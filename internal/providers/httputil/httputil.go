@@ -137,7 +137,7 @@ func idleTimeoutFromEnv(envVar string, fallback time.Duration) time.Duration {
 // DefaultResponseHeaderTimeout is the time-to-first-byte guard applied by
 // NewTransport. Streaming upstreams return headers immediately, so 30s is ample
 // for them; it only bites a non-streaming upstream that buffers a slow response.
-const DefaultResponseHeaderTimeout = 30 * time.Second
+var DefaultResponseHeaderTimeout = idleTimeoutFromEnv("ROUTER_RESPONSE_HEADER_TIMEOUT_SECONDS", 30*time.Second)
 
 // SanitizeInboundAuthHeader returns v unchanged unless it carries a
 // router-issued key as a Bearer token, in which case it returns "" so the

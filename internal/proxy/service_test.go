@@ -20,6 +20,7 @@ import (
 	"workweave/router/internal/router/sessionpin"
 	"workweave/router/internal/translate"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -256,6 +257,33 @@ func TestService_AgentShadowEvaluationNeverSubstitutesRequestedBaseline(t *testi
 	assert.Equal(t, "gpt-5.5", rec.Header().Get(proxy.HeaderRouterModel))
 	// gpt-5.5 is not CapExtendedContext, so the header carries its catalog window.
 	assert.Equal(t, "1050000", rec.Header().Get(proxy.HeaderRouterContextWindow))
+}
+
+func TestService_BaselineFailoverSkipsUnconfiguredProvider(t *testing.T) {
+	aiandProvider := &fakeProvider{proxyErr: &providers.UpstreamStatusError{Status: http.StatusServiceUnavailable}}
+	telemetry := newCaptureTelemetry()
+	svc := proxy.NewService(&fakeRouter{
+		decision: router.Decision{
+			Model:    "deepseek-ai/deepseek-v4-flash",
+			Provider: providers.ProviderAiand,
+			Reason:   "cluster:v0.76 test",
+		},
+	}, map[string]providers.Client{
+		providers.ProviderAiand: aiandProvider,
+	}, nil, false, nil, nil, false, "", "claude-sonnet-4-5", telemetry).
+		WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAiand: {}}).
+		WithAvailableModels(map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}})
+
+	body := []byte(`{"model":"claude-sonnet-4-5","messages":[{"role":"user","content":"hi"}],"max_tokens":512}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, uuid.New().String())
+	_ = svc.ProxyMessages(ctx, body, rec, req)
+
+	assert.Equal(t, http.StatusBadGateway, rec.Code, "the routed model's 503 surfaces as 502; no doomed anthropic rescue runs")
+	row := telemetry.firstRow(t)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", row.DecisionModel, "telemetry must attribute the routed model, not the unconfigured baseline")
 }
 
 func TestService_AgentShadowEvaluationNeverRetriesSubscriptionOnDeploymentKey(t *testing.T) {

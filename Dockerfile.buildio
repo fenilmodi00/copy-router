@@ -1,0 +1,57 @@
+# Production Dockerfile for build.io deployment
+# Builds a minimal, production-ready router image
+# syntax=docker/dockerfile:1
+
+# Use the same builder approach as Dockerfile.dev but with production optimizations
+FROM node:22-alpine AS ui-builder
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci --prefer-offline
+COPY frontend/ ./
+RUN npm run build
+
+FROM golang:1.25.9-bookworm AS build-stage
+
+# Build identity via -ldflags (surfaced at GET /v1/version)
+ARG ROUTER_SHA=unknown
+ARG ROUTER_BUILD_TIME=unknown
+ARG ROUTER_PR=unknown
+ARG TARGETARCH
+
+# Copy the build-time assets first (parallelizable)
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+
+# Copy source
+COPY cmd ./cmd
+COPY internal ./internal
+
+# Build with ORT tags (required for ONNX runtime support)
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    GOOS=linux go build -tags ORT \
+      -ldflags "-X workweave/router/internal/version.Commit=${ROUTER_SHA} -X workweave/router/internal/version.BuildTime=${ROUTER_BUILD_TIME} -X workweave/router/internal/version.PR=${ROUTER_PR}" \
+      -o /server
+
+FROM gcr.io/distroless/cc-debian12 AS runtime
+
+# Copy the built binary
+COPY --from=build-stage /server /server
+
+# Copy the static UI assets
+COPY --from=ui-builder /app/frontend/out /assets/ui
+
+# Copy cluster artifacts from build-stage (they were pulled during build)
+COPY --from=build-stage /opt/router/assets /opt/router/assets
+
+# Environment
+ENV PORT=8080
+ENV ROUTER_ONNX_ASSETS_DIR=/opt/router/assets
+ENV ROUTER_ONNX_LIBRARY_DIR=/usr/lib
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD curl -sf http://localhost:8080/health || exit 1
+
+# Run the server
+ENTRYPOINT ["/server"]

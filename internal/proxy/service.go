@@ -1926,6 +1926,15 @@ func (s *Service) provider(name string) (providers.Client, error) {
 	return p, nil
 }
 
+// providerConfigured reports whether the named provider client is registered
+// at runtime. Failover must check this before dispatching: a catalog-bound
+// provider that isn't configured can never serve, and attempting it rewrites
+// the recorded decision model to a model that never served.
+func (s *Service) providerConfigured(name string) bool {
+	_, err := s.provider(name)
+	return err == nil
+}
+
 // WithPolicyStrategy registers one non-default router and its lifecycle
 // capabilities. Outcome and feedback reporters are discovered from the router.
 func (s *Service) WithPolicyStrategy(spec policy.StrategySpec) *Service {
@@ -3301,7 +3310,8 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		baselineAllowed &&
 		decision.Provider != providers.ProviderAnthropic &&
 		baselineModel != decision.Model &&
-		baselineKnown && baselineCatalog.PrimaryProvider() == providers.ProviderAnthropic
+		baselineKnown && baselineCatalog.PrimaryProvider() == providers.ProviderAnthropic &&
+		s.providerConfigured(providers.ProviderAnthropic)
 	baselineEligible := !routeRes.AuthoritativePerTurn && baselineViable
 
 	// Subscription-credit failover eligibility. A Claude turn served on the

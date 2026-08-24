@@ -1,0 +1,60 @@
+# build.io Application Manifest for Weave Router
+{
+  "name": "router",
+  "description": "Weave Router — Smart AI model proxy that routes every request to the best model using a cluster scorer with ONNX embedders",
+  "version": "1.0.0",
+  "buildStack": "heroku-24",
+  "env": {
+    "POSTGRES_PASSWORD": {
+      "description": "PostgreSQL password for router user",
+      "required": true
+    },
+    "AIAND_API_KEY": {
+      "description": "AI& API key for model routing",
+      "required": true
+    },
+    "ROUTER_ADMIN_PASSWORD": {
+      "description": "Admin dashboard password",
+      "required": true
+    },
+    "EXTERNAL_KEY_ENCRYPTION_KEY": {
+      "description": "Tink AES-256-GCM keyset JSON for BYOK encryption",
+      "required": true
+    },
+    "ROUTER_DEPLOYMENT_MODE": {
+      "description": "Deployment mode (selfhosted or managed)",
+      "default": "selfhosted",
+      "required": false
+    },
+    "ROUTER_CLUSTER_VERSION": {
+      "description": "Cluster artifact version to serve",
+      "default": "v0.76",
+      "required": false
+    },
+    "SERVER_REPLICAS": {
+      "description": "Number of router replicas",
+      "default": "2",
+      "required": false
+    },
+    "OTEL_EXPORTER_OTLP_ENDPOINT": {
+      "description": "OTel collector endpoint for traces",
+      "required": false
+    },
+    "ROUTER_FEEDBACK_LINK_SECRET": {
+      "description": "Secret for feedback link token signing",
+      "required": false
+    },
+    "ROUTER_FEEDBACK_BASE_URL": {
+      "description": "Public origin of feedback page",
+      "required": false
+    }
+  },
+  "addons": [
+    {
+      "id": "6e4973d2-d948-4a22-b83c-649ecaa87f84",
+      "name": "ave-to-go",
+      "plan": "default",
+      "as": "DATABASE_URL"
+    }
+  ]
+}
