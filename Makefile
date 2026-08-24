@@ -43,7 +43,7 @@ test-install: ## Run offline installer regression tests
 	@bash install/tests/key_reuse_test.sh
 	@bash install/tests/models_test.sh
 
-smoke: ## Pre-merge smoke suite: real router stack + real Anthropic (needs ANTHROPIC_API_KEY)
+smoke: ## Pre-merge smoke suite: real router stack + real upstreams (scenarios still target the pre-ai& providers; re-record for ai& before relying on it)
 	./scripts/smoke/run.sh
 
 initdb: ## Create the database and router schema (idempotent)
