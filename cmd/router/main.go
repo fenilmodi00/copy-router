@@ -218,9 +218,12 @@ func main() {
 	userClusterCache := auth.NewLRUUserClusterListCache(50000, 5*time.Minute)
 
 	// Single-replica PaaS deploys (e.g. build.io demo) often have no GCP Pub/Sub.
-	// PUBSUB_DISABLED=true skips cross-replica invalidation; cache TTL is the safety net.
+	// Skip when PUBSUB_DISABLED=true or when PUBSUB_PROJECT_ID is unset; cache TTL
+	// is the safety net for a lone replica.
 	notifier := auth.InstallationChangeNotifier(auth.NoOpInstallationChangeNotifier{})
-	if config.GetOr("PUBSUB_DISABLED", "false") != "true" {
+	pubsubDisabled := config.GetOr("PUBSUB_DISABLED", "false") == "true" ||
+		config.GetOr("PUBSUB_PROJECT_ID", "") == ""
+	if !pubsubDisabled {
 		pubsubProjectID := config.MustGet("PUBSUB_PROJECT_ID")
 		pubsubTopicID := config.MustGet("PUBSUB_TOPIC_ROUTER_INVALIDATION")
 		// Treated as a prefix: each replica derives its own subscription
@@ -273,7 +276,7 @@ func main() {
 		}()
 		safeGo(logger, "invalidation-listener", func() { listener.Run(listenerCtx) })
 	} else {
-		logger.Warn("PUBSUB_DISABLED=true; cross-replica cache invalidation disabled (single-replica OK)")
+		logger.Warn("Pub/Sub invalidation disabled (PUBSUB_DISABLED=true or PUBSUB_PROJECT_ID unset); single-replica OK")
 	}
 
 	// Deployment-wide escape hatch: suppresses every per-organization flag
