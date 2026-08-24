@@ -105,8 +105,8 @@ root or legacy locations transparently.
 
 ## v0.76 — 5-model ai& candidate (not promoted)
 
-`v0.76/` is a candidate 5-model ai&-only bundle (glm-5.2, deepseek-v4-flash, kimi-k2.7, kimi-k3, motif-3) with `status: candidate`. The `latest` pointer stays at `v0.75` — v0.76 is NOT promoted.
+`v0.76/` is a candidate 5-model ai&-only bundle (glm-5.2, deepseek-v4-flash, kimi-k2.7-code, kimi-k3, motif-3) with `status: candidate`. The `latest` pointer stays at `v0.75` — v0.76 is NOT promoted.
 
 Access it via env var `ROUTER_CLUSTER_VERSION=v0.76`, or per-request header `x-weave-cluster-version: v0.76`. Requires multi-version serving: set `ROUTER_CLUSTER_BUILD_ALL_VERSIONS=true` so the router loads v0.76's bundle alongside latest.
 
-Not available via dashboard/CLI default selection (only `latest` is). kimi-k3 wins the 11 high-alpha clusters, flash the 5 conversational clusters, motif-3 inert (available via /force-model).
+Not available via dashboard/CLI default selection (only `latest` is). Per-cluster winners (verified through the scorer blend): `moonshotai/kimi-k3` wins hard clusters {0, 13}; `motif-technologies/motif-3` wins medium clusters {1, 3, 4, 5, 6, 7, 8, 12, 14}; `deepseek-ai/deepseek-v4-flash` wins conversational clusters {2, 9, 10, 11, 15}. `rankings.json` is intentionally absent — the v2 loader ignores it and v0.75's copy is stale 18-model data (incl. `deepseek-v4-pro`).
