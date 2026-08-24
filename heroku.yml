@@ -1,0 +1,5 @@
+# build.io / Heroku-compatible Docker deploy from GitHub.
+# Dashboard: Settings → Stack → dockerfile (or container), then Deploy → Connect repo.
+build:
+  docker:
+    web: Dockerfile
