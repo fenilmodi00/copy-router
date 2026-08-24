@@ -7,14 +7,15 @@ import (
 )
 
 // ComputeKnobsHash calculates a canonical 64-bit hash over the effective knobs.
-func ComputeKnobsHash(alpha []float64, speedWeight, outputCostRatio float64, expectedOutputTokens int, perModelVerbosity bool) uint64 {
+func ComputeKnobsHash(alpha []float64, speedWeight, outputCostRatio float64, expectedOutputTokens int, perModelVerbosity bool, contextWindowWeight float64) uint64 {
 	// 4 bytes for len(alpha)
 	// len(alpha)*8 bytes for alpha values
 	// 8 bytes for speedWeight
 	// 8 bytes for outputCostRatio
 	// 4 bytes for expectedOutputTokens
 	// 1 byte for perModelVerbosity
-	buf := make([]byte, 4+len(alpha)*8+8+8+4+1)
+	// 8 bytes for contextWindowWeight
+	buf := make([]byte, 4+len(alpha)*8+8+8+4+1+8)
 	binary.LittleEndian.PutUint32(buf[0:4], uint32(len(alpha)))
 	off := 4
 	for _, a := range alpha {
@@ -32,6 +33,8 @@ func ComputeKnobsHash(alpha []float64, speedWeight, outputCostRatio float64, exp
 	} else {
 		buf[off] = 0
 	}
+	off += 1
+	binary.LittleEndian.PutUint64(buf[off:off+8], math.Float64bits(contextWindowWeight))
 
 	sum := sha256.Sum256(buf)
 	return binary.LittleEndian.Uint64(sum[:8])

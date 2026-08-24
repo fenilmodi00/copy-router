@@ -154,6 +154,14 @@ type DefaultRoutingKnobs struct {
 	OutputCostRatio      float64   `yaml:"output_cost_ratio"`
 	ExpectedOutputTokens int       `yaml:"expected_output_tokens"`
 	PerModelVerbosity    bool      `yaml:"per_model_verbosity"`
+	// ContextWindowWeight scales the soft per-model context-window preference
+	// term in blendScoresV2. 0 (default) disables the term entirely (strict
+	// back-compat). When nonzero, models whose catalog context window
+	// comfortably fits the request's estimated input tokens keep winning on
+	// merit, and large-window models (e.g. 1M) are preferred as the estimate
+	// approaches/exceeds the ~256K ceiling of the cheaper models — without a
+	// hard eligibility drop (compaction remains the fit mechanism).
+	ContextWindowWeight float64 `yaml:"context_window_weight,omitempty"`
 }
 
 type RecommendedKnobs struct {

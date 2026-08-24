@@ -264,7 +264,7 @@ func (s *Scorer) computeDialCalibration() []float64 {
 		}
 		counts := make(map[string]int, len(s.models))
 		for c := 0; c < k; c++ {
-			scores := s.blendScoresV2(centroidTopClusters[c], knobs, s.models, nil, nil)
+			scores := s.blendScoresV2(centroidTopClusters[c], knobs, s.models, nil, nil, 0)
 			winner, _ := argmax(scores, s.models)
 			// Skip empty winners (matches RoutingDistribution) so a cluster
 			// flipping between "" and a real model can't fake a breakpoint.
@@ -783,9 +783,10 @@ func (s *Scorer) Route(ctx context.Context, req router.Request) (router.Decision
 			activeKnobs.OutputCostRatio,
 			activeKnobs.ExpectedOutputTokens,
 			activeKnobs.PerModelVerbosity,
+			activeKnobs.ContextWindowWeight,
 		)
 
-		scores = s.blendScoresV2(topClusters, activeKnobs, eligibleModels, req.SubsidizedModelCostFactor, priorityBonus)
+		scores = s.blendScoresV2(topClusters, activeKnobs, eligibleModels, req.SubsidizedModelCostFactor, priorityBonus, req.EstimatedInputTokens)
 	} else {
 		// Legacy v1: static cluster rankings, no cost axis, so
 		// SubsidizedModelCostFactor doesn't apply. All deployed bundles run V2;
@@ -1061,11 +1062,25 @@ func priorityBonusFor(rank int) float32 {
 	return preferredBonusBase * float32(math.Pow(preferredBonusDecay, float64(rank)))
 }
 
+// contextWindowReference is the largest "small-model" context window used as
+// the relative-window baseline: models at this window (e.g. the 256K group)
+// get ~zero bump, larger windows (1M) get a positive bump, smaller windows
+// (the 128K default) a negative one — but only once the estimate is large.
+const contextWindowReference = 256_000
+
+// contextWindowEngageFloor is the estimate below which the context term is a
+// strict no-op: requests comfortably fitting the small models must let the
+// cheap 256K group win on merit. 0.5 * contextWindowReference.
+const contextWindowEngageFloor = 128_000
+
 // blendScoresV2 computes v2 per-model blended scores for the top-P clusters
 // under the effective knobs. Extracted from Route so the distribution preview
 // scores identically to live routing — single source of truth for the
 // cost/quality/speed blend. Caller owns knob validation and QualityBias->Alpha.
-func (s *Scorer) blendScoresV2(topClusters []int, activeKnobs DefaultRoutingKnobs, eligibleModels []string, subsidyFactors map[string]float64, priorityBonus map[string]float32) map[string]float32 {
+// estimatedTokens is the request's estimated input size (req.EstimatedInputTokens);
+// the context-window term is a no-op when ContextWindowWeight == 0 or the
+// estimate is below contextWindowEngageFloor.
+func (s *Scorer) blendScoresV2(topClusters []int, activeKnobs DefaultRoutingKnobs, eligibleModels []string, subsidyFactors map[string]float64, priorityBonus map[string]float32, estimatedTokens int) map[string]float32 {
 	// 2. Effective per-model cost. Kept at FULL catalog scale even for
 	// subscription-covered models: the catalog ratio tracks plan-quota burn
 	// (Anthropic's unified rate limit weights Opus far above Haiku), which is
@@ -1174,6 +1189,32 @@ func (s *Scorer) blendScoresV2(topClusters []int, activeKnobs DefaultRoutingKnob
 		sRange = sMax - sMin
 	}
 
+	// Context-window soft preference (opt-in via ContextWindowWeight). The bump
+	// is per-model and request-level (independent of cluster), so it is computed
+	// once here. A nil map (weight 0, or estimate below the engage floor) makes
+	// the loop lookup miss and adds nothing — a strict no-op identical to today.
+	var ctxBump map[string]float32
+	if activeKnobs.ContextWindowWeight != 0 {
+		est := estimatedTokens
+		if est < 0 {
+			est = 0
+		}
+		if est > contextWindowEngageFloor {
+			margin := float64(est-contextWindowEngageFloor) /
+				float64(contextWindowReference-contextWindowEngageFloor)
+			if margin > 1 {
+				margin = 1
+			}
+			w := float32(activeKnobs.ContextWindowWeight)
+			ctxBump = make(map[string]float32, len(eligibleModels))
+			for _, m := range eligibleModels {
+				window := catalog.ContextWindowFor(m)
+				bumpAppear := margin * (float64(window)/float64(contextWindowReference) - 1.0)
+				ctxBump[m] = w * float32(bumpAppear)
+			}
+		}
+	}
+
 	// 6. Blend per top-P cluster
 	scores := make(map[string]float32, len(eligibleModels))
 	for _, k := range topClusters {
@@ -1234,6 +1275,13 @@ func (s *Scorer) blendScoresV2(topClusters []int, activeKnobs DefaultRoutingKnob
 			// Per-installation preference: lift by its rank-decaying bonus.
 			// Additive, so it only decides close calls. Absent = no preference.
 			if b, ok := priorityBonus[m]; ok {
+				scores[m] += b
+			}
+
+			// Context-window soft preference: lift large-window models (or
+			// penalize small-window ones) as the estimate approaches/exceeds
+			// the small-model ceiling. Additive and opt-in; absent = no-op.
+			if b, ok := ctxBump[m]; ok {
 				scores[m] += b
 			}
 		}

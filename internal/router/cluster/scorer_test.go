@@ -1794,3 +1794,196 @@ func TestExtremeRoutingKnobWarnOnlyOnOverride(t *testing.T) {
 		}
 	})
 }
+
+// ctxWindowBundleOpts configures a 2-cluster v2 bundle registering
+// claude-opus-5 (1M catalog context window) and claude-haiku-4-5 (200K)
+// so the context-window term has real catalog windows to differentiate.
+type ctxWindowBundleOpts struct {
+	qualityMeans        Rankings
+	opusInputPer1K      float64
+	haikuInputPer1K     float64
+	contextWindowWeight float64
+}
+
+func newCtxWindowScorer(t *testing.T, opts ctxWindowBundleOpts) *Scorer {
+	t.Helper()
+	dim := EmbedDim
+	c0 := make([]float32, dim)
+	c0[0] = 1
+	c1 := make([]float32, dim)
+	c1[1] = 1
+	full := append(append([]float32{}, c0...), c1...)
+	centroidsBlob := buildCentroidsBlob(t, 2, dim, full)
+	centroids, err := loadCentroids(centroidsBlob)
+	require.NoError(t, err)
+
+	registry, err := loadRegistry([]byte(`{
+		"deployed_models": [
+			{"model": "claude-opus-5", "provider": "anthropic", "bench_column": "gpt-5", "proxy": true},
+			{"model": "claude-haiku-4-5", "provider": "anthropic", "bench_column": "gemini-2.5-flash", "proxy": true}
+		]
+	}`))
+	require.NoError(t, err)
+
+	qm := opts.qualityMeans
+	if qm == nil {
+		qm = Rankings{
+			0: {"claude-opus-5": 0.4, "claude-haiku-4-5": 0.6},
+			1: {"claude-opus-5": 0.6, "claude-haiku-4-5": 0.4},
+		}
+	}
+	opusIn := opts.opusInputPer1K
+	if opusIn == 0 {
+		opusIn = 5.0
+	}
+	haikuIn := opts.haikuInputPer1K
+	if haikuIn == 0 {
+		haikuIn = 0.25
+	}
+	axes := map[string]ModelAxis{
+		"claude-opus-5":   {InputPer1KUSD: &opusIn},
+		"claude-haiku-4-5": {InputPer1KUSD: &haikuIn},
+	}
+
+	defaults := &DefaultRoutingKnobs{
+		Alpha:                []float64{0.5, 0.5},
+		SpeedWeight:          0.0,
+		OutputCostRatio:      0.0,
+		ExpectedOutputTokens: 2000,
+		PerModelVerbosity:    false,
+		ContextWindowWeight:  opts.contextWindowWeight,
+	}
+	meta := &ArtifactMetadata{
+		FormatVersion: 2,
+		Training: ArtifactTraining{
+			K:                   2,
+			TopP:                2,
+			DefaultRoutingKnobs: defaults,
+		},
+	}
+	bundle := &Bundle{
+		Version:         "v2-ctx-test",
+		Centroids:       centroids,
+		Registry:        registry,
+		Metadata:        meta,
+		IsV2:            true,
+		QualityMeans:    qm,
+		ModelAxes:       axes,
+		MedianVerbosity: 1.0,
+	}
+	cfg := DefaultConfig()
+	cfg.TopP = 1
+	scorer, err := NewScorer(bundle, cfg, &fakeEmbedder{vec: makeOpusVec()}, allProviders())
+	require.NoError(t, err)
+	return scorer
+}
+
+// A large context estimate must flip the pick to the 1M-window model even
+// though the 200K model wins the base quality/cost blend on cluster 0.
+func TestScorer_ContextWindowLargeEstPrefers1M(t *testing.T) {
+	s := newCtxWindowScorer(t, ctxWindowBundleOpts{contextWindowWeight: 0.5})
+	knobs := s.defaultActiveKnobs()
+
+	scores := s.blendScoresV2([]int{0}, knobs, s.models, nil, nil, 600_000)
+	winner, _ := argmax(scores, s.models)
+
+	require.InDelta(t, 1.453125, float64(scores["claude-opus-5"]), 1e-6, "1M model gets the large-window bump")
+	require.InDelta(t, 0.890625, float64(scores["claude-haiku-4-5"]), 1e-6, "200K model gets a small penalty")
+	assert.Equal(t, "claude-opus-5", winner,
+		"large estimate (600K) must prefer the 1M-window opus-5 over the 200K haiku")
+}
+
+// A small estimate must not disturb the cheap model winning on merit: the
+// term is a no-op below the engage floor.
+func TestScorer_ContextWindowSmallEstKeepsCheap(t *testing.T) {
+	s := newCtxWindowScorer(t, ctxWindowBundleOpts{contextWindowWeight: 0.5})
+	knobs := s.defaultActiveKnobs()
+
+	scores := s.blendScoresV2([]int{0}, knobs, s.models, nil, nil, 10_000)
+	winner, _ := argmax(scores, s.models)
+
+	assert.Equal(t, "claude-haiku-4-5", winner,
+		"small estimate (10K) must not disturb the cheap 200K model winning on merit")
+}
+
+// Weight 0.0 must be a strict no-op: the estimate has zero influence on scores.
+func TestScorer_ContextWindowWeightZeroIsNoop(t *testing.T) {
+	s := newCtxWindowScorer(t, ctxWindowBundleOpts{contextWindowWeight: 0.0})
+	knobs := s.defaultActiveKnobs()
+
+	off := s.blendScoresV2([]int{0}, knobs, s.models, nil, nil, 600_000)
+	on := s.blendScoresV2([]int{0}, knobs, s.models, nil, nil, 0)
+
+	assert.Equal(t, off, on, "weight 0.0 must yield identical scores regardless of estimate")
+	winner, _ := argmax(off, s.models)
+	assert.Equal(t, "claude-haiku-4-5", winner, "weight 0.0 must keep the base-blend winner")
+}
+
+// A model absent from the catalog must fall back to DefaultContextWindow
+// (128K) inside the blend: at a large estimate its small window is penalized
+// and the 1M model wins, proving the catalog fallback is what the term used.
+func TestScorer_ContextWindowUnknownModelDefaultWindow(t *testing.T) {
+	require.Equal(t, catalog.DefaultContextWindow, catalog.ContextWindowFor("test-ctx-unknown"),
+		"unknown model must resolve to DefaultContextWindow via the catalog fallback")
+
+	dim := EmbedDim
+	c0 := make([]float32, dim)
+	c0[0] = 1
+	c1 := make([]float32, dim)
+	c1[1] = 1
+	full := append(append([]float32{}, c0...), c1...)
+	centroidsBlob := buildCentroidsBlob(t, 2, dim, full)
+	centroids, err := loadCentroids(centroidsBlob)
+	require.NoError(t, err)
+
+	registry, err := loadRegistry([]byte(`{
+		"deployed_models": [
+			{"model": "test-ctx-unknown", "provider": "anthropic", "bench_column": "x", "proxy": true},
+			{"model": "claude-opus-5", "provider": "anthropic", "bench_column": "y", "proxy": true}
+		]
+	}`))
+	require.NoError(t, err)
+
+	unknownIn := 0.25
+	opusIn := 5.0
+	axes := map[string]ModelAxis{
+		"test-ctx-unknown": {InputPer1KUSD: &unknownIn},
+		"claude-opus-5":    {InputPer1KUSD: &opusIn},
+	}
+	qm := Rankings{
+		0: {"test-ctx-unknown": 0.6, "claude-opus-5": 0.4},
+		1: {"test-ctx-unknown": 0.4, "claude-opus-5": 0.6},
+	}
+	defaults := &DefaultRoutingKnobs{
+		Alpha:                []float64{0.5, 0.5},
+		SpeedWeight:          0.0,
+		OutputCostRatio:      0.0,
+		ExpectedOutputTokens: 2000,
+		PerModelVerbosity:    false,
+		ContextWindowWeight:  0.5,
+	}
+	bundle := &Bundle{
+		Version:      "v2-ctx-unknown",
+		Centroids:    centroids,
+		Registry:     registry,
+		Metadata:     &ArtifactMetadata{FormatVersion: 2, Training: ArtifactTraining{K: 2, TopP: 2, DefaultRoutingKnobs: defaults}},
+		IsV2:         true,
+		QualityMeans: qm,
+		ModelAxes:    axes,
+		MedianVerbosity: 1.0,
+	}
+	cfg := DefaultConfig()
+	cfg.TopP = 1
+	s, err := NewScorer(bundle, cfg, &fakeEmbedder{vec: makeOpusVec()}, allProviders())
+	require.NoError(t, err)
+
+	knobs := s.defaultActiveKnobs()
+	small := s.blendScoresV2([]int{0}, knobs, s.models, nil, nil, 10_000)
+	smallWinner, _ := argmax(small, s.models)
+	require.Equal(t, "test-ctx-unknown", smallWinner, "small estimate: merit picks the unknown model")
+
+	large := s.blendScoresV2([]int{0}, knobs, s.models, nil, nil, 600_000)
+	largeWinner, _ := argmax(large, s.models)
+	assert.Equal(t, "claude-opus-5", largeWinner,
+		"large estimate: the 128K-fallback unknown model must lose to the 1M opus-5")
+}
