@@ -6,7 +6,7 @@ export interface ModelPricing {
 	outputUsdPerMillion: number;
 }
 
-export const PRICING_VERSION = "catalog-sha256:e2a1d3ea39f7118f";
+export const PRICING_VERSION = "catalog-sha256:5f0fe845b5f1f456";
 
 export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = Object.freeze({
 	"claude-fable-5": { inputUsdPerMillion: 10, outputUsdPerMillion: 50 },
@@ -21,9 +21,9 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = Object.free
 	"claude-sonnet-4-5": { inputUsdPerMillion: 3, outputUsdPerMillion: 15 },
 	"claude-sonnet-4-6": { inputUsdPerMillion: 3, outputUsdPerMillion: 15 },
 	"claude-sonnet-5": { inputUsdPerMillion: 3, outputUsdPerMillion: 15 },
-	"deepseek/deepseek-v4-flash": { inputUsdPerMillion: 0.1134, outputUsdPerMillion: 0.2791 },
+	"deepseek/deepseek-v4-flash": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.25 },
 	"deepseek/deepseek-v4-pro": { inputUsdPerMillion: 1.74, outputUsdPerMillion: 3.48 },
-	"deepseek/deepseek-v4-pro-0813": { inputUsdPerMillion: 1.74, outputUsdPerMillion: 3.48 },
+	"deepseek/deepseek-v4-pro-0813": { inputUsdPerMillion: 1, outputUsdPerMillion: 2.5 },
 	"gemini-2.0-flash": { inputUsdPerMillion: 0.1, outputUsdPerMillion: 0.4 },
 	"gemini-2.0-flash-lite": { inputUsdPerMillion: 0.075, outputUsdPerMillion: 0.3 },
 	"gemini-2.5-flash": { inputUsdPerMillion: 0.3, outputUsdPerMillion: 1.2 },
@@ -38,6 +38,7 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = Object.free
 	"gemini-3.6-flash": { inputUsdPerMillion: 1.5, outputUsdPerMillion: 7.5 },
 	"gemini-3.7-flash": { inputUsdPerMillion: 1.5, outputUsdPerMillion: 7.5 },
 	"google/gemma-4-26b-a4b-it": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 },
+	"google/gemma-4-31b-it": { inputUsdPerMillion: 0.2, outputUsdPerMillion: 0.5 },
 	"gpt-4.1": { inputUsdPerMillion: 2, outputUsdPerMillion: 8 },
 	"gpt-4.1-mini": { inputUsdPerMillion: 0.4, outputUsdPerMillion: 1.6 },
 	"gpt-4.1-nano": { inputUsdPerMillion: 0.1, outputUsdPerMillion: 0.4 },
@@ -67,19 +68,22 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = Object.free
 	"mistralai/mistral-small-2603": { inputUsdPerMillion: 0.2, outputUsdPerMillion: 0.6 },
 	"moonshotai/kimi-k2.5": { inputUsdPerMillion: 0.6, outputUsdPerMillion: 3 },
 	"moonshotai/kimi-k2.6": { inputUsdPerMillion: 0.95, outputUsdPerMillion: 4 },
-	"moonshotai/kimi-k2.7": { inputUsdPerMillion: 0.95, outputUsdPerMillion: 4 },
-	"moonshotai/kimi-k3": { inputUsdPerMillion: 3, outputUsdPerMillion: 15 },
+	"moonshotai/kimi-k2.7": { inputUsdPerMillion: 0.75, outputUsdPerMillion: 3.5 },
+	"moonshotai/kimi-k3": { inputUsdPerMillion: 3, outputUsdPerMillion: 12.5 },
+	"motif-technologies/motif-3": { inputUsdPerMillion: 0.5, outputUsdPerMillion: 2 },
+	"openai/gpt-oss-120b": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 },
 	"qwen/qwen3-235b-a22b-2507": { inputUsdPerMillion: 0.2266, outputUsdPerMillion: 0.9064 },
 	"qwen/qwen3-30b-a3b-instruct-2507": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 },
 	"qwen/qwen3-coder": { inputUsdPerMillion: 0.9, outputUsdPerMillion: 2.7 },
 	"qwen/qwen3-coder-next": { inputUsdPerMillion: 0.5, outputUsdPerMillion: 1.2 },
 	"qwen/qwen3-next-80b-a3b-instruct": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 1.2 },
 	"qwen/qwen3.5-flash-02-23": { inputUsdPerMillion: 0.05, outputUsdPerMillion: 0.15 },
+	"qwen/qwen3.6-27b": { inputUsdPerMillion: 0.32, outputUsdPerMillion: 3.2 },
 	"qwen/qwen3.6-35b-a3b": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 1 },
 	"qwen/qwen3.7-plus": { inputUsdPerMillion: 0.4, outputUsdPerMillion: 1.6 },
 	"qwen/qwen3.8-max": { inputUsdPerMillion: 2, outputUsdPerMillion: 6 },
 	"xiaomi/mimo-v2.5-pro": { inputUsdPerMillion: 1, outputUsdPerMillion: 3 },
 	"z-ai/glm-5": { inputUsdPerMillion: 1, outputUsdPerMillion: 3.2 },
 	"z-ai/glm-5.1": { inputUsdPerMillion: 1.4, outputUsdPerMillion: 4.4 },
-	"z-ai/glm-5.2": { inputUsdPerMillion: 1.4, outputUsdPerMillion: 4.4 },
+	"z-ai/glm-5.2": { inputUsdPerMillion: 1, outputUsdPerMillion: 4 },
 });

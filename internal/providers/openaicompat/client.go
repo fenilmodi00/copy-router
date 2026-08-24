@@ -34,6 +34,8 @@ const (
 	TogetherBaseURL = "https://api.together.xyz/v1"
 	// XAIBaseURL is SpaceXAI's OpenAI-compatible Chat Completions surface.
 	XAIBaseURL = "https://api.x.ai/v1"
+	// AiandBaseURL is the ai& (aiand.com) OpenAI-compatible inference surface.
+	AiandBaseURL = "https://api.aiand.com/v1"
 )
 
 // BedrockMantleBaseURLTemplate is the OpenAI-compatible bedrock-mantle endpoint

@@ -56,6 +56,10 @@ const (
 	ProviderMakora     = "makora"
 	ProviderTogether   = "together"
 	ProviderXAI        = "xai"
+	// ProviderAiand is the ai& (aiand.com) OpenAI-compatible inference
+	// provider serving open-weight models (GLM, DeepSeek, Kimi, Qwen, Gemma,
+	// gpt-oss) from Japan-resident infra. OpenAI Chat Completions surface.
+	ProviderAiand = "aiand"
 	// ProviderAnthropicGateway is an Anthropic-spec enterprise gateway using
 	// Bearer auth; its endpoint is per-tenant with no deployment default.
 	ProviderAnthropicGateway = "anthropic_gateway"
@@ -97,6 +101,7 @@ var ProviderFamilies = map[string]TranslationFamily{
 	ProviderMakora:     FamilyOpenAICompat,
 	ProviderTogether:   FamilyOpenAICompat,
 	ProviderXAI:        FamilyOpenAICompat,
+	ProviderAiand:      FamilyOpenAICompat,
 
 	ProviderAnthropicGateway: FamilyAnthropic,
 	ProviderOpenAIGateway:    FamilyOpenAICompat,
@@ -154,6 +159,7 @@ var APIKeyEnvVars = map[string]string{
 	ProviderMakora:     "MAKORA_API_KEY",
 	ProviderTogether:   "TOGETHER_API_KEY",
 	ProviderXAI:        "XAI_API_KEY",
+	ProviderAiand:      "AIAND_API_KEY",
 	// Pairs with ANTHROPIC_GATEWAY_BASE_URL, the endpoint the token is scoped to.
 	ProviderAnthropicGateway: "ANTHROPIC_GATEWAY_TOKEN",
 	// Pairs with OPENAI_GATEWAY_BASE_URL, likewise.
@@ -193,6 +199,7 @@ var CacheTTL = map[string]time.Duration{
 	ProviderFireworks:  5 * time.Minute,
 	ProviderBedrock:    5 * time.Minute,
 	ProviderXAI:        5 * time.Minute,
+	ProviderAiand:      5 * time.Minute,
 	// A gateway publishes no prompt-cache lifetime of its own, so it keeps the
 	// conservative window rather than inheriting Anthropic's 1h extended cache.
 	ProviderAnthropicGateway: 5 * time.Minute,

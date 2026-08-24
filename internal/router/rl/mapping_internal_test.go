@@ -35,6 +35,7 @@ var defaultRosterPrefixProviders = map[string]struct{}{
 	providers.ProviderBedrock:    {},
 	providers.ProviderMakora:     {},
 	providers.ProviderTogether:   {},
+	providers.ProviderAiand:      {},
 	// An OpenAI-spec gateway serves several vendors' models, so no single
 	// vendor prefix is right; the bare ID lets the sidecar match what it can.
 	providers.ProviderOpenAIGateway: {},

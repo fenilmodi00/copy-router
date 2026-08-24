@@ -22,6 +22,7 @@ vendor/
 .env.production
 .env.staging
 .env*.local
+.opencode/
 
 # ONNX model assets (pulled at build/dev time, not committed)
 assets/
@@ -37,6 +38,7 @@ dist/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.omo/
 
 # IDE / editor
 .vscode/
