@@ -7,41 +7,39 @@
   },
   "deployed_models": [
     {
-      "model": "deepseek/deepseek-v4-flash",
+      "model": "deepseek-ai/deepseek-v4-flash",
       "provider": "aiand",
       "bench_column": "routerarena_deepseek/deepseek-v4-flash",
       "proxy": true,
-      "proxy_note": "ai& overlay: kept from v0.75, provider rewritten to aiand."
+      "proxy_note": "ai& overlay: kept from v0.75, renamed to ai& catalog ID."
     },
     {
-      "model": "z-ai/glm-5.2",
+      "model": "zai-org/glm-5.2",
       "provider": "aiand",
       "bench_column": "routerarena_z-ai/glm-5",
       "proxy": true,
-      "proxy_note": "ai& overlay: kept from v0.75, provider rewritten to aiand."
+      "proxy_note": "ai& overlay: kept from v0.75, renamed to ai& catalog ID."
     },
     {
-      "model": "moonshotai/kimi-k2.7",
+      "model": "moonshotai/kimi-k2.7-code",
       "provider": "aiand",
       "bench_column": "routerarena_moonshotai/kimi-k2.6",
       "proxy": true,
-      "proxy_note": "ai& overlay: kept from v0.75, provider rewritten to aiand."
+      "proxy_note": "ai& overlay: kept from v0.75, renamed to ai& catalog ID."
     },
     {
       "model": "moonshotai/kimi-k3",
       "provider": "aiand",
       "bench_column": "routerarena_moonshotai/kimi-k2.6",
-      "direct_label": "aa",
       "proxy": true,
-      "proxy_note": "kimi-k3 quality = max(glm-5.2, deepseek-flash, kimi-k2.7) x 1.03 per cluster. Validated by 100-prompt probe. User positioning: most capable frontier model."
+      "proxy_note": "kimi-k3 wins HARD_K3 {0,13} at 1.03x maxpool. Below tier leader elsewhere (0.97x)."
     },
     {
       "model": "motif-technologies/motif-3",
       "provider": "aiand",
       "bench_column": "routerarena_z-ai/glm-5",
-      "direct_label": "aa",
       "proxy": true,
-      "proxy_note": "motif-3 quality = glm-5.2 x 0.95 per cluster. Inert (wins no clusters) but available via /force-model. User positioning: just behind glm-5.2 at half pricing."
+      "proxy_note": "motif-3 wins MID_M3 at Q_M3_WIN x maxpool (30-prompt medium-coding probe). Below tier leader elsewhere (0.92x)."
     }
   ]
 }
