@@ -651,6 +651,74 @@ func TestService_PassthroughToProvider_CountTokensForwardsWithCredential(t *test
 	})
 }
 
+// TestService_PassthroughToProvider_LocalMetadataWithoutAnthropic covers the
+// ai&-only deployment: no Anthropic provider registered, so the metadata
+// pre-flight calls are answered locally instead of failing.
+func TestService_PassthroughToProvider_LocalMetadataWithoutAnthropic(t *testing.T) {
+	deployed := []string{"moonshotai/kimi-k3", "zai-org/glm-5.2"}
+	aiandProvider := &fakeProvider{}
+	newSvc := func() *proxy.Service {
+		return makeProxyService(router.Decision{}, map[string]providers.Client{providers.ProviderAiand: aiandProvider}).
+			WithLocalModelList(func() []string { return deployed })
+	}
+
+	t.Run("count_tokens answered locally", func(t *testing.T) {
+		body := []byte(`{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hello world"}]}`)
+		httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", strings.NewReader(""))
+		rec := httptest.NewRecorder()
+
+		require.NoError(t, newSvc().PassthroughToProvider(context.Background(), body, rec, httpReq))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Positive(t, gjson.GetBytes(rec.Body.Bytes(), "input_tokens").Int())
+		assert.Empty(t, aiandProvider.passthroughCreds, "no upstream dispatch for metadata calls")
+	})
+
+	t.Run("models list served from deployed registry", func(t *testing.T) {
+		httpReq := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+		rec := httptest.NewRecorder()
+
+		require.NoError(t, newSvc().PassthroughToProvider(context.Background(), nil, rec, httpReq))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "application/json", rec.Header().Get("content-type"))
+		data := gjson.GetBytes(rec.Body.Bytes(), "data")
+		require.True(t, data.IsArray(), "response must carry the Anthropic model-list shape, got %s", rec.Body.String())
+		ids := []string{}
+		for _, e := range data.Array() {
+			ids = append(ids, e.Get("id").Str)
+			assert.Equal(t, "model", e.Get("type").Str)
+		}
+		assert.Equal(t, deployed, ids)
+		assert.False(t, gjson.GetBytes(rec.Body.Bytes(), "has_more").Bool())
+	})
+
+	t.Run("single model entry", func(t *testing.T) {
+		httpReq := httptest.NewRequest(http.MethodGet, "/v1/models/moonshotai/kimi-k3", nil)
+		rec := httptest.NewRecorder()
+
+		require.NoError(t, newSvc().PassthroughToProvider(context.Background(), nil, rec, httpReq))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "moonshotai/kimi-k3", gjson.GetBytes(rec.Body.Bytes(), "id").Str)
+	})
+
+	t.Run("unknown model 404s in the Anthropic error shape", func(t *testing.T) {
+		httpReq := httptest.NewRequest(http.MethodGet, "/v1/models/nope", nil)
+		rec := httptest.NewRecorder()
+
+		require.NoError(t, newSvc().PassthroughToProvider(context.Background(), nil, rec, httpReq))
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		assert.Equal(t, "not_found_error", gjson.GetBytes(rec.Body.Bytes(), "error.type").Str)
+	})
+
+	t.Run("listing disabled without a model list source", func(t *testing.T) {
+		svc := makeProxyService(router.Decision{}, map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}})
+		httpReq := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+		rec := httptest.NewRecorder()
+
+		err := svc.PassthroughToProvider(context.Background(), nil, rec, httpReq)
+		assert.ErrorIs(t, err, proxy.ErrProviderNotConfigured)
+	})
+}
+
 func TestService_ProxyMessages_PropagatesUpstreamStatusError(t *testing.T) {
 	upstreamErr := &providers.UpstreamStatusError{Status: 400}
 	provider := &fakeProvider{proxyErr: upstreamErr}

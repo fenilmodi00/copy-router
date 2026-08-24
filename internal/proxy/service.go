@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -129,6 +130,10 @@ type Service struct {
 	// otherwise an Anthropic-surface `x-api-key` could forward to
 	// api.openai.com (and vice versa) — a cross-provider credential leak.
 	passthroughEligibleProviders map[string]struct{}
+	// localModelList supplies the deployed model IDs used to answer the
+	// Anthropic model-listing passthrough locally when no Anthropic upstream
+	// is registered. nil keeps the legacy fail-through behavior.
+	localModelList func() []string
 	// planner parameterizes the Prism-style EV policy for stay-vs-switch.
 	planner planner.EVConfig
 	// hmmUpgradeConfidenceThreshold is the minimum classifier confidence needed
@@ -1745,6 +1750,14 @@ func (s *Service) WithPassthroughEligibleProviders(set map[string]struct{}) *Ser
 	return s
 }
 
+// WithLocalModelList supplies the deployed model IDs used to answer the
+// Anthropic model-listing passthrough (/v1/models, /v1/models/:model) locally
+// when no Anthropic upstream is registered. nil disables local listing.
+func (s *Service) WithLocalModelList(list func() []string) *Service {
+	s.localModelList = list
+	return s
+}
+
 // MetricsSummary returns aggregated cost/token totals for the given installation and time window.
 func (s *Service) MetricsSummary(ctx context.Context, installationID string, from, to time.Time) (TelemetrySummary, error) {
 	if s.telemetry == nil {
@@ -2115,6 +2128,22 @@ func (s *Service) RouteAnthropicRequest(ctx context.Context, body []byte, header
 // Anthropic credential is reachable (gateway-only deployment), count_tokens is
 // answered locally with an estimate instead of hard-failing.
 func (s *Service) PassthroughToProvider(ctx context.Context, body []byte, w http.ResponseWriter, r *http.Request) error {
+	if _, err := s.provider(providers.ProviderAnthropic); err != nil {
+		// No Anthropic upstream in this deployment: answer the metadata
+		// pre-flight calls locally instead of failing the client.
+		if isCountTokensRequest(r) {
+			return writeLocalCountTokens(w, body)
+		}
+		if s.localModelList != nil {
+			if id, ok := modelsEntryRequestID(r); ok {
+				return writeLocalModelsEntry(w, id, s.localModelList())
+			}
+			if isModelsListRequest(r) {
+				return writeLocalModelsList(w, s.localModelList())
+			}
+		}
+		return err
+	}
 	if isCountTokensRequest(r) && !s.anthropicCredentialReachable(ctx, r.Header) {
 		if err := writeLocalCountTokens(w, body); err == nil {
 			return nil
@@ -2123,6 +2152,61 @@ func (s *Service) PassthroughToProvider(ctx context.Context, body []byte, w http
 		// would get from a credential-less passthrough today.
 	}
 	return s.PassthroughToNamedProvider(ctx, providers.ProviderAnthropic, body, w, r)
+}
+
+// isModelsListRequest reports whether r is GET /v1/models.
+func isModelsListRequest(r *http.Request) bool {
+	return r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/models")
+}
+
+// modelsEntryRequestID returns the model ID of a GET /v1/models/:model
+// request; ok=false for the list endpoint or any non-model path.
+func modelsEntryRequestID(r *http.Request) (string, bool) {
+	if r.Method != http.MethodGet {
+		return "", false
+	}
+	const marker = "/models/"
+	i := strings.LastIndex(r.URL.Path, marker)
+	if i < 0 {
+		return "", false
+	}
+	id := r.URL.Path[i+len(marker):]
+	return id, id != ""
+}
+
+type anthropicModelEntry struct {
+	Type        string `json:"type"`
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+}
+
+// writeLocalModelsList answers GET /v1/models from the deployed registry in
+// the Anthropic model-list shape.
+func writeLocalModelsList(w http.ResponseWriter, ids []string) error {
+	entries := make([]anthropicModelEntry, 0, len(ids))
+	for _, id := range ids {
+		entries = append(entries, anthropicModelEntry{Type: "model", ID: id, DisplayName: id})
+	}
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	return json.NewEncoder(w).Encode(map[string]any{"data": entries, "has_more": false})
+}
+
+// writeLocalModelsEntry answers GET /v1/models/:model from the deployed
+// registry, 404 in the Anthropic error shape for unknown IDs.
+func writeLocalModelsEntry(w http.ResponseWriter, id string, ids []string) error {
+	w.Header().Set("content-type", "application/json")
+	for _, m := range ids {
+		if m != id {
+			continue
+		}
+		w.WriteHeader(http.StatusOK)
+		return json.NewEncoder(w).Encode(anthropicModelEntry{Type: "model", ID: m, DisplayName: m})
+	}
+	w.WriteHeader(http.StatusNotFound)
+	return json.NewEncoder(w).Encode(map[string]any{
+		"error": map[string]string{"type": "not_found_error", "message": "model not found: " + id},
+	})
 }
 
 // isCountTokensRequest reports whether r is the Anthropic count_tokens
