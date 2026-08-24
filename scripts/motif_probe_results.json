@@ -1,0 +1,545 @@
+{
+  "pass_rates": {
+    "motif-technologies/motif-3": {
+      "passed": 30,
+      "total": 30,
+      "rate": 1.0
+    },
+    "zai-org/glm-5.2": {
+      "passed": 27,
+      "total": 30,
+      "rate": 0.9
+    },
+    "moonshotai/kimi-k2.7-code": {
+      "passed": 30,
+      "total": 30,
+      "rate": 1.0
+    }
+  },
+  "ratio_m3_vs_glm": 1.1111111111111112,
+  "recommended_m3_win": 1.1,
+  "go_no_go": "PASS",
+  "results": {
+    "probe_000": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 133,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 160,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 154,
+        "error": false
+      }
+    },
+    "probe_001": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 418,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 418,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 408,
+        "error": false
+      }
+    },
+    "probe_002": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 342,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 379,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 313,
+        "error": false
+      }
+    },
+    "probe_003": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 364,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 369,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 524,
+        "error": false
+      }
+    },
+    "probe_004": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 324,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 337,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 320,
+        "error": false
+      }
+    },
+    "probe_005": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 225,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 254,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 222,
+        "error": false
+      }
+    },
+    "probe_006": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 492,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 416,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 383,
+        "error": false
+      }
+    },
+    "probe_007": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 1017,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 755,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 765,
+        "error": false
+      }
+    },
+    "probe_008": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 280,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 212,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 230,
+        "error": false
+      }
+    },
+    "probe_009": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 322,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 265,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 327,
+        "error": false
+      }
+    },
+    "probe_010": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 562,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 421,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 493,
+        "error": false
+      }
+    },
+    "probe_011": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 300,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 399,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 455,
+        "error": false
+      }
+    },
+    "probe_012": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 952,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 1113,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 896,
+        "error": false
+      }
+    },
+    "probe_013": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 528,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 543,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 440,
+        "error": false
+      }
+    },
+    "probe_014": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 137,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 135,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 221,
+        "error": false
+      }
+    },
+    "probe_015": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 350,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 303,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 311,
+        "error": false
+      }
+    },
+    "probe_016": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 273,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 267,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 271,
+        "error": false
+      }
+    },
+    "probe_017": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 598,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 617,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 612,
+        "error": false
+      }
+    },
+    "probe_018": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 304,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 255,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 202,
+        "error": false
+      }
+    },
+    "probe_019": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 470,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 439,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 358,
+        "error": false
+      }
+    },
+    "probe_020": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 465,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": false,
+        "response_length": 0,
+        "error": true
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 554,
+        "error": false
+      }
+    },
+    "probe_021": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 338,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": false,
+        "response_length": 0,
+        "error": true
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 328,
+        "error": false
+      }
+    },
+    "probe_022": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 990,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 884,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 851,
+        "error": false
+      }
+    },
+    "probe_023": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 1965,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": false,
+        "response_length": 0,
+        "error": true
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 2246,
+        "error": false
+      }
+    },
+    "probe_024": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 404,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 388,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 460,
+        "error": false
+      }
+    },
+    "probe_025": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 516,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 245,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 245,
+        "error": false
+      }
+    },
+    "probe_026": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 824,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 526,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 762,
+        "error": false
+      }
+    },
+    "probe_027": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 322,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 322,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 271,
+        "error": false
+      }
+    },
+    "probe_028": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 830,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 682,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 633,
+        "error": false
+      }
+    },
+    "probe_029": {
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 470,
+        "error": false
+      },
+      "zai-org/glm-5.2": {
+        "passed": true,
+        "response_length": 379,
+        "error": false
+      },
+      "moonshotai/kimi-k2.7-code": {
+        "passed": true,
+        "response_length": 389,
+        "error": false
+      }
+    }
+  },
+  "pass_motif3": 30,
+  "pass_glm": 27,
+  "error_rate": 0.03333333333333333,
+  "total_errors": 3,
+  "total_calls": 90,
+  "models_verified": [
+    "motif-technologies/motif-3",
+    "zai-org/glm-5.2",
+    "moonshotai/kimi-k2.7-code"
+  ],
+  "probe_count": 30
+}
