@@ -14,7 +14,7 @@ import {
   routerOrigin,
 } from "@/lib/installCommands";
 import { cn } from "@/lib/cn";
-import { ArrowRight, ChevronRight, GitBranch, Loader2, User, Zap } from "lucide-react";
+import { ArrowRight, ChevronRight, Loader2, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const POLL_INTERVAL_MS = 3000;
@@ -27,9 +27,9 @@ const ONBOARDING_KEY_NAME = "Onboarding key";
 // a key: the raw token exists only at issuance and can't be recovered here.
 const KEY_PLACEHOLDER = "<YOUR_ROUTER_KEY>";
 
-type StepID = "setup" | "harness" | "scope" | "install";
+type StepID = "setup" | "harness" | "install";
 
-const STEPS: StepID[] = ["setup", "harness", "scope", "install"];
+const STEPS: StepID[] = ["setup", "harness", "install"];
 
 interface RouterOnboardingProps {
   /** Called once the router has served its first request. */
@@ -40,9 +40,10 @@ interface RouterOnboardingProps {
 
 /**
  * First-run onboarding for a self-hosted router: one decision per screen —
- * issue a key → pick a harness → personal vs team → copy the command — then
- * idle until the router serves its first request and hand off to the
- * dashboard.
+ * issue a key → pick a harness → copy the command — then idle until the
+ * router serves its first request and hand off to the dashboard. Personal
+ * install only; the team/project scope was dropped with the multi-provider
+ * platform.
  *
  * Deliberately mirrors the hosted flow at router.workweave.ai so the two
  * surfaces teach the same mental model, but the base URL comes from this
@@ -113,16 +114,7 @@ export function RouterOnboarding({ onComplete, onSkip }: RouterOnboardingProps) 
         <HarnessStep
           onSelect={id => {
             setHarnessID(id);
-            setStep("scope");
-          }}
-        />
-      )}
-      {step === "scope" && harnessID != null && (
-        <ScopeStep
-          harnessID={harnessID}
-          onBack={() => setStep("harness")}
-          onSelect={s => {
-            setScope(s);
+            setScope("user");
             setStep("install");
           }}
         />
@@ -133,7 +125,7 @@ export function RouterOnboarding({ onComplete, onSkip }: RouterOnboardingProps) 
           scope={scope}
           token={issued?.token}
           hasExistingKey={(existingKeyCount ?? 0) > 0}
-          onBack={() => setStep("scope")}
+          onBack={() => setStep("harness")}
           onComplete={onComplete}
           onSkip={onSkip}
         />
@@ -226,68 +218,6 @@ function HarnessStep({ onSelect }: { onSelect: (id: HarnessID) => void }) {
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-
-function ScopeStep({
-  harnessID,
-  onBack,
-  onSelect,
-}: {
-  harnessID: HarnessID;
-  onBack: () => void;
-  onSelect: (scope: InstallScope) => void;
-}) {
-  const selected = harness(harnessID);
-  const options: { value: InstallScope; label: string; detail: string; icon: typeof User }[] = [
-    {
-      value: "user",
-      label: "Personal install",
-      detail: "Configures this machine for every project.",
-      icon: User,
-    },
-    {
-      value: "project",
-      label: "Team install (this project)",
-      detail: selected.projectDetail,
-      icon: GitBranch,
-    },
-  ];
-
-  return (
-    <div className="flex w-full max-w-lg flex-col items-center gap-6">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <Text variant="h3" className="text-lg font-semibold">
-          Personal or team install?
-        </Text>
-        <Text className="text-xs text-muted-foreground">
-          You can always find both commands later in Settings.
-        </Text>
-      </div>
-      <div className="flex w-full flex-col gap-3">
-        {options.map(o => {
-          const Icon = o.icon;
-          return (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => onSelect(o.value)}
-              className="flex items-center gap-4 rounded-xl border border-border-darker bg-background p-4 text-left transition-colors hover:border-brand"
-            >
-              <Icon className="size-4 shrink-0 text-muted-foreground" />
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <Text className="text-xs font-medium">{o.label}</Text>
-                <Text className="text-2xs text-muted-foreground">{o.detail}</Text>
-              </div>
-              <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground" />
-            </button>
-          );
-        })}
-      </div>
-      <Button appearance={Appearance.Hollow} onClick={onBack} className="text-xs text-muted-foreground">
-        Back
-      </Button>
     </div>
   );
 }

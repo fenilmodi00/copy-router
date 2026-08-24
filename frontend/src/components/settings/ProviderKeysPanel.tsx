@@ -17,30 +17,20 @@ import {
 import { ChevronDown, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-const PROVIDERS = ["anthropic", "openai", "google", "openrouter", "anthropic_gateway", "openai_gateway"] as const;
+const PROVIDERS = ["aiand"] as const;
 type Provider = (typeof PROVIDERS)[number];
 
 const PROVIDER_LABEL: Record<Provider, string> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-  google: "Google",
-  openrouter: "OpenRouter",
-  anthropic_gateway: "Anthropic-compatible gateway",
-  openai_gateway: "OpenAI-compatible gateway",
+  aiand: "ai&",
 };
 
 const PROVIDER_ENV_VAR: Record<Provider, string> = {
-  anthropic: "ANTHROPIC_API_KEY",
-  openai: "OPENAI_API_KEY",
-  google: "GOOGLE_API_KEY",
-  openrouter: "OPENROUTER_API_KEY",
-  anthropic_gateway: "ANTHROPIC_GATEWAY_TOKEN",
-  openai_gateway: "OPENAI_GATEWAY_TOKEN",
+  aiand: "AIAND_API_KEY",
 };
 
 // Providers with no vendor endpoint to fall back to: a key without a URL here
 // is stored but can never be dispatched, so the form blocks it up front.
-const PROVIDERS_REQUIRING_BASE_URL: readonly Provider[] = ["anthropic_gateway", "openai_gateway"];
+const PROVIDERS_REQUIRING_BASE_URL: readonly Provider[] = [];
 
 function providerLabel(p: Provider): string {
   return PROVIDER_LABEL[p];

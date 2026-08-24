@@ -17,8 +17,6 @@ export interface HarnessInfo {
   label: string;
   /** What the installer touches, shown under the label in the picker. */
   detail: string;
-  /** How the repo-local install is launched, shown on the project scope option. */
-  projectDetail: string;
 }
 
 export const HARNESSES: HarnessInfo[] = [
@@ -26,19 +24,16 @@ export const HARNESSES: HarnessInfo[] = [
     id: "claude",
     label: "Claude Code",
     detail: "Patches ~/.claude/settings.json.",
-    projectDetail: "Writes <repo>/.claude/settings.json — commit it to share with teammates.",
   },
   {
     id: "codex",
     label: "Codex",
     detail: "Patches ~/.codex/config.toml.",
-    projectDetail: "Writes <repo>/.codex/config.toml (gitignored). Run: CODEX_HOME=.codex codex",
   },
   {
     id: "pi",
     label: "pi",
     detail: "Merges a weave provider into ~/.pi/agent/models.json.",
-    projectDetail: "Writes <repo>/.pi/ (gitignored). Run: PI_CODING_AGENT_DIR=.pi pi",
   },
 ];
 

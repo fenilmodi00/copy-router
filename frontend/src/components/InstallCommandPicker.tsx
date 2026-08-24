@@ -7,18 +7,11 @@ import { Appearance } from "@/components/types";
 import {
   HARNESSES,
   type HarnessID,
-  type InstallScope,
   harness,
   installCommand,
   routerOrigin,
 } from "@/lib/installCommands";
-import { GitBranch, User } from "lucide-react";
 import { useState } from "react";
-
-const SCOPES: { value: InstallScope; label: string; icon: typeof User }[] = [
-  { value: "user", label: "Personal", icon: User },
-  { value: "project", label: "This project", icon: GitBranch },
-];
 
 interface InstallCommandPickerProps {
   /** Raw bearer token to inline into the command. */
@@ -30,11 +23,10 @@ interface InstallCommandPickerProps {
  * first because it's the only decision the user actually has to make — a
  * freshly minted token is useless until it's paired with the right installer
  * invocation, and burying that behind an endpoint block and an uninstall
- * section is what made the old reveal unreadable.
+ * section is what made the old reveal unreadable. Personal (user) scope only.
  */
 export function InstallCommandPicker({ token }: InstallCommandPickerProps) {
   const [harnessID, setHarnessID] = useState<HarnessID>("claude");
-  const [scope, setScope] = useState<InstallScope>("user");
   const origin = routerOrigin();
   const selected = harness(harnessID);
 
@@ -61,36 +53,13 @@ export function InstallCommandPicker({ token }: InstallCommandPickerProps) {
         ))}
       </div>
 
-      <div role="radiogroup" aria-label="Install scope" className="flex flex-wrap gap-2">
-        {SCOPES.map(s => {
-          const Icon = s.icon;
-          return (
-            <Button
-              key={s.value}
-              type="button"
-              role="radio"
-              aria-checked={scope === s.value}
-              size="sm"
-              appearance={Appearance.Outlined}
-              className={scope === s.value ? "!border-foreground/40" : "text-muted-foreground"}
-              onClick={() => setScope(s.value)}
-            >
-              <Icon className="size-3.5" />
-              {s.label}
-            </Button>
-          );
-        })}
-      </div>
-
-      <Text className="text-2xs text-muted-foreground">
-        {scope === "project" ? selected.projectDetail : selected.detail}
-      </Text>
+      <Text className="text-2xs text-muted-foreground">{selected.detail}</Text>
 
       {origin === "" ? (
         <Text className="text-2xs text-muted-foreground">Preparing install command…</Text>
       ) : (
         <CopyBlock
-          value={installCommand(harnessID, scope, token, origin)}
+          value={installCommand(harnessID, "user", token, origin)}
           title="Copy install command"
         />
       )}
