@@ -217,33 +217,63 @@ func main() {
 	// 5-min TTL matches the API-key cache so both halves share one staleness bound under a Pub/Sub outage.
 	userClusterCache := auth.NewLRUUserClusterListCache(50000, 5*time.Minute)
 
-	pubsubProjectID := config.MustGet("PUBSUB_PROJECT_ID")
-	pubsubTopicID := config.MustGet("PUBSUB_TOPIC_ROUTER_INVALIDATION")
-	// Treated as a prefix: each replica derives its own subscription
-	// "<prefix>-<uuid>" so every replica receives every invalidation. A shared
-	// subscription would load-balance, defeating cross-fleet cache broadcast.
-	pubsubSubscriptionPrefix := config.MustGet("PUBSUB_SUBSCRIPTION_ROUTER_INVALIDATION")
-	pubsubClient, err := gcppubsub.NewClient(context.Background(), pubsubProjectID)
-	if err != nil {
-		logger.Error("Failed to create Pub/Sub client", "err", err)
-		panic(err)
-	}
-	defer pubsubClient.Close()
-
-	publisher := pubsubClient.Publisher(pubsubTopicID)
-	notifier := routerpubsub.NewInvalidationNotifier(publisher)
-	defer notifier.Stop()
-
-	// When configured, the billing debit hook publishes a signal once an org's
-	// balance crosses its recharge threshold; the Weave control plane charges
-	// the saved card. Unset topic just leaves autopay disabled.
-	if billingSvc != nil {
-		if autopayTopicID := config.GetOr("PUBSUB_TOPIC_ROUTER_AUTOPAY", ""); autopayTopicID != "" {
-			autopayNotifier := routerpubsub.NewAutopayNotifier(pubsubClient.Publisher(autopayTopicID))
-			defer autopayNotifier.Stop()
-			billingSvc = billingSvc.WithAutopayNotifier(autopayNotifier)
-			logger.Info("Autopay recharge signalling enabled", "topic", autopayTopicID)
+	// Single-replica PaaS deploys (e.g. build.io demo) often have no GCP Pub/Sub.
+	// PUBSUB_DISABLED=true skips cross-replica invalidation; cache TTL is the safety net.
+	notifier := auth.InstallationChangeNotifier(auth.NoOpInstallationChangeNotifier{})
+	if config.GetOr("PUBSUB_DISABLED", "false") != "true" {
+		pubsubProjectID := config.MustGet("PUBSUB_PROJECT_ID")
+		pubsubTopicID := config.MustGet("PUBSUB_TOPIC_ROUTER_INVALIDATION")
+		// Treated as a prefix: each replica derives its own subscription
+		// "<prefix>-<uuid>" so every replica receives every invalidation. A shared
+		// subscription would load-balance, defeating cross-fleet cache broadcast.
+		pubsubSubscriptionPrefix := config.MustGet("PUBSUB_SUBSCRIPTION_ROUTER_INVALIDATION")
+		pubsubClient, err := gcppubsub.NewClient(context.Background(), pubsubProjectID)
+		if err != nil {
+			logger.Error("Failed to create Pub/Sub client", "err", err)
+			panic(err)
 		}
+		defer pubsubClient.Close()
+
+		publisher := pubsubClient.Publisher(pubsubTopicID)
+		psNotifier := routerpubsub.NewInvalidationNotifier(publisher)
+		defer psNotifier.Stop()
+		notifier = psNotifier
+
+		// When configured, the billing debit hook publishes a signal once an org's
+		// balance crosses its recharge threshold; the Weave control plane charges
+		// the saved card. Unset topic just leaves autopay disabled.
+		if billingSvc != nil {
+			if autopayTopicID := config.GetOr("PUBSUB_TOPIC_ROUTER_AUTOPAY", ""); autopayTopicID != "" {
+				autopayNotifier := routerpubsub.NewAutopayNotifier(pubsubClient.Publisher(autopayTopicID))
+				defer autopayNotifier.Stop()
+				billingSvc = billingSvc.WithAutopayNotifier(autopayNotifier)
+				logger.Info("Autopay recharge signalling enabled", "topic", autopayTopicID)
+			}
+		}
+
+		// Fans out Pub/Sub invalidations to this replica's cache; the 5-min TTL
+		// is the safety net if the listener falls behind.
+		subCtx, subCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		subscriptionName, deleteSubscription, err := routerpubsub.CreateReplicaSubscription(
+			subCtx, pubsubClient, pubsubProjectID, pubsubTopicID, pubsubSubscriptionPrefix,
+		)
+		subCancel()
+		if err != nil {
+			logger.Error("Failed to create per-replica invalidation subscription", "err", err)
+			panic(err)
+		}
+		defer deleteSubscription()
+		logger.Info("Created per-replica invalidation subscription", "subscription", subscriptionName)
+
+		listener := routerpubsub.NewInvalidationListener(pubsubClient.Subscriber(subscriptionName), cache, userClusterCache)
+		listenerCtx, listenerCancel := context.WithCancel(context.Background())
+		defer func() {
+			listenerCancel()
+			listener.Wait()
+		}()
+		safeGo(logger, "invalidation-listener", func() { listener.Run(listenerCtx) })
+	} else {
+		logger.Warn("PUBSUB_DISABLED=true; cross-replica cache invalidation disabled (single-replica OK)")
 	}
 
 	// Deployment-wide escape hatch: suppresses every per-organization flag
@@ -261,28 +291,6 @@ func main() {
 		WithUserClusterModelLists(repo.UserClusterModelLists, userClusterCache).
 		WithWIFTokenSource(buildWIFTokenSource(logger)).
 		WithFlagOverridesDisabled(flagOverridesDisabled)
-
-	// Fans out Pub/Sub invalidations to this replica's cache; the 5-min TTL
-	// is the safety net if the listener falls behind.
-	subCtx, subCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	subscriptionName, deleteSubscription, err := routerpubsub.CreateReplicaSubscription(
-		subCtx, pubsubClient, pubsubProjectID, pubsubTopicID, pubsubSubscriptionPrefix,
-	)
-	subCancel()
-	if err != nil {
-		logger.Error("Failed to create per-replica invalidation subscription", "err", err)
-		panic(err)
-	}
-	defer deleteSubscription()
-	logger.Info("Created per-replica invalidation subscription", "subscription", subscriptionName)
-
-	listener := routerpubsub.NewInvalidationListener(pubsubClient.Subscriber(subscriptionName), cache, userClusterCache)
-	listenerCtx, listenerCancel := context.WithCancel(context.Background())
-	defer func() {
-		listenerCancel()
-		listener.Wait()
-	}()
-	safeGo(logger, "invalidation-listener", func() { listener.Run(listenerCtx) })
 
 	// Managed mode doesn't mount the dashboard, so this only matters selfhosted.
 	if deploymentMode == server.DeploymentModeSelfHosted {
