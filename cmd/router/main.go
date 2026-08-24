@@ -31,9 +31,6 @@ import (
 	"workweave/router/internal/policyclient"
 	"workweave/router/internal/postgres"
 	"workweave/router/internal/providers"
-	"workweave/router/internal/providers/anthropic"
-	googleProvider "workweave/router/internal/providers/google"
-	openaiProvider "workweave/router/internal/providers/openai"
 	openaiCompatProvider "workweave/router/internal/providers/openaicompat"
 	"workweave/router/internal/proxy"
 	"workweave/router/internal/proxy/usage"
@@ -147,12 +144,6 @@ func main() {
 	// Feeds resolveHardPinModel so compaction only lands where deployment
 	// auth actually exists — a BYOK/passthrough-only provider would 401.
 	envKeyedProviders := make(map[string]struct{})
-	// True when Anthropic has no deployment key but is reachable via client
-	// auth passthrough (Claude Code's OAuth/x-api-key flow). Must stay out of
-	// envKeyedProviders since not every request carries those credentials.
-	anthropicPassthroughEligible := false
-	// Mirrors anthropicPassthroughEligible for OpenAI (Codex's plan flow).
-	openaiPassthroughEligible := false
 
 	// Wired by default in managed mode. A boot-time health-check error (e.g.
 	// transient pool unreadiness) defaults to billing-enabled rather than
@@ -181,173 +172,19 @@ func main() {
 	// platform-key mode gated by balance checks. Self-hosted is never BYOK-only.
 	byokOnly := deploymentMode == server.DeploymentModeManaged && billingSvc == nil
 
-	// Always registered. With ANTHROPIC_API_KEY (selfhosted only) the router
-	// uses its own key; otherwise client auth headers pass through directly.
-	anthropicKey := ""
-	if !byokOnly {
-		anthropicKey = config.GetOr("ANTHROPIC_API_KEY", "")
-	}
-	providerMap[providers.ProviderAnthropic] = anthropic.NewClient(anthropicKey, anthropic.DefaultBaseURL)
-	switch {
-	case byokOnly:
-		logger.Info("Anthropic provider enabled (BYOK only)", "base_url", anthropic.DefaultBaseURL)
-	case anthropicKey != "":
-		envKeyedProviders[providers.ProviderAnthropic] = struct{}{}
-		logger.Info("Anthropic provider enabled (router key)", "base_url", anthropic.DefaultBaseURL)
-	default:
-		// Selfhosted, no env key: passthrough-only, kept out of envKeyedProviders.
-		anthropicPassthroughEligible = true
-		logger.Info("Anthropic provider enabled (client auth passthrough)", "base_url", anthropic.DefaultBaseURL)
-	}
+	// ai& is the sole upstream provider of this deployment.
 
 	{
-		openaiBaseURL := config.GetOr("OPENAI_BASE_URL", openaiProvider.DefaultBaseURL)
-		openaiKey := ""
-		if !byokOnly {
-			openaiKey = config.GetOr("OPENAI_API_KEY", "")
-		}
-		// Codex (ChatGPT) subscription reroute to the Codex backend lives in
-		// the OpenAI client itself, keyed off the resolved credential.
-		providerMap[providers.ProviderOpenAI] = openaiProvider.NewClient(openaiKey, openaiBaseURL)
-		switch {
-		case byokOnly:
-			logger.Info("OpenAI provider enabled (BYOK only)", "base_url", openaiBaseURL)
-		case openaiKey != "":
-			envKeyedProviders[providers.ProviderOpenAI] = struct{}{}
-			logger.Info("OpenAI provider enabled", "base_url", openaiBaseURL)
-		default:
-			// OpenAI in selfhosted with no env key serves the passthrough
-			// path on client Authorization headers (Codex plan flow).
-			openaiPassthroughEligible = true
-			logger.Info("OpenAI provider enabled (client auth passthrough)", "base_url", openaiBaseURL)
-		}
-	}
 
-	{
-		openRouterBaseURL := config.GetOr("OPENROUTER_BASE_URL", openaiCompatProvider.DefaultBaseURL)
-		// Managed deploys don't use OpenRouter as a platform source by default
-		// (opt in via ROUTER_OPENROUTER_PLATFORM_ENABLED=true); selfhosted reads
-		// the key unconditionally. Either way BYOK OpenRouter keys still dispatch.
-		openRouterPlatformEnabled := deploymentMode == server.DeploymentModeSelfHosted ||
-			config.GetOr("ROUTER_OPENROUTER_PLATFORM_ENABLED", "false") == "true"
-		openRouterKey := ""
-		if !byokOnly && openRouterPlatformEnabled {
-			openRouterKey = config.GetOr("OPENROUTER_API_KEY", "")
-		}
-		providerMap[providers.ProviderOpenRouter] = openaiCompatProvider.NewClient(openRouterKey, openRouterBaseURL)
-		switch {
-		case byokOnly:
-			logger.Info("OpenRouter provider enabled (BYOK only)", "base_url", openRouterBaseURL)
-		case openRouterKey != "":
-			envKeyedProviders[providers.ProviderOpenRouter] = struct{}{}
-			logger.Info("OpenRouter provider enabled", "base_url", openRouterBaseURL)
-		case !openRouterPlatformEnabled:
-			logger.Info("OpenRouter provider registered (BYOK only — managed deploys don't use OpenRouter as a platform source; set ROUTER_OPENROUTER_PLATFORM_ENABLED=true to opt in)", "base_url", openRouterBaseURL)
-		default:
-			logger.Info("OpenRouter provider registered (BYOK only — set OPENROUTER_API_KEY for deployment-level use)", "base_url", openRouterBaseURL)
-		}
-	}
-
-	{
-		fireworksBaseURL := config.GetOr("FIREWORKS_BASE_URL", openaiCompatProvider.FireworksBaseURL)
+		// ai& (aiand.com) OpenAI-compatible inference surface for open-weight
+		// models (GLM, DeepSeek, Kimi, Qwen, Gemma, gpt-oss). Uses ai&'s
+		// namespaced "<lab>/<model>" IDs; modelIDMap comes from the catalog's
+		// per-binding UpstreamID.
+		aiandBaseURL := config.GetOr("AIAND_API_URL", openaiCompatProvider.AiandBaseURL)
 		registerDeploymentKeyedProvider(providerMap, envKeyedProviders, logger,
-			providers.ProviderFireworks, "Fireworks", "FIREWORKS_API_KEY", fireworksBaseURL, byokOnly,
+			providers.ProviderAiand, "ai&", "AIAND_API_KEY", aiandBaseURL, byokOnly,
 			func(key, baseURL string) providers.Client {
-				return openaiCompatProvider.NewClientWithModelIDMap(key, baseURL, upstreamIDsForProvider(providers.ProviderFireworks))
-			})
-	}
-
-	{
-		// Makora uses DeepSeek-canonical model IDs vs. the router's slash-form
-		// slugs; modelIDMap comes from the catalog's per-binding UpstreamID.
-		makoraBaseURL := config.GetOr("MAKORA_BASE_URL", openaiCompatProvider.MakoraBaseURL)
-		registerDeploymentKeyedProvider(providerMap, envKeyedProviders, logger,
-			providers.ProviderMakora, "Makora", "MAKORA_API_KEY", makoraBaseURL, byokOnly,
-			func(key, baseURL string) providers.Client {
-				return openaiCompatProvider.NewClientWithModelIDMap(key, baseURL, upstreamIDsForProvider(providers.ProviderMakora))
-			})
-	}
-
-	{
-		// Primary binding for DeepSeek V4 Pro / GLM-5.1 / MiniMax M2.7 (top of
-		// artificialanalysis.ai throughput tables); prior providers stay as
-		// ordered fallbacks. Uses "Org/Model" IDs vs. the router's slash-form
-		// slugs; modelIDMap comes from the catalog's per-binding UpstreamID.
-		togetherBaseURL := config.GetOr("TOGETHER_BASE_URL", openaiCompatProvider.TogetherBaseURL)
-		registerDeploymentKeyedProvider(providerMap, envKeyedProviders, logger,
-			providers.ProviderTogether, "Together", "TOGETHER_API_KEY", togetherBaseURL, byokOnly,
-			func(key, baseURL string) providers.Client {
-				return openaiCompatProvider.NewClientWithModelIDMap(key, baseURL, upstreamIDsForProvider(providers.ProviderTogether))
-			})
-	}
-
-	{
-		xaiBaseURL := config.GetOr("XAI_BASE_URL", openaiCompatProvider.XAIBaseURL)
-		registerDeploymentKeyedProvider(providerMap, envKeyedProviders, logger,
-			providers.ProviderXAI, "XAI", "XAI_API_KEY", xaiBaseURL, byokOnly,
-			func(key, baseURL string) providers.Client {
-				return openaiCompatProvider.NewClient(key, baseURL)
-			})
-	}
-
-	{
-		// "bedrock-mantle" OpenAI-compatible surface (AWS-recommended over
-		// bedrock-runtime/InvokeModel). Auth is a static Bedrock API key
-		// (AWS_BEARER_TOKEN_BEDROCK), not SigV4, so the standard bearer flow
-		// applies. Expects dot-form model IDs; modelIDMap comes from the catalog.
-		bedrockRegion := config.GetOr("AWS_REGION", "us-east-1")
-		bedrockBaseURL := config.GetOr("BEDROCK_BASE_URL", openaiCompatProvider.BedrockMantleBaseURL(bedrockRegion))
-		registerDeploymentKeyedProvider(providerMap, envKeyedProviders, logger,
-			providers.ProviderBedrock, "Bedrock", "AWS_BEARER_TOKEN_BEDROCK", bedrockBaseURL, byokOnly,
-			func(key, baseURL string) providers.Client {
-				return openaiCompatProvider.NewClientWithModelIDMap(key, baseURL, upstreamIDsForProvider(providers.ProviderBedrock))
-			},
-			"region", bedrockRegion)
-	}
-
-	{
-		// Endpoint is per-tenant with no vendor default; token is only used when a
-		// base URL is also set.
-		gatewayBaseURL := config.GetOr("ANTHROPIC_GATEWAY_BASE_URL", "")
-		gatewayToken := ""
-		if !byokOnly && gatewayBaseURL != "" {
-			gatewayToken = config.GetOr(providers.APIKeyEnvVar(providers.ProviderAnthropicGateway), "")
-		}
-		providerMap[providers.ProviderAnthropicGateway] = anthropic.NewClient(
-			gatewayToken, gatewayBaseURL, anthropic.WithAuthScheme(anthropic.AuthBearer))
-		if gatewayToken != "" {
-			envKeyedProviders[providers.ProviderAnthropicGateway] = struct{}{}
-			logger.Info("Anthropic gateway provider enabled", "base_url", gatewayBaseURL)
-		} else {
-			logger.Info("Anthropic gateway provider registered (BYOK only — set ANTHROPIC_GATEWAY_TOKEN and ANTHROPIC_GATEWAY_BASE_URL for deployment-level use)")
-		}
-	}
-
-	{
-		// Same arrangement for the OpenAI-spec surface of a customer gateway
-		// (Snowflake Cortex serves its non-Claude models only here).
-		gatewayBaseURL := config.GetOr("OPENAI_GATEWAY_BASE_URL", "")
-		gatewayToken := ""
-		if !byokOnly && gatewayBaseURL != "" {
-			gatewayToken = config.GetOr(providers.APIKeyEnvVar(providers.ProviderOpenAIGateway), "")
-		}
-		providerMap[providers.ProviderOpenAIGateway] = openaiCompatProvider.NewGatewayClient(gatewayToken, gatewayBaseURL)
-		if gatewayToken != "" {
-			envKeyedProviders[providers.ProviderOpenAIGateway] = struct{}{}
-			logger.Info("OpenAI gateway provider enabled", "base_url", gatewayBaseURL)
-		} else {
-			logger.Info("OpenAI gateway provider registered (BYOK only — set OPENAI_GATEWAY_TOKEN and OPENAI_GATEWAY_BASE_URL for deployment-level use)")
-		}
-	}
-
-	{
-		// Native REST surface, required for multi-turn tool use against Gemini
-		// 3.x's opaque thought_signature field (not exposed via OpenAI-compat).
-		googleBaseURL := config.GetOr("GOOGLE_BASE_URL", googleProvider.NativeBaseURL)
-		registerDeploymentKeyedProvider(providerMap, envKeyedProviders, logger,
-			providers.ProviderGoogle, "Google (Gemini) native", "GOOGLE_API_KEY", googleBaseURL, byokOnly,
-			func(key, baseURL string) providers.Client {
-				return googleProvider.NewNativeClient(key, baseURL)
+				return openaiCompatProvider.NewClientWithModelIDMap(key, baseURL, upstreamIDsForProvider(providers.ProviderAiand))
 			})
 	}
 
@@ -551,19 +388,6 @@ func main() {
 	deploymentEligible := make(map[string]struct{}, len(envKeyedProviders))
 	for p := range envKeyedProviders {
 		deploymentEligible[p] = struct{}{}
-	}
-
-	// Kept separate from deploymentEligible: adding these unconditionally would
-	// let e.g. an Anthropic-surface request route to OpenAI in passthrough mode,
-	// forwarding an Anthropic `x-api-key` to api.openai.com — a credential leak.
-	// WithPassthroughEligibleProviders only admits a provider when the request
-	// matches its own surface.
-	passthroughEligible := make(map[string]struct{}, 2)
-	if anthropicPassthroughEligible {
-		passthroughEligible[providers.ProviderAnthropic] = struct{}{}
-	}
-	if openaiPassthroughEligible {
-		passthroughEligible[providers.ProviderOpenAI] = struct{}{}
 	}
 
 	// Planner + handover config (Prism-style cache-aware routing); each default
@@ -861,7 +685,6 @@ func main() {
 		WithFeedback(repo.Feedback, feedbackSigner, feedbackBaseURL).
 		WithByokOnly(byokOnly).
 		WithDeploymentKeyedProviders(deploymentEligible).
-		WithPassthroughEligibleProviders(passthroughEligible).
 		WithHardPinResolver(hardPinResolver).
 		WithSubAgentOverride(subAgentProvider, subAgentModel).
 		WithPlannerEnabled(plannerEnabled).
@@ -1011,6 +834,16 @@ func main() {
 	// Lets the admin model-selection handler surface deployed models; nil
 	// fallback keeps non-cluster routers bootable.
 	deployedModels, _ := rtr.(*cluster.Multiversion)
+	if deployedModels != nil {
+		proxySvc = proxySvc.WithLocalModelList(func() []string {
+			entries := deployedModels.DefaultDeployedModels()
+			ids := make([]string, 0, len(entries))
+			for _, e := range entries {
+				ids = append(ids, e.Model)
+			}
+			return ids
+		})
+	}
 	analyticsSvc := analytics.NewService(repo.Analytics, time.Now)
 	server.Register(engine, authSvc, proxySvc, deployedModels, hmmRosterModels, deploymentMode, billingSvc, hmmReadinessChecker, hmmRosterSource, analyticsSvc)
 
@@ -1605,8 +1438,8 @@ func runSessionPinSweep(ctx context.Context, store sessionpin.Store) {
 // defaultHardPinProvider and defaultHardPinModel are the fallback (provider,
 // model) used by resolveHardPinModel when the cluster bundle can't be loaded.
 const (
-	defaultHardPinProvider = providers.ProviderAnthropic
-	defaultHardPinModel    = "claude-haiku-4-5"
+	defaultHardPinProvider = providers.ProviderAiand
+	defaultHardPinModel    = "deepseek-ai/deepseek-v4-flash"
 	// flagRegistryPublishTimeout bounds the boot-time registry publish so a slow
 	// or unreachable database delays startup by seconds, not indefinitely.
 	flagRegistryPublishTimeout = 10 * time.Second
