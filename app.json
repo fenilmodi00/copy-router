@@ -1,7 +1,6 @@
-# build.io Application Manifest for Weave Router
 {
   "name": "router",
-  "description": "Weave Router — Smart AI model proxy that routes every request to the best model using a cluster scorer with ONNX embedders",
+  "description": "aiand router — Smart AI model proxy that routes every request to the best model using a cluster scorer with ONNX embedders",
   "version": "1.0.0",
   "buildStack": "heroku-24",
   "env": {
