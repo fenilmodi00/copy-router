@@ -3,3 +3,5 @@
 build:
   docker:
     web: Dockerfile
+  config:
+    TARGETARCH: amd64

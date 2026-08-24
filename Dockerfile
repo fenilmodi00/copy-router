@@ -65,11 +65,10 @@ ARG HF_QWEN_REVISION
 ARG ROUTER_SHA=unknown
 ARG ROUTER_BUILD_TIME=unknown
 ARG ROUTER_PR=unknown
-# TARGETARCH is set automatically by buildx (`amd64` or `arm64`) so we
-# can pull the matching native ONNX Runtime + libtokenizers tarball.
-# Without this, building on Apple Silicon / Graviton picks up x86_64
-# binaries and the linker rejects them as "incompatible".
-ARG TARGETARCH
+# TARGETARCH is set automatically by buildx (`amd64` or `arm64`). build.io's
+# Kaniko builder does not inject it — default amd64 for cloud linux/amd64.
+# Without a value, `set -u` in the RUN below aborts with "parameter not set".
+ARG TARGETARCH=amd64
 
 # Pull the ONNX Runtime + libtokenizers release tarballs in one layer,
 # selecting the right arch per TARGETARCH. The CGO build needs

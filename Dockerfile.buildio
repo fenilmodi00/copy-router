@@ -1,8 +1,26 @@
-# Production Dockerfile for build.io deployment
-# Builds a minimal, production-ready router image
+# Production Dockerfile for build.io deployment.
+# Functionally identical to ./Dockerfile — kept as a separate -f target so
+# deploy scripts can pin the build.io image recipe without coupling to the
+# default local-dev Dockerfile name.
 # syntax=docker/dockerfile:1
+#
+# The router uses hugot + onnxruntime_go (CGO; dynamic-links against
+# libonnxruntime.so) to run the cluster scorer's embedders (Jina v2,
+# Qwen3-0.6B) in-process. That requires a glibc base — Alpine/musl
+# can't load the library out of the box. Builder is bookworm-glibc;
+# runtime is distroless/cc-debian12 so we get the C runtime without
+# the rest of Debian's userland.
+#
+# The mini UI is a Next.js static export built by a Node.js stage and
+# copied into assets/ui/ before the Go binary is assembled.
 
-# Use the same builder approach as Dockerfile.dev but with production optimizations
+ARG ONNXRUNTIME_VERSION=1.25.1
+ARG TOKENIZERS_VERSION=v1.27.0
+ARG HF_MODEL_REPO=jinaai/jina-embeddings-v2-base-code
+ARG HF_MODEL_REVISION=516f4baf13dec4ddddda8631e019b5737c8bc250
+ARG HF_QWEN_REPO=
+ARG HF_QWEN_REVISION=a43740ed1bb6436deaa4b79c9a132a3d98756ace
+
 FROM node:22-alpine AS ui-builder
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json* ./
@@ -12,21 +30,115 @@ RUN npm run build
 
 FROM golang:1.25.9-bookworm AS build-stage
 
-# Build identity via -ldflags (surfaced at GET /v1/version)
+ARG ONNXRUNTIME_VERSION
+ARG TOKENIZERS_VERSION
+ARG HF_MODEL_REPO
+ARG HF_MODEL_REVISION
+ARG HF_QWEN_REPO
+ARG HF_QWEN_REVISION
 ARG ROUTER_SHA=unknown
 ARG ROUTER_BUILD_TIME=unknown
 ARG ROUTER_PR=unknown
-ARG TARGETARCH
+ARG TARGETARCH=amd64
 
-# Copy the build-time assets first (parallelizable)
+RUN set -eux; \
+    case "$TARGETARCH" in \
+      amd64) ort_arch=x64;     tok_arch=x86_64  ;; \
+      arm64) ort_arch=aarch64; tok_arch=aarch64 ;; \
+      *) echo "unsupported TARGETARCH: $TARGETARCH"; exit 1 ;; \
+    esac; \
+    mkdir -p /opt/onnxruntime /opt/libtokenizers; \
+    curl --fail --silent --show-error --location \
+      "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-${ort_arch}-${ONNXRUNTIME_VERSION}.tgz" \
+      -o /tmp/onnxruntime.tgz; \
+    tar -xzf /tmp/onnxruntime.tgz -C /opt/onnxruntime --strip-components=1; \
+    rm /tmp/onnxruntime.tgz; \
+    curl --fail --silent --show-error --location \
+      "https://github.com/daulet/tokenizers/releases/download/${TOKENIZERS_VERSION}/libtokenizers.linux-${tok_arch}.tar.gz" \
+      -o /tmp/libtokenizers.tar.gz; \
+    tar -xzf /tmp/libtokenizers.tar.gz -C /opt/libtokenizers; \
+    rm /tmp/libtokenizers.tar.gz
+
+RUN --mount=type=secret,id=hf_token,required=false \
+    set -eux; \
+    if [ -s /run/secrets/hf_token ]; then \
+      auth_header="Authorization: Bearer $(cat /run/secrets/hf_token)"; \
+    else \
+      auth_header=""; \
+    fi; \
+    jina_dir=/opt/router/assets/jina-v2-base-code-int8; \
+    mkdir -p "$jina_dir"; \
+    base="https://huggingface.co/${HF_MODEL_REPO}/resolve/${HF_MODEL_REVISION}"; \
+    curl --fail --silent --show-error --location \
+      ${auth_header:+--header "$auth_header"} \
+      "${base}/onnx/model_quantized.onnx" -o "$jina_dir/model.onnx"; \
+    curl --fail --silent --show-error --location \
+      ${auth_header:+--header "$auth_header"} \
+      "${base}/tokenizer.json" -o "$jina_dir/tokenizer.json"; \
+    for f in config.json tokenizer_config.json special_tokens_map.json; do \
+      curl --silent --show-error --location \
+        ${auth_header:+--header "$auth_header"} \
+        --write-out "%{http_code}" \
+        "${base}/${f}" -o "$jina_dir/${f}" \
+        > /tmp/code; \
+      code=$(cat /tmp/code); \
+      case "$code" in \
+        200) ;; \
+        404) rm -f "$jina_dir/${f}" ;; \
+        *) echo "ERROR: unexpected HTTP $code for $f"; exit 1 ;; \
+      esac; \
+    done; \
+    sz=$(stat -c '%s' "$jina_dir/model.onnx"); \
+    if [ "$sz" -lt 1048576 ]; then \
+      echo "ERROR: jina model.onnx is only $sz bytes (HF download likely returned a pointer or auth issue)"; \
+      exit 1; \
+    fi; \
+    if [ -n "${HF_QWEN_REPO}" ]; then \
+      qwen_dir=/opt/router/assets/qwen3-embedding-0.6b-int8; \
+      mkdir -p "$qwen_dir"; \
+      qbase="https://huggingface.co/${HF_QWEN_REPO}/resolve/${HF_QWEN_REVISION}"; \
+      curl --fail --silent --show-error --location \
+        ${auth_header:+--header "$auth_header"} \
+        "${qbase}/model.onnx" -o "$qwen_dir/model.onnx"; \
+      curl --fail --silent --show-error --location \
+        ${auth_header:+--header "$auth_header"} \
+        "${qbase}/tokenizer.json" -o "$qwen_dir/tokenizer.json"; \
+      for f in tokenizer_config.json special_tokens_map.json; do \
+        curl --silent --show-error --location \
+          ${auth_header:+--header "$auth_header"} \
+          --write-out "%{http_code}" \
+          "${qbase}/${f}" -o "$qwen_dir/${f}" \
+          > /tmp/code; \
+        code=$(cat /tmp/code); \
+        case "$code" in \
+          200) ;; \
+          404) rm -f "$qwen_dir/${f}" ;; \
+          *) echo "ERROR: unexpected HTTP $code for $f"; exit 1 ;; \
+        esac; \
+      done; \
+      qsz=$(stat -c '%s' "$qwen_dir/model.onnx"); \
+      if [ "$qsz" -lt 1048576 ]; then \
+        echo "ERROR: qwen model.onnx is only $qsz bytes (HF download likely returned a pointer or auth issue)"; \
+        exit 1; \
+      fi; \
+    fi; \
+    ls -laR /opt/router/assets/
+
+WORKDIR /app
+
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
-# Copy source
 COPY cmd ./cmd
 COPY internal ./internal
+COPY --from=ui-builder /app/frontend/out ./assets/ui
 
-# Build with ORT tags (required for ONNX runtime support)
+ENV CGO_ENABLED=1 \
+    CGO_CFLAGS="-I/opt/onnxruntime/include" \
+    CGO_LDFLAGS="-L/opt/onnxruntime/lib -L/opt/libtokenizers -lonnxruntime"
+
+WORKDIR /app/cmd/router
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     GOOS=linux go build -tags ORT \
@@ -35,23 +147,15 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM gcr.io/distroless/cc-debian12 AS runtime
 
-# Copy the built binary
+COPY --from=build-stage /opt/onnxruntime/lib/libonnxruntime.so* /usr/lib/
+COPY --from=build-stage /opt/router/assets/ /opt/router/assets/
+WORKDIR /
 COPY --from=build-stage /server /server
+COPY --from=build-stage /app/assets/ui ./assets/ui
 
-# Copy the static UI assets
-COPY --from=ui-builder /app/frontend/out /assets/ui
-
-# Copy cluster artifacts from build-stage (they were pulled during build)
-COPY --from=build-stage /opt/router/assets /opt/router/assets
-
-# Environment
 ENV PORT=8080
 ENV ROUTER_ONNX_ASSETS_DIR=/opt/router/assets
 ENV ROUTER_ONNX_LIBRARY_DIR=/usr/lib
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -sf http://localhost:8080/health || exit 1
-
-# Run the server
+EXPOSE 8080
 ENTRYPOINT ["/server"]
