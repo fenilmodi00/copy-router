@@ -35,6 +35,7 @@ func TestCatalog_BindingsReferenceCanonicalProviders(t *testing.T) {
 		providers.ProviderMakora:           {},
 		providers.ProviderTogether:         {},
 		providers.ProviderXAI:              {},
+		providers.ProviderAiand:            {},
 		providers.ProviderAnthropicGateway: {},
 		providers.ProviderOpenAIGateway:    {},
 	}
@@ -341,6 +342,33 @@ func TestContextWindowFor_KnownModels(t *testing.T) {
 	assert.Equal(t, 204_800, ContextWindowFor("minimax/minimax-m2.7"))
 	// Unknown model falls back to DefaultContextWindow.
 	assert.Equal(t, DefaultContextWindow, ContextWindowFor("not-a-real-model"))
+}
+
+// The v0.76 ai& model_registry.json stores upstream API IDs (the values a
+// binding's UpstreamID carries) as the model field. The context-window scoring
+// term hands those to the catalog, so ContextWindowFor must resolve an upstream
+// ID back to the canonical catalog model that owns the real window — not the
+// 128K default. Three of the five ai& models use an upstream ID that differs
+// from its catalog ID (org-prefix or "-code" suffix mismatch); the other two
+// already match. All five must report the true window.
+func TestContextWindowFor_ResolvesUpstreamRegistryIDs(t *testing.T) {
+	assert.Equal(t, 1_048_576, ContextWindowFor("zai-org/glm-5.2"),
+		"upstream ID zai-org/glm-5.2 must resolve to z-ai/glm-5.2's 1M window")
+	assert.Equal(t, 1_048_576, ContextWindowFor("deepseek-ai/deepseek-v4-flash"),
+		"upstream ID deepseek-ai/deepseek-v4-flash must resolve to deepseek/deepseek-v4-flash's 1M window")
+	assert.Equal(t, 262_144, ContextWindowFor("moonshotai/kimi-k2.7-code"),
+		"upstream ID moonshotai/kimi-k2.7-code must resolve to moonshotai/kimi-k2.7's 256K window")
+	assert.Equal(t, 1_048_576, ContextWindowFor("moonshotai/kimi-k3"))
+	assert.Equal(t, 262_144, ContextWindowFor("motif-technologies/motif-3"))
+}
+
+// Catalog-ID lookups must keep their exact window — the upstream-ID fallback is
+// miss-only, so a catalog ID that also equals some model's UpstreamID is never
+// rerouted to a different model.
+func TestContextWindowFor_CatalogIDPriorityPreserved(t *testing.T) {
+	assert.Equal(t, 1_048_576, ContextWindowFor("moonshotai/kimi-k3"))
+	assert.Equal(t, 262_144, ContextWindowFor("motif-technologies/motif-3"))
+	assert.Equal(t, DefaultContextWindow, ContextWindowFor("definitely-not-a-model"))
 }
 
 func TestValidateDeployed_FlagsMissingAndUntiered(t *testing.T) {

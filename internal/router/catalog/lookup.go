@@ -11,10 +11,24 @@ import (
 // byID is built once at init from Models so accessors are O(1).
 var byID map[string]Model
 
+// byUpstreamID resolves an upstream API model ID (e.g. "zai-org/glm-5.2", stored
+// as the registry model field) back to its canonical catalog Model. Consulted
+// only on a ByID miss so catalog-ID priority is preserved.
+var byUpstreamID map[string]Model
+
 func init() {
 	byID = make(map[string]Model, len(Models))
+	byUpstreamID = make(map[string]Model)
 	for _, m := range Models {
 		byID[m.ID] = m
+		for _, b := range m.Providers {
+			if b.UpstreamID == "" || b.UpstreamID == m.ID {
+				continue
+			}
+			if _, exists := byUpstreamID[b.UpstreamID]; !exists {
+				byUpstreamID[b.UpstreamID] = m
+			}
+		}
 	}
 }
 
@@ -28,6 +42,20 @@ func ByID(id string) (Model, bool) {
 		if m, ok := byID[base]; ok {
 			return m, true
 		}
+	}
+	return Model{}, false
+}
+
+// resolveModelForWindow returns the catalog Model whose window applies to id.
+// Catalog IDs win first (ByID, exact + date-suffix); on a miss it falls back to
+// the upstream-ID index so a registry's upstream model field resolves to the
+// model that truly owns the ContextWindow instead of the 128K default.
+func resolveModelForWindow(id string) (Model, bool) {
+	if m, ok := ByID(id); ok {
+		return m, true
+	}
+	if m, ok := byUpstreamID[id]; ok {
+		return m, true
 	}
 	return Model{}, false
 }
@@ -275,8 +303,12 @@ const DefaultContextWindow = 128_000
 
 // ContextWindowFor returns the context window in tokens for the given model.
 // Returns DefaultContextWindow when the model is absent or has no ContextWindow set.
+// Accepts either a catalog ID (e.g. "z-ai/glm-5.2") or an upstream API ID stored
+// as a registry model field (e.g. "zai-org/glm-5.2"), so the context-window
+// scoring term sees the true window regardless of which ID a strategy artifact
+// recorded.
 func ContextWindowFor(id string) int {
-	m, ok := ByID(id)
+	m, ok := resolveModelForWindow(id)
 	if !ok || m.ContextWindow <= 0 {
 		return DefaultContextWindow
 	}
@@ -285,9 +317,10 @@ func ContextWindowFor(id string) int {
 
 // ContextWindowForBinding returns the context window for modelID on provider,
 // preferring a non-zero ProviderBinding.ContextWindow over the model-level value.
-// Returns DefaultContextWindow for an unknown model.
+// Returns DefaultContextWindow for an unknown model. Accepts catalog IDs or
+// upstream API IDs (resolved via resolveModelForWindow).
 func ContextWindowForBinding(modelID, provider string) int {
-	m, ok := ByID(modelID)
+	m, ok := resolveModelForWindow(modelID)
 	if !ok {
 		return DefaultContextWindow
 	}

@@ -442,6 +442,8 @@ var Models = []Model{
 	// from V3.2 was filtering requests over ~128K (excludeContextOverflowModels
 	// in proxy/service.go).
 	{ID: "deepseek/deepseek-v4-flash", Tier: TierLow, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, AgenticUse: AgenticLow, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAiand, UpstreamID: "deepseek-ai/deepseek-v4-flash",
+			Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.250, CacheReadMultiplier: 0.08 / 0.150}},
 		{Provider: providers.ProviderMakora, UpstreamID: "deepseek-ai/DeepSeek-V4-Flash",
 			Price: Pricing{InputUSDPer1M: 0.1134, OutputUSDPer1M: 0.2791, CacheReadMultiplier: 0.20}},
 		{Provider: providers.ProviderOpenRouter, Price: Pricing{InputUSDPer1M: 0.140, OutputUSDPer1M: 0.280, CacheReadMultiplier: 0.10}},
@@ -466,6 +468,8 @@ var Models = []Model{
 	// this dated ID to route to what it was actually ranked on.
 	{ID: "deepseek/deepseek-v4-pro-0813", Tier: TierMid, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
 		// Together first: higher throughput (~209 t/s vs Fireworks ~120) at equal price. Together serves only 512K context.
+		{Provider: providers.ProviderAiand, UpstreamID: "deepseek-ai/deepseek-v4-pro",
+			Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 2.500, CacheReadMultiplier: 0.25 / 1.000}},
 		{Provider: providers.ProviderTogether, UpstreamID: "deepseek-ai/DeepSeek-V4-Pro",
 			ContextWindow: 512_000, Price: Pricing{InputUSDPer1M: 1.740, OutputUSDPer1M: 3.480, CacheReadMultiplier: 0.20 / 1.740}},
 		{Provider: providers.ProviderFireworks, UpstreamID: "accounts/fireworks/models/deepseek-v4-pro",
@@ -487,6 +491,8 @@ var Models = []Model{
 	// (identical $0.95/$4.00 list price) so a Fireworks outage fails over
 	// instead of hard-killing the turn — the binding previously stood alone.
 	{ID: "moonshotai/kimi-k2.7", Tier: TierHigh, ContextWindow: 262_144, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAiand, UpstreamID: "moonshotai/kimi-k2.7-code",
+			Price: Pricing{InputUSDPer1M: 0.750, OutputUSDPer1M: 3.500, CacheReadMultiplier: 0.20 / 0.750}},
 		{Provider: providers.ProviderFireworks, UpstreamID: "accounts/fireworks/models/kimi-k2p7-code",
 			Price: Pricing{InputUSDPer1M: 0.950, OutputUSDPer1M: 4.000, CacheReadMultiplier: 0.20}},
 		{Provider: providers.ProviderTogether, UpstreamID: "moonshotai/Kimi-K2.7-Code",
@@ -497,6 +503,8 @@ var Models = []Model{
 	// it carries no ImageInputUnsupported. Together has no K3 endpoint yet, so
 	// OpenRouter (identical list price) is the outage fallback.
 	{ID: "moonshotai/kimi-k3", Tier: TierHigh, ContextWindow: 1_048_576, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAiand, UpstreamID: "moonshotai/kimi-k3",
+			Price: Pricing{InputUSDPer1M: 3.000, OutputUSDPer1M: 12.500, CacheReadMultiplier: 0.50 / 3.000}},
 		{Provider: providers.ProviderFireworks, UpstreamID: "accounts/fireworks/models/kimi-k3",
 			Price: Pricing{InputUSDPer1M: 3.000, OutputUSDPer1M: 15.000, CacheReadMultiplier: 0.10}},
 		{Provider: providers.ProviderOpenRouter, Price: Pricing{InputUSDPer1M: 3.000, OutputUSDPer1M: 15.000, CacheReadMultiplier: 0.10}},
@@ -516,6 +524,24 @@ var Models = []Model{
 	// it below v4-flash.
 	{ID: "qwen/qwen3.6-35b-a3b", Tier: TierLow, ContextWindow: 262_144, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
 		{Provider: providers.ProviderOpenRouter, Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 1.000, CacheReadMultiplier: 0.10}},
+	}},
+	// ai&-only open-weight models served from Japan-resident infra; priced off
+	// the live GET /v1/models catalog (docs/aiand-live-catalog.md).
+	{ID: "openai/gpt-oss-120b", Tier: TierLow, ContextWindow: 131_072, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAiand, UpstreamID: "openai/gpt-oss-120b",
+			Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.600, CacheReadMultiplier: 0.08 / 0.150}},
+	}},
+	{ID: "qwen/qwen3.6-27b", Tier: TierLow, ContextWindow: 262_144, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAiand, UpstreamID: "qwen/qwen3.6-27b",
+			Price: Pricing{InputUSDPer1M: 0.320, OutputUSDPer1M: 3.200, CacheReadMultiplier: 0.20 / 0.320}},
+	}},
+	{ID: "google/gemma-4-31b-it", Tier: TierLow, ContextWindow: 262_144, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAiand, UpstreamID: "google/gemma-4-31b-it",
+			Price: Pricing{InputUSDPer1M: 0.200, OutputUSDPer1M: 0.500, CacheReadMultiplier: 0.05 / 0.200}},
+	}},
+	{ID: "motif-technologies/motif-3", Tier: TierMid, ContextWindow: 262_144, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAiand, UpstreamID: "motif-technologies/motif-3",
+			Price: Pricing{InputUSDPer1M: 0.500, OutputUSDPer1M: 2.000, CacheReadMultiplier: 0.20 / 0.500}},
 	}},
 	// Context window is 204,800 on Fireworks and OpenRouter despite MiniMax's
 	// "1M" marketing — do NOT raise without re-confirming the served cap, or
@@ -557,6 +583,9 @@ var Models = []Model{
 	// pending that confirmation (cf. the minimax 1M->204800 incident, which is
 	// the risk if a served cap is overstated, not understated).
 	{ID: "z-ai/glm-5.2", Tier: TierHigh, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
+		// ai& serves GLM-5.2 at list price with Japan-resident serving.
+		{Provider: providers.ProviderAiand, UpstreamID: "zai-org/glm-5.2",
+			Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 4.000, CacheReadMultiplier: 0.30 / 1.000}},
 		// Together leads: #1 AA throughput (~382 t/s vs Fireworks ~347) at the
 		// same $1.40/$4.40 price.
 		{Provider: providers.ProviderTogether, UpstreamID: "zai-org/GLM-5.2",
