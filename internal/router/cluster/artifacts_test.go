@@ -231,6 +231,19 @@ func TestLatestBundle_OneDeployedModelPerFamily(t *testing.T) {
 	require.NoError(t, err)
 
 	dups := catalog.FamilyDuplicates(bundle.Registry.Models())
+	if len(bundle.Metadata.KeepSupersededModels) > 0 {
+		keep := make(map[string]struct{}, len(bundle.Metadata.KeepSupersededModels))
+		for _, id := range bundle.Metadata.KeepSupersededModels {
+			keep[id] = struct{}{}
+		}
+		filtered := make([]catalog.Duplicate, 0, len(dups))
+		for _, d := range dups {
+			if _, ok := keep[d.Superseded]; !ok {
+				filtered = append(filtered, d)
+			}
+		}
+		dups = filtered
+	}
 	if len(dups) == 0 {
 		return
 	}

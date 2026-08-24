@@ -116,7 +116,12 @@ type ArtifactMetadata struct {
 	Training          ArtifactTraining   `yaml:"training"`
 	DeployedProviders []string           `yaml:"deployed_providers,omitempty"`
 	DeployedModels    []string           `yaml:"deployed_models,omitempty"`
-	CostPer1KInputUSD map[string]float64 `yaml:"cost_per_1k_input_usd,omitempty"`
+	// KeepSupersededModels lists deployed model IDs intentionally retained
+	// even though a newer same-family member is also deployed. The latest
+	// family-uniqueness test skips exactly these; any other superseded model
+	// still fails the check.
+	KeepSupersededModels []string            `yaml:"keep_superseded_models,omitempty"`
+	CostPer1KInputUSD    map[string]float64  `yaml:"cost_per_1k_input_usd,omitempty"`
 	// TokPerS holds measured median tok/s keyed by provider then model (same
 	// model varies sharply by provider). Read only by FastestModel/clamp
 	// selectors; missing/partial data degrades to CheapestModel.

@@ -1,7 +1,7 @@
 format_version: 2
 version: v0.76
 parent: v0.75
-status: candidate
+status: latest
 embedder:
   model: jina-v2-base-code-int8
   embed_dim: 768
