@@ -49,10 +49,10 @@ func TestSidecarRouterOnboardsFutureStrategyWithoutProxyChanges(t *testing.T) {
 	decider := &recordingPolicy{result: policy.Result{
 		SchemaVersion:        policy.SchemaVersionV1,
 		RouteID:              "route-future",
-		Model:                "future/gpt-5.5",
-		Provider:             providers.ProviderOpenAI,
+		Model:                "future/openai/gpt-oss-120b",
+		Provider:             providers.ProviderAiand,
 		Score:                0.9,
-		CandidateScores:      map[string]float32{"future/gpt-5.5": 0.9},
+		CandidateScores:      map[string]float32{"future/openai/gpt-oss-120b": 0.9},
 		PolicyRouteKey:       "high",
 		PolicyArtifactID:     "future-prod",
 		PolicyArtifactSHA256: "sha256:future",
@@ -60,8 +60,8 @@ func TestSidecarRouterOnboardsFutureStrategyWithoutProxyChanges(t *testing.T) {
 		DebugRef:             "must-not-leak",
 	}}
 	resolver := policy.NewResolver(
-		set("gpt-5.5"),
-		set(providers.ProviderOpenAI),
+		set("openai/gpt-oss-120b"),
+		set(providers.ProviderAiand),
 		func(model catalog.Model) string { return "future/" + model.ID },
 		policy.ManagedProviderPolicy(),
 	)
@@ -88,21 +88,21 @@ func TestSidecarRouterOnboardsFutureStrategyWithoutProxyChanges(t *testing.T) {
 			VisibleTurnIndex:    3,
 			SessionTurnCount:    4,
 			TurnType:            "main_loop",
-			PreviousServedModel: "gpt-5.4",
-			PreviousProvider:    providers.ProviderOpenAI,
+			PreviousServedModel: "moonshotai/kimi-k2.7",
+			PreviousProvider:    providers.ProviderAiand,
 			CacheState:          router.PolicyCacheStateWarm,
 			PriorOutputTokens:   &priorOutputTokens,
 		},
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, "gpt-5.5", decision.Model)
-	assert.Equal(t, providers.ProviderOpenAI, decision.Provider)
+	assert.Equal(t, "openai/gpt-oss-120b", decision.Model)
+	assert.Equal(t, providers.ProviderAiand, decision.Provider)
 	assert.Equal(t, "future-policy", decision.Metadata.Strategy)
 	assert.Equal(t, "route-future", decision.Metadata.RouteID)
 	assert.Equal(t, "high", decision.Metadata.PolicyRouteKey)
 	assert.Equal(t, "future-prod", decision.Metadata.PolicyArtifactID)
-	assert.Equal(t, map[string]float32{"gpt-5.5": 0.9}, decision.Metadata.CandidateScores)
+	assert.Equal(t, map[string]float32{"openai/gpt-oss-120b": 0.9}, decision.Metadata.CandidateScores)
 	assert.True(t, decision.Metadata.AuthoritativePerTurnSelection)
 	assert.Empty(t, decision.Metadata.DebugRef)
 	assert.Equal(t, strategy, decider.query.Strategy)
@@ -114,9 +114,9 @@ func TestSidecarRouterOnboardsFutureStrategyWithoutProxyChanges(t *testing.T) {
 	assert.Equal(t, "hashed", decider.query.CaptureMode)
 	require.NotNil(t, decider.query.TurnContext)
 	assert.Equal(t, 3, decider.query.TurnContext.VisibleTurnIndex)
-	assert.Equal(t, "gpt-5.4", decider.query.TurnContext.PreviousServedModel)
+	assert.Equal(t, "moonshotai/kimi-k2.7", decider.query.TurnContext.PreviousServedModel)
 	require.Len(t, decider.query.Candidates, 1)
-	assert.Equal(t, "future/gpt-5.5", decider.query.Candidates[0].RosterID)
+	assert.Equal(t, "future/openai/gpt-oss-120b", decider.query.Candidates[0].RosterID)
 	assert.Greater(t, decider.query.Candidates[0].InputUSDPer1M, 0.0)
 	assert.Greater(t, decider.query.Candidates[0].Capabilities.ContextWindow, 0)
 
@@ -128,12 +128,16 @@ func TestSidecarRouterOnboardsFutureStrategyWithoutProxyChanges(t *testing.T) {
 
 func TestSidecarRouterDispatchesSidecarSelectedArm(t *testing.T) {
 	resolver := policy.NewArmResolver(
-		set("minimax/minimax-m2.7"),
-		set(providers.ProviderTogether, providers.ProviderFireworks),
+		set("deepseek-ai/deepseek-v4-flash"),
+		set(providers.ProviderAiand, providers.ProviderOpenAIGateway),
 		func(model catalog.Model) string { return model.ID },
 		policy.ManagedProviderPolicy(),
 	)
-	resolved := resolver.Resolve(router.Request{})
+	resolved := resolver.Resolve(router.Request{
+		CustomBindings: map[string][]string{
+			"deepseek-ai/deepseek-v4-flash": {providers.ProviderOpenAIGateway},
+		},
+	})
 	require.Len(t, resolved.Candidates, 2)
 	selected := resolved.Candidates[1]
 	decider := &recordingPolicy{result: policy.Result{
@@ -149,7 +153,11 @@ func TestSidecarRouterDispatchesSidecarSelectedArm(t *testing.T) {
 		Strategy: router.Strategy("future-policy"),
 	}, decider, resolver)
 
-	decision, err := adapter.Route(context.Background(), router.Request{})
+	decision, err := adapter.Route(context.Background(), router.Request{
+		CustomBindings: map[string][]string{
+			"deepseek-ai/deepseek-v4-flash": {providers.ProviderOpenAIGateway},
+		},
+	})
 
 	require.NoError(t, err)
 	assert.Equal(t, selected.CatalogID, decision.Model)
@@ -167,12 +175,12 @@ func TestSidecarRouterDispatchesSidecarSelectedArm(t *testing.T) {
 }
 
 func TestSidecarRouterMarksShadowDecisionsNonLearning(t *testing.T) {
-	decider := &recordingPolicy{result: policy.Result{Model: "gpt-5.5"}}
+	decider := &recordingPolicy{result: policy.Result{Model: "openai/gpt-oss-120b"}}
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
 		Strategy: router.Strategy("future-policy"),
 	}, decider, policy.NewResolver(
-		set("gpt-5.5"),
-		set(providers.ProviderOpenAI),
+		set("openai/gpt-oss-120b"),
+		set(providers.ProviderAiand),
 		func(model catalog.Model) string { return model.ID },
 		policy.ManagedProviderPolicy(),
 	))
@@ -201,20 +209,20 @@ func TestSidecarRouterPreviewReturnsAllEligibleArmsWithoutLifecycleCallbacks(t *
 		RankedFallback: []policy.PreviewGroup{{
 			Group:        "hard",
 			Probability:  0.8,
-			RosterArms:   []string{"claude-opus-4-8", "gpt-5.5"},
-			EligibleArms: []string{"claude-opus-4-8", "gpt-5.5"},
+			RosterArms:   []string{"moonshotai/kimi-k3", "openai/gpt-oss-120b"},
+			EligibleArms: []string{"moonshotai/kimi-k3", "openai/gpt-oss-120b"},
 		}, {
 			Group:       "balanced",
 			Probability: 0.2,
 		}},
 		SelectedGroup:     "hard",
-		EligibleRosterIDs: []string{"claude-opus-4-8", "gpt-5.5"},
+		EligibleRosterIDs: []string{"moonshotai/kimi-k3", "openai/gpt-oss-120b"},
 	}}
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
 		Strategy: router.StrategyHMM,
 	}, decider, policy.NewResolver(
-		set("claude-opus-4-8", "gpt-5.5"),
-		set(providers.ProviderAnthropic, providers.ProviderOpenAI),
+		set("moonshotai/kimi-k3", "openai/gpt-oss-120b"),
+		set(providers.ProviderAiand),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)).WithCapabilities(policy.Capabilities{SupportsPreview: true})
@@ -227,7 +235,7 @@ func TestSidecarRouterPreviewReturnsAllEligibleArmsWithoutLifecycleCallbacks(t *
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, []string{"claude-opus-4-8", "gpt-5.5"}, result.EligibleRosterIDs)
+	assert.Equal(t, []string{"moonshotai/kimi-k3", "openai/gpt-oss-120b"}, result.EligibleRosterIDs)
 	assert.Equal(t, router.StrategyHMM, result.Strategy)
 	assert.NotEmpty(t, result.RouteID)
 	assert.Equal(t, policy.SchemaVersionV1, decider.previewQuery.SchemaVersion)
@@ -241,12 +249,16 @@ func TestSidecarRouterPreviewReturnsAllEligibleArmsWithoutLifecycleCallbacks(t *
 
 func TestSidecarRouterPreviewUsesArmSchemaAndIDs(t *testing.T) {
 	resolver := policy.NewArmResolver(
-		set("minimax/minimax-m2.7"),
-		set(providers.ProviderTogether, providers.ProviderFireworks),
+		set("deepseek-ai/deepseek-v4-flash"),
+		set(providers.ProviderAiand, providers.ProviderOpenAIGateway),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
-	resolved := resolver.Resolve(router.Request{})
+	resolved := resolver.Resolve(router.Request{
+		CustomBindings: map[string][]string{
+			"deepseek-ai/deepseek-v4-flash": {providers.ProviderOpenAIGateway},
+		},
+	})
 	require.Len(t, resolved.Candidates, 2)
 	selectedArmID := resolved.Candidates[0].ArmID
 	decider := &recordingPolicy{preview: policy.PreviewResult{
@@ -271,7 +283,11 @@ func TestSidecarRouterPreviewUsesArmSchemaAndIDs(t *testing.T) {
 		Strategy: router.Strategy("temporal-q"),
 	}, decider, resolver).WithCapabilities(policy.Capabilities{SupportsPreview: true})
 
-	result, err := adapter.PreviewRoute(context.Background(), router.Request{})
+	result, err := adapter.PreviewRoute(context.Background(), router.Request{
+		CustomBindings: map[string][]string{
+			"deepseek-ai/deepseek-v4-flash": {providers.ProviderOpenAIGateway},
+		},
+	})
 
 	require.NoError(t, err)
 	assert.Equal(t, policy.SchemaVersionV2, decider.previewQuery.SchemaVersion)
@@ -297,21 +313,21 @@ func TestSidecarRouterPreviewRecordsZeroEligibleArms(t *testing.T) {
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
 		Strategy: router.StrategyHMM,
 	}, decider, policy.NewResolver(
-		set("gpt-5.5"),
-		set(providers.ProviderOpenAI),
+		set("openai/gpt-oss-120b"),
+		set(providers.ProviderAiand),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)).WithCapabilities(policy.Capabilities{SupportsPreview: true})
 
 	result, err := adapter.PreviewRoute(context.Background(), router.Request{
-		ExcludedModels: set("gpt-5.5"),
+		ExcludedModels: set("openai/gpt-oss-120b"),
 	})
 
 	require.NoError(t, err)
 	assert.Empty(t, result.EligibleRosterIDs)
 	assert.Empty(t, result.ResolverCandidates)
 	assert.Contains(t, result.ResolverExclusions, policy.Diagnostic{
-		CatalogID: "gpt-5.5",
+		CatalogID: "openai/gpt-oss-120b",
 		Reason:    policy.ExclusionRequested,
 	})
 	assert.Empty(t, result.SelectedGroup)
@@ -341,8 +357,8 @@ func TestSidecarRouterPreviewRejectsUnknownArm(t *testing.T) {
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
 		Strategy: router.StrategyHMM,
 	}, decider, policy.NewResolver(
-		set("gpt-5.5"),
-		set(providers.ProviderOpenAI),
+		set("openai/gpt-oss-120b"),
+		set(providers.ProviderAiand),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	))
@@ -399,34 +415,29 @@ func TestSidecarRouterCapabilitiesCanRefreshAfterStartup(t *testing.T) {
 	assert.True(t, adapter.CurrentCapabilities().SupportsShadow)
 }
 
-// clusterOverrideMapper mirrors the HMM roster aliasing closely enough for the
-// override path: anthropic models map to "anthropic/<id>".
-func clusterOverrideMapper(model catalog.Model) string { return "anthropic/" + model.ID }
+// clusterOverrideMapper mirrors HMM roster aliasing: catalog IDs map to "aiand/<id>".
+func clusterOverrideMapper(model catalog.Model) string { return "aiand/" + model.ID }
 
 func TestSidecarRouterAppliesClusterArmOverride(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "claude-sonnet-5"),
-		set(providers.ProviderAnthropic),
+		set("moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAiand),
 		clusterOverrideMapper,
 		policy.ManagedProviderPolicy(),
 	)
-	// Sidecar classifies into "maximum" and would serve opus first.
 	decider := &recordingPolicy{result: policy.Result{
 		SchemaVersion: policy.SchemaVersionV1,
-		Model:         "anthropic/claude-opus-4-8",
-		Provider:      providers.ProviderAnthropic,
+		Model:         "aiand/moonshotai/kimi-k3",
+		Provider:      providers.ProviderAiand,
 		Score:         0.8,
 		PolicyGroup:   "maximum",
 		RankedFallback: []policy.PreviewGroup{{
 			Group:        "maximum",
 			Probability:  0.8,
-			RosterArms:   []string{"anthropic/claude-opus-4-8", "anthropic/claude-sonnet-5"},
-			EligibleArms: []string{"anthropic/claude-opus-4-8", "anthropic/claude-sonnet-5"},
+			RosterArms:   []string{"aiand/moonshotai/kimi-k3", "aiand/deepseek-ai/deepseek-v4-pro"},
+			EligibleArms: []string{"aiand/moonshotai/kimi-k3", "aiand/deepseek-ai/deepseek-v4-pro"},
 		}},
 	}}
-	// Capability flag is deliberately false: the presence of ranked_fallback in
-	// the /route response must be enough to enforce overrides, so a stale
-	// boot-time capability (older sidecar, no refresh) can't block them.
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
 		Strategy: router.StrategyHMM,
 	}, decider, resolver).WithCapabilities(policy.Capabilities{
@@ -434,43 +445,39 @@ func TestSidecarRouterAppliesClusterArmOverride(t *testing.T) {
 		ReportsRankedFallback: false,
 	})
 
-	// The key reorders the maximum cluster so sonnet-5 wins over opus.
 	decision, err := adapter.Route(context.Background(), router.Request{
 		ClusterArmOverrides: map[string][]string{
-			"maximum": {"claude-sonnet-5", "claude-opus-4-8"},
+			"maximum": {"deepseek-ai/deepseek-v4-pro", "moonshotai/kimi-k3"},
 		},
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, "claude-sonnet-5", decision.Model,
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", decision.Model,
 		"override order must decide the served model, not the sidecar's first arm")
-	assert.Equal(t, providers.ProviderAnthropic, decision.Provider)
+	assert.Equal(t, providers.ProviderAiand, decision.Provider)
 	assert.Contains(t, decision.Reason, "cluster_override",
 		"an override that changes the pick must annotate the reason")
 }
 
-// The sidecar's DisplayMarker names its pre-override pick (opus). Once the
-// router reselects sonnet-5, that marker must not survive into the decision
-// metadata, or the banner and telemetry disagree about the served model.
 func TestSidecarRouterClusterOverrideSuppressesStaleDisplayMarker(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "claude-sonnet-5"),
-		set(providers.ProviderAnthropic),
+		set("moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAiand),
 		clusterOverrideMapper,
 		policy.ManagedProviderPolicy(),
 	)
 	decider := &recordingPolicy{result: policy.Result{
 		SchemaVersion: policy.SchemaVersionV1,
-		Model:         "anthropic/claude-opus-4-8",
-		Provider:      providers.ProviderAnthropic,
+		Model:         "aiand/moonshotai/kimi-k3",
+		Provider:      providers.ProviderAiand,
 		Score:         0.8,
 		PolicyGroup:   "maximum",
-		DisplayMarker: "✦ **Weave Router** → Delegating work with claude-opus-4-8",
+		DisplayMarker: "✦ **Weave Router** → Delegating work with moonshotai/kimi-k3",
 		RankedFallback: []policy.PreviewGroup{{
 			Group:        "maximum",
 			Probability:  0.8,
-			RosterArms:   []string{"anthropic/claude-opus-4-8", "anthropic/claude-sonnet-5"},
-			EligibleArms: []string{"anthropic/claude-opus-4-8", "anthropic/claude-sonnet-5"},
+			RosterArms:   []string{"aiand/moonshotai/kimi-k3", "aiand/deepseek-ai/deepseek-v4-pro"},
+			EligibleArms: []string{"aiand/moonshotai/kimi-k3", "aiand/deepseek-ai/deepseek-v4-pro"},
 		}},
 	}}
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
@@ -482,12 +489,12 @@ func TestSidecarRouterClusterOverrideSuppressesStaleDisplayMarker(t *testing.T) 
 
 	decision, err := adapter.Route(context.Background(), router.Request{
 		ClusterArmOverrides: map[string][]string{
-			"maximum": {"claude-sonnet-5", "claude-opus-4-8"},
+			"maximum": {"deepseek-ai/deepseek-v4-pro", "moonshotai/kimi-k3"},
 		},
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, "claude-sonnet-5", decision.Model)
+	require.Equal(t, "deepseek-ai/deepseek-v4-pro", decision.Model)
 	assert.Empty(t, decision.Metadata.DisplayMarker,
 		"a reselected arm must drop the sidecar's stale marker so the generic path renders the served model")
 }
@@ -497,8 +504,8 @@ func TestSidecarRouterClusterOverrideResolvesArmEnumeratingBinding(t *testing.T)
 	// must go through the arm ID — shared roster IDs are dropped from ByRosterID as
 	// ambiguous.
 	resolver := policy.NewArmResolver(
-		set("claude-opus-4-8", "claude-sonnet-5"),
-		set(providers.ProviderAnthropic),
+		set("moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAiand),
 		clusterOverrideMapper,
 		policy.ManagedProviderPolicy(),
 	)
@@ -511,13 +518,13 @@ func TestSidecarRouterClusterOverrideResolvesArmEnumeratingBinding(t *testing.T)
 		SchemaVersion: policy.SchemaVersionV2,
 		ArmID:         resolved.Candidates[0].ArmID,
 		Model:         resolved.Candidates[0].RosterID,
-		Provider:      providers.ProviderAnthropic,
+		Provider:      providers.ProviderAiand,
 		Score:         0.8,
 		RankedFallback: []policy.PreviewGroup{{
 			Group:        "maximum",
 			Probability:  0.8,
-			RosterArms:   []string{"anthropic/claude-opus-4-8", "anthropic/claude-sonnet-5"},
-			EligibleArms: []string{"anthropic/claude-opus-4-8", "anthropic/claude-sonnet-5"},
+			RosterArms:   []string{"aiand/moonshotai/kimi-k3", "aiand/deepseek-ai/deepseek-v4-pro"},
+			EligibleArms: []string{"aiand/moonshotai/kimi-k3", "aiand/deepseek-ai/deepseek-v4-pro"},
 		}},
 	}}
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
@@ -526,27 +533,27 @@ func TestSidecarRouterClusterOverrideResolvesArmEnumeratingBinding(t *testing.T)
 
 	decision, err := adapter.Route(context.Background(), router.Request{
 		ClusterArmOverrides: map[string][]string{
-			"maximum": {"claude-sonnet-5", "claude-opus-4-8"},
+			"maximum": {"deepseek-ai/deepseek-v4-pro", "moonshotai/kimi-k3"},
 		},
 	})
 
 	require.NoError(t, err, "override must resolve via the arm ID on an arm-enumerating resolver")
-	assert.Equal(t, "claude-sonnet-5", decision.Model)
-	assert.Equal(t, providers.ProviderAnthropic, decision.Provider)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", decision.Model)
+	assert.Equal(t, providers.ProviderAiand, decision.Provider)
 }
 
 func TestSidecarRouterClusterOverrideFailsOpenWithoutRankedFallback(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "claude-sonnet-5"),
-		set(providers.ProviderAnthropic),
+		set("moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAiand),
 		clusterOverrideMapper,
 		policy.ManagedProviderPolicy(),
 	)
 	// Old sidecar: no ranked fallback in the result, capability off.
 	decider := &recordingPolicy{result: policy.Result{
 		SchemaVersion: policy.SchemaVersionV1,
-		Model:         "anthropic/claude-opus-4-8",
-		Provider:      providers.ProviderAnthropic,
+		Model:         "aiand/moonshotai/kimi-k3",
+		Provider:      providers.ProviderAiand,
 		Score:         0.8,
 	}}
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
@@ -558,32 +565,31 @@ func TestSidecarRouterClusterOverrideFailsOpenWithoutRankedFallback(t *testing.T
 
 	decision, err := adapter.Route(context.Background(), router.Request{
 		ClusterArmOverrides: map[string][]string{
-			"maximum": {"claude-sonnet-5"},
+			"maximum": {"deepseek-ai/deepseek-v4-pro"},
 		},
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, "claude-opus-4-8", decision.Model,
+	assert.Equal(t, "moonshotai/kimi-k3", decision.Model,
 		"an old sidecar without ranked fallback must serve its own selection unchanged")
 	assert.NotContains(t, decision.Reason, "cluster_override")
 }
 
 func TestSidecarRouterServesWithinForcedCluster(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "claude-haiku-4-5"),
-		set(providers.ProviderAnthropic),
+		set("moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-flash"),
+		set(providers.ProviderAiand),
 		clusterOverrideMapper,
 		policy.ManagedProviderPolicy(),
 	)
-	// The sidecar classified into "maximum" and would serve opus.
 	decider := &recordingPolicy{result: policy.Result{
 		SchemaVersion: policy.SchemaVersionV1,
-		Model:         "anthropic/claude-opus-4-8",
-		Provider:      providers.ProviderAnthropic,
+		Model:         "aiand/moonshotai/kimi-k3",
+		Provider:      providers.ProviderAiand,
 		PolicyGroup:   "maximum",
 		RankedFallback: []policy.PreviewGroup{
-			{Group: "maximum", Probability: 0.8, EligibleArms: []string{"anthropic/claude-opus-4-8"}},
-			{Group: "fast", Probability: 0.2, EligibleArms: []string{"anthropic/claude-haiku-4-5"}},
+			{Group: "maximum", Probability: 0.8, EligibleArms: []string{"aiand/moonshotai/kimi-k3"}},
+			{Group: "fast", Probability: 0.2, EligibleArms: []string{"aiand/deepseek-ai/deepseek-v4-flash"}},
 		},
 	}}
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
@@ -593,7 +599,7 @@ func TestSidecarRouterServesWithinForcedCluster(t *testing.T) {
 	decision, err := adapter.Route(context.Background(), router.Request{ForceCluster: "fast"})
 
 	require.NoError(t, err)
-	assert.Equal(t, "claude-haiku-4-5", decision.Model,
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", decision.Model,
 		"the forced cluster must outrank the sidecar's own argmax group")
 	assert.Contains(t, decision.Reason, "force_cluster")
 	assert.Len(t, decider.query.Candidates, 2,
@@ -605,20 +611,20 @@ func TestSidecarRouterServesWithinForcedCluster(t *testing.T) {
 // marker for its own (unserved) pick into the decision.
 func TestSidecarRouterForcedClusterSuppressesStaleDisplayMarker(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "claude-haiku-4-5"),
-		set(providers.ProviderAnthropic),
+		set("moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-flash"),
+		set(providers.ProviderAiand),
 		clusterOverrideMapper,
 		policy.ManagedProviderPolicy(),
 	)
 	decider := &recordingPolicy{result: policy.Result{
 		SchemaVersion: policy.SchemaVersionV1,
-		Model:         "anthropic/claude-opus-4-8",
-		Provider:      providers.ProviderAnthropic,
+		Model:         "aiand/moonshotai/kimi-k3",
+		Provider:      providers.ProviderAiand,
 		PolicyGroup:   "maximum",
-		DisplayMarker: "✦ **Weave Router** → Delegating work with claude-opus-4-8",
+		DisplayMarker: "✦ **Weave Router** → Delegating work with moonshotai/kimi-k3",
 		RankedFallback: []policy.PreviewGroup{
-			{Group: "maximum", Probability: 0.8, EligibleArms: []string{"anthropic/claude-opus-4-8"}},
-			{Group: "fast", Probability: 0.2, EligibleArms: []string{"anthropic/claude-haiku-4-5"}},
+			{Group: "maximum", Probability: 0.8, EligibleArms: []string{"aiand/moonshotai/kimi-k3"}},
+			{Group: "fast", Probability: 0.2, EligibleArms: []string{"aiand/deepseek-ai/deepseek-v4-flash"}},
 		},
 	}}
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
@@ -628,9 +634,9 @@ func TestSidecarRouterForcedClusterSuppressesStaleDisplayMarker(t *testing.T) {
 	decision, err := adapter.Route(context.Background(), router.Request{ForceCluster: "fast"})
 
 	require.NoError(t, err)
-	require.Equal(t, "claude-haiku-4-5", decision.Model)
+	require.Equal(t, "deepseek-ai/deepseek-v4-flash", decision.Model)
 	assert.Empty(t, decision.Metadata.DisplayMarker,
-		"the forced cluster serves haiku, not the sidecar's opus pick named in its marker")
+		"the forced cluster serves flash, not the sidecar's kimi-k3 pick named in its marker")
 }
 
 // A force that coincides with the sidecar's own pick must not waive the
@@ -638,18 +644,18 @@ func TestSidecarRouterForcedClusterSuppressesStaleDisplayMarker(t *testing.T) {
 // still means the sidecar and resolver disagree.
 func TestSidecarRouterForcedClusterKeepsProviderAgreementCheck(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8"),
-		set(providers.ProviderAnthropic),
+		set("moonshotai/kimi-k3"),
+		set(providers.ProviderAiand),
 		clusterOverrideMapper,
 		policy.ManagedProviderPolicy(),
 	)
 	decider := &recordingPolicy{result: policy.Result{
 		SchemaVersion: policy.SchemaVersionV1,
-		Model:         "anthropic/claude-opus-4-8",
-		Provider:      providers.ProviderOpenAI, // disagrees with the resolved binding
+		Model:         "aiand/moonshotai/kimi-k3",
+		Provider:      providers.ProviderAnthropic,
 		RankedFallback: []policy.PreviewGroup{{
 			Group:        "maximum",
-			EligibleArms: []string{"anthropic/claude-opus-4-8"},
+			EligibleArms: []string{"aiand/moonshotai/kimi-k3"},
 		}},
 	}}
 	unavailable := errors.New("hmm unavailable")
@@ -666,18 +672,18 @@ func TestSidecarRouterForcedClusterKeepsProviderAgreementCheck(t *testing.T) {
 
 func TestSidecarRouterForcedClusterNarrowedByPerKeyOverride(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "claude-sonnet-5"),
-		set(providers.ProviderAnthropic),
+		set("moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAiand),
 		clusterOverrideMapper,
 		policy.ManagedProviderPolicy(),
 	)
 	decider := &recordingPolicy{result: policy.Result{
 		SchemaVersion: policy.SchemaVersionV1,
-		Model:         "anthropic/claude-opus-4-8",
-		Provider:      providers.ProviderAnthropic,
+		Model:         "aiand/moonshotai/kimi-k3",
+		Provider:      providers.ProviderAiand,
 		RankedFallback: []policy.PreviewGroup{{
 			Group:        "maximum",
-			EligibleArms: []string{"anthropic/claude-opus-4-8", "anthropic/claude-sonnet-5"},
+			EligibleArms: []string{"aiand/moonshotai/kimi-k3", "aiand/deepseek-ai/deepseek-v4-pro"},
 		}},
 	}}
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
@@ -686,28 +692,28 @@ func TestSidecarRouterForcedClusterNarrowedByPerKeyOverride(t *testing.T) {
 
 	decision, err := adapter.Route(context.Background(), router.Request{
 		ForceCluster:        "maximum",
-		ClusterArmOverrides: map[string][]string{"maximum": {"claude-sonnet-5", "claude-opus-4-8"}},
+		ClusterArmOverrides: map[string][]string{"maximum": {"deepseek-ai/deepseek-v4-pro", "moonshotai/kimi-k3"}},
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, "claude-sonnet-5", decision.Model,
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", decision.Model,
 		"the key's cluster model list must still order the forced group")
 }
 
 func TestSidecarRouterForcedClusterNotInRosterErrorsUnwrapped(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8"),
-		set(providers.ProviderAnthropic),
+		set("moonshotai/kimi-k3"),
+		set(providers.ProviderAiand),
 		clusterOverrideMapper,
 		policy.ManagedProviderPolicy(),
 	)
 	decider := &recordingPolicy{result: policy.Result{
 		SchemaVersion: policy.SchemaVersionV1,
-		Model:         "anthropic/claude-opus-4-8",
-		Provider:      providers.ProviderAnthropic,
+		Model:         "aiand/moonshotai/kimi-k3",
+		Provider:      providers.ProviderAiand,
 		RankedFallback: []policy.PreviewGroup{{
 			Group:        "maximum",
-			EligibleArms: []string{"anthropic/claude-opus-4-8"},
+			EligibleArms: []string{"aiand/moonshotai/kimi-k3"},
 		}},
 	}}
 	unavailable := errors.New("hmm unavailable")
@@ -728,16 +734,16 @@ func TestSidecarRouterForcedClusterNotInRosterErrorsUnwrapped(t *testing.T) {
 
 func TestSidecarRouterForcedClusterFailsClosedWithoutRankedFallback(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8"),
-		set(providers.ProviderAnthropic),
+		set("moonshotai/kimi-k3"),
+		set(providers.ProviderAiand),
 		clusterOverrideMapper,
 		policy.ManagedProviderPolicy(),
 	)
 	// Older sidecar: serves a decision but reports no roster to verify against.
 	decider := &recordingPolicy{result: policy.Result{
 		SchemaVersion: policy.SchemaVersionV1,
-		Model:         "anthropic/claude-opus-4-8",
-		Provider:      providers.ProviderAnthropic,
+		Model:         "aiand/moonshotai/kimi-k3",
+		Provider:      providers.ProviderAiand,
 	}}
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
 		Strategy: router.StrategyHMM,
