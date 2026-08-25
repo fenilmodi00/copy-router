@@ -1,33 +1,12 @@
 # Strip-to-aiand Close blockers
 
-Tip: `#26` (`0cdcf89`). Verification mode: **host + Supabase only** (`make setup` / `make dev`, `PUBSUB_DISABLED=true`). No Docker Compose / `make db` for Close. Analytics stays mounted. Operator supersession: host Close path (Appendix E in `docs/strip-to-aiand-plan.md`). No Graphite/cloud-VM swarm ceremony.
+Tip: `#27` (`3cde896`). Verification mode: **host + Supabase only** (`make setup` / `make dev`, `PUBSUB_DISABLED=true`). No Docker Compose / `make db` for Close. Analytics stays mounted. Host Close path supersedes Graphite / cloud-VM swarm (plan Appendix E). Media on main: four review PNGs + two ~46 s MP4s under `docs/media/`.
 
-## Cleared on host (this lane)
-
-| Gate | Evidence |
-|---|---|
-| Review PNGs (cut-gemini L2/L3, fix-tests-smoke L7/L8) | `docs/media/cut-gemini-review-messages.png`, `docs/media/cut-gemini-review-stream.png`, `docs/media/fix-tests-smoke-review-live.png`, `docs/media/fix-tests-smoke-review-stream.png` |
-| Review MP4s (cut-gemini + fix-tests-smoke) | `docs/media/cut-gemini-review.mp4`, `docs/media/fix-tests-smoke-review.mp4` (~46 s each). Slideshow artifacts from review PNGs + live host `/v1/messages` (WSL `:0` x11grab blank) |
-| Analytics kept | `GET /v1/analytics/routing-decisions` with `rk_` → **401** (mounted), not 404 |
-| Feedback cut | `GET /f/test` → **404** |
-| cut-pubsub binary size | Pre-cut `b08561d` = 83667632 B; head = 79976560 B (**PASS**) |
-| cut-pubsub unit | `go test ./internal/auth/ ./cmd/router/ -count=1` → EXIT=0 |
-| cut-gemini unit | `go test ./internal/translate/ ./internal/server/ ./internal/api/anthropic/ ./internal/api/openai/ -count=1` → EXIT=0 after AgentShadow fixture uses `deepseek-ai/deepseek-v4-flash` + `ProviderAiand` |
-| docs-host health latency | Trunk median ~0.92 ms vs head ~0.86 ms (**PASS**, within 50 ms) |
-| cut-sidecars RSS | Trunk ~311 MB, head ~272 MB (**PASS**) |
-| cut-sidecars Verify, unit | `go test ./internal/router/... ./internal/server/ ./cmd/router/ -count=1` EXIT 0 after aiand fixture realign (`cluster` / `planner` / `policy` / `rl`). Packages kept |
-| Host smoke replay + Rule | Interleaved `SMOKE_HOST=1` twice each: base `e7ad086` mean **47.70 s** vs head `e6aa944` mean **44.46 s** = **−6.8%** (**PASS**, ≤25%) |
-| cut-catalog `ResolveBinding` Rule | Index-map fix `e6aa944` / #23. Head mean **30.66 ns/op** vs trunk **54.31 ns/op** (**PASS**) |
-| cut-gemini router-overhead Rule | `AccessLog` only has total `latency_ms`. Probe used `ProxyMessages complete` `route_ms`. Trunk `87cca0a` median **312 ms**; head `faf1507` median **314 ms** (**PASS**, +2 ms) |
-| Dependency order + file boundaries + incremental `gh` merges | `#10` through `#26` on `main`. Plan ritual boxes updated to host Close where honest |
-
-## Still operator / sibling
+## Only remaining
 
 | Gate | Status | Why |
 |---|---|---|
-| Operator review click | **OPERATOR** | Post media in chat, then click cut-gemini + fix-tests-smoke. Paths: `docs/media/cut-gemini-review-messages.png`, `docs/media/cut-gemini-review-stream.png`, `docs/media/cut-gemini-review.mp4`, `docs/media/fix-tests-smoke-review-live.png`, `docs/media/fix-tests-smoke-review-stream.png`, `docs/media/fix-tests-smoke-review.mp4` |
-| Arm / Graphite / cloud-VM swarm boxes | **Left unchecked** | Superseded by host Close (plan Appendix E). Do not invent swarm screenshots or tick as PASS |
+| Operator review click | **OPERATOR** | Post media in chat, then click `cut-gemini` + `fix-tests-smoke`. Paths: `docs/media/cut-gemini-review-messages.png`, `docs/media/cut-gemini-review-stream.png`, `docs/media/cut-gemini-review.mp4`, `docs/media/fix-tests-smoke-review-live.png`, `docs/media/fix-tests-smoke-review-stream.png`, `docs/media/fix-tests-smoke-review.mp4` |
+| Close the program | **blocked** | Do not tick Close or invent the review click. Arm / Graphite / swarm boxes stay unchecked on purpose (Appendix E). Residual unchecked file boxes (provider constants, Gemini translate, hmm/rl/bandit packages, `sidecars/hmm`, `internal/feedback`) are not Close gates while live/verify on main already passed. |
 
-## Do not invent
-
-Do not tick Close while operator review clicks stay open. Do not fake Graphite/swarm PASS. cut-sidecars unit is cleared. Tip includes `#26` (`0cdcf89`).
+Do not invent operator approval.
