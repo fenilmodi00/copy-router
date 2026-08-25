@@ -26,10 +26,10 @@ func TestOpenAIResponsesAPI(t *testing.T) {
 		r := callModel(t, body, cfg.OpenAIPinModel)
 
 		requireOKMessage(t, r)
-		assertServedByModel(t, r, cfg.OpenAIPinModel, "openai")
+		assertServedByModel(t, r, cfg.OpenAIPinModel, "aiand")
 	})
 
-	t.Run("basic turn served by pinned gpt-5.x model", func(t *testing.T) {
+	t.Run("basic turn served by pinned gpt-oss model", func(t *testing.T) {
 		body := newRequest("smoke-openai-basic").tokens(64).
 			text("Reply with exactly the word: ok").build(t)
 		r := callModel(t, body, cfg.OpenAIPinModel)
@@ -38,6 +38,6 @@ func TestOpenAIResponsesAPI(t *testing.T) {
 		if r.message.Usage.InputTokens <= 0 {
 			t.Errorf("want input_tokens > 0, got %d", r.message.Usage.InputTokens)
 		}
-		assertServedByModel(t, r, cfg.OpenAIPinModel, "openai")
+		assertServedByModel(t, r, cfg.OpenAIPinModel, "aiand")
 	})
 }

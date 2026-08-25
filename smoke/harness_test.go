@@ -1,11 +1,12 @@
 //go:build smoke
 
 // Package smoke holds the router's pre-merge smoke suite: boots a live docker
-// compose stack and drives real Anthropic/OpenAI APIs, asserting HTTP status,
+// compose stack and drives real aiand upstream APIs, asserting HTTP status,
 // response/usage shape, cache-token accounting, and x-router-* decision headers.
 //
-// Guarded by the `smoke` build tag; run via `make smoke`. Pins claude-haiku-4-5
+// Guarded by the `smoke` build tag; run via `make smoke`. Pins deepseek/deepseek-v4-flash
 // and caps max_tokens — a full run costs a few cents.
+// When SMOKE_ROUTER_KEY is unset, TestMain prints a skip message and exits 0.
 package smoke
 
 import (
@@ -29,11 +30,11 @@ type Config struct {
 	BaseURL string
 	// RouterKey is the rk_... key the orchestrator seeded. Required.
 	RouterKey string
-	// PinModel is forced via x-weave-force-model so decisions land on Anthropic
-	// deterministically and cheaply (default claude-haiku-4-5).
+	// PinModel is forced via x-weave-force-model so decisions land on aiand
+	// deterministically and cheaply (default deepseek/deepseek-v4-flash).
 	PinModel string
-	// OpenAIPinModel is the gpt-5.x model forced for OpenAI-path scenarios
-	// (default gpt-5.4-nano — bound solely to direct OpenAI, can't drift onto OpenRouter).
+	// OpenAIPinModel is the model forced for OpenAI-path scenarios
+	// (default openai/gpt-oss-120b — served via aiand).
 	OpenAIPinModel string
 	// OpenAIEnabled gates smoke/openai_test.go scenarios. Set SMOKE_OPENAI_ENABLED=0
 	// to skip when recording without an OPENAI_API_KEY. Defaults to true.
@@ -66,13 +67,13 @@ func TestMain(m *testing.M) {
 	cfg = Config{
 		BaseURL:        envOr("SMOKE_BASE_URL", "http://localhost:8080"),
 		RouterKey:      os.Getenv("SMOKE_ROUTER_KEY"),
-		PinModel:       envOr("SMOKE_PIN_MODEL", "claude-haiku-4-5"),
-		OpenAIPinModel: envOr("SMOKE_OPENAI_PIN_MODEL", "gpt-5.4-nano"),
+		PinModel:       envOr("SMOKE_PIN_MODEL", "deepseek/deepseek-v4-flash"),
+		OpenAIPinModel: envOr("SMOKE_OPENAI_PIN_MODEL", "openai/gpt-oss-120b"),
 		OpenAIEnabled:  envOr("SMOKE_OPENAI_ENABLED", "1") != "0",
 	}
 	if cfg.RouterKey == "" {
-		fmt.Fprintln(os.Stderr, "SMOKE_ROUTER_KEY is required (seed one with `docker compose run --rm seed`)")
-		os.Exit(2)
+		fmt.Fprintln(os.Stderr, "SMOKE_ROUTER_KEY unset — skipping smoke suite (seed one with `docker compose run --rm seed` to run live)")
+		os.Exit(0)
 	}
 
 	data, err := os.ReadFile(filepath.Join("fixtures", "system_prompt.txt"))

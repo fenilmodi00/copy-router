@@ -3,25 +3,22 @@
 #
 # Boots the router docker compose stack — plus the smoke suite's record/replay
 # MITM proxy (smoke/mitmproxy/) sitting between the router and its upstream
-# providers (Anthropic + OpenAI) — and runs the fixture-based smoke tests
+# aiand provider — and runs the fixture-based smoke tests
 # (smoke/ package, `smoke` build tag). Used by `make smoke` and
 # .github/workflows/smoke.yml.
 #
 # The MITM proxy means most runs need NO provider API keys: PR CI defaults to
 # SMOKE_PROXY_MODE=replay-only, reading the cassettes committed under
 # smoke/mitmproxy/cassettes/. Keys are only needed to (re)record — locally, or
-# in the nightly drift-check workflow.
+# in the nightly drift-check workflow. Replay does not need ANTHROPIC_API_KEY.
 #
 # Env:
 #   SMOKE_PROXY_MODE      replay-only (default) | record | replay-or-record
-#                          record and replay-or-record need ANTHROPIC_API_KEY
-#                          (OPENAI_API_KEY optional — only needed to record the
-#                          gpt-5.x Responses-API scenarios; those are skipped
-#                          without it, even in record mode).
-#   ANTHROPIC_API_KEY     required only when SMOKE_PROXY_MODE != replay-only
-#   OPENAI_API_KEY        optional; enables recording the OpenAI-path scenarios
+#                          record and replay-or-record need AIAND_API_KEY
+#   AIAND_API_KEY         required only when SMOKE_PROXY_MODE != replay-only
 #   SMOKE_KEEP_STACK=1    leave the stack running after the tests (local iteration)
-#   SMOKE_PIN_MODEL       Anthropic model every scenario pins (default claude-haiku-4-5)
+#   SMOKE_PIN_MODEL       model every Messages scenario pins (default deepseek/deepseek-v4-flash)
+#   SMOKE_OPENAI_PIN_MODEL  model for OpenAI-path scenarios (default openai/gpt-oss-120b)
 #   SMOKE_CI_CACHE=1      layer-cache the server/mitmproxy builds via the GitHub
 #                          Actions cache backend (type=gha). Set only by
 #                          .github/workflows/smoke.yml — type=gha hard-errors
@@ -30,8 +27,8 @@
 #                          this locally.
 #
 # Cost: replay-only runs make zero upstream calls (served from cassettes).
-# record/replay-or-record make ~10-15 real calls, all pinned to the cheapest
-# tier of each provider with small max_tokens — a few cents.
+# record/replay-or-record make ~10-15 real calls, all pinned to cheap aiand
+# catalog models with small max_tokens — a few cents.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
