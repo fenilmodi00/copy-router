@@ -12,7 +12,6 @@ import (
 	"workweave/router/internal/api/admin"
 	analyticsapi "workweave/router/internal/api/analytics"
 	anthropicapi "workweave/router/internal/api/anthropic"
-	feedbackapi "workweave/router/internal/api/feedback"
 	openaiapi "workweave/router/internal/api/openai"
 	"workweave/router/internal/auth"
 	"workweave/router/internal/billing"
@@ -39,9 +38,6 @@ const (
 	// catalogModelsTimeout bounds GET /v1/router/models; must exceed the HMM
 	// sidecar client budget (policyclient.DefaultTimeout) or a cold cache 503s.
 	catalogModelsTimeout = policyclient.DefaultTimeout * 2
-	// feedbackTimeout bounds the no-login feedback link reads/writes. Both are
-	// single-row Postgres ops plus an async span emit, so 5s is generous.
-	feedbackTimeout = 5 * time.Second
 	// analyticsTimeout bounds an export page. Keyset scans on a high-volume
 	// telemetry table warrant a batch-job budget, not an interactive one.
 	analyticsTimeout = 60 * time.Second
@@ -272,19 +268,6 @@ func Register(engine *gin.Engine, authSvc *auth.Service, proxySvc *proxy.Service
 		analyticsGroup.GET("/routing-decisions", analyticsapi.RoutingDecisionsHandler(analyticsSvc))
 		analyticsGroup.GET("/models", analyticsapi.ModelsHandler())
 		analyticsGroup.GET("/schema", analyticsapi.SchemaHandler())
-	}
-
-	// No-login feedback link: the signed HMAC token in the URL/body is the
-	// sole credential, so no auth middleware. Mounted only when
-	// ROUTER_FEEDBACK_LINK_SECRET is configured.
-	if proxySvc.FeedbackEnabled() {
-		feedbackGroup := engine.Group("/v1/feedback", middleware.WithTimeout(feedbackTimeout))
-		feedbackGroup.GET("/link/:token", feedbackapi.GetContextHandler(proxySvc))
-		feedbackGroup.POST("/link", feedbackapi.SubmitHandler(proxySvc))
-		// One-click thumb links embedded in response footers.
-		feedbackGroup.GET("/rate", feedbackapi.RateHandler(proxySvc))
-		feedbackGroup.GET("/assets/wooly-wave.png", feedbackapi.WoolyWaveHandler())
-		feedbackGroup.GET("/assets/weave.svg", feedbackapi.WeaveLogoHandler())
 	}
 }
 

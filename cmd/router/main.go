@@ -23,7 +23,6 @@ import (
 	"workweave/router/internal/auth"
 	"workweave/router/internal/billing"
 	"workweave/router/internal/config"
-	"workweave/router/internal/feedback"
 	"workweave/router/internal/flags"
 	"workweave/router/internal/observability"
 	"workweave/router/internal/observability/apm"
@@ -445,19 +444,7 @@ func main() {
 	captureMode := proxy.ParseCaptureMode(config.GetOr("WV_CAPTURE_CONTENT", ""))
 	captureMaxBytes := parseEnvInt("WV_CAPTURE_MAX_BYTES", 1<<20)
 	logger.Info("Router content capture configured", "mode", captureMode.String(), "max_bytes", captureMaxBytes)
-
-	// Both the signer and base URL must be set for the feedback link header
-	// to be emitted on responses.
-	feedbackSigner := feedback.NewSigner(config.GetOr("ROUTER_FEEDBACK_LINK_SECRET", ""), feedbackLinkTTL())
-	feedbackBaseURL := config.GetOr("ROUTER_FEEDBACK_BASE_URL", "")
-	switch {
-	case feedbackSigner != nil && feedbackBaseURL != "":
-		logger.Info("Feedback link enabled", "base_url", feedbackBaseURL)
-	case feedbackSigner != nil:
-		logger.Warn("Feedback link endpoints mounted but ROUTER_FEEDBACK_BASE_URL is unset; responses will not carry a feedback link header")
-	default:
-		logger.Info("Feedback link disabled (set ROUTER_FEEDBACK_LINK_SECRET and ROUTER_FEEDBACK_BASE_URL to enable)")
-	}
+	logger.Info("Feedback HTTP pages removed; ROUTER_FEEDBACK_* env vars are ignored (no /v1/feedback routes or link headers)")
 
 	// Wired only when ROUTER_RL_SIDECAR_URL is set; x-weave-router-strategy: rl
 	// then routes through it. Unset fails closed with 503 rather than
@@ -632,7 +619,7 @@ func main() {
 		}).
 		WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyBandit, Router: banditRouter, Unavailable: bandit.ErrBanditUnavailable}).
 		WithContentCapture(captureMode, captureMaxBytes, nil).
-		WithFeedback(repo.Feedback, feedbackSigner, feedbackBaseURL).
+		WithFeedback(repo.Feedback, nil, "").
 		WithByokOnly(byokOnly).
 		WithDeploymentKeyedProviders(deploymentEligible).
 		WithHardPinResolver(hardPinResolver).
@@ -1170,24 +1157,6 @@ func parseEnvFloat(key string, fallback float64) float64 {
 		return fallback
 	}
 	return v
-}
-
-// feedbackLinkTTL resolves the feedback-link token lifetime from
-// ROUTER_FEEDBACK_LINK_TTL_SEC (default 30 days). An explicit 0 means "never
-// expire" (feedback.NewSigner's non-positive-TTL contract); parsed inline
-// rather than via parseEnvInt, which would reject 0.
-func feedbackLinkTTL() time.Duration {
-	const defaultSec = 30 * 24 * 60 * 60
-	raw := config.GetOr("ROUTER_FEEDBACK_LINK_TTL_SEC", "")
-	if raw == "" {
-		return defaultSec * time.Second
-	}
-	sec, err := strconv.Atoi(raw)
-	if err != nil || sec < 0 {
-		observability.Get().Warn("Invalid env var; using default", "key", "ROUTER_FEEDBACK_LINK_TTL_SEC", "value", raw, "default", defaultSec)
-		return defaultSec * time.Second
-	}
-	return time.Duration(sec) * time.Second
 }
 
 // sseKeepaliveInterval parses ROUTER_SSE_KEEPALIVE_INTERVAL_SECONDS.
