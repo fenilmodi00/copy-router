@@ -89,6 +89,14 @@ make setup
 make dev
 ```
 
+When the remote project already has schema `router` but the DB role cannot `CREATE SCHEMA` or cannot write `router.schema_migrations` (common on a shared Supabase project already migrated by another role), `make setup` / `make migrate-up` may fail with `permission denied`. If migrations are already applied (no pending schema drift), run seed only:
+
+```bash
+make seed
+```
+
+Otherwise ask a role that owns schema `router` to run migrate, then `make seed` on the host.
+
 Check:
 
 ```bash
@@ -97,8 +105,6 @@ curl -sf -H "Authorization: Bearer rk_YOUR_SEEDED_KEY" http://127.0.0.1:8080/val
 # Admin UI (selfhosted)
 curl -sf http://127.0.0.1:8080/ui/ | head
 ```
-
-`make setup` should report no pending migrations when the remote schema is current, and `make seed` should print an `rk_` key.
 
 ## ONNX on WSL
 

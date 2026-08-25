@@ -12,6 +12,10 @@ _Avoid_: aiand-relay (legacy app), dyno name alone
 The manually set Build.io config var pointing at Supabase Postgres (session pooler for runtime). Not an Addons.io provisioned URL.
 _Avoid_: Schema To Go, Ave To Go, dedicated Build.io database addon
 
+**Host WSL path**:
+Local `make setup` / `make dev` against the same Supabase session pooler (`:5432`), with `PUBSUB_DISABLED=true` and no Compose Postgres. Documented in `docs/HOST_WSL_SUPABASE.md`. Skip `make db` and `make full-setup`.
+_Avoid_: Treating Compose `make db` as required for every local loop
+
 **Pub/Sub disable**:
 Single-replica boot with `PUBSUB_DISABLED=true` (or empty `PUBSUB_PROJECT_ID`) so GCP Pub/Sub is skipped. Cross-replica cache invalidation is off; 5-minute cache TTL is the safety net.
 _Avoid_: "no Pub/Sub features", emulator-only disable
