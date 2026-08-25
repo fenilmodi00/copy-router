@@ -1,85 +1,40 @@
-# Weave Router - Build.io Deployment
+# Build.io Deployment — Quick Start
 
-## Summary
+Full guide: **[BUILDIO_DEPLOYMENT_GUIDE.md](./BUILDIO_DEPLOYMENT_GUIDE.md)**
 
-All deployment files are prepared. The Weave Router is ready to be deployed on build.io with all services containerized.
+## What's ready
 
-## Files Created/Modified
+| Artifact | Status |
+|----------|--------|
+| `Dockerfile` / `Dockerfile.buildio` | Production ONNX/CGO image |
+| `heroku.yml` | `PUBSUB_DISABLED=true`, `SERVER_REPLICAS=1` |
+| `app.json` | No Schema To Go; requires `DATABASE_URL` |
+| Supabase project `router` | `ap-northeast-1` (ref `ssmcjrszhaxbxlyfgthn`) |
+| build.io app `router` | `https://router-568f5bb0.onbld.com` |
+| `.env.production.local` | Fill secrets (gitignored) |
 
-| File | Purpose |
-|------|---------|
-| `.env.production.local` | Production environment config with AI& key |
-| `app.json` | Build.io app manifest |
-| `docker-compose.buildio.yml` | All services (Postgres, Pub/Sub, Router, Nginx) |
-| `Dockerfile.buildio` | Production Docker image |
-| `DEPLOY.sh` | Automation script |
-| `BUILDIO_DEPLOYMENT_GUIDE.md` | Complete deployment guide |
-| `setup_wsl.sh` | WSL setup + Docker build |
+## Deploy in 4 steps
 
-## Current State
+```powershell
+# 1. Secrets
+Copy-Item .env.buildio .env.production.local
+# Set DATABASE_URL from Supabase Connect → Session (:5432)
+# Keep PUBSUB_DISABLED=true
 
-- **Router**: Ready with v0.76 cluster artifacts
-- **AI& API key**: Configured: `sk-7611c41e9cdcd243ce6600107b4621464016425bc71b641fd56df04dd2b462bb`
-- **Admin password**: `fenil2004`
-- **Database**: PostgreSQL configured
-- **Pub/Sub**: Configured for cache invalidation
-- **Replicas**: 2
+# 2. Migrate once (direct or session pooler)
+# migrate -path db/migrations -database "$env:DATABASE_URL" up
 
-## Next Steps (Choose One)
+# 3. Push config (API token from Build.io Account settings)
+# $env:BUILDIO_API_TOKEN='...'; $env:DATABASE_URL='...'
+# .\scripts\buildio-set-safe-config.ps1 -EnvFile .env.production.local
+# Then deploy via Dockerfile stack (or Docker Hub image)
 
-### Option 1: Build.io Dashboard (Easiest)
-1. Visit [build.io/dashboard](https://www.build.io/dashboard)
-2. Create app: `router` (stack: heroku-24)
-3. Add addon: `ave-to-go` (plan: default)
-4. Set environment variables from `.env.production.local`
-5. Deploy Docker image: `your-username/router:v1`
-
-### Option 2: bld CLI (Requires Crystal)
-```bash
-# Install Crystal
-curl -fsSL https://crystal-lang.org/install.sh | bash
-
-# Install build.io CLI
-git clone https://github.com/buildio/cli.git
-cd cli && shards build
-
-# Deploy
-bld login
-bld create app router --stack heroku-24
-bld addons:create router DATABASE_URL --plan default
-bld deploy router
+# 4. Verify
+curl -skSf https://router-568f5bb0.onbld.com/health
 ```
 
-### Option 3: WSL (Windows)
-```bash
-# Enable WSL
-wsl --install -d Ubuntu-24.04
+## Do not
 
-# Run setup script
-cd /mnt/d/router
-./setup_wsl.sh
-```
-
-## API Endpoints
-
-Once deployed at `https://router.build.io`:
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/v1/messages` | POST | Anthropic Messages API |
-| `/v1/chat/completions` | POST | OpenAI Chat Completions API |
-| `/v1/route` | POST | Get routing decision |
-| `/ui/*` | GET | Admin dashboard |
-
-## Important Notes
-
-1. **BYOK Encryption**: Replace `EXTERNAL_KEY_ENCRYPTION_KEY` with a real Tink keyset before production
-2. **Don't commit** `.env.buildio.local` to git
-3. **Use HTTPS** in production (Nginx included)
-4. **Rotate API keys** regularly
-
-## Support
-
-- [Build.io Docs](https://docs.build.io)
-- [Weave Router Docs](./DEPLOYMENT_BUILDIO.md)
+- Attach Schema To Go / Ave To Go
+- Copy `PUBSUB_PROJECT_ID` without GCP credentials (boot panic → 502)
+- Commit `.env.production.local`

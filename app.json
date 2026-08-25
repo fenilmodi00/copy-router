@@ -2,10 +2,10 @@
   "name": "router",
   "description": "aiand router — Smart AI model proxy that routes every request to the best model using a cluster scorer with ONNX embedders",
   "version": "1.0.0",
-  "buildStack": "heroku-24",
+  "buildStack": "dockerfile",
   "env": {
-    "POSTGRES_PASSWORD": {
-      "description": "PostgreSQL password for router user",
+    "DATABASE_URL": {
+      "description": "Postgres URI (Supabase session pooler :5432). Do not attach Schema To Go.",
       "required": true
     },
     "AIAND_API_KEY": {
@@ -20,6 +20,11 @@
       "description": "Tink AES-256-GCM keyset JSON for BYOK encryption",
       "required": true
     },
+    "PUBSUB_DISABLED": {
+      "description": "Skip GCP Pub/Sub (required for single-replica Build.io without GCP)",
+      "default": "true",
+      "required": false
+    },
     "ROUTER_DEPLOYMENT_MODE": {
       "description": "Deployment mode (selfhosted or managed)",
       "default": "selfhosted",
@@ -31,8 +36,8 @@
       "required": false
     },
     "SERVER_REPLICAS": {
-      "description": "Number of router replicas",
-      "default": "2",
+      "description": "Number of router replicas (keep 1 while Pub/Sub is disabled)",
+      "default": "1",
       "required": false
     },
     "OTEL_EXPORTER_OTLP_ENDPOINT": {
@@ -48,12 +53,5 @@
       "required": false
     }
   },
-  "addons": [
-    {
-      "id": "6e4973d2-d948-4a22-b83c-649ecaa87f84",
-      "name": "ave-to-go",
-      "plan": "default",
-      "as": "DATABASE_URL"
-    }
-  ]
+  "addons": []
 }
