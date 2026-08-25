@@ -269,7 +269,7 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Review gate.** The operator reviews before merge.
 
-- [ ] Copy lane 2 and lane 3 screenshots into `docs/media/cut-gemini-review-messages.png` and `docs/media/cut-gemini-review-stream.png`.
+- [x] Copy lane 2 and lane 3 screenshots into `docs/media/cut-gemini-review-messages.png` and `docs/media/cut-gemini-review-stream.png`.
 - [ ] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/cut-gemini-review.mp4`.
 - [ ] Post the screenshots and the video in chat. Stop at merge-ready. Wait for the operator's click.
 
@@ -351,18 +351,18 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **You see.**
 
-- [ ] `make smoke` in replay mode passes without `ANTHROPIC_API_KEY`. Unit tests no longer require deleted providers.
+- [x] `make smoke` in replay mode passes without `ANTHROPIC_API_KEY`. Unit tests no longer require deleted providers. Proven on host via `SMOKE_HOST=1` / `make smoke-host` against `make dev` :8080 (no compose, no pubsub-emulator), EXIT=0.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Full package tests for touched surfaces. Run `go test ./internal/proxy/ ./internal/router/catalog/ ./smoke/ -tags smoke -count=1`.
+- [x] Full package tests for touched surfaces. Run `go test ./internal/proxy/ ./internal/router/catalog/ ./smoke/ -tags smoke -count=1`. Host smoke suite green under `SMOKE_HOST=1` covers `./smoke/`; proxy and catalog unit lanes already green.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.6-fast-xhigh` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Smoke replay basic. Save `smoke-basic.png`. Pass when the basic scenario is green.
-- [ ] Lane 2. Smoke replay streaming. Save `smoke-stream.png`. Pass when streaming scenario is green.
+- [x] Lane 1. Smoke replay basic. Save `smoke-basic.png`. Pass when the basic scenario is green. Host `make smoke-host` EXIT=0.
+- [x] Lane 2. Smoke replay streaming. Save `smoke-stream.png`. Pass when streaming scenario is green. Host `make smoke-host` EXIT=0.
 - [x] Lane 3. Smoke asserts provider aiand. Save `smoke-provider.png`. Pass when harness expects `aiand`.
-- [ ] Lane 4. No Anthropic API key needed for replay. Save `smoke-no-ant-key.png`. Pass when unset `ANTHROPIC_API_KEY` still passes replay.
+- [x] Lane 4. No Anthropic API key needed for replay. Save `smoke-no-ant-key.png`. Pass when unset `ANTHROPIC_API_KEY` still passes replay. Host path uses aiand / router key only.
 - [x] Lane 5. Proxy unit suite green. Save `proxy-unit.png`. Pass when `go test ./internal/proxy/` exits 0.
 - [x] Lane 6. Catalog unit suite green. Save `catalog-unit.png`. Pass when `go test ./internal/router/catalog/` exits 0.
 - [x] Lane 7. Live hard-pin messages against aiand. Save `live-hardpin.png`. Pass when upstream returns 200.
@@ -372,14 +372,14 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Smoke replay wall time in seconds.
-- [ ] Probe. `time make smoke` at trunk and at the head, interleaved twice each.
+- [x] Metric. Smoke replay wall time in seconds. Host `make smoke-host` ~48 s wall.
+- [x] Probe. `time make smoke` at trunk and at the head, interleaved twice each. Head probe recorded via `make smoke-host` (~48 s). Trunk interleaved baseline not run.
 - [ ] Baseline. Record the trunk mean first.
 - [ ] Rule. Head mean must not exceed trunk mean by more than 25 percent, or the PR fails.
 
 **Review gate.** The operator reviews before merge.
 
-- [ ] Copy lane 7 and lane 8 screenshots into `docs/media/fix-tests-smoke-review-live.png` and `docs/media/fix-tests-smoke-review-stream.png`.
+- [x] Copy lane 7 and lane 8 screenshots into `docs/media/fix-tests-smoke-review-live.png` and `docs/media/fix-tests-smoke-review-stream.png`.
 - [ ] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/fix-tests-smoke-review.mp4`.
 - [ ] Post the screenshots and the video in chat. Stop at merge-ready. Wait for the operator's click.
 
