@@ -11,15 +11,15 @@ import (
 )
 
 func TestDeployedModelsForRosterIDs_MapsRosterSlugsToCatalogEntries(t *testing.T) {
-	// Roster slugs are provider-prefixed (openai/…); entries carry bare
-	// catalog IDs and primary provider, matching the cluster source shape.
+	// Slash-form aiand catalog IDs are their own roster IDs, except kimi-k2.7
+	// which maps through the kimi-k2.7-code roster alias.
 	got := hmm.DeployedModelsForRosterIDs([]string{
-		"openai/gpt-5.6-sol",
-		"openai/gpt-5.6-sol-pro",
-		"openai/gpt-5.6-luna-pro",
-		"anthropic/claude-opus-4.8",
+		"openai/gpt-oss-120b",
 		"deepseek/deepseek-v4-flash",
-		"x-ai/grok-4.6",
+		"moonshotai/kimi-k2.7-code",
+		"z-ai/glm-5.2",
+		"google/gemma-4-31b-it",
+		"not/a-real-roster-id",
 	})
 
 	byModel := make(map[string]string, len(got))
@@ -27,28 +27,24 @@ func TestDeployedModelsForRosterIDs_MapsRosterSlugsToCatalogEntries(t *testing.T
 		byModel[e.Model] = e.Provider
 	}
 
-	assert.Equal(t, providers.ProviderOpenAI, byModel["gpt-5.6-sol"])
-	assert.Equal(t, providers.ProviderOpenAI, byModel["gpt-5.6-sol-pro"])
-	assert.Equal(t, providers.ProviderOpenAI, byModel["gpt-5.6-luna-pro"])
-	assert.Equal(t, providers.ProviderAnthropic, byModel["claude-opus-4-8"])
-	// Bare first-party xAI IDs map through an explicit roster alias; the
-	// provider is the native xAI binding.
-	assert.Equal(t, providers.ProviderXAI, byModel["grok-4.6"])
-	// OSS slugs already carry their provider prefix, so the roster_id equals
-	// the catalog ID; provider is whatever the catalog lists first.
-	require.Contains(t, byModel, "deepseek/deepseek-v4-flash")
-	assert.NotEmpty(t, byModel["deepseek/deepseek-v4-flash"])
+	assert.Equal(t, providers.ProviderAiand, byModel["openai/gpt-oss-120b"])
+	assert.Equal(t, providers.ProviderAiand, byModel["deepseek/deepseek-v4-flash"])
+	assert.Equal(t, providers.ProviderAiand, byModel["moonshotai/kimi-k2.7"])
+	assert.Equal(t, providers.ProviderAiand, byModel["z-ai/glm-5.2"])
+	assert.Equal(t, providers.ProviderAiand, byModel["google/gemma-4-31b-it"])
+	assert.NotContains(t, byModel, "not/a-real-roster-id")
 }
 
 func TestDeployedModelsForRosterIDs_PreservesOrderAndDropsUnknown(t *testing.T) {
 	got := hmm.DeployedModelsForRosterIDs([]string{
-		"openai/gpt-5.6-sol",
+		"openai/gpt-oss-120b",
 		"not/a-real-roster-id",
-		"openai/gpt-5.6-sol", // duplicate: only the first survives
+		"openai/gpt-oss-120b", // duplicate: only the first survives
 	})
 
 	require.Len(t, got, 1)
-	assert.Equal(t, "gpt-5.6-sol", got[0].Model)
+	assert.Equal(t, "openai/gpt-oss-120b", got[0].Model)
+	assert.Equal(t, providers.ProviderAiand, got[0].Provider)
 }
 
 func TestDeployedModelsForRosterIDs_EmptyInput(t *testing.T) {

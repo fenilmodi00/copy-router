@@ -7,7 +7,7 @@
       }
     ],
     "id": "<id>",
-    "model": "deepseek/deepseek-v4-pro",
+    "model": "deepseek/deepseek-v4-pro-0813",
     "role": "assistant",
     "stop_reason": "end_turn",
     "stop_sequence": null,

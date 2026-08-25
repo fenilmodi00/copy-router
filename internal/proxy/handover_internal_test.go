@@ -55,7 +55,7 @@ func (f *fakeHandoverProvider) Passthrough(_ context.Context, _ providers.Prepar
 // system and a couple of message turns so buildHandoverRequestBody has
 // real content to flatten.
 const sampleConversation = `{
-  "model": "claude-opus-4-7",
+  "model": "moonshotai/kimi-k3",
   "system": "You are a helpful assistant.",
   "messages": [
     {"role": "user", "content": "Step 1?"},
@@ -71,7 +71,7 @@ const canonicalAnthropicResponse = `{
   "id": "msg_test_001",
   "type": "message",
   "role": "assistant",
-  "model": "claude-haiku-4-5",
+  "model": "deepseek/deepseek-v4-flash",
   "stop_reason": "end_turn",
   "content": [
     {"type": "text", "text": "Refactor in progress: step 1 done, step 2 pending."}

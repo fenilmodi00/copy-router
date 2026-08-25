@@ -48,107 +48,95 @@ func (e *ForcedModelUnknownError) Error() string {
 func (e *ForcedModelUnknownError) Unwrap() error { return ErrForcedModelUnknown }
 
 var forceModelAliases = map[string]string{
-	"anthropic":   "claude-opus-5",
-	"claude":      "claude-opus-5",
-	"opus":        "claude-opus-5",
-	"claude-opus": "claude-opus-5",
-	"opus-5":      "claude-opus-5",
-	"opus-5.0":    "claude-opus-5",
-	"opus5":       "claude-opus-5",
-	"claude-5":    "claude-opus-5",
-	// Opus 4.8 is retired from routing but still servable as passthrough;
-	// keep its own-name aliases so direct pins resolve.
-	"opus-4-8":      "claude-opus-4-8",
-	"opus-4.8":      "claude-opus-4-8",
-	"claude-4-8":    "claude-opus-4-8",
-	"claude-4.8":    "claude-opus-4-8",
-	"fable":         "claude-fable-5",
-	"fable-5":       "claude-fable-5",
-	"fable5":        "claude-fable-5",
-	"claude-fable":  "claude-fable-5",
-	"sonnet":        "claude-sonnet-5",
-	"claude-sonnet": "claude-sonnet-5",
-	"sonnet-5":      "claude-sonnet-5",
-	"sonnet-4-6":    "claude-sonnet-4-6",
-	"sonnet-4.6":    "claude-sonnet-4-6",
-	"haiku":         "claude-haiku-4-5",
-	"claude-haiku":  "claude-haiku-4-5",
-	"haiku-4-5":     "claude-haiku-4-5",
-	"haiku-4.5":     "claude-haiku-4-5",
-	// Generic GPT aliases follow the current flagship, not a pinned version;
-	// they pointed at gpt-5.5 until it was retired. Version-specific aliases
-	// (gpt-5-5*) deliberately still resolve to their exact model, which stays
-	// available as priced passthrough.
-	"gpt":    "gpt-5.6-sol",
-	"openai": "gpt-5.6-sol",
-	// The bare gpt-5.6 alias routes to Sol, matching OpenAI's own alias.
-	"gpt-5.6":       "gpt-5.6-sol",
-	"gpt-5-6":       "gpt-5.6-sol",
-	"sol":           "gpt-5.6-sol",
-	"gpt-5-6-sol":   "gpt-5.6-sol",
-	"terra":         "gpt-5.6-terra",
-	"gpt-5-6-terra": "gpt-5.6-terra",
-	"luna":          "gpt-5.6-luna",
-	"gpt-5-6-luna":  "gpt-5.6-luna",
-	"gpt-5-5":       "gpt-5.5",
-	"gpt-5-5-pro":   "gpt-5.5-pro",
-	"gpt-5-5-mini":  "gpt-5.5-mini",
-	"gpt-5-5-nano":  "gpt-5.5-nano",
-	// grok-4.5 is retired from routing (no AA Agentic Index score, never rostered).
-	// Family aliases follow flagship 4.6; own-name alias keeps grok-4.5 as passthrough.
-	"grok":                  "grok-4.6",
-	"grok-4.5":              "grok-4.5",
-	"grok4.5":               "grok-4.5",
-	"xai":                   "grok-4.6",
-	"grok-4.6":              "grok-4.6",
-	"grok4.6":               "grok-4.6",
-	"grok-max":              "grok-4.6",
-	"gpt-5-4":               "gpt-5.4",
-	"gpt-5-4-pro":           "gpt-5.4-pro",
-	"gpt-5-4-mini":          "gpt-5.4-mini",
-	"gpt-5-4-nano":          "gpt-5.4-nano",
-	"google":                "gemini-3-pro-preview",
-	"gemini":                "gemini-3-pro-preview",
-	"gemini-pro":            "gemini-3-pro-preview",
-	"gemini-flash":          "gemini-3-flash-preview",
-	"gemini-3-6-flash":      "gemini-3.6-flash",
-	"gemini-3-5-flash-lite": "gemini-3.5-flash-lite",
-	"gemini-3-7-flash":      "gemini-3.7-flash",
-	// The family alias follows Makora's V4-Pro EOL onto Flash; deepseek-pro
-	// still names V4-Pro explicitly, which is passthrough-only now.
-	"deepseek":       "deepseek/deepseek-v4-flash",
-	"deepseek-pro":   "deepseek/deepseek-v4-pro",
-	"deepseek-flash": "deepseek/deepseek-v4-flash",
-	"qwen":           "qwen/qwen3-coder",
-	"qwen-coder":     "qwen/qwen3-coder",
-	// qwen3.7-plus is retired from routing but still servable as passthrough;
-	// keep its own-name alias so direct pins resolve.
-	"qwen3.7-plus": "qwen/qwen3.7-plus",
-	"qwen-max":     "qwen/qwen3.8-max",
-	"qwen3.8-max":  "qwen/qwen3.8-max",
-	"qwen3.8":      "qwen/qwen3.8-max",
-	// Dash-form spellings people type from memory; the catalog ID uses dots.
-	"qwen/qwen-3.8-max": "qwen/qwen3.8-max",
-	"qwen-3.8-max":      "qwen/qwen3.8-max",
-	"qwen-3.8":          "qwen/qwen3.8-max",
-	// Generic kimi alias stays on 2.7; k3 is ~3x the price, so it needs an
-	// explicit pin rather than silently repricing everyone on the family alias.
-	"kimi":      "moonshotai/kimi-k2.7",
-	"kimi-k3":   "moonshotai/kimi-k3",
-	"kimi-k2.7": "moonshotai/kimi-k2.7",
-	"kimi-k2.6": "moonshotai/kimi-k2.6",
-	// Generic glm/zai aliases stay on 5.1 (Together/Fireworks/OpenRouter);
-	// 5.2 is Fireworks-only day-0, so it requires an explicit pin.
-	"glm":          "z-ai/glm-5.1",
-	"zai":          "z-ai/glm-5.1",
-	"z-ai":         "z-ai/glm-5.1",
+	// Anthropic-family aliases retarget onto the aiand-only catalog.
+	"anthropic":     "z-ai/glm-5.2",
+	"claude":        "z-ai/glm-5.2",
+	"opus":          "z-ai/glm-5.2",
+	"claude-opus":   "z-ai/glm-5.2",
+	"opus-5":        "z-ai/glm-5.2",
+	"opus-5.0":      "z-ai/glm-5.2",
+	"opus5":         "z-ai/glm-5.2",
+	"claude-5":      "z-ai/glm-5.2",
+	"opus-4-8":      "moonshotai/kimi-k3",
+	"opus-4.8":      "moonshotai/kimi-k3",
+	"claude-4-8":    "moonshotai/kimi-k3",
+	"claude-4.8":    "moonshotai/kimi-k3",
+	"fable":         "moonshotai/kimi-k3",
+	"fable-5":       "moonshotai/kimi-k3",
+	"fable5":        "moonshotai/kimi-k3",
+	"claude-fable":  "moonshotai/kimi-k3",
+	"sonnet":        "moonshotai/kimi-k2.7",
+	"claude-sonnet": "moonshotai/kimi-k2.7",
+	"sonnet-5":      "moonshotai/kimi-k2.7",
+	"sonnet-4-6":    "deepseek/deepseek-v4-pro-0813",
+	"sonnet-4.6":    "deepseek/deepseek-v4-pro-0813",
+	"haiku":         "deepseek/deepseek-v4-flash",
+	"claude-haiku":  "deepseek/deepseek-v4-flash",
+	"haiku-4-5":     "deepseek/deepseek-v4-flash",
+	"haiku-4.5":     "deepseek/deepseek-v4-flash",
+	// GPT / OpenAI family → gpt-oss on aiand.
+	"gpt":           "openai/gpt-oss-120b",
+	"openai":        "openai/gpt-oss-120b",
+	"gpt-5.6":       "openai/gpt-oss-120b",
+	"gpt-5-6":       "openai/gpt-oss-120b",
+	"sol":           "openai/gpt-oss-120b",
+	"gpt-5-6-sol":   "openai/gpt-oss-120b",
+	"terra":         "openai/gpt-oss-120b",
+	"gpt-5-6-terra": "openai/gpt-oss-120b",
+	"luna":          "openai/gpt-oss-120b",
+	"gpt-5-6-luna":  "openai/gpt-oss-120b",
+	"gpt-5-5":       "openai/gpt-oss-120b",
+	"gpt-5-5-pro":   "openai/gpt-oss-120b",
+	"gpt-5-5-mini":  "openai/gpt-oss-120b",
+	"gpt-5-5-nano":  "openai/gpt-oss-120b",
+	"gpt-5-4":       "openai/gpt-oss-120b",
+	"gpt-5-4-pro":   "openai/gpt-oss-120b",
+	"gpt-5-4-mini":  "openai/gpt-oss-120b",
+	"gpt-5-4-nano":  "openai/gpt-oss-120b",
+	// Grok / xAI → kimi-k2.7.
+	"grok":     "moonshotai/kimi-k2.7",
+	"grok-4.5": "moonshotai/kimi-k2.7",
+	"grok4.5":  "moonshotai/kimi-k2.7",
+	"xai":      "moonshotai/kimi-k2.7",
+	"grok-4.6": "moonshotai/kimi-k2.7",
+	"grok4.6":  "moonshotai/kimi-k2.7",
+	"grok-max": "moonshotai/kimi-k2.7",
+	// Google / Gemini → gemma.
+	"google":                "google/gemma-4-31b-it",
+	"gemini":                "google/gemma-4-31b-it",
+	"gemini-pro":            "google/gemma-4-31b-it",
+	"gemini-flash":          "google/gemma-4-31b-it",
+	"gemini-3-6-flash":      "google/gemma-4-31b-it",
+	"gemini-3-5-flash-lite": "google/gemma-4-31b-it",
+	"gemini-3-7-flash":      "google/gemma-4-31b-it",
+	"deepseek":              "deepseek/deepseek-v4-flash",
+	"deepseek-pro":          "deepseek/deepseek-v4-pro-0813",
+	"deepseek-flash":        "deepseek/deepseek-v4-flash",
+	"qwen":                  "qwen/qwen3.6-27b",
+	"qwen-coder":            "qwen/qwen3.6-27b",
+	"qwen3.7-plus":          "qwen/qwen3.6-27b",
+	"qwen-max":              "qwen/qwen3.6-27b",
+	"qwen3.8-max":           "qwen/qwen3.6-27b",
+	"qwen3.8":               "qwen/qwen3.6-27b",
+	"qwen/qwen-3.8-max":     "qwen/qwen3.6-27b",
+	"qwen-3.8-max":          "qwen/qwen3.6-27b",
+	"qwen-3.8":              "qwen/qwen3.6-27b",
+	// Generic kimi alias stays on 2.7; k3 needs an explicit pin.
+	"kimi":         "moonshotai/kimi-k2.7",
+	"kimi-k3":      "moonshotai/kimi-k3",
+	"kimi-k2.7":    "moonshotai/kimi-k2.7",
+	"kimi-k2.6":    "moonshotai/kimi-k2.7",
+	"glm":          "z-ai/glm-5.2",
+	"zai":          "z-ai/glm-5.2",
+	"z-ai":         "z-ai/glm-5.2",
 	"glm-5.2":      "z-ai/glm-5.2",
-	"glm-5.1":      "z-ai/glm-5.1",
-	"glm-5":        "z-ai/glm-5",
-	"minimax":      "minimax/minimax-m3",
-	"minimax-m3":   "minimax/minimax-m3",
-	"minimax-m2.7": "minimax/minimax-m2.7",
-	"mistral":      "mistralai/mistral-small-2603",
+	"glm-5.1":      "z-ai/glm-5.2",
+	"glm-5":        "z-ai/glm-5.2",
+	"minimax":      "deepseek/deepseek-v4-flash",
+	"minimax-m3":   "deepseek/deepseek-v4-flash",
+	"minimax-m2.7": "deepseek/deepseek-v4-flash",
+	"mistral":      "deepseek/deepseek-v4-flash",
+	"aiand":        "deepseek/deepseek-v4-flash",
 }
 
 // resolveForceModel is the legacy two-return surface. New pin-and-effort
@@ -170,6 +158,12 @@ func resolveForceModelWithEffort(model string) (canonicalID, provider string, kn
 	model = stripped
 	model = strings.ToLower(strings.TrimSpace(model))
 	effort = effortLevel
+	// Prefer an exact catalog / upstream hit on the full string before the
+	// openai/ native-prefix strip — aiand catalog IDs like openai/gpt-oss-120b
+	// must not be misread as OpenAI-native names.
+	if m, ok := catalog.ByIDOrUpstream(model); ok && len(m.Providers) > 0 {
+		return m.ID, m.Providers[0].Provider, true, effort
+	}
 	unknownID := model
 	requiredProvider := ""
 	if nativeID, ok := strings.CutPrefix(model, "openai/"); ok {
@@ -179,6 +173,10 @@ func resolveForceModelWithEffort(model string) (canonicalID, provider string, kn
 	}
 	if alias, ok := forceModelAliases[model]; ok {
 		model = alias
+		// Aliases retarget onto the aiand catalog; the openai/ native-prefix
+		// constraint only applies to unresolved OpenAI-native names.
+		requiredProvider = ""
+		unknownID = model
 	} else if canonical, ok := bareCatalogNames[model]; ok {
 		model = canonical
 	}
@@ -417,9 +415,9 @@ func (s *Service) handleForceModelCommand(
 			"session_key_hex", fmt.Sprintf("%x", sessionKey),
 			"role", role,
 		)
-		msg = fmt.Sprintf("✦ **Weave Router** → force-model: %q isn't a recognized model · keeping automatic routing. Use a full model ID, e.g. claude-opus-5, gpt-5.5, or gemini-3-pro-preview.\n\n", cmd.Model)
+		msg = fmt.Sprintf("✦ **Weave Router** → force-model: %q isn't a recognized model · keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek/deepseek-v4-flash, or z-ai/glm-5.2.\n\n", cmd.Model)
 		if env.SourceFormat() == translate.FormatOpenAI {
-			msg = fmt.Sprintf("Weave Router: force-model: %q isn't a recognized model; keeping automatic routing. Use a full model ID, e.g. claude-opus-5, gpt-5.5, or gemini-3-pro-preview.", cmd.Model)
+			msg = fmt.Sprintf("Weave Router: force-model: %q isn't a recognized model; keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek/deepseek-v4-flash, or z-ai/glm-5.2.", cmd.Model)
 		}
 	} else if binding, reason := s.forcedModelBinding(ctx, canonicalModel, provider); reason != "" {
 		// Exclusions outrank the force. Pinning anyway would look accepted and

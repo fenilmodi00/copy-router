@@ -12,7 +12,7 @@ import (
 )
 
 func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
-	decision := router.Decision{Model: "deepseek/deepseek-v4-pro", Provider: "openrouter"}
+	decision := router.Decision{Model: "deepseek/deepseek-v4-pro-0813", Provider: "openrouter"}
 
 	cases := []struct {
 		name           string
@@ -28,7 +28,7 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 				PlannerDecision: planner.Decision{Reason: planner.ReasonEVPositive},
 			},
 			wantContains: []string{
-				"✦ **Weave Router** → deepseek/deepseek-v4-pro · " + markerReasonSwitched,
+				"✦ **Weave Router** → deepseek/deepseek-v4-pro-0813 · " + markerReasonSwitched,
 			},
 			wantNotContain: []string{
 				"(openrouter)",
@@ -92,7 +92,7 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 				PlannerDecision: planner.Decision{Reason: planner.ReasonPricingMissing},
 			},
 			wantContains: []string{
-				"✦ **Weave Router** → deepseek/deepseek-v4-pro",
+				"✦ **Weave Router** → deepseek/deepseek-v4-pro-0813",
 			},
 			wantNotContain: []string{
 				"·",
@@ -137,19 +137,19 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 			res: turnLoopResult{
 				Decision:         decision,
 				StickyHit:        true,
-				PriorServedModel: "deepseek/deepseek-v4-pro",
+				PriorServedModel: "deepseek/deepseek-v4-pro-0813",
 			},
 			wantEmpty: true,
 		},
 		{
 			name: "tool-result but model switched: marker shown despite sticky hit",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "claude-haiku-4-5", Provider: "anthropic"},
+				Decision:         router.Decision{Model: "deepseek/deepseek-v4-flash", Provider: "anthropic"},
 				StickyHit:        true,
-				PriorServedModel: "deepseek/deepseek-v4-pro",
+				PriorServedModel: "deepseek/deepseek-v4-pro-0813",
 			},
 			wantContains: []string{
-				"✦ **Weave Router** → claude-haiku-4-5 · " + markerReasonBestPick,
+				"✦ **Weave Router** → deepseek/deepseek-v4-flash · " + markerReasonBestPick,
 			},
 			wantNotContain: []string{
 				"(anthropic)",
@@ -158,13 +158,13 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 		{
 			name: "recovery code with model switch: marker shown without reason",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "claude-haiku-4-5", Provider: "anthropic"},
+				Decision:         router.Decision{Model: "deepseek/deepseek-v4-flash", Provider: "anthropic"},
 				StickyHit:        true,
-				PriorServedModel: "deepseek/deepseek-v4-pro",
+				PriorServedModel: "deepseek/deepseek-v4-pro-0813",
 				PlannerDecision:  planner.Decision{Reason: "pin_model_missing"},
 			},
 			wantContains: []string{
-				"✦ **Weave Router** → claude-haiku-4-5\n\n",
+				"✦ **Weave Router** → deepseek/deepseek-v4-flash\n\n",
 			},
 			wantNotContain: []string{
 				"(anthropic)",
@@ -175,12 +175,12 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 		{
 			name: "user-forced model: distinct marker, not best-pick",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "gpt-5.5", Provider: "openai", Reason: translate.ReasonUserForceModel},
+				Decision:         router.Decision{Model: "openai/gpt-oss-120b", Provider: "openai", Reason: translate.ReasonUserForceModel},
 				StickyHit:        true,
 				PriorServedModel: "deepseek/deepseek-v4-flash",
 			},
 			wantContains: []string{
-				"✦ **Weave Router** → gpt-5.5",
+				"✦ **Weave Router** → openai/gpt-oss-120b",
 				"· " + markerReasonUserForced,
 			},
 			wantNotContain: []string{
@@ -190,12 +190,12 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 		{
 			name: "loop escalation: distinct marker, not best-pick",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "claude-opus-4-8", Provider: "anthropic", Reason: translate.ReasonLoopEscalation},
+				Decision:         router.Decision{Model: "moonshotai/kimi-k3", Provider: "anthropic", Reason: translate.ReasonLoopEscalation},
 				StickyHit:        true,
 				PriorServedModel: "deepseek/deepseek-v4-flash",
 			},
 			wantContains: []string{
-				"✦ **Weave Router** → claude-opus-4-8",
+				"✦ **Weave Router** → moonshotai/kimi-k3",
 				"· " + markerReasonLoopEscalated,
 			},
 			wantNotContain: []string{
@@ -210,18 +210,18 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 			// "force-model applied" acknowledgment when the directive was issued.
 			name: "user-forced same model on a sticky follow-up: marker suppressed",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "gpt-5.5", Provider: "openai", Reason: translate.ReasonUserForceModel},
+				Decision:         router.Decision{Model: "openai/gpt-oss-120b", Provider: "openai", Reason: translate.ReasonUserForceModel},
 				StickyHit:        true,
-				PriorServedModel: "gpt-5.5", // pin already serving the forced model
+				PriorServedModel: "openai/gpt-oss-120b", // pin already serving the forced model
 			},
 			wantEmpty: true,
 		},
 		{
 			name: "loop-escalated same model on a sticky follow-up: marker suppressed",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "claude-opus-4-8", Provider: "anthropic", Reason: translate.ReasonLoopEscalation},
+				Decision:         router.Decision{Model: "moonshotai/kimi-k3", Provider: "anthropic", Reason: translate.ReasonLoopEscalation},
 				StickyHit:        true,
-				PriorServedModel: "claude-opus-4-8", // pin already serving the escalated model
+				PriorServedModel: "moonshotai/kimi-k3", // pin already serving the escalated model
 			},
 			wantEmpty: true,
 		},
@@ -253,7 +253,7 @@ func TestRoutingMarkerFor_EmptyDecisionEmitsNothing(t *testing.T) {
 
 func TestRoutingMarkerFor_SuggestionModeSuppressed(t *testing.T) {
 	res := turnLoopResult{
-		Decision:       router.Decision{Model: "gpt-5.5", Provider: "openai"},
+		Decision:       router.Decision{Model: "openai/gpt-oss-120b", Provider: "openai"},
 		SuggestionMode: true,
 		PlannerDecision: planner.Decision{
 			Reason: planner.ReasonSameModel,
@@ -265,12 +265,12 @@ func TestRoutingMarkerFor_SuggestionModeSuppressed(t *testing.T) {
 
 func TestRoutingMarkerFor_DropsProviderEvenWhenSet(t *testing.T) {
 	got := routingMarkerFor(turnLoopResult{
-		Decision: router.Decision{Model: "claude-haiku-4-5", Provider: "anthropic"},
+		Decision: router.Decision{Model: "deepseek/deepseek-v4-flash", Provider: "anthropic"},
 		PlannerDecision: planner.Decision{
 			Reason: planner.ReasonNoPin,
 		},
 	})
-	assert.Contains(t, got, "✦ **Weave Router** → claude-haiku-4-5 ·")
+	assert.Contains(t, got, "✦ **Weave Router** → deepseek/deepseek-v4-flash ·")
 	assert.NotContains(t, got, "(anthropic)", "provider must not leak into the user-facing marker")
 	assert.NotContains(t, got, "()")
 	assert.Contains(t, got, "· "+markerReasonBestPick)
@@ -372,23 +372,23 @@ func TestRoutingMarkerFor_SidecarDisplayMarkerShownOnGenuineSwitch(t *testing.T)
 				DisplayMarker: "✦ **Weave Router** → deepseek/deepseek-v4-flash · fast route for this turn",
 			},
 		},
-		PriorServedModel: "claude-sonnet-5",
+		PriorServedModel: "moonshotai/kimi-k2.7",
 	})
 	assert.Equal(t, "✦ **Weave Router** → deepseek/deepseek-v4-flash · fast route for this turn\n\n", got)
 }
 
 func TestBaselineRoutingMarkerFor_SuppressedWhenBaselineAlreadyServing(t *testing.T) {
 	got := baselineRoutingMarkerFor(turnLoopResult{
-		PriorServedModel: "claude-opus-4-8",
-	}, "claude-opus-4-8")
+		PriorServedModel: "moonshotai/kimi-k3",
+	}, "moonshotai/kimi-k3")
 	assert.Empty(t, got, "a failover that lands back on the model already serving must stay quiet")
 }
 
 func TestBaselineRoutingMarkerFor_ShowsOnGenuineSwitch(t *testing.T) {
 	got := baselineRoutingMarkerFor(turnLoopResult{
-		PriorServedModel: "deepseek/deepseek-v4-pro",
-	}, "claude-opus-4-8")
-	assert.Equal(t, "✦ **Weave Router** → claude-opus-4-8 · "+markerReasonBaseline+"\n\n", got)
+		PriorServedModel: "deepseek/deepseek-v4-pro-0813",
+	}, "moonshotai/kimi-k3")
+	assert.Equal(t, "✦ **Weave Router** → moonshotai/kimi-k3 · "+markerReasonBaseline+"\n\n", got)
 }
 
 func TestHumanReasonFromPlanner_UnknownCodeIsSilenced(t *testing.T) {

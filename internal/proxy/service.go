@@ -178,7 +178,7 @@ type Service struct {
 	sseKeepalive time.Duration
 	// cyberRefusalFallbackModel is the model to re-pin to on a cyber refusal
 	// when the session pin carries no runner-up (PairedModel). Set from
-	// ROUTER_CYBER_REFUSAL_FALLBACK_MODEL; defaults to claude-sonnet-5.
+	// ROUTER_CYBER_REFUSAL_FALLBACK_MODEL; defaults to moonshotai/kimi-k2.7.
 	cyberRefusalFallbackModel string
 	// effortEscalation enables the escalate-on-failure reasoning-effort policy:
 	// gpt-5.x serves low effort by default and high after an observed

@@ -19,15 +19,15 @@ import (
 
 const hmmPinStickyTestFallbackReason = "arm-selector unavailable for 'high': arm selector requires " +
 	"at least 2 trained eligible arm(s) in cluster 'high'; " +
-	"eligible=['anthropic/claude-opus-4-7', 'openai/gpt-5.6-terra']; " +
+	"eligible=['anthropic/moonshotai/kimi-k3', 'openai/gpt-oss-120b']; " +
 	"legacy pairwise arm 'z-ai/glm-5.2' among 2/5 eligible [explored] " +
 	hmmArmSelectorUnavailableSentinel
 
 // TestStickPinOnArmSelectorUnavailable exercises the pure predicate against the full stick/no-stick matrix.
 func TestStickPinOnArmSelectorUnavailable(t *testing.T) {
-	const pinnedModel = "claude-opus-4-7"         // catalog.TierHigh
+	const pinnedModel = "moonshotai/kimi-k3"         // catalog.TierHigh
 	const sameTierFresh = "claude-opus-4-6"       // catalog.TierHigh
-	const differentTierFresh = "claude-haiku-4-5" // catalog.TierLow — different tier, but the legacy bandit draws within one cluster, not within one catalog tier, so tier is not what gates this case.
+	const differentTierFresh = "deepseek/deepseek-v4-flash" // catalog.TierLow — different tier, but the legacy bandit draws within one cluster, not within one catalog tier, so tier is not what gates this case.
 	const pinnedGroup = "high"
 	const otherGroup = "low"
 
@@ -167,7 +167,7 @@ func (r *hmmPinStickyTestRouter) Route(_ context.Context, _ router.Request) (rou
 // predicate end to end and that an authoritative cluster escalation still serves.
 func TestHMMPinStickyOnArmSelectorUnavailableWiredIntoTurnLoop(t *testing.T) {
 	strategy := router.Strategy("hmm-pin-sticky-wiring-test")
-	const pinnedModel = "claude-opus-4-7"
+	const pinnedModel = "moonshotai/kimi-k3"
 	const sameTierFresh = "claude-opus-4-6"
 	const pinnedGroup = "high"
 	const otherGroup = "low"
@@ -234,7 +234,7 @@ func TestHMMPinStickyOnArmSelectorUnavailableWiredIntoTurnLoop(t *testing.T) {
 				store,
 				false,
 				providers.ProviderAnthropic,
-				"claude-haiku-4-5",
+				"deepseek/deepseek-v4-flash",
 				nil,
 			).WithHMPinStickyOnArmSelectorUnavail(test.enabled).
 				WithPolicyStrategy(policy.StrategySpec{
@@ -246,7 +246,7 @@ func TestHMMPinStickyOnArmSelectorUnavailableWiredIntoTurnLoop(t *testing.T) {
 					},
 				})
 			env, err := translate.ParseAnthropic(
-				[]byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"continue"}]}`),
+				[]byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"continue"}]}`),
 			)
 			require.NoError(t, err)
 			features := env.RoutingFeatures(false)

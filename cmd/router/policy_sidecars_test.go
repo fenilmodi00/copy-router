@@ -53,8 +53,8 @@ func TestBuildConfiguredPolicySidecarsOnboardsFutureStrategy(t *testing.T) {
 		`{"future-policy":"`+server.URL+`"}`,
 		"",
 		time.Second,
-		map[string]struct{}{"gpt-5.5": {}},
-		map[string]struct{}{providers.ProviderOpenAI: {}},
+		map[string]struct{}{"openai/gpt-oss-120b": {}},
+		map[string]struct{}{providers.ProviderAiand: {}},
 		server.Client(),
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 	)
@@ -65,8 +65,8 @@ func TestBuildConfiguredPolicySidecarsOnboardsFutureStrategy(t *testing.T) {
 	assert.True(t, registrations[0].Capabilities.SupportsShadow)
 	decision, err := registrations[0].Router.Route(context.Background(), router.Request{})
 	require.NoError(t, err)
-	assert.Equal(t, "gpt-5.5", decision.Model)
-	assert.Equal(t, providers.ProviderOpenAI, decision.Provider)
+	assert.Equal(t, "openai/gpt-oss-120b", decision.Model)
+	assert.Equal(t, providers.ProviderAiand, decision.Provider)
 }
 
 func TestBuildConfiguredPolicySidecarsRejectsReservedAndInvalidConfiguration(t *testing.T) {

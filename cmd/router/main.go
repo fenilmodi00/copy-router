@@ -347,7 +347,7 @@ func main() {
 	// session off a model that returned a safety refusal. Default off; enabled
 	// on the defensive deploy. Fallback target when the pin has no runner-up.
 	cyberRefusalRepin := config.GetOr("ROUTER_CYBER_REFUSAL_REPIN", "false") == "true"
-	cyberRefusalFallbackModel := config.GetOr("ROUTER_CYBER_REFUSAL_FALLBACK_MODEL", "claude-sonnet-5")
+	cyberRefusalFallbackModel := config.GetOr("ROUTER_CYBER_REFUSAL_FALLBACK_MODEL", "moonshotai/kimi-k2.7")
 	effortEscalation := config.GetOr("ROUTER_EFFORT_ESCALATION", "false") == "true"
 	// Kill switch for degrading to a same-cluster candidate when the routed
 	// model's bindings are all exhausted by a transient upstream fault.
@@ -1366,12 +1366,12 @@ const (
 
 // resolveDefaultBaselineModel returns the cost-comparison baseline used when
 // RequestedModel has no pricing entry. Uses os.LookupEnv directly (not
-// config.GetOr) to distinguish unset (-> claude-sonnet-4-5) from explicit ""
-// (-> no substitution), per the contract in .env.example.
+// config.GetOr) to distinguish unset (-> deepseek/deepseek-v4-pro-0813) from
+// explicit "" (-> no substitution), per the contract in .env.example.
 func resolveDefaultBaselineModel() string {
 	v, ok := os.LookupEnv("ROUTER_DEFAULT_BASELINE_MODEL")
 	if !ok {
-		return "claude-sonnet-4-5"
+		return "deepseek/deepseek-v4-pro-0813"
 	}
 	return strings.TrimSpace(v)
 }

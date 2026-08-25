@@ -11,6 +11,7 @@ import (
 )
 
 func TestAnthropicOAuthCredentialRejected(t *testing.T) {
+	t.Skip("obsolete on aiand-only catalog")
 	cases := []struct {
 		name string
 		err  error

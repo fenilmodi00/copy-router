@@ -15,11 +15,11 @@ func TestCustomBindingsFromKeys_DeclaredByAliases(t *testing.T) {
 	got := customBindingsFromKeys([]*auth.ExternalAPIKey{{
 		Provider:     providers.ProviderOpenAIGateway,
 		Plaintext:    []byte("pat"),
-		ModelAliases: map[string]string{"gpt-5": "openai-gpt-5"},
+		ModelAliases: map[string]string{"openai/gpt-oss-120b": "openai-gpt-oss-120b"},
 	}})
 
 	assert.Equal(t,
-		map[string][]string{"gpt-5": {providers.ProviderOpenAIGateway}},
+		map[string][]string{"openai/gpt-oss-120b": {providers.ProviderOpenAIGateway}},
 		got)
 }
 
@@ -28,7 +28,7 @@ func TestCustomBindingsFromKeys_SkipsUnusableDeclarations(t *testing.T) {
 		{
 			// No plaintext: enrolling it would route to an upstream that 401s.
 			Provider:     providers.ProviderOpenAIGateway,
-			ModelAliases: map[string]string{"gpt-5": "openai-gpt-5"},
+			ModelAliases: map[string]string{"openai/gpt-oss-120b": "openai-gpt-oss-120b"},
 		},
 		{
 			Provider:  providers.ProviderAnthropicGateway,
@@ -49,16 +49,16 @@ func TestCustomBindingsFromKeys_ProvidersAreOrdered(t *testing.T) {
 		{
 			Provider:     providers.ProviderOpenAIGateway,
 			Plaintext:    []byte("pat"),
-			ModelAliases: map[string]string{"claude-sonnet-4-5": "claude-sonnet-4-5"},
+			ModelAliases: map[string]string{"deepseek/deepseek-v4-pro-0813": "deepseek/deepseek-v4-pro-0813"},
 		},
 		{
 			Provider:     providers.ProviderAnthropicGateway,
 			Plaintext:    []byte("pat"),
-			ModelAliases: map[string]string{"claude-sonnet-4-5": "claude-sonnet-4-5"},
+			ModelAliases: map[string]string{"deepseek/deepseek-v4-pro-0813": "deepseek/deepseek-v4-pro-0813"},
 		},
 	}
 
 	assert.Equal(t,
 		[]string{providers.ProviderAnthropicGateway, providers.ProviderOpenAIGateway},
-		customBindingsFromKeys(keys)["claude-sonnet-4-5"])
+		customBindingsFromKeys(keys)["deepseek/deepseek-v4-pro-0813"])
 }

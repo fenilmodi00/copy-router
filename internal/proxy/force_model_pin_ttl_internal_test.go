@@ -76,12 +76,12 @@ func TestPinExpiry_UserForcedNeverExpires(t *testing.T) {
 func TestSetForceModelPin_WritesNeverExpiresSentinel(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
 
 	var key [sessionpin.SessionKeyLen]byte
 	require.NoError(t, svc.setForceModelPin(
 		context.Background(), key, roleForTier(0), uuid.New(),
-		"claude-opus-4-8", providers.ProviderAnthropic))
+		"moonshotai/kimi-k3", providers.ProviderAnthropic))
 
 	require.Len(t, store.upserts, 1)
 	assert.Equal(t, translate.ReasonUserForceModel, store.upserts[0].Reason)

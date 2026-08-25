@@ -23,7 +23,7 @@ type stripFailureRouter struct {
 
 func (r *stripFailureRouter) Route(context.Context, router.Request) (router.Decision, error) {
 	r.routeCalls++
-	return router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}, nil
+	return router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash"}, nil
 }
 
 // stripFailureProvider never gets called either, for the same reason.
@@ -54,7 +54,7 @@ func TestProxyOpenAIChatCompletion_StripRoutingMarkerFailure_ReturnsError(t *tes
 	fr := &stripFailureRouter{}
 	fp := &stripFailureProvider{}
 	svc := NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: fp}, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
 
 	body := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`
 	rec := httptest.NewRecorder()
@@ -78,9 +78,9 @@ func TestProxyMessages_StripRoutingMarkerFailure_ReturnsError(t *testing.T) {
 	fr := &stripFailureRouter{}
 	fp := &stripFailureProvider{}
 	svc := NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: fp}, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
 
-	body := `{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hi"}]}`
+	body := `{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hi"}]}`
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(body))
 

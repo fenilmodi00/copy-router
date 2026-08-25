@@ -100,7 +100,7 @@ func newEvictionTestService(store *evictionStubPinStore) *Service {
 		nil,
 		store,
 		false,
-		"anthropic", "claude-haiku-4-5",
+		"anthropic", "deepseek/deepseek-v4-flash",
 		nil,
 	)
 }
@@ -126,7 +126,7 @@ func TestMaybeEvictPin_FirstStrikeOnlyIncrements(t *testing.T) {
 		context.Background(),
 		true, // stickyHit
 		upstreamErr,
-		"cluster:v0.57 model=gpt-5.5 provider=openai",
+		"cluster:v0.57 model=openai/gpt-oss-120b provider=openai",
 		uuid.New(),
 		nonZeroSessionKey(),
 		sessionpin.DefaultRole,
@@ -150,7 +150,7 @@ func TestMaybeEvictPin_SecondStrikeExpires(t *testing.T) {
 		context.Background(),
 		true,
 		upstreamErr,
-		"cluster:v0.57 model=gpt-5.5 provider=openai",
+		"cluster:v0.57 model=openai/gpt-oss-120b provider=openai",
 		installationID,
 		sessionKey,
 		sessionpin.DefaultRole,
@@ -173,7 +173,7 @@ func TestExpireSessionPinInvalidatesPostCommandContinuation(t *testing.T) {
 	store := &evictionStubPinStore{continuations: map[string]sessionpin.Pin{
 		continuationRole: {
 			Provider:    providers.ProviderAnthropic,
-			Model:       "claude-haiku-4-5",
+			Model:       "deepseek/deepseek-v4-flash",
 			PinnedUntil: time.Now().Add(time.Minute),
 		},
 	}}
@@ -232,7 +232,7 @@ func TestMaybeEvictPin_SuccessResets(t *testing.T) {
 		context.Background(),
 		true,
 		nil, // success
-		"cluster:v0.57 model=gpt-5.5 provider=openai",
+		"cluster:v0.57 model=openai/gpt-oss-120b provider=openai",
 		uuid.New(),
 		nonZeroSessionKey(),
 		sessionpin.DefaultRole,
@@ -254,7 +254,7 @@ func TestMaybeEvictPin_RetryableStatusIgnored(t *testing.T) {
 			context.Background(),
 			true,
 			&providers.UpstreamErrorResponse{Status: status},
-			"cluster:v0.57 model=gpt-5.5 provider=openai",
+			"cluster:v0.57 model=openai/gpt-oss-120b provider=openai",
 			uuid.New(),
 			nonZeroSessionKey(),
 			sessionpin.DefaultRole,
@@ -298,7 +298,7 @@ func TestMaybeEvictPin_NoStickyHitSkipped(t *testing.T) {
 		context.Background(),
 		false, // !stickyHit
 		&providers.UpstreamErrorResponse{Status: http.StatusBadRequest},
-		"cluster:v0.57 model=gpt-5.5 provider=openai",
+		"cluster:v0.57 model=openai/gpt-oss-120b provider=openai",
 		uuid.New(),
 		nonZeroSessionKey(),
 		sessionpin.DefaultRole,
@@ -319,7 +319,7 @@ func TestMaybeEvictPin_ZeroSessionKeySkipped(t *testing.T) {
 		context.Background(),
 		true,
 		&providers.UpstreamErrorResponse{Status: http.StatusBadRequest},
-		"cluster:v0.57 model=gpt-5.5 provider=openai",
+		"cluster:v0.57 model=openai/gpt-oss-120b provider=openai",
 		uuid.New(),
 		[sessionpin.SessionKeyLen]byte{}, // zero key
 		sessionpin.DefaultRole,
@@ -339,7 +339,7 @@ func TestMaybeEvictPin_NilInstallationSkipped(t *testing.T) {
 		context.Background(),
 		true,
 		&providers.UpstreamErrorResponse{Status: http.StatusBadRequest},
-		"cluster:v0.57 model=gpt-5.5 provider=openai",
+		"cluster:v0.57 model=openai/gpt-oss-120b provider=openai",
 		uuid.Nil,
 		nonZeroSessionKey(),
 		sessionpin.DefaultRole,
@@ -359,7 +359,7 @@ func TestMaybeEvictPin_NonUpstreamErrorIgnored(t *testing.T) {
 		context.Background(),
 		true,
 		errors.New("upstream call: dial tcp: connection refused"),
-		"cluster:v0.57 model=gpt-5.5 provider=openai",
+		"cluster:v0.57 model=openai/gpt-oss-120b provider=openai",
 		uuid.New(),
 		nonZeroSessionKey(),
 		sessionpin.DefaultRole,

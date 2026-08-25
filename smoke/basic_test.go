@@ -102,7 +102,7 @@ func TestForceHeaderRejections(t *testing.T) {
 // headers name the pinned model on Anthropic.
 func assertServedByPin(t *testing.T, r response) {
 	t.Helper()
-	assertServedByModel(t, r, cfg.PinModel, "anthropic")
+	assertServedByModel(t, r, cfg.PinModel, "aiand")
 }
 
 // assertServedByModel is assertServedByPin generalized to an arbitrary

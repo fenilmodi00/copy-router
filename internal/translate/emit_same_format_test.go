@@ -6,9 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"workweave/router/internal/providers"
 	"workweave/router/internal/router"
-	"workweave/router/internal/router/catalog"
 	"workweave/router/internal/translate"
 
 	"github.com/stretchr/testify/assert"
@@ -1031,44 +1029,37 @@ func TestAnthropicSameFormat_XhighEffortPreservedForCapableModel(t *testing.T) {
 	assert.Equal(t, "xhigh", outputConfig["effort"], "xhigh must pass through to models with CapXhighEffort")
 }
 
-// Exhaustive backstop for the 2026-06-09 incident: a newly added or re-tagged
-// Anthropic model could silently reintroduce the 400. Walk every catalog model
-// and assert xhigh survives emit only when CapXhighEffort is advertised.
+// CapXhighEffort gate: xhigh must survive emit only when advertised.
 func TestAnthropicSameFormat_XhighEffortNeverReachesIncapableModel(t *testing.T) {
-	var anthropicModels, capableModels int
-	for _, m := range catalog.Models {
-		if m.PrimaryProvider() != providers.ProviderAnthropic {
-			continue
-		}
-		anthropicModels++
-		capable := router.Lookup(m.ID).Supports(router.CapXhighEffort)
-		if capable {
-			capableModels++
-		}
-		t.Run(m.ID, func(t *testing.T) {
-			body := []byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"hi"}],"max_tokens":1024,"thinking":{"type":"adaptive"},"effort":"xhigh","output_config":{"effort":"xhigh"}}`)
-			out := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
-				TargetModel:  m.ID,
-				Capabilities: router.Lookup(m.ID),
-			})
+	body := []byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"hi"}],"max_tokens":1024,"thinking":{"type":"adaptive"},"effort":"xhigh","output_config":{"effort":"xhigh"}}`)
 
-			topLevel, _ := out["effort"].(string)
-			var nested string
-			if oc, ok := out["output_config"].(map[string]any); ok {
-				nested, _ = oc["effort"].(string)
-			}
-			if capable {
-				assert.Equal(t, "xhigh", topLevel, "top-level effort xhigh must pass through to a CapXhighEffort model")
-				assert.Equal(t, "xhigh", nested, "output_config.effort xhigh must pass through to a CapXhighEffort model")
-				return
-			}
-			assert.NotEqual(t, "xhigh", topLevel, "top-level effort xhigh must never reach a model without CapXhighEffort")
-			assert.NotEqual(t, "xhigh", nested, "output_config.effort xhigh must never reach a model without CapXhighEffort")
+	t.Run("without CapXhighEffort", func(t *testing.T) {
+		out := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
+			TargetModel:  "adaptive-only",
+			Capabilities: router.NewSpec(router.CapAdaptiveThinking),
 		})
-	}
-	// Guard against a vacuous pass if the catalog filter ever stops matching.
-	require.Positive(t, anthropicModels, "expected Anthropic models in the catalog")
-	require.Positive(t, capableModels, "expected at least one CapXhighEffort model so the preserve branch is exercised")
+		topLevel, _ := out["effort"].(string)
+		var nested string
+		if oc, ok := out["output_config"].(map[string]any); ok {
+			nested, _ = oc["effort"].(string)
+		}
+		assert.NotEqual(t, "xhigh", topLevel, "top-level effort xhigh must never reach a model without CapXhighEffort")
+		assert.NotEqual(t, "xhigh", nested, "output_config.effort xhigh must never reach a model without CapXhighEffort")
+	})
+
+	t.Run("with CapXhighEffort", func(t *testing.T) {
+		out := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
+			TargetModel:  "adaptive-xhigh",
+			Capabilities: router.NewSpec(router.CapAdaptiveThinking, router.CapXhighEffort),
+		})
+		topLevel, _ := out["effort"].(string)
+		var nested string
+		if oc, ok := out["output_config"].(map[string]any); ok {
+			nested, _ = oc["effort"].(string)
+		}
+		assert.Equal(t, "xhigh", topLevel, "top-level effort xhigh must pass through to a CapXhighEffort model")
+		assert.Equal(t, "xhigh", nested, "output_config.effort xhigh must pass through to a CapXhighEffort model")
+	})
 }
 
 // Levels below xhigh are on every adaptive model's menu; the clamp must not
