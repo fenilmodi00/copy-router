@@ -150,11 +150,10 @@ type Request struct {
 	// into it); this field lets scorer/resolver NAME the constraint in errors
 	// rather than reporting a large exclusion list.
 	AllowedModels map[string]struct{}
-	// SafetyExcludedModels holds only the hard request-time constraints a model
-	// physically cannot satisfy: context-window overflow
-	// history — not the installation's excluded_models policy. The bypass gate
-	// consults this so policy exclusions don't block pass-through, but physical
-	// constraints still do.
+	// SafetyExcludedModels holds only hard request-time constraints a model
+	// physically cannot satisfy (context-window overflow), not the
+	// installation's excluded_models policy. The bypass gate consults this so
+	// policy exclusions don't block pass-through, but physical constraints still do.
 	SafetyExcludedModels map[string]struct{}
 	// PreferredModels is the per-installation priority ranking (index 0 =
 	// first). The scorer adds a small rank-decaying bonus to each preferred

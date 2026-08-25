@@ -1203,11 +1203,10 @@ func leadsWithToolishMarkup(content string) bool {
 }
 
 // synthesizeTextOnlyTurnNudge fabricates a Bash tool_use block when the
-// upstream produced no tool_use on a request that had tools. Targets
-// Gemini-3.1-Pro/Mimo-v2.5-Pro sometimes emitting prose+XML thinking tags as
-// plain text, which Claude Code's strict parser rejects, killing the session.
-// The synthetic Bash echo turns that dead-end into a normal tool_use turn
-// the client can dispatch, keeping the agentic loop alive.
+// upstream produced no tool_use on a request that had tools. Some OpenAI-compat
+// models emit prose+XML thinking tags as plain text, which Claude Code's
+// strict parser rejects. The synthetic Bash echo turns that dead-end into a
+// normal tool_use turn the client can dispatch.
 //
 // No-op if a tool_use was already emitted, the request had no tools, or
 // nothing has streamed yet.
@@ -1216,14 +1215,6 @@ func leadsWithToolishMarkup(content string) bool {
 // is clean prose (no tool-call markup) — that's a legitimate finished answer,
 // and nudging it would revive an already-done turn. finish_reason="length"
 // never nudges (truncation, not a parse failure).
-//
-// Gemini-3.x is excluded entirely: the synthesized tool_use has no
-// thoughtSignature, and Gemini-3.x requires one on every functionCall across
-// turns. A sig-less nudge makes writeGeminiFromAnthropic drop the whole
-// tool_use/tool_result history (emit_gemini.go dropToolBlocks), wiping prior
-// context and looping the model to the turn ceiling — empirically far worse
-// (≥90-turn loops 4→46 in the v0.59 bake-off). OpenAI-compat models this was
-// built for have no such guard and still benefit.
 func (t *AnthropicSSETranslator) synthesizeTextOnlyTurnNudge() error {
 	if t.toolUseEmitted || !t.requestHadTools || !t.started {
 		return nil

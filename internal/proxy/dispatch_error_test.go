@@ -70,8 +70,6 @@ func TestClassifyDispatchError_NoEligibleProviderIsClientErrorAndWarns(t *testin
 
 // ErrAllowlistEmptiesPool wraps ErrNoEligibleProvider, so switch ordering is
 // load-bearing: the generic case must not match first and misattribute the cause.
-// ErrAllowlistEmptiesPool wraps ErrNoEligibleProvider, so switch ordering is
-// load-bearing: the generic case must not match first and misattribute the cause.
 func TestClassifyDispatchError_AllowlistEmptiesPoolPrecedesNoEligibleProvider(t *testing.T) {
 	cls, ok := proxy.ClassifyDispatchError(cluster.ErrAllowlistEmptiesPool)
 
@@ -213,8 +211,6 @@ func TestClassifyDispatchError_ForcedClusterUnsupportedStrategyIs400(t *testing.
 	assert.Contains(t, cls.Message, proxy.ForceClusterHeader, "the caller must be told which header to clear")
 }
 
-// The unservable error is raised inside the policy router, so it must classify
-// through the wrap chain Route returns it in — not just bare.
 // The unservable error is raised inside the policy router, so it must classify
 // through the wrap chain Route returns it in — not just bare.
 func TestClassifyDispatchError_ForcedClusterUnservableIs400(t *testing.T) {

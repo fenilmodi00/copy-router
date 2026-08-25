@@ -17,7 +17,6 @@ import (
 // stop being generated at the source instead of being repaired after the
 // fact.
 //   - OpenAI Responses (gpt-5.x): tools[].strict=true + strictified schema.
-//   - Gemini 3.x: toolConfig.functionCallingConfig.mode=VALIDATED.
 
 const anthropicToolsRequest = `{
   "model":"claude-opus-4-8","max_tokens":4096,

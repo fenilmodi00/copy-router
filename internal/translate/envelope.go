@@ -48,9 +48,9 @@ type EmitOptions struct {
 	// in thinking block". When set, the emit path strips thinking blocks.
 	ModelSwitched bool
 	// ForceReasoningEffort, when non-empty, overrides the request-derived
-	// reasoning effort for gpt-5.x (Responses API) / gemini-3.x (thinkingConfig).
-	// Set by the proxy's escalate-on-failure policy: gpt-5.x starts "low", goes
-	// "high" after a failed/no-progress turn; gemini stays "low" (effort-immune).
+	// reasoning effort for gpt-5.x (Responses API). Set by the proxy's
+	// escalate-on-failure policy: gpt-5.x starts "low", goes "high" after a
+	// failed/no-progress turn.
 	ForceReasoningEffort string
 	// ForceEffort, when non-empty, is the user-requested effort level
 	// (x-weave-effort header / :level suffix). Wins over ForceReasoningEffort;
@@ -889,8 +889,8 @@ func resolveOpenAIOverrides(body []byte, opts EmitOptions) EmitOverrides {
 
 // Anthropic adaptive effort levels referenced by emit logic. Every adaptive
 // model accepts low/medium/high/max; xhigh requires router.CapXhighEffort.
-// "none" is the ai& (and Gemini) disable tier — a first-class wire level, not
-// only a parse-time alias for ReasoningDisabled.
+// "none" is the ai& disable tier — a first-class wire level, not only a
+// parse-time alias for ReasoningDisabled.
 const (
 	effortNone   = "none"
 	effortLow    = "low"

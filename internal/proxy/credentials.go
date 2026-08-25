@@ -137,8 +137,7 @@ func BuildCredentialsMap(keys []*auth.ExternalAPIKey) map[string]*Credentials {
 }
 
 // ExtractClientCredentials extracts provider credentials from request
-// headers. Anthropic uses x-api-key; OpenAI and Google use
-// Authorization: Bearer.
+// headers. Anthropic uses x-api-key; OpenAI-compat uses Authorization: Bearer.
 //
 // Rejects any token with auth.APIKeyPrefix — router-issued bearers (rk_...)
 // use the same headers via WithAuth, and this stops them leaking upstream.
@@ -172,8 +171,6 @@ func ExtractClientCredentials(provider string, headers http.Header) *Credentials
 		}
 		return nil
 	}
-	// OpenAI-compat upstreams authenticate via Authorization: Bearer.
-	// FamilyUnknown providers fall through to nil.
 	if family != providers.FamilyOpenAICompat {
 		return nil
 	}

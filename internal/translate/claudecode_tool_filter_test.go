@@ -10,13 +10,9 @@ import (
 	"workweave/router/internal/translate"
 )
 
-// On the v0.57 SWE-bench Verified router eval, 224 phantom CC-only tool_use
-// blocks (96% in the Task* family) were emitted by non-Anthropic upstreams
-// — Gemini 3.x, gpt-5.5, etc. — because the request body still carried
-// schemas for tools the model has no business invoking (Task subagent
-// dispatch, plan-mode toggles, Skill calls, etc.). These tests pin the
-// filter that drops those schemas on Anthropic→non-Anthropic emit paths
-// while leaving the Anthropic→Anthropic passthrough untouched.
+// These tests pin the filter that drops Claude-Code-only tool schemas on
+// Anthropic→non-Anthropic emit paths while leaving Anthropic→Anthropic
+// passthrough untouched.
 
 // emittedToolNames extracts the top-level OpenAI tool names from an emitted
 // chat-completions body.

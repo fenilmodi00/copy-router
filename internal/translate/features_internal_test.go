@@ -42,22 +42,12 @@ func TestSignatureTokenSavings(t *testing.T) {
 	anthropic := &RequestEnvelope{body: body, format: FormatAnthropic}
 	assert.Equal(t, 200, anthropic.SignatureTokenSavings(), "800 signature bytes / 4 = 200 tokens saved")
 
-	// Same bytes arriving as an OpenAI body: the "signature" field is caller
-	// data, not an Anthropic block, so nothing is stripped and nothing is saved.
 	openai := &RequestEnvelope{body: body, format: FormatOpenAI}
 	assert.Equal(t, 0, openai.SignatureTokenSavings(), "non-Anthropic format saves nothing")
 }
 
-// TestContextOverflowTokenEstimate_TicketRegression is the regression for the
-// 262K-overflow ticket: a signature-light, content-dense ~1.05MB body is a real
-// ~263K-token prompt. The old ÷6 estimate (~175K) let it pass the pre-filter
-// onto a 256K OSS model, which then hard-400'd on context overflow. The
-// strip-aware ÷4 estimate must land above that window so the model is excluded.
-// TestContextOverflowTokenEstimate_TicketRegression is the regression for the
-// 262K-overflow ticket: a signature-light, content-dense ~1.05MB body is a real
-// ~263K-token prompt. The old ÷6 estimate (~175K) let it pass the pre-filter
-// onto a 256K OSS model, which then hard-400'd on context overflow. The
-// strip-aware ÷4 estimate must land above that window so the model is excluded.
+// TestContextOverflowTokenEstimate_TicketRegression: dense ~1.05MB body must
+// estimate above a 256K window under ÷4; the old ÷6 undercount is the bug.
 func TestContextOverflowTokenEstimate_TicketRegression(t *testing.T) {
 	const kimiWindow = 262_143
 	body := []byte(strings.Repeat("x", 1_050_000))
@@ -67,9 +57,6 @@ func TestContextOverflowTokenEstimate_TicketRegression(t *testing.T) {
 	assert.Less(t, e.FullTokenEstimate(), kimiWindow, "the old ÷6 estimate undercounted below the window — the bug this fixes")
 }
 
-// TestBase64ImageStats sums inline base64 image payloads per inbound format,
-// covering top-level and tool_result-nested Anthropic images, OpenAI data URLs
-// (http URLs skipped), and Gemini inlineData (camelCase + snake_case).
 // TestContextOverflowTokenEstimate_ImagesRepriced is the regression for
 // phantom token inflation on multi-page PDF reads: base64 transport size
 // must not be counted at the content byte ratio.
@@ -89,8 +76,6 @@ func TestContextOverflowTokenEstimate_ImagesRepriced(t *testing.T) {
 	assert.Equal(t, pages, imgCount, "counts one image per page")
 	assert.Equal(t, pages*pageBytes, imgBytes, "sums each page's base64 bytes")
 
-	// The naive len/4 estimate is a phantom >1M-token overflow (the bug).
 	assert.Greater(t, len(body)/contentBytesPerToken, 1_000_000, "raw body ÷4 falsely overflows")
-	// Repriced, the same body is well below any compaction trigger.
 	assert.Less(t, e.ContextOverflowTokenEstimate(), 100_000, "repriced estimate stays far below the window")
 }

@@ -1431,10 +1431,9 @@ func TestSanitizeToolUseIDs_AnthropicToAnthropic(t *testing.T) {
 	assert.Equal(t, "functions_Grep_11", result["tool_use_id"], "tool_use_id must be sanitized in same-format path")
 }
 
-// TestStripToolUseThoughtSignature_AnthropicToAnthropic checks a Gemini
+// TestStripToolUseThoughtSignature_AnthropicToAnthropic checks a
 // thought_signature on a tool_use block is stripped before forwarding to
-// Anthropic (which 400s on the unknown field), while the id — which smuggles
-// the signature for a later switch back to Gemini — survives untouched.
+// Anthropic (which 400s on the unknown field), while the smuggled id survives.
 func TestStripToolUseThoughtSignature_AnthropicToAnthropic(t *testing.T) {
 	body := []byte(`{
 		"model": "claude-opus-4-8",

@@ -20,8 +20,6 @@ import (
 
 // driveAnthropicSSEWithSummary feeds events through a translator, returning
 // the translated body and Summary for assertions.
-// driveAnthropicSSEWithSummary feeds events through a translator, returning
-// the translated body and Summary for assertions.
 func driveAnthropicSSEWithSummary(
 	t *testing.T,
 	model string,
@@ -118,8 +116,6 @@ func TestAnthropicSSETranslator_FlagsEachInvalidBlockIndependently(t *testing.T)
 	assert.Equal(t, "Edit", summary.ToolCallIssues[0].ToolName)
 }
 
-// driveAnthropicSSEWithTools is driveAnthropicSSEWithSummary plus a "had
-// tools" flag, for exercising the nudge-synthesis path.
 // driveAnthropicSSEWithTools is driveAnthropicSSEWithSummary plus a "had
 // tools" flag, for exercising the nudge-synthesis path.
 func driveAnthropicSSEWithTools(

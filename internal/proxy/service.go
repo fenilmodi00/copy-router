@@ -744,12 +744,9 @@ func routingKnobsForRequest(ctx context.Context) *router.Overrides {
 	return nil
 }
 
-// safetyExcludedModels returns the hard request-time safety exclusion set
-// (context-overflow). It re-runs the filter against an EMPTY base — the
-// routing-path filters skip models already in excluded_models, so a
-// policy-excluded overflow model would be absent from those lists yet must
-// still block bypass (it would 400 on the subscription).
-// Returns nil when the filter does not fire.
+// safetyExcludedModels re-runs context-overflow filtering against an empty
+// exclusion base so policy-excluded overflow models still block usage bypass.
+// Returns nil when nothing overflows.
 func (s *Service) safetyExcludedModels(env *translate.RequestEnvelope, outputReserve int, enabledProviders map[string]struct{}) map[string]struct{} {
 	_, overflowed := excludeContextOverflowModels(env.ContextOverflowTokenEstimate(), env.SignatureTokenSavings(), outputReserve, enabledProviders, nil, s.availableModels)
 	if len(overflowed) == 0 {
@@ -2960,7 +2957,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		KeepCrossVendorOrchestrationTools: s.ccOrchToolsCrossVendor,
 	}
 	// User-forced effort wins over effortEscalation; also pre-populate
-	// ForceReasoningEffort so the gpt-5.x/gemini-3.x emit seams honor it.
+	// ForceReasoningEffort so the gpt-5.x emit path honors it.
 	if knobs := routingKnobsForRequest(ctx); knobs != nil && knobs.ForceEffort != "" {
 		opts.ForceEffort = knobs.ForceEffort
 		opts.ForceReasoningEffort = translate.ResolveForceEffort(opts.Capabilities, opts.ForceEffort)

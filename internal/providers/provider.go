@@ -48,8 +48,7 @@ func ObserveUpstreamHeaders(ctx context.Context, h http.Header) {
 // the table test catch this at boot instead of in production.
 //
 // Composition root (cmd/router/main.go) registers ProviderAiand only. Other
-// Provider* names stay as wire-family / BYOK / test fixtures. ProviderGoogle
-// is name-only (force_model / hmm / rl / otel); it has no ProviderFamilies entry.
+// Provider* names stay as wire-family / BYOK / test fixtures.
 const (
 	ProviderAnthropic  = "anthropic"
 	ProviderOpenAI     = "openai"
@@ -93,8 +92,7 @@ const (
 
 // ProviderFamilies is the single source of truth for cross-format dispatch;
 // keep it covering EVERY dispatchable Provider* constant (see the three-map
-// note above). ProviderGoogle remains as a name constant for hmm/rl/force_model
-// /otel but is intentionally absent here (FamilyUnknown).
+// note above).
 var ProviderFamilies = map[string]TranslationFamily{
 	ProviderAnthropic:  FamilyAnthropic,
 	ProviderOpenAI:     FamilyOpenAICompat,
@@ -508,9 +506,7 @@ type RequestMutationStats struct {
 	// CCOnlyToolsStripped counts Claude-Code-only tools removed before
 	// dispatching to a non-Anthropic upstream. See claudecode_tool_filter.go.
 	CCOnlyToolsStripped int
-	// Transformations carries stable, structured request transformation
-	// outcomes. Aggregate fields above remain during the migration for existing
-	// dashboards and callers.
+	// Transformations carries stable, structured request transformation outcomes.
 	Transformations []RequestTransformation
 }
 
