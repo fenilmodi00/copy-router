@@ -273,6 +273,17 @@ Set `DATABASE_URL` directly, or compose it from the individual vars:
 | `POSTGRES_SSLMODE`         | `require`                         | TLS mode. Use `disable` for local Docker. |
 | `POSTGRES_CONNECTION_NAME` | *(none)*                          | Cloud SQL Auth Proxy instance connection name. |
 
+### Host mode (Supabase session pooler)
+
+For local WSL or Build.io-parity runs without Compose Postgres:
+
+- Point `DATABASE_URL` at the Supabase **session** pooler on port **5432** (`sslmode=require`).
+- Do **not** use the **transaction** pooler on port **6543** for migrate or the Go `pgx` pool.
+- Set `PUBSUB_DISABLED=true` and leave `PUBSUB_PROJECT_ID` unset. Setting `PUBSUB_PROJECT_ID` alone panics at boot.
+- Run `make setup` then `make dev`. Skip `make db` and `make full-setup`.
+
+Step-by-step: [HOST_WSL_SUPABASE.md](HOST_WSL_SUPABASE.md).
+
 ## Server
 
 | Variable                 | Default      | Purpose |

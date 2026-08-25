@@ -7,7 +7,9 @@ conventions, and PR process.
 ## Quick start
 
 1. Fork and clone the repo.
-2. Boot the stack: `make full-setup` (see [README](README.md)).
+2. Boot the stack:
+   - **Host WSL + Supabase (preferred for Build.io parity):** follow [docs/HOST_WSL_SUPABASE.md](docs/HOST_WSL_SUPABASE.md). Use `make setup` / `make dev` against session pooler. Do **not** run `make db` or `make full-setup`.
+   - **Local Compose Postgres:** `make full-setup` (see [README](README.md)).
 3. Run the test suite: `make check` (regenerates code + builds + tests).
 4. Make your changes on a topic branch.
 5. Open a PR.
@@ -86,7 +88,18 @@ after `make generate` (to catch uncommitted regenerated code).
 
 ### Hot-reload dev loop
 
-For iterating on router code with `CompileDaemon`:
+For iterating on router code with `CompileDaemon`.
+
+**Host against Supabase (no Compose).** Prefer this when matching Build.io. Full steps: [docs/HOST_WSL_SUPABASE.md](docs/HOST_WSL_SUPABASE.md).
+
+```bash
+# .env.local: Supabase session pooler DATABASE_URL (:5432), AIAND_API_KEY,
+# PUBSUB_DISABLED=true, ONNX paths. Skip make db and make full-setup.
+make setup                             # migrate + seed an rk_ key against Supabase
+make dev                               # hot reload on the host
+```
+
+**Local Compose Postgres** (disposable DB on port 5433):
 
 ```bash
 make db                                # start Postgres only (port 5433)
