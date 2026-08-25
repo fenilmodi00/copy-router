@@ -362,6 +362,29 @@ func TestContextWindowFor_ResolvesUpstreamRegistryIDs(t *testing.T) {
 	assert.Equal(t, 262_144, ContextWindowFor("motif-technologies/motif-3"))
 }
 
+func TestByIDOrUpstream_MapsAiandRegistryIDs(t *testing.T) {
+	tests := []struct {
+		input      string
+		wantID     string
+		wantWireID string // UpstreamID ai& still receives — must not change
+	}{
+		{"deepseek-ai/deepseek-v4-flash", "deepseek/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
+		{"deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
+		{"zai-org/glm-5.2", "z-ai/glm-5.2", "zai-org/glm-5.2"},
+		{"moonshotai/kimi-k2.7-code", "moonshotai/kimi-k2.7", "moonshotai/kimi-k2.7-code"},
+	}
+	for _, tt := range tests {
+		m, ok := ByIDOrUpstream(tt.input)
+		require.True(t, ok, tt.input)
+		assert.Equal(t, tt.wantID, m.ID)
+		b, ok := ResolveBinding(m.ID, map[string]struct{}{providers.ProviderAiand: {}})
+		require.True(t, ok, "aiand binding for %s", m.ID)
+		assert.Equal(t, tt.wantWireID, b.UpstreamID, "UpstreamID must stay the ai& wire name")
+	}
+	_, ok := ByIDOrUpstream("not-a-real-upstream-id")
+	assert.False(t, ok)
+}
+
 // Catalog-ID lookups must keep their exact window — the upstream-ID fallback is
 // miss-only, so a catalog ID that also equals some model's UpstreamID is never
 // rerouted to a different model.

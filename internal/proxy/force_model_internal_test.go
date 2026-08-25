@@ -327,3 +327,26 @@ func TestResolveForceModel_EffortSuffixPreserved(t *testing.T) {
 	assert.True(t, gotKnown, "known")
 	assert.Equal(t, "high", gotEffort, "effort")
 }
+
+// /v1/router/models on ai& deploys lists UpstreamIDs. Force-model must accept
+// those exact strings and pin the catalog row — without renaming UpstreamID.
+func TestResolveForceModel_AcceptsUpstreamRegistryIDs(t *testing.T) {
+	tests := []struct {
+		input  string
+		wantID string
+	}{
+		{"deepseek-ai/deepseek-v4-flash", "deepseek/deepseek-v4-flash"},
+		{"zai-org/glm-5.2", "z-ai/glm-5.2"},
+		{"moonshotai/kimi-k2.7-code", "moonshotai/kimi-k2.7"},
+		{"moonshotai/kimi-k3", "moonshotai/kimi-k3"},
+		{"motif-technologies/motif-3", "motif-technologies/motif-3"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			gotID, gotProvider, gotKnown := resolveForceModel(tt.input)
+			assert.True(t, gotKnown, "known")
+			assert.Equal(t, tt.wantID, gotID, "canonical catalog id")
+			assert.Equal(t, providers.ProviderAiand, gotProvider, "primary binding")
+		})
+	}
+}

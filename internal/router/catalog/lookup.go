@@ -25,9 +25,21 @@ func init() {
 			if b.UpstreamID == "" || b.UpstreamID == m.ID {
 				continue
 			}
-			if _, exists := byUpstreamID[b.UpstreamID]; !exists {
-				byUpstreamID[b.UpstreamID] = m
-			}
+			indexUpstreamID(b.UpstreamID, m)
+		}
+	}
+}
+
+// indexUpstreamID records both the exact UpstreamID and its lower-case form so
+// callers that normalize input (e.g. /force-model) still resolve ai& registry
+// IDs like deepseek-ai/deepseek-v4-flash without renaming catalog IDs.
+func indexUpstreamID(upstreamID string, m Model) {
+	if _, exists := byUpstreamID[upstreamID]; !exists {
+		byUpstreamID[upstreamID] = m
+	}
+	if lower := strings.ToLower(upstreamID); lower != upstreamID {
+		if _, exists := byUpstreamID[lower]; !exists {
+			byUpstreamID[lower] = m
 		}
 	}
 }
@@ -46,18 +58,30 @@ func ByID(id string) (Model, bool) {
 	return Model{}, false
 }
 
-// resolveModelForWindow returns the catalog Model whose window applies to id.
-// Catalog IDs win first (ByID, exact + date-suffix); on a miss it falls back to
-// the upstream-ID index so a registry's upstream model field resolves to the
-// model that truly owns the ContextWindow instead of the 128K default.
-func resolveModelForWindow(id string) (Model, bool) {
+// ByIDOrUpstream returns the model for a catalog ID or any binding UpstreamID
+// (e.g. "deepseek-ai/deepseek-v4-flash" → deepseek/deepseek-v4-flash). Catalog
+// IDs win first so a catalog ID that equals some other model's UpstreamID is
+// never rerouted. Upstream bindings themselves are unchanged — this only
+// resolves names clients see on /v1/router/models back to the catalog row.
+func ByIDOrUpstream(id string) (Model, bool) {
 	if m, ok := ByID(id); ok {
 		return m, true
 	}
 	if m, ok := byUpstreamID[id]; ok {
 		return m, true
 	}
+	if lower := strings.ToLower(id); lower != id {
+		if m, ok := byUpstreamID[lower]; ok {
+			return m, true
+		}
+	}
 	return Model{}, false
+}
+
+// resolveModelForWindow is the ContextWindowFor path; same resolution as
+// ByIDOrUpstream so registry upstream IDs get the real window, not 128K.
+func resolveModelForWindow(id string) (Model, bool) {
+	return ByIDOrUpstream(id)
 }
 
 // ResolveBinding returns the first ProviderBinding whose Provider is in

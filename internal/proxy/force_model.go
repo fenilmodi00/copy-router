@@ -182,7 +182,10 @@ func resolveForceModelWithEffort(model string) (canonicalID, provider string, kn
 	} else if canonical, ok := bareCatalogNames[model]; ok {
 		model = canonical
 	}
-	if m, ok := catalog.ByID(model); ok && len(m.Providers) > 0 && (requiredProvider == "" || m.Providers[0].Provider == requiredProvider) {
+	// Accept catalog IDs and provider UpstreamIDs (what /v1/router/models lists
+	// for ai& deploys). Upstream wire names stay on the binding; we only map
+	// them back to the catalog row for pinning/dispatch.
+	if m, ok := catalog.ByIDOrUpstream(model); ok && len(m.Providers) > 0 && (requiredProvider == "" || m.Providers[0].Provider == requiredProvider) {
 		return m.ID, m.Providers[0].Provider, true, effort
 	}
 	if requiredProvider != "" {
