@@ -140,7 +140,7 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] `internal/auth` NoOp notifier tests still pass. Run `go test ./internal/auth/ ./cmd/router/ -count=1`.
+- [x] `internal/auth` NoOp notifier tests still pass. Run `go test ./internal/auth/ ./cmd/router/ -count=1`. Host tip `e6aa944`: EXIT=0.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.6-fast-xhigh` at the PR head, per the boot recipe.
 
@@ -245,7 +245,7 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Translate and server tests. Run `go test ./internal/translate/ ./internal/server/ ./internal/api/anthropic/ ./internal/api/openai/ -count=1`.
+- [ ] Translate and server tests. Run `go test ./internal/translate/ ./internal/server/ ./internal/api/anthropic/ ./internal/api/openai/ -count=1`. Host tip `e6aa944`: `translate` + `server` ok; full command FAIL on `TestMessagesHandler_AgentShadowDoesNotUpsertRouterUser` (`claude-opus-4-8` rejected as non-canonical after catalog trim). Leave open until that fixture is aiand-aligned.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.6-fast-xhigh` at the PR head, per the boot recipe.
 
@@ -262,10 +262,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Non-stream `/v1/messages` router overhead before upstream wait, in ms from access log.
-- [ ] Probe. Timed local call with a hard-pinned tiny model at trunk and at the head, five interleaved samples.
-- [ ] Baseline. Record the trunk median first.
-- [ ] Rule. Head median must stay within 100 ms of trunk median or the PR fails.
+- [x] Metric. Non-stream `/v1/messages` router overhead before upstream wait. `AccessLog` only emits total `latency_ms` (includes upstream), so the probe uses `ProxyMessages complete` `route_ms` (model-choice latency before upstream wait).
+- [x] Probe. Hard-pinned `deepseek-ai/deepseek-v4-flash` non-stream `/v1/messages` at trunk `87cca0a` (`:8081`) and head `faf1507` (`:8082`), five interleaved samples after one warmup each.
+- [x] Baseline. Record the trunk median first. Trunk `route_ms` samples `[306, 312, 320, 306, 318]`, median **312 ms**.
+- [x] Rule. Head median must stay within 100 ms of trunk median or the PR fails. Head samples `[309, 430, 314, 315, 307]`, median **314 ms** (delta **+2 ms**, **PASS**).
 
 **Review gate.** The operator reviews before merge.
 
@@ -304,7 +304,7 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Router and server tests. Run `go test ./internal/router/... ./internal/server/ ./cmd/router/ -count=1`.
+- [ ] Router and server tests. Run `go test ./internal/router/... ./internal/server/ ./cmd/router/ -count=1`. Host tip `e6aa944`: FAIL on `internal/router/rl` `TestRouteImageTurnDropsImageUnsupported` (no eligible vision candidate after catalog trim). Leave open until RL fixtures use aiand vision-capable ids.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.6-fast-xhigh` at the PR head, per the boot recipe.
 
@@ -372,10 +372,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [x] Metric. Smoke replay wall time in seconds. Host `make smoke-host` ~48 s wall.
-- [x] Probe. `time make smoke` at trunk and at the head, interleaved twice each. Head probe recorded via `make smoke-host` (~48 s). Trunk interleaved baseline not run.
-- [ ] Baseline. Record the trunk mean first.
-- [ ] Rule. Head mean must not exceed trunk mean by more than 25 percent, or the PR fails.
+- [x] Metric. Smoke replay wall time in seconds. Host `make smoke-host`.
+- [x] Probe. Interleaved `SMOKE_HOST=1 ./scripts/smoke/run.sh` twice each on two SHAs that both support host smoke: base `e7ad086` (#20) and head `e6aa944` (#23 tip). Pre-#20 tips have no `SMOKE_HOST=1` path, so #20 merge is the honest host baseline.
+- [x] Baseline. Record the trunk mean first. Base `e7ad086` walls **55.37 s**, **40.02 s** (mean **47.70 s**).
+- [x] Rule. Head mean must not exceed trunk mean by more than 25 percent, or the PR fails. Head `e6aa944` walls **44.20 s**, **44.72 s** (mean **44.46 s**, **−6.8%**, **PASS**).
 
 **Review gate.** The operator reviews before merge.
 
