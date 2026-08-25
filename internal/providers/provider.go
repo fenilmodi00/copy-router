@@ -46,6 +46,10 @@ func ObserveUpstreamHeaders(ctx context.Context, h http.Header) {
 // entry makes dispatch fall through to ErrProviderNotConfigured — a silent 502
 // even though the provider looked "enabled" at boot. ValidateDispatchable and
 // the table test catch this at boot instead of in production.
+//
+// Composition root (cmd/router/main.go) registers ProviderAiand only. The other
+// Provider* names stay because proxy/translate/BYOK/custom-binding paths and
+// tests still key off them for wire-family dispatch; they are not unused.
 const (
 	ProviderAnthropic  = "anthropic"
 	ProviderOpenAI     = "openai"
@@ -59,6 +63,7 @@ const (
 	// ProviderAiand is the ai& (aiand.com) OpenAI-compatible inference
 	// provider serving open-weight models (GLM, DeepSeek, Kimi, Qwen, Gemma,
 	// gpt-oss) from Japan-resident infra. OpenAI Chat Completions surface.
+	// This is the only provider the aiand-only deploy registers at boot.
 	ProviderAiand = "aiand"
 	// ProviderAnthropicGateway is an Anthropic-spec enterprise gateway using
 	// Bearer auth; its endpoint is per-tenant with no deployment default.
@@ -82,10 +87,11 @@ const (
 	// FamilyAnthropic speaks the Anthropic Messages wire format natively.
 	FamilyAnthropic
 	// FamilyOpenAICompat speaks the OpenAI Chat Completions wire format
-	// (OpenAI itself plus every OpenAI-compatible upstream: OpenRouter,
-	// Fireworks, Bedrock's OpenAI-compat surface, Makora, Together, XAI).
+	// (aiand and every other OpenAI-compatible upstream).
 	FamilyOpenAICompat
 	// FamilyGemini speaks the Google Generative Language (Gemini) wire format.
+	// Ingress /v1beta is unmounted; the family remains for translate/proxy
+	// branches that still compile against FormatGemini.
 	FamilyGemini
 )
 

@@ -281,9 +281,10 @@ func TestProxy_4xxStillBuffered(t *testing.T) {
 		"sanity: 400 must classify as non-retryable")
 }
 
-// TestGatewayClient_UnconfiguredBaseURLDoesNotFallBackToOpenRouter: an
-// unconfigured gateway must fail, not silently spend the tenant's token.
-func TestGatewayClient_UnconfiguredBaseURLDoesNotFallBackToOpenRouter(t *testing.T) {
+// TestGatewayClient_UnconfiguredBaseURLDoesNotFallBackToDefaultHost: an
+// unconfigured gateway must fail, not silently spend the tenant's token on
+// DefaultBaseURL (aiand).
+func TestGatewayClient_UnconfiguredBaseURLDoesNotFallBackToDefaultHost(t *testing.T) {
 	c := openaicompat.NewGatewayClient("gateway-token", "")
 	rec := httptest.NewRecorder()
 	clientReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
@@ -292,7 +293,7 @@ func TestGatewayClient_UnconfiguredBaseURLDoesNotFallBackToOpenRouter(t *testing
 	err := c.Proxy(context.Background(), router.Decision{Model: "gpt-5"}, prep, rec, clientReq)
 
 	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "openrouter.ai")
+	assert.NotContains(t, err.Error(), "aiand.com")
 }
 
 // TestGatewayClient_DispatchesToConfiguredEndpoint: the gateway path is

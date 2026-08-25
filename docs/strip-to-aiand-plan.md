@@ -180,15 +180,15 @@ Host Close path. Live lanes ran on the WSL host with `make setup` / `make dev` a
 
 **Files.**
 
-- [ ] Edit `internal/providers/provider.go`.
-- [ ] Edit `internal/providers/openaicompat/` BaseURL constants.
+- [x] Edit `internal/providers/provider.go`. Audited `Provider*` set: every constant is still referenced by proxy/translate/BYOK/tests. Kept all; documented that composition root registers `ProviderAiand` only.
+- [x] Edit `internal/providers/openaicompat/` BaseURL constants. Deleted unused Fireworks/Makora/Together/XAI/BedrockMantle URLs. `DefaultBaseURL` now aliases `AiandBaseURL`.
 - [x] Edit `internal/router/catalog/catalog.go` and tests.
 - [x] Edit `cmd/router/main.go` handover default to `ProviderAiand`.
-- [ ] Edit AGENTS and providers package guides.
+- [x] Edit AGENTS and providers package guides (aiand-primary; native anthropic/openai/google adapters gone).
 
 **Build.**
 
-- [ ] Keep `ProviderAiand` and OpenAI-compat family helpers needed for translate. Delete unused `Provider*` constants and non-aiand catalog bindings that the v0.76 registry never selects.
+- [x] Keep `ProviderAiand` and OpenAI-compat family helpers needed for translate. No unused `Provider*` constants remained to delete (all still referenced). Non-aiand catalog bindings already removed; v0.76 registry binds aiand only.
 
 **You see.**
 
@@ -233,7 +233,7 @@ Host Close path. Live lanes ran on the WSL host with `make setup` / `make dev` a
 
 - [x] Delete `internal/api/gemini/`.
 - [x] Edit `internal/server/` to unmount `/v1beta/models/:modelAction`.
-- [ ] Edit `internal/translate/` to drop Gemini emit and stream paths unused by Anthropic to OpenAI-compat.
+- [ ] Edit `internal/translate/` to drop Gemini emit and stream paths unused by Anthropic to OpenAI-compat. Deferred: `PrepareGemini` is unused on the Anthropic↔OpenAI-compat (Claude Code → aiand) path (`FamilyOpenAICompat` → `PrepareOpenAI`), but Gemini symbols remain compile-wired through `proxy` `FamilyGemini` branches, `FormatGemini` envelope helpers, and related tests. Deleting translate Gemini without a matching proxy stub is not a small cut; leave until a dedicated proxy trim.
 - [ ] Edit related tests and API docs.
 
 **Build.**
@@ -287,9 +287,9 @@ Host Close path. Live lanes ran on the WSL host with `make setup` / `make dev` a
 
 **Files.**
 
-- [ ] Delete or unwire `internal/router/hmm/`, `internal/router/rl/`, `internal/router/bandit/`, `internal/router/banditexplore/` as registered strategies.
-- [ ] Delete `sidecars/hmm/`.
-- [ ] Delete or unmount `internal/feedback/`, `internal/api/feedback/`. Keep `internal/analytics/` and `internal/api/analytics/`.
+- [ ] ~~Delete or unwire~~ **Kept for training/analytics:** `internal/router/hmm/`, `internal/router/rl/`, `internal/router/bandit/`, `internal/router/banditexplore/` (packages remain; strategy headers fail closed / explore off by default; not registered as default traffic).
+- [ ] ~~Delete~~ **Kept for training:** `sidecars/hmm/`.
+- [ ] ~~Delete~~ **Kept for training/analytics:** `internal/feedback/` package (API already unmounted; `/f/` is 404). Keep `internal/analytics/` and `internal/api/analytics/`.
 - [x] Edit `cmd/router/main.go` and `internal/server/server.go` mounts. Leave analytics mounted.
 - [x] Edit `.env.example` to drop sidecar and feedback secrets. Keep analytics key docs.
 
@@ -435,4 +435,4 @@ Actual path:
 
 Boxes that only name Graphite, cloud-VM swarm, or autopilot arming stay unchecked on purpose. Host Close ticks cover dependency order, file boundaries, incremental `gh` merges, and host live/perf evidence. Do not invent swarm screenshots or tick operator review-click boxes. Do not tick Close while review clicks stay open.
 
-Tip at this sync: `#26` (`0cdcf89`).
+Tip at this sync: `#28` (`efffe9b`). Residual File leftovers after provider-surface trim: Gemini translate (deferred; still proxy-wired), training/analytics package keeps (intentionally unchecked).

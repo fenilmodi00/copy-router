@@ -22,35 +22,13 @@ import (
 )
 
 const (
-	DefaultBaseURL   = "https://openrouter.ai/api/v1"
-	FireworksBaseURL = "https://api.fireworks.ai/inference/v1"
-	// MakoraBaseURL serves DeepSeek V4 Flash at higher throughput than
-	// commodity providers; pair with NewClientWithModelIDMap to rewrite slugs
-	// to Makora's upstream IDs.
-	MakoraBaseURL = "https://inference.makora.com/v1"
-	// TogetherBaseURL serves the OSS pool (DeepSeek, GLM, MiniMax, Qwen, Kimi)
-	// and is fastest on artificialanalysis.ai for several routed models; pair
-	// with NewClientWithModelIDMap to rewrite slugs to Together's "Org/Model" IDs.
-	TogetherBaseURL = "https://api.together.xyz/v1"
-	// XAIBaseURL is SpaceXAI's OpenAI-compatible Chat Completions surface.
-	XAIBaseURL = "https://api.x.ai/v1"
 	// AiandBaseURL is the ai& (aiand.com) OpenAI-compatible inference surface.
 	AiandBaseURL = "https://api.aiand.com/v1"
+	// DefaultBaseURL is the empty-baseURL fallback for NewClient. Aiand-only
+	// deploys always pass an explicit URL from composition root; this exists so
+	// tests that omit baseURL still hit a real OpenAI-compat host shape.
+	DefaultBaseURL = AiandBaseURL
 )
-
-// BedrockMantleBaseURLTemplate is the OpenAI-compatible bedrock-mantle endpoint
-// template. Substitute the region via BedrockMantleBaseURL.
-const BedrockMantleBaseURLTemplate = "https://bedrock-mantle.%s.api.aws/v1"
-
-// BedrockMantleBaseURL returns the bedrock-mantle URL for the given region.
-// AWS recommends bedrock-mantle over the model-native bedrock-runtime surface
-// for OpenAI-compat traffic; auth is a long-term Bedrock API key, not SigV4.
-func BedrockMantleBaseURL(region string) string {
-	if region == "" {
-		region = "us-east-1"
-	}
-	return fmt.Sprintf(BedrockMantleBaseURLTemplate, region)
-}
 
 type Client struct {
 	apiKey  string
@@ -91,7 +69,7 @@ func NewClientWithModelIDMap(apiKey, baseURL string, modelIDMap map[string]strin
 
 // NewGatewayClient builds a client for a customer-supplied OpenAI-spec endpoint.
 // Unlike NewClient, no default base URL is applied: an unconfigured gateway must
-// fail rather than silently dispatch the tenant's token to OpenRouter.
+// fail rather than silently dispatch the tenant's token to DefaultBaseURL.
 func NewGatewayClient(apiKey, baseURL string) *Client {
 	return newClient(apiKey, baseURL, nil)
 }
