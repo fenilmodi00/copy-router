@@ -37,7 +37,7 @@ func TestToolTemperature_AnthropicSource_ForcesZeroForDeepSeekWithTools(t *testi
 	env, err := translate.ParseAnthropic(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	temp, present := temperatureField(t, out.Body)
@@ -56,7 +56,7 @@ func TestToolTemperature_AnthropicSource_ClientTempWins(t *testing.T) {
 	env, err := translate.ParseAnthropic(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	temp, present := temperatureField(t, out.Body)
@@ -73,7 +73,7 @@ func TestToolTemperature_AnthropicSource_NoOverrideWithoutTools(t *testing.T) {
 	env, err := translate.ParseAnthropic(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	_, present := temperatureField(t, out.Body)
@@ -115,7 +115,7 @@ func TestToolTemperature_OpenAISource_ForcesZeroForDeepSeekWithTools(t *testing.
 	env, err := translate.ParseOpenAI(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	temp, present := temperatureField(t, out.Body)
@@ -134,7 +134,7 @@ func TestToolTemperature_OpenAISource_ClientTempWins(t *testing.T) {
 	env, err := translate.ParseOpenAI(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	temp, present := temperatureField(t, out.Body)

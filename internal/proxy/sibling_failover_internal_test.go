@@ -34,14 +34,14 @@ func TestSiblingFailoverDecision(t *testing.T) {
 	t.Run("prefers a candidate off the failed provider", func(t *testing.T) {
 		s := siblingService(providers.ProviderAnthropic, providers.ProviderFireworks)
 		got, ok := s.siblingFailoverDecision(ctx, overloadedDecision(&router.RoutingMetadata{
-			CandidateModels: []string{"z-ai/glm-5.2", "moonshotai/kimi-k2.7", "deepseek/deepseek-v4-pro-0813"},
+			CandidateModels: []string{"z-ai/glm-5.2", "moonshotai/kimi-k2.7", "deepseek-ai/deepseek-v4-pro"},
 			CandidateProviders: map[string]string{
 				"moonshotai/kimi-k2.7":          providers.ProviderAnthropic,
-				"deepseek/deepseek-v4-pro-0813": providers.ProviderFireworks,
+				"deepseek-ai/deepseek-v4-pro": providers.ProviderFireworks,
 			},
 		}), 1_000, 0, 0)
 		require.True(t, ok)
-		assert.Equal(t, "deepseek/deepseek-v4-pro-0813", got.Model)
+		assert.Equal(t, "deepseek-ai/deepseek-v4-pro", got.Model)
 		assert.Equal(t, providers.ProviderFireworks, got.Provider)
 		assert.Equal(t, ReasonSiblingFailover, got.Reason)
 	})
@@ -49,10 +49,10 @@ func TestSiblingFailoverDecision(t *testing.T) {
 	t.Run("falls back to a same-provider candidate when nothing else is keyed", func(t *testing.T) {
 		s := siblingService(providers.ProviderAnthropic)
 		got, ok := s.siblingFailoverDecision(ctx, overloadedDecision(&router.RoutingMetadata{
-			CandidateModels: []string{"moonshotai/kimi-k2.7", "deepseek/deepseek-v4-pro-0813"},
+			CandidateModels: []string{"moonshotai/kimi-k2.7", "deepseek-ai/deepseek-v4-pro"},
 			CandidateProviders: map[string]string{
 				"moonshotai/kimi-k2.7":          providers.ProviderAnthropic,
-				"deepseek/deepseek-v4-pro-0813": providers.ProviderFireworks,
+				"deepseek-ai/deepseek-v4-pro": providers.ProviderFireworks,
 			},
 		}), 1_000, 0, 0)
 		require.True(t, ok)

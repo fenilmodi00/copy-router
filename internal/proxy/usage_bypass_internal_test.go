@@ -73,7 +73,7 @@ func newBypassService(p providers.Client) *Service {
 
 func bypassAnthropicEnvelope(t *testing.T) *translate.RequestEnvelope {
 	t.Helper()
-	env, err := translate.ParseAnthropic([]byte(`{"model":"deepseek/deepseek-v4-pro-0813","messages":[{"role":"user","content":"hi"}]}`))
+	env, err := translate.ParseAnthropic([]byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`))
 	require.NoError(t, err)
 	return env
 }
@@ -116,7 +116,7 @@ func TestUsageBypassDecision_CodexSubscriptionPreservesRequestedModel(t *testing
 func TestUsageBypassEngaged_SafetyExclusionBlocks_PolicyExclusionDoesNot(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	const token = "sk-ant-oat01-test-subscription-token"
-	const model = "deepseek/deepseek-v4-pro-0813"
+	const model = "deepseek-ai/deepseek-v4-pro"
 	threshold := 0.80
 	newObs := func() *usage.Observer {
 		obs := usage.NewObserver([]byte("salt"), 10*time.Minute, time.Now)
@@ -178,10 +178,10 @@ func TestUsageBypass_PreservesSwitchHistory(t *testing.T) {
 	store := newStubPinStore()
 	store.getFound = true
 	store.getPin = sessionpin.Pin{
-		LastServedModel: "deepseek/deepseek-v4-flash",
+		LastServedModel: "deepseek-ai/deepseek-v4-flash",
 		HasEverSwitched: true,
 	}
-	svc := NewService(nil, nil, nil, false, nil, store, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+	svc := NewService(nil, nil, nil, false, nil, store, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithUsageObserver(obs)
 	ctx := context.WithValue(context.Background(), AnthropicSubscriptionContextKey{}, token)
 	ctx = context.WithValue(ctx, InstallationUsageBypassContextKey{}, UsageBypassConfig{
@@ -200,7 +200,7 @@ func TestUsageBypass_PreservesSwitchHistory(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, res.UsageBypass)
-	assert.Equal(t, "deepseek/deepseek-v4-flash", res.PriorServedModel)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", res.PriorServedModel)
 	assert.True(t, res.SessionEverSwitched)
 	assert.True(t, res.modelSwitched(), "bypass must retain switch history for Anthropic thinking-block stripping")
 	bucketKey, ok := noProgressBucketKey(res.SessionKey, uuid.Nil, res.PinRole)
@@ -453,7 +453,7 @@ func TestBypass_EmitsUsageAndCost(t *testing.T) {
 	const (
 		inputTokens  = 1200
 		outputTokens = 340
-		model        = "deepseek/deepseek-v4-pro-0813"
+		model        = "deepseek-ai/deepseek-v4-pro"
 	)
 	sse := "event: message_start\n" +
 		`data: {"type":"message_start","message":{"usage":{"input_tokens":1200,"output_tokens":1}}}` + "\n\n" +

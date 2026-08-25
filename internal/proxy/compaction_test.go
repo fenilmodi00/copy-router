@@ -200,10 +200,10 @@ func TestSelectCompactionSummarizer_WindowAware(t *testing.T) {
 }
 
 func TestMaxEligibleContextWindow(t *testing.T) {
-	s := &Service{availableModels: map[string]struct{}{"deepseek/deepseek-v4-flash": {}}}
+	s := &Service{availableModels: map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}}
 	assert.Equal(t, 1_048_576, s.maxEligibleContextWindow(nil, nil, 0))
 	assert.Equal(t, 1_048_576+5_000, s.maxEligibleContextWindow(nil, nil, 5_000), "aiand flash strips Anthropic signatures, so sig savings expand the window")
-	assert.Equal(t, 0, s.maxEligibleContextWindow(map[string]struct{}{"deepseek/deepseek-v4-flash": {}}, nil, 0), "policy-excluding the only model leaves no window")
+	assert.Equal(t, 0, s.maxEligibleContextWindow(map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}, nil, 0), "policy-excluding the only model leaves no window")
 
 	sStrip := &Service{availableModels: map[string]struct{}{"openai/gpt-oss-120b": {}}}
 	assert.Equal(t, 131_072, sStrip.maxEligibleContextWindow(nil, nil, 0))

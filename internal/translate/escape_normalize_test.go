@@ -19,7 +19,7 @@ import (
 func translateWithEscapeNormalize(t *testing.T, resp []byte, enabled bool) []byte {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	w := translate.NewAnthropicSSETranslator(rec, "deepseek/deepseek-v4-pro", nil).
+	w := translate.NewAnthropicSSETranslator(rec, "deepseek-ai/deepseek-v4-pro", nil).
 		WithEscapeNormalize(enabled)
 	require.NoError(t, w.Prelude(false)) // buffered path
 	w.WriteHeader(http.StatusOK)
@@ -35,7 +35,7 @@ func editToolUseResponse(t *testing.T, toolName, argsJSON string) []byte {
 	t.Helper()
 	body := map[string]any{
 		"id":    "resp_1",
-		"model": "deepseek/deepseek-v4-pro",
+		"model": "deepseek-ai/deepseek-v4-pro",
 		"choices": []any{
 			map[string]any{
 				"message": map[string]any{

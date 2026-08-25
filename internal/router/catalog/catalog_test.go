@@ -52,12 +52,12 @@ func TestByID_UnknownReturnsFalse(t *testing.T) {
 }
 
 func TestPriceFor_UnknownProviderForKnownModel(t *testing.T) {
-	_, ok := PriceFor(providers.ProviderOpenAI, "deepseek/deepseek-v4-flash")
+	_, ok := PriceFor(providers.ProviderOpenAI, "deepseek-ai/deepseek-v4-flash")
 	assert.False(t, ok)
 }
 
 func TestPriceFor_KnownAiandPair(t *testing.T) {
-	p, ok := PriceFor(providers.ProviderAiand, "deepseek/deepseek-v4-flash")
+	p, ok := PriceFor(providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash")
 	require.True(t, ok)
 	assert.Equal(t, 0.150, p.InputUSDPer1M)
 	assert.Equal(t, 0.250, p.OutputUSDPer1M)
@@ -66,13 +66,13 @@ func TestPriceFor_KnownAiandPair(t *testing.T) {
 
 func TestResolveBinding_PicksAiand(t *testing.T) {
 	avail := map[string]struct{}{providers.ProviderAiand: {}}
-	b, ok := ResolveBinding("deepseek/deepseek-v4-flash", avail)
+	b, ok := ResolveBinding("deepseek-ai/deepseek-v4-flash", avail)
 	require.True(t, ok)
 	assert.Equal(t, providers.ProviderAiand, b.Provider)
 	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", b.UpstreamID)
 
 	availNoAiand := map[string]struct{}{providers.ProviderOpenAI: {}}
-	_, ok = ResolveBinding("deepseek/deepseek-v4-flash", availNoAiand)
+	_, ok = ResolveBinding("deepseek-ai/deepseek-v4-flash", availNoAiand)
 	assert.False(t, ok)
 }
 
@@ -108,8 +108,8 @@ func TestResolveBinding_V076RegistryIDs(t *testing.T) {
 }
 
 func TestTierFor_KnownAndUnknown(t *testing.T) {
-	assert.Equal(t, TierLow, TierFor("deepseek/deepseek-v4-flash"))
-	assert.Equal(t, TierMid, TierFor("deepseek/deepseek-v4-pro-0813"))
+	assert.Equal(t, TierLow, TierFor("deepseek-ai/deepseek-v4-flash"))
+	assert.Equal(t, TierMid, TierFor("deepseek-ai/deepseek-v4-pro"))
 	assert.Equal(t, TierHigh, TierFor("z-ai/glm-5.2"))
 	assert.Equal(t, TierHigh, TierFor("moonshotai/kimi-k3"))
 	assert.Equal(t, TierUnknown, TierFor("definitely-not-a-model"))
@@ -121,8 +121,8 @@ func TestByIDOrUpstream_MapsAiandRegistryIDs(t *testing.T) {
 		wantID     string
 		wantWireID string
 	}{
-		{"deepseek-ai/deepseek-v4-flash", "deepseek/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
-		{"deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
+		{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
+		{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
 		{"zai-org/glm-5.2", "z-ai/glm-5.2", "zai-org/glm-5.2"},
 		{"moonshotai/kimi-k2.7-code", "moonshotai/kimi-k2.7", "moonshotai/kimi-k2.7-code"},
 	}
@@ -142,7 +142,7 @@ func TestContextWindowFor_ResolvesUpstreamRegistryIDs(t *testing.T) {
 	assert.Equal(t, 1_048_576, ContextWindowFor("zai-org/glm-5.2"),
 		"upstream ID zai-org/glm-5.2 must resolve to z-ai/glm-5.2's 1M window")
 	assert.Equal(t, 1_048_576, ContextWindowFor("deepseek-ai/deepseek-v4-flash"),
-		"upstream ID deepseek-ai/deepseek-v4-flash must resolve to deepseek/deepseek-v4-flash's 1M window")
+		"upstream ID deepseek-ai/deepseek-v4-flash must resolve to deepseek-ai/deepseek-v4-flash's 1M window")
 	assert.Equal(t, 262_144, ContextWindowFor("moonshotai/kimi-k2.7-code"),
 		"upstream ID moonshotai/kimi-k2.7-code must resolve to moonshotai/kimi-k2.7's 256K window")
 	assert.Equal(t, 1_048_576, ContextWindowFor("moonshotai/kimi-k3"))
@@ -186,7 +186,7 @@ func TestCatalog_AiandEffortVocabularyPresent(t *testing.T) {
 }
 
 func TestCapabilitiesFor_UsesCatalogReasoningEfforts(t *testing.T) {
-	spec := CapabilitiesFor("deepseek/deepseek-v4-flash")
+	spec := CapabilitiesFor("deepseek-ai/deepseek-v4-flash")
 	require.True(t, spec.Supports(router.CapReasoning))
 	assert.Equal(t, []string{EffortNone, EffortHigh, EffortMax}, spec.Reasoning().Levels)
 
@@ -206,7 +206,7 @@ func TestReasoningEffortsFor(t *testing.T) {
 }
 
 func TestValidateDeployed_FlagsMissing(t *testing.T) {
-	err := ValidateDeployed([]string{"deepseek/deepseek-v4-flash"})
+	err := ValidateDeployed([]string{"deepseek-ai/deepseek-v4-flash"})
 	assert.NoError(t, err)
 
 	err = ValidateDeployed([]string{"definitely-not-a-model"})

@@ -13,7 +13,7 @@ import (
 // customModel is aiand-bound in the catalog; a configuration-declared gateway
 // overlay is the only way it reaches a customer's own endpoint when aiand is
 // unavailable.
-const customModel = "deepseek/deepseek-v4-flash"
+const customModel = "deepseek-ai/deepseek-v4-flash"
 
 func customFor(provider string) map[string][]string {
 	return map[string][]string{customModel: {provider}}

@@ -22,7 +22,7 @@ func TestForcedReasoningEffort(t *testing.T) {
 		{"grok-4", false, "low"},
 		{"claude-opus-5", false, ""}, // adaptive path untouched
 		{"claude-sonnet-5", true, ""},
-		{"deepseek/deepseek-v4-pro-0813", true, ""},
+		{"deepseek-ai/deepseek-v4-pro", true, ""},
 		{"gemini-2.5-flash", true, ""}, // only gemini-3* is pinned
 	}
 	for _, tc := range cases {

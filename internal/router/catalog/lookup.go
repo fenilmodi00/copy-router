@@ -59,7 +59,7 @@ func ByID(id string) (Model, bool) {
 }
 
 // ByIDOrUpstream returns the model for a catalog ID or any binding UpstreamID
-// (e.g. "deepseek-ai/deepseek-v4-flash" → deepseek/deepseek-v4-flash). Catalog
+// (e.g. "deepseek-ai/deepseek-v4-flash" → deepseek-ai/deepseek-v4-flash). Catalog
 // IDs win first so a catalog ID that equals some other model's UpstreamID is
 // never rerouted. Upstream bindings themselves are unchanged — this only
 // resolves names clients see on /v1/router/models back to the catalog row.

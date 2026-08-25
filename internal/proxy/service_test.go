@@ -92,7 +92,7 @@ func TestService_PreviewAnthropicRouteBuildsServingCandidateContextWithoutDispat
 	svc := proxy.NewService(&fakeRouter{}, map[string]providers.Client{
 		providers.ProviderAnthropic: anthropicProvider,
 		providers.ProviderOpenAI:    openAIProvider,
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyHMM, Router: previewer}).
 		WithDeploymentKeyedProviders(map[string]struct{}{
 			providers.ProviderAnthropic: {},
@@ -136,7 +136,7 @@ func TestService_PreviewAnthropicRouteExcludesInfrastructureModelsForOAuthOnlyCo
 	}}
 	svc := proxy.NewService(&fakeRouter{}, map[string]providers.Client{
 		providers.ProviderOpenAI: &fakeProvider{},
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithByokOnly(true).
 		WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyHMM, Router: previewer})
 
@@ -160,7 +160,7 @@ func TestService_AgentShadowEvaluationForcesEphemerallyWithoutServingRouter(t *t
 	telemetry := newCaptureTelemetry()
 	pins := newFakePinStore()
 	pins.hasPin = true
-	pins.pin = sessionpin.Pin{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash"}
+	pins.pin = sessionpin.Pin{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash"}
 	provider := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"id":"msg_eval","type":"message","role":"assistant","model":"moonshotai/kimi-k3","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":3}}`)
@@ -168,7 +168,7 @@ func TestService_AgentShadowEvaluationForcesEphemerallyWithoutServingRouter(t *t
 	servingRouter := &fakeRouter{err: errors.New("serving router must not run")}
 	svc := proxy.NewService(servingRouter, map[string]providers.Client{
 		providers.ProviderAnthropic: provider,
-	}, nil, false, nil, pins, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", telemetry).
+	}, nil, false, nil, pins, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", telemetry).
 		WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}}).
 		WithAvailableModels(map[string]struct{}{"moonshotai/kimi-k3": {}}).
 		WithCompaction(nil, 0.0001)
@@ -195,7 +195,7 @@ func TestService_AgentShadowEvaluationForcesEphemerallyWithoutServingRouter(t *t
 	}
 	messages = append(messages, map[string]any{"role": "user", "content": "make the next edit"})
 	body, err := json.Marshal(map[string]any{
-		"model": "deepseek/deepseek-v4-flash", "messages": messages, "max_tokens": 512,
+		"model": "deepseek-ai/deepseek-v4-flash", "messages": messages, "max_tokens": 512,
 		"thinking": map[string]any{"type": "adaptive"},
 	})
 	require.NoError(t, err)
@@ -237,7 +237,7 @@ func TestService_AgentShadowEvaluationNeverSubstitutesRequestedBaseline(t *testi
 	svc := proxy.NewService(&fakeRouter{}, map[string]providers.Client{
 		providers.ProviderAnthropic: anthropicProvider,
 		providers.ProviderOpenAI:    openAIProvider,
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(map[string]struct{}{
 			providers.ProviderAnthropic: {},
 			providers.ProviderOpenAI:    {},
@@ -274,11 +274,11 @@ func TestService_BaselineFailoverSkipsUnconfiguredProvider(t *testing.T) {
 		},
 	}, map[string]providers.Client{
 		providers.ProviderAiand: aiandProvider,
-	}, nil, false, nil, nil, false, "", "deepseek/deepseek-v4-pro-0813", telemetry).
+	}, nil, false, nil, nil, false, "", "deepseek-ai/deepseek-v4-pro", telemetry).
 		WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAiand: {}}).
 		WithAvailableModels(map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}})
 
-	body := []byte(`{"model":"deepseek/deepseek-v4-pro-0813","messages":[{"role":"user","content":"hi"}],"max_tokens":512}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hi"}],"max_tokens":512}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 
@@ -324,7 +324,7 @@ func TestService_ProxyOpenAIResponses_CustomToolUsesNativeOpenAIFamily(t *testin
 	svc := proxy.NewService(fr, map[string]providers.Client{
 		providers.ProviderAnthropic: &fakeProvider{},
 		providers.ProviderOpenAI:    provider,
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 
 	body := []byte(`{"model":"openai/gpt-oss-120b","input":"apply a patch","reasoning":{"effort":"high"},"tools":[{"type":"custom","name":"apply_patch"}]}`)
 	rec := httptest.NewRecorder()
@@ -505,7 +505,7 @@ func TestService_ProxyOpenAIResponses_CodexPassthroughUsesChatForOpenAICompatPro
 	svc := proxy.NewService(fr, map[string]providers.Client{
 		providers.ProviderOpenAI:     &fakeProvider{},
 		providers.ProviderOpenRouter: openRouter,
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 
 	ctx := context.WithValue(context.Background(), proxy.OpenAISubscriptionContextKey{}, "eyJhbGciOiJSUzI1NiJ9.codex.sig")
 	ctx = context.WithValue(ctx, proxy.OpenAIAccountIDContextKey{}, "acct-123")
@@ -609,7 +609,7 @@ func (f *fakeProvider) Passthrough(ctx context.Context, prep providers.PreparedR
 }
 
 func makeProxyService(decision router.Decision, p map[string]providers.Client) *proxy.Service {
-	return proxy.NewService(&fakeRouter{decision: decision}, p, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+	return proxy.NewService(&fakeRouter{decision: decision}, p, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 }
 
 // TestService_PassthroughToNamedProvider_ResolvesBYOKCredential: passthrough
@@ -643,7 +643,7 @@ func TestService_PassthroughToProvider_CountTokensLocalFallback(t *testing.T) {
 		providers.ProviderAnthropicGateway: gatewayProvider,
 	}).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropicGateway: {}})
 
-	body := []byte(`{"model":"deepseek/deepseek-v4-pro-0813","messages":[{"role":"user","content":"hello world"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hello world"}]}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", strings.NewReader(""))
 	rec := httptest.NewRecorder()
 
@@ -659,7 +659,7 @@ func TestService_PassthroughToProvider_CountTokensLocalFallback(t *testing.T) {
 // TestService_PassthroughToProvider_CountTokensForwardsWithCredential verifies
 // that a reachable Anthropic credential keeps count_tokens on the real upstream.
 func TestService_PassthroughToProvider_CountTokensForwardsWithCredential(t *testing.T) {
-	body := []byte(`{"model":"deepseek/deepseek-v4-pro-0813","messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hello"}]}`)
 
 	t.Run("deployment key", func(t *testing.T) {
 		provider := &fakeProvider{}
@@ -699,7 +699,7 @@ func TestService_PassthroughToProvider_LocalMetadataWithoutAnthropic(t *testing.
 	}
 
 	t.Run("count_tokens answered locally", func(t *testing.T) {
-		body := []byte(`{"model":"deepseek/deepseek-v4-pro-0813","messages":[{"role":"user","content":"hello world"}]}`)
+		body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hello world"}]}`)
 		httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", strings.NewReader(""))
 		rec := httptest.NewRecorder()
 
@@ -759,7 +759,7 @@ func TestService_ProxyMessages_PropagatesUpstreamStatusError(t *testing.T) {
 	upstreamErr := &providers.UpstreamStatusError{Status: 400}
 	provider := &fakeProvider{proxyErr: upstreamErr}
 	svc := makeProxyService(
-		router.Decision{Provider: "anthropic", Model: "deepseek/deepseek-v4-flash"},
+		router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash"},
 		map[string]providers.Client{"anthropic": provider},
 	)
 
@@ -822,18 +822,18 @@ func TestService_ProxyMessages_StripsRoutingMarkerFromInboundHistory(t *testing.
 		"messages":[
 			{"role":"user","content":"first prompt"},
 			{"role":"assistant","content":[
-				{"type":"text","text":"✦ **Weave Router** → deepseek/deepseek-v4-pro-0813 (openrouter) · reason: top scorer\n\n"},
+				{"type":"text","text":"✦ **Weave Router** → deepseek-ai/deepseek-v4-pro (openrouter) · reason: top scorer\n\n"},
 				{"type":"text","text":"real assistant reply"}
 			]},
 			{"role":"user","content":[
-				{"type":"text","text":"</summary>\n<result>✦ **Weave Router** → deepseek/deepseek-v4-flash (anthropic) · reason: tool-result follow-up\n\n</result>"}
+				{"type":"text","text":"</summary>\n<result>✦ **Weave Router** → deepseek-ai/deepseek-v4-flash (anthropic) · reason: tool-result follow-up\n\n</result>"}
 			]}
 		]
 	}`)
 
 	provider := &fakeProvider{}
 	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash"},
+		router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash"},
 		map[string]providers.Client{providers.ProviderAnthropic: provider},
 	)
 
@@ -874,7 +874,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageFlag(t *testing.T) {
 	}`)
 
 	t.Run("flag off uses concatenated stream", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek/deepseek-v4-flash"}}
+		fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash"}}
 		svc := proxy.NewService(fr,
 			map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 			nil,
@@ -882,7 +882,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageFlag(t *testing.T) {
 			nil,
 			nil,
 			false,
-			providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+			providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 			nil,
 		)
 
@@ -897,7 +897,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageFlag(t *testing.T) {
 	})
 
 	t.Run("flag on concatenates user-role text and drops everything else", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek/deepseek-v4-flash"}}
+		fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash"}}
 		svc := proxy.NewService(fr,
 			map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 			nil,
@@ -905,7 +905,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageFlag(t *testing.T) {
 			nil,
 			nil,
 			false,
-			providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+			providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 			nil,
 		)
 
@@ -961,7 +961,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageContextOverride(t *testing.T)
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek/deepseek-v4-flash"}}
+			fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash"}}
 			svc := proxy.NewService(fr,
 				map[string]providers.Client{"anthropic": &fakeProvider{}},
 				nil,
@@ -969,7 +969,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageContextOverride(t *testing.T)
 				nil,
 				nil,
 				false,
-				"anthropic", "deepseek/deepseek-v4-flash",
+				"anthropic", "deepseek-ai/deepseek-v4-flash",
 				nil,
 			)
 
@@ -995,7 +995,7 @@ func boolPtr(b bool) *bool { return &b }
 // without a pin store, every turn re-runs the cluster scorer.
 func TestService_ProxyMessages_NoPinStoreRunsScorerEveryTurn(t *testing.T) {
 	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hi"}]}`)
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek/deepseek-v4-flash"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash"}}
 	svc := proxy.NewService(fr,
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil,
@@ -1003,7 +1003,7 @@ func TestService_ProxyMessages_NoPinStoreRunsScorerEveryTurn(t *testing.T) {
 		nil,
 		nil, // pinStore disabled
 		false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -1149,8 +1149,8 @@ func TestService_ProxyMessages_DispatchesBedrockMakoraTogether(t *testing.T) {
 		model    string
 	}{
 		{"bedrock", providers.ProviderBedrock, "moonshotai/kimi-k2.5"},
-		{"makora", providers.ProviderMakora, "deepseek/deepseek-v4-flash"},
-		{"together", providers.ProviderTogether, "deepseek/deepseek-v4-pro-0813"},
+		{"makora", providers.ProviderMakora, "deepseek-ai/deepseek-v4-flash"},
+		{"together", providers.ProviderTogether, "deepseek-ai/deepseek-v4-pro"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1183,8 +1183,8 @@ func TestService_ProxyOpenAIChatCompletion_DispatchesBedrockMakoraTogether(t *te
 		model    string
 	}{
 		{"bedrock", providers.ProviderBedrock, "qwen/qwen3.6-27b-next"},
-		{"makora", providers.ProviderMakora, "deepseek/deepseek-v4-flash"},
-		{"together", providers.ProviderTogether, "deepseek/deepseek-v4-pro-0813"},
+		{"makora", providers.ProviderMakora, "deepseek-ai/deepseek-v4-flash"},
+		{"together", providers.ProviderTogether, "deepseek-ai/deepseek-v4-pro"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1215,19 +1215,19 @@ func TestService_ProxyOpenAIChatCompletion_DispatchesBedrockMakoraTogether(t *te
 // callers are unaffected: a lone Codex sub still yields {OpenAI}.)
 func TestService_CodexPassthrough_RoutesFreelyWithBothSubs(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-pro-0813"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-pro"}}
 	// Anthropic upstream returns a normal Messages response; proxy translates
 	// it to Responses wire format (not the verbatim Codex-backend path).
 	anthropicResp := func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","role":"assistant","model":"deepseek/deepseek-v4-pro-0813","content":[{"type":"text","text":"hi"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`))
+		_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","role":"assistant","model":"deepseek-ai/deepseek-v4-pro","content":[{"type":"text","text":"hi"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`))
 	}
 	providerMap := map[string]providers.Client{
 		providers.ProviderOpenAI:    &fakeProvider{},
 		providers.ProviderAnthropic: &fakeProvider{proxyResponse: anthropicResp},
 	}
-	svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-pro-0813", nil).
+	svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-pro", nil).
 		WithByokOnly(true)
 
 	// Both subscriptions presented via the dedicated headers (stashed on ctx by
@@ -1265,8 +1265,8 @@ func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
 	}
 
 	t.Run("byok-off keeps every registered provider eligible (selfhost baseline)", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 
 		rec := httptest.NewRecorder()
 		httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
@@ -1278,8 +1278,8 @@ func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
 	})
 
 	t.Run("byok-on with no creds yields empty eligible set", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 			WithByokOnly(true)
 
 		rec := httptest.NewRecorder()
@@ -1294,8 +1294,8 @@ func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
 		// A client x-api-key on the Anthropic surface is a legitimate passthrough
 		// credential and enables Anthropic, but must not leak into OpenRouter or
 		// other OpenAI-compat upstreams on a different inbound surface.
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 			WithByokOnly(true)
 
 		rec := httptest.NewRecorder()
@@ -1315,8 +1315,8 @@ func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
 		// enables Anthropic, but must never enable OpenRouter or other
 		// OpenAI-compat upstreams — that cross-provider leak was the 2026-05-13
 		// prod incident (argmax picked OpenRouter, 401'd with no OpenRouter key).
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 			WithByokOnly(true)
 
 		rec := httptest.NewRecorder()
@@ -1339,8 +1339,8 @@ func TestService_ExcludedModelsThroughRequest(t *testing.T) {
 	providerMap := map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}}
 
 	t.Run("no override and no installation list → nil", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 
 		rec := httptest.NewRecorder()
 		httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
@@ -1351,8 +1351,8 @@ func TestService_ExcludedModelsThroughRequest(t *testing.T) {
 	})
 
 	t.Run("installation list populates request", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 
 		ctx := context.WithValue(context.Background(), proxy.InstallationExcludedModelsContextKey{}, []string{"moonshotai/kimi-k3", "gpt-5"})
 		rec := httptest.NewRecorder()
@@ -1365,8 +1365,8 @@ func TestService_ExcludedModelsThroughRequest(t *testing.T) {
 	})
 
 	t.Run("env override replaces installation list", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 			WithExcludedModelsOverride([]string{"gpt-4o"})
 
 		// Installation list says one thing; override says another. Override wins.

@@ -67,7 +67,7 @@ func buildSpiralBody(t *testing.T, turns []string) []byte {
 		}
 	}
 	body, err := json.Marshal(map[string]any{
-		"model":    "deepseek/deepseek-v4-pro-0813",
+		"model":    "deepseek-ai/deepseek-v4-pro",
 		"messages": msgs,
 	})
 	if err != nil {

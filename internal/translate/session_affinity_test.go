@@ -30,7 +30,7 @@ func TestSessionAffinity_FireworksSetsHeaderNotBody(t *testing.T) {
 	require.NoError(t, err)
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
-		TargetModel:     "deepseek/deepseek-v4-pro",
+		TargetModel:     "deepseek-ai/deepseek-v4-pro",
 		TargetProvider:  providers.ProviderFireworks,
 		SessionAffinity: affinityKey,
 	})
@@ -53,7 +53,7 @@ func TestSessionAffinity_MakoraAndTogetherSetHeader(t *testing.T) {
 			require.NoError(t, err)
 
 			out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
-				TargetModel:     "deepseek/deepseek-v4-pro",
+				TargetModel:     "deepseek-ai/deepseek-v4-pro",
 				TargetProvider:  provider,
 				SessionAffinity: affinityKey,
 			})
@@ -72,7 +72,7 @@ func TestSessionAffinity_OpenRouterUsesSessionIDHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
-		TargetModel:     "deepseek/deepseek-v4-pro",
+		TargetModel:     "deepseek-ai/deepseek-v4-pro",
 		TargetProvider:  providers.ProviderOpenRouter,
 		SessionAffinity: affinityKey,
 	})
@@ -140,7 +140,7 @@ func TestSessionAffinity_EmptyIsNoOp(t *testing.T) {
 	require.NoError(t, err)
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
-		TargetModel:    "deepseek/deepseek-v4-pro",
+		TargetModel:    "deepseek-ai/deepseek-v4-pro",
 		TargetProvider: providers.ProviderFireworks,
 	})
 	require.NoError(t, err)

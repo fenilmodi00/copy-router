@@ -49,9 +49,9 @@ func TestUpstreamSpan_FirstOutputMs_ExceedsTTFTOnReasoningStall(t *testing.T) {
 			}
 		}
 		// Byte-alive immediately, but role-only: nothing the client can render.
-		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek/deepseek-v4-pro-0813","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}` + "\n\n")
+		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-pro","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}` + "\n\n")
 		time.Sleep(preOutputStall)
-		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek/deepseek-v4-pro-0813","choices":[{"index":0,"delta":{"content":"finally"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1}}` + "\n\n")
+		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-pro","choices":[{"index":0,"delta":{"content":"finally"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1}}` + "\n\n")
 		write("data: [DONE]\n\n")
 	}))
 	defer upstream.Close()
@@ -60,14 +60,14 @@ func TestUpstreamSpan_FirstOutputMs_ExceedsTTFTOnReasoningStall(t *testing.T) {
 	emitter := newTestEmitter(t, collector.srv.URL)
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek/deepseek-v4-pro-0813"}},
+		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek-ai/deepseek-v4-pro"}},
 		map[string]providers.Client{"fireworks": openaicompat.NewClient("test-fw-key", upstream.URL)},
-		emitter, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil,
+		emitter, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{"fireworks": {}})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"deepseek/deepseek-v4-pro-0813","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 	// Middleware installs Timing on the request context in prod; without it
 	// there are no latency attributes at all.
 	ctx, _ := timing.WithTiming(context.Background())

@@ -1,7 +1,7 @@
 package openaicompat_test
 
 // Guards the MINIMUM-THROUGHPUT watchdog on the generic OpenAI-compatible
-// adapter. Prod incident 2026-06-25: a deepseek/deepseek-v4-flash stream emitted
+// adapter. Prod incident 2026-06-25: a deepseek-ai/deepseek-v4-flash stream emitted
 // ~1774 output deltas over ~132s (~13 events/s) — a clean, steadily-flowing 200
 // that reset BOTH the byte-idle (45s) and output-stall (240s) watchdogs on every
 // delta yet was so slow the turn rode toward the 600s request cap with the client
@@ -70,7 +70,7 @@ func TestProxy_SlowThroughputAbortsRetryable(t *testing.T) {
 	clientReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
 
 	start := time.Now()
-	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek/deepseek-v4-flash"}, chatPrep(), w, clientReq)
+	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek-ai/deepseek-v4-flash"}, chatPrep(), w, clientReq)
 	elapsed := time.Since(start)
 
 	require.Error(t, err, "a sustained sub-throughput stream must surface an error, not hang")
@@ -109,7 +109,7 @@ func TestProxy_HealthyThroughputIsNotAborted(t *testing.T) {
 	w := &fakeProgressWriter{armReturns: true, markOnWrite: true}
 	clientReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
 
-	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek/deepseek-v4-flash"}, chatPrep(), w, clientReq)
+	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek-ai/deepseek-v4-flash"}, chatPrep(), w, clientReq)
 
 	require.NoError(t, err, "a stream above the throughput floor must never trip the watchdog")
 	assert.Positive(t, w.bytesIn)

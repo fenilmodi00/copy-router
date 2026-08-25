@@ -124,7 +124,7 @@ func TestAuthoritativePolicySelectsEveryEligibleTurn(t *testing.T) {
 				store,
 				false,
 				providers.ProviderAnthropic,
-				"deepseek/deepseek-v4-flash",
+				"deepseek-ai/deepseek-v4-flash",
 				nil,
 			).WithScoreToolResultTurns(false).
 				WithPlanner(planner.EVConfig{
@@ -238,7 +238,7 @@ func TestAuthoritativePolicyPreservesExplicitForceModel(t *testing.T) {
 		store,
 		false,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithPolicyStrategy(policy.StrategySpec{
 		Strategy: strategy,
@@ -290,21 +290,21 @@ func TestAuthoritativeUpgradeConfidenceGate(t *testing.T) {
 		{
 			name:     "low-confidence upgrade keeps cheaper pin",
 			pinFound: true,
-			pinModel: "deepseek/deepseek-v4-flash",
+			pinModel: "deepseek-ai/deepseek-v4-flash",
 			fresh: router.Decision{
 				Provider: providers.ProviderAnthropic,
 				Model:    "moonshotai/kimi-k3",
 				Reason:   "hmm_policy(tool-result communication reroute: classifier 'maximum' (p=0.180))",
 				Metadata: &router.RoutingMetadata{ChosenScore: 0.18},
 			},
-			wantModel:  "deepseek/deepseek-v4-flash",
+			wantModel:  "deepseek-ai/deepseek-v4-flash",
 			wantSticky: true,
 			wantTier:   "authoritative_hmm_upgrade_confidence_low",
 		},
 		{
 			name:     "confident upgrade serves fresh",
 			pinFound: true,
-			pinModel: "deepseek/deepseek-v4-flash",
+			pinModel: "deepseek-ai/deepseek-v4-flash",
 			fresh: router.Decision{
 				Provider: providers.ProviderAnthropic,
 				Model:    "moonshotai/kimi-k3",
@@ -321,18 +321,18 @@ func TestAuthoritativeUpgradeConfidenceGate(t *testing.T) {
 			pinModel: "moonshotai/kimi-k3",
 			fresh: router.Decision{
 				Provider: providers.ProviderAnthropic,
-				Model:    "deepseek/deepseek-v4-flash",
+				Model:    "deepseek-ai/deepseek-v4-flash",
 				Reason:   "hmm_policy(classifier 'fast' (p=0.20))",
 				Metadata: &router.RoutingMetadata{ChosenScore: 0.20},
 			},
-			wantModel:  "deepseek/deepseek-v4-flash",
+			wantModel:  "deepseek-ai/deepseek-v4-flash",
 			wantSticky: false,
 			wantTier:   "authoritative_per_turn",
 		},
 		{
 			name:     "unscored upgrade fails open",
 			pinFound: true,
-			pinModel: "deepseek/deepseek-v4-flash",
+			pinModel: "deepseek-ai/deepseek-v4-flash",
 			fresh: router.Decision{
 				Provider: providers.ProviderAnthropic,
 				Model:    "moonshotai/kimi-k3",
@@ -359,7 +359,7 @@ func TestAuthoritativeUpgradeConfidenceGate(t *testing.T) {
 			name:     "gate disabled serves fresh",
 			gateOff:  true,
 			pinFound: true,
-			pinModel: "deepseek/deepseek-v4-flash",
+			pinModel: "deepseek-ai/deepseek-v4-flash",
 			fresh: router.Decision{
 				Provider: providers.ProviderAnthropic,
 				Model:    "moonshotai/kimi-k3",
@@ -392,7 +392,7 @@ func TestAuthoritativeUpgradeConfidenceGate(t *testing.T) {
 				store,
 				false,
 				providers.ProviderAnthropic,
-				"deepseek/deepseek-v4-flash",
+				"deepseek-ai/deepseek-v4-flash",
 				nil,
 			).WithPolicyStrategy(policy.StrategySpec{
 				Strategy: strategy,

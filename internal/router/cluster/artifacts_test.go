@@ -532,6 +532,6 @@ func TestFastestModel_RealLatestBundle_LowTierPrefersFastFlash(t *testing.T) {
 
 	assert.Equal(t, "gemini-3.1-flash-lite-preview", fastM, "fastest low-tier model")
 	assert.Equal(t, "google", fastP)
-	assert.Equal(t, "deepseek/deepseek-v4-flash", cheapM, "cheapest low-tier model (the slow incumbent)")
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", cheapM, "cheapest low-tier model (the slow incumbent)")
 	assert.NotEqual(t, cheapM, fastM, "fastest must diverge from cheapest on the low-tier clamp")
 }

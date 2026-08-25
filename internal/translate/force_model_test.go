@@ -20,8 +20,8 @@ func TestParseForceModelCommand_ForceModel(t *testing.T) {
 	}{
 		{
 			name:         "command only",
-			input:        "/force-model deepseek/deepseek-v4-pro",
-			wantModel:    "deepseek/deepseek-v4-pro",
+			input:        "/force-model deepseek-ai/deepseek-v4-pro",
+			wantModel:    "deepseek-ai/deepseek-v4-pro",
 			wantFound:    true,
 			wantStripped: "",
 		},

@@ -2,12 +2,18 @@ package translate
 
 import "strings"
 
+// isDeepSeekModel reports whether model is a DeepSeek slug under either the
+// legacy OpenRouter prefix (deepseek/) or the HuggingFace/ai& form (deepseek-ai/).
+func isDeepSeekModel(model string) bool {
+	return strings.HasPrefix(model, "deepseek/") || strings.HasPrefix(model, "deepseek-ai/")
+}
+
 // openRouterProviderHint pins model slugs to caching-capable backends.
 // Without it, OpenRouter load-balances by price onto hosts without prefix
 // caching, which breaks agentic workloads re-sending large transcripts.
 func openRouterProviderHint(model string) map[string]any {
 	switch {
-	case strings.HasPrefix(model, "deepseek/"):
+	case isDeepSeekModel(model):
 		return map[string]any{
 			"order":           []string{"deepseek"},
 			"allow_fallbacks": false,
@@ -31,7 +37,7 @@ func openRouterProviderHint(model string) map[string]any {
 // tool_calls empty (hermes-agent #24534, vllm #39056).
 func openRouterReasoningHint(model string) map[string]any {
 	switch {
-	case strings.HasPrefix(model, "deepseek/"),
+	case isDeepSeekModel(model),
 		strings.HasPrefix(model, "moonshotai/"),
 		strings.HasPrefix(model, "xiaomi/"),
 		model == "z-ai/glm-5.1":
@@ -45,7 +51,7 @@ func openRouterReasoningHint(model string) map[string]any {
 // tool-arg fidelity (DeepSeek's reasoning-disabled tool turns). Callers still
 // skip this when the client set temperature explicitly.
 func openRouterForcesToolTemperatureZero(model string) bool {
-	return strings.HasPrefix(model, "deepseek/")
+	return isDeepSeekModel(model)
 }
 
 // isGLM51 reports whether the model id is z-ai/glm-5.1. GLM-5.1's streaming

@@ -136,7 +136,7 @@ func TestRunTurnLoop_ForcedModelOverridesHardPin(t *testing.T) {
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(time.Hour),
 	}}
-	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek/deepseek-v4-flash": {}}}
+	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}}
 	svc := NewService(
 		fr,
 		nil,
@@ -146,7 +146,7 @@ func TestRunTurnLoop_ForcedModelOverridesHardPin(t *testing.T) {
 		store,
 		false,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -182,7 +182,7 @@ func TestRunTurnLoop_ForcedModelServesDespiteDisabledProvider(t *testing.T) {
 		PinnedUntil:       time.Now().Add(time.Hour),
 		DisabledProviders: []string{providers.ProviderAnthropic},
 	}}
-	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek/deepseek-v4-flash": {}}}
+	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}}
 	svc := NewService(
 		fr,
 		nil,
@@ -192,7 +192,7 @@ func TestRunTurnLoop_ForcedModelServesDespiteDisabledProvider(t *testing.T) {
 		store,
 		false,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -220,11 +220,11 @@ func TestRunTurnLoop_ForcedModelServesDespiteDisabledProvider(t *testing.T) {
 func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 	store := &overwritingPinStore{pin: sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
-		Model:       "deepseek/deepseek-v4-flash",
+		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      "cluster:v0.2",
 		PinnedUntil: time.Now().Add(time.Hour),
 	}, found: true}
-	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek/deepseek-v4-flash": {}}}
+	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}}
 	svc := NewService(
 		fr,
 		nil,
@@ -234,7 +234,7 @@ func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 		store,
 		false,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -267,10 +267,10 @@ func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 // must return ok=false rather than hand the scorer an empty pool.
 func TestRestrictToTier_FallsBackWhenNoInTierCandidate(t *testing.T) {
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
-		WithAvailableModels(map[string]struct{}{"deepseek/deepseek-v4-flash": {}})
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
+		WithAvailableModels(map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}})
 
-	excluded := map[string]struct{}{"deepseek/deepseek-v4-pro-0813": {}}
+	excluded := map[string]struct{}{"deepseek-ai/deepseek-v4-pro": {}}
 	out, ok := svc.restrictToTier(excluded, catalog.TierHigh)
 	assert.False(t, ok, "no high-tier model is available, so the constraint must not apply")
 	assert.Equal(t, excluded, out, "the original denylist is returned unchanged on fallback")
@@ -280,17 +280,17 @@ func TestRestrictToTier_FallsBackWhenNoInTierCandidate(t *testing.T) {
 // models stay eligible.
 func TestRestrictToTier_ExcludesOtherTiers(t *testing.T) {
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(map[string]struct{}{
 			"z-ai/glm-5.2":     {}, // high
-			"deepseek/deepseek-v4-flash":  {}, // low
-			"deepseek/deepseek-v4-pro-0813": {}, // mid
+			"deepseek-ai/deepseek-v4-flash":  {}, // low
+			"deepseek-ai/deepseek-v4-pro": {}, // mid
 		})
 
 	out, ok := svc.restrictToTier(nil, catalog.TierHigh)
 	require.True(t, ok)
-	_, haikuExcluded := out["deepseek/deepseek-v4-flash"]
-	_, sonnetExcluded := out["deepseek/deepseek-v4-pro-0813"]
+	_, haikuExcluded := out["deepseek-ai/deepseek-v4-flash"]
+	_, sonnetExcluded := out["deepseek-ai/deepseek-v4-pro"]
 	_, opusExcluded := out["z-ai/glm-5.2"]
 	assert.True(t, haikuExcluded, "low-tier excluded")
 	assert.True(t, sonnetExcluded, "mid-tier excluded")

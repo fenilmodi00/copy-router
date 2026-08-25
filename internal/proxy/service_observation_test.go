@@ -146,7 +146,7 @@ func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) 
 	const installID = "66666666-6666-6666-6666-666666666666"
 	serving := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 	}
 	scorerDecision := router.Decision{
 		Provider: providers.ProviderAnthropic,
@@ -171,7 +171,7 @@ func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) 
 		&fakeRouter{decision: scorerDecision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", telem,
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", telem,
 	).WithPolicyStrategy(policy.StrategySpec{Strategy: shadowStrategy, Router: shadowRouter})
 
 	ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, installID)
@@ -260,14 +260,14 @@ func TestProxyMessages_RecordsClusterObservation(t *testing.T) {
 	const installID = "11111111-1111-1111-1111-111111111111"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
-		Reason:   "cluster:v-test top_p=[3,7] model=deepseek/deepseek-v4-flash provider=anthropic",
+		Model:    "deepseek-ai/deepseek-v4-flash",
+		Reason:   "cluster:v-test top_p=[3,7] model=deepseek-ai/deepseek-v4-flash provider=anthropic",
 		Metadata: &router.RoutingMetadata{
 			ClusterIDs:           []int{3, 7},
-			CandidateModels:      []string{"moonshotai/kimi-k3", "deepseek/deepseek-v4-flash"},
+			CandidateModels:      []string{"moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-flash"},
 			ChosenScore:          0.85,
 			ClusterRouterVersion: "v-test",
-			CandidateScores:      map[string]float32{"moonshotai/kimi-k3": 0.85, "deepseek/deepseek-v4-flash": 0.42},
+			CandidateScores:      map[string]float32{"moonshotai/kimi-k3": 0.85, "deepseek-ai/deepseek-v4-flash": 0.42},
 			Propensity:           1.0,
 		},
 	}
@@ -280,7 +280,7 @@ func TestProxyMessages_RecordsClusterObservation(t *testing.T) {
 		nil,
 		nil,
 		false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 
@@ -292,9 +292,9 @@ func TestProxyMessages_RecordsClusterObservation(t *testing.T) {
 
 	row := telem.firstRow(t)
 	assert.Equal(t, installID, row.InstallationID)
-	assert.Equal(t, "deepseek/deepseek-v4-flash", row.DecisionModel)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", row.DecisionModel)
 	assert.Equal(t, []int32{3, 7}, row.ClusterIDs)
-	assert.Equal(t, []string{"moonshotai/kimi-k3", "deepseek/deepseek-v4-flash"}, row.CandidateModels)
+	assert.Equal(t, []string{"moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-flash"}, row.CandidateModels)
 	require.NotNil(t, row.ChosenScore)
 	assert.InDelta(t, 0.85, *row.ChosenScore, 1e-6)
 	assert.Equal(t, "v-test", row.ClusterRouterVersion)
@@ -306,7 +306,7 @@ func TestProxyMessages_RecordsClusterObservation(t *testing.T) {
 	var gotScores map[string]float32
 	require.NoError(t, json.Unmarshal(row.CandidateScores, &gotScores))
 	assert.InDelta(t, 0.85, gotScores["moonshotai/kimi-k3"], 1e-6)
-	assert.InDelta(t, 0.42, gotScores["deepseek/deepseek-v4-flash"], 1e-6)
+	assert.InDelta(t, 0.42, gotScores["deepseek-ai/deepseek-v4-flash"], 1e-6)
 	// AlphaBreakdown is a W-1335 forward-compat slot; Cache* are nil since the
 	// fake provider returns no body.
 	assert.Nil(t, row.AlphaBreakdown)
@@ -318,7 +318,7 @@ func TestProxyMessages_RecordsPolicyObservation(t *testing.T) {
 	const installID = "55555555-5555-5555-5555-555555555555"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "policy:hmm",
 		Metadata: &router.RoutingMetadata{
 			Strategy:             string(router.StrategyHMM),
@@ -336,7 +336,7 @@ func TestProxyMessages_RecordsPolicyObservation(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	).WithContentCapture(proxy.CaptureHashed, 0, nil)
 
@@ -367,21 +367,21 @@ func TestProxyMessages_PersistsCacheTokens(t *testing.T) {
 	const installID = "44444444-4444-4444-4444-444444444444"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 	telem := newCaptureTelemetry()
 	provider := &fakeProvider{
 		proxyResponse: func(w http.ResponseWriter) {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"model":"deepseek/deepseek-v4-flash","stop_reason":"end_turn","usage":{"input_tokens":120,"output_tokens":7,"cache_creation_input_tokens":512,"cache_read_input_tokens":2048}}`))
+			_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"model":"deepseek-ai/deepseek-v4-flash","stop_reason":"end_turn","usage":{"input_tokens":120,"output_tokens":7,"cache_creation_input_tokens":512,"cache_read_input_tokens":2048}}`))
 		},
 	}
 	svc := proxy.NewService(
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: provider},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 
@@ -404,11 +404,11 @@ func TestProxyMessages_ChosenScoreZeroIsPersisted(t *testing.T) {
 	const installID = "33333333-3333-3333-3333-333333333333"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
-		Reason:   "cluster:v-test top_p=[0] model=deepseek/deepseek-v4-flash provider=anthropic",
+		Model:    "deepseek-ai/deepseek-v4-flash",
+		Reason:   "cluster:v-test top_p=[0] model=deepseek-ai/deepseek-v4-flash provider=anthropic",
 		Metadata: &router.RoutingMetadata{
 			ClusterIDs:           []int{0},
-			CandidateModels:      []string{"deepseek/deepseek-v4-flash"},
+			CandidateModels:      []string{"deepseek-ai/deepseek-v4-flash"},
 			ChosenScore:          0, // must persist as &0, not nil
 			ClusterRouterVersion: "v-test",
 		},
@@ -418,7 +418,7 @@ func TestProxyMessages_ChosenScoreZeroIsPersisted(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 
@@ -441,7 +441,7 @@ func TestProxyMessages_NoMetadataOmitsClusterFields(t *testing.T) {
 
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "pin",
 		// Metadata intentionally nil; matches pinDecision shape.
 	}
@@ -454,7 +454,7 @@ func TestProxyMessages_NoMetadataOmitsClusterFields(t *testing.T) {
 		nil,
 		nil,
 		false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 
@@ -465,7 +465,7 @@ func TestProxyMessages_NoMetadataOmitsClusterFields(t *testing.T) {
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
 
 	row := telem.firstRow(t)
-	assert.Equal(t, "deepseek/deepseek-v4-flash", row.DecisionModel)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", row.DecisionModel)
 	assert.Nil(t, row.ClusterIDs)
 	assert.Nil(t, row.CandidateModels)
 	assert.Nil(t, row.ChosenScore)
@@ -481,7 +481,7 @@ func TestProxyMessages_PersistsTurnType(t *testing.T) {
 	const installID = "55555555-5555-5555-5555-555555555555"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 
@@ -508,7 +508,7 @@ func TestProxyMessages_PersistsTurnType(t *testing.T) {
 				&fakeRouter{decision: decision},
 				map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 				nil, false, nil, nil, false,
-				providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+				providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 				telem,
 			)
 
@@ -530,7 +530,7 @@ func TestProxyMessages_PersistsRolloutID(t *testing.T) {
 	const rolloutID = "policy-rollout-1"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 	telem := newCaptureTelemetry()
@@ -538,7 +538,7 @@ func TestProxyMessages_PersistsRolloutID(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 
@@ -559,7 +559,7 @@ func TestProxyMessages_PersistedPolicyRolloutIDOverridesClientIdentity(t *testin
 	const rolloutID = "policy-rollout-42"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 	telem := newCaptureTelemetry()
@@ -567,7 +567,7 @@ func TestProxyMessages_PersistedPolicyRolloutIDOverridesClientIdentity(t *testin
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 
@@ -591,7 +591,7 @@ func TestProxyMessages_PersistsSessionKeyAndRole(t *testing.T) {
 	const installID = "77777777-7777-7777-7777-777777777777"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 	telem := newCaptureTelemetry()
@@ -599,7 +599,7 @@ func TestProxyMessages_PersistsSessionKeyAndRole(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 

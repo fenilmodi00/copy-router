@@ -23,8 +23,8 @@ import (
 
 const (
 	bypassSubToken      = "sk-ant-oat01-subscription-token"
-	bypassRequestedMdl  = "deepseek/deepseek-v4-pro-0813"
-	bypassScorerPickMdl = "deepseek/deepseek-v4-flash"
+	bypassRequestedMdl  = "deepseek-ai/deepseek-v4-pro"
+	bypassScorerPickMdl = "deepseek-ai/deepseek-v4-flash"
 )
 
 // bypassFixture builds a service whose fake scorer would route to

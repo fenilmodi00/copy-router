@@ -4,7 +4,7 @@
 // compose stack and drives real aiand upstream APIs, asserting HTTP status,
 // response/usage shape, cache-token accounting, and x-router-* decision headers.
 //
-// Guarded by the `smoke` build tag; run via `make smoke`. Pins deepseek/deepseek-v4-flash
+// Guarded by the `smoke` build tag; run via `make smoke`. Pins deepseek-ai/deepseek-v4-flash
 // and caps max_tokens — a full run costs a few cents.
 // When SMOKE_ROUTER_KEY is unset, TestMain prints a skip message and exits 0.
 package smoke
@@ -31,7 +31,7 @@ type Config struct {
 	// RouterKey is the rk_... key the orchestrator seeded. Required.
 	RouterKey string
 	// PinModel is forced via x-weave-force-model so decisions land on aiand
-	// deterministically and cheaply (default deepseek/deepseek-v4-flash).
+	// deterministically and cheaply (default deepseek-ai/deepseek-v4-flash).
 	PinModel string
 	// OpenAIPinModel is the model forced for OpenAI-path scenarios
 	// (default openai/gpt-oss-120b — served via aiand).
@@ -67,7 +67,7 @@ func TestMain(m *testing.M) {
 	cfg = Config{
 		BaseURL:        envOr("SMOKE_BASE_URL", "http://localhost:8080"),
 		RouterKey:      os.Getenv("SMOKE_ROUTER_KEY"),
-		PinModel:       envOr("SMOKE_PIN_MODEL", "deepseek/deepseek-v4-flash"),
+		PinModel:       envOr("SMOKE_PIN_MODEL", "deepseek-ai/deepseek-v4-flash"),
 		OpenAIPinModel: envOr("SMOKE_OPENAI_PIN_MODEL", "openai/gpt-oss-120b"),
 		OpenAIEnabled:  envOr("SMOKE_OPENAI_ENABLED", "1") != "0",
 	}

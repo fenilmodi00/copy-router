@@ -67,7 +67,7 @@ func TestSystemReminder_AnthropicSource_AppendsForDeepSeekWithTools(t *testing.T
 	env, err := translate.ParseAnthropic(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	got := systemContent(emittedMessages(t, out.Body))
@@ -85,7 +85,7 @@ func TestSystemReminder_AnthropicSource_SkipsWithoutTools(t *testing.T) {
 	env, err := translate.ParseAnthropic(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	assert.NotContains(t, systemContent(emittedMessages(t, out.Body)), reminderSnippet,
@@ -102,7 +102,7 @@ func TestSystemReminder_AnthropicSource_NoSystemMessagePrepended(t *testing.T) {
 	env, err := translate.ParseAnthropic(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	msgs := emittedMessages(t, out.Body)
@@ -147,7 +147,7 @@ func TestSystemReminder_OpenAISource_AppendsForDeepSeekWithTools(t *testing.T) {
 	env, err := translate.ParseOpenAI(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	got := systemContent(emittedMessages(t, out.Body))
@@ -167,7 +167,7 @@ func TestSystemReminder_OpenAISource_SkipsWithoutTools(t *testing.T) {
 	env, err := translate.ParseOpenAI(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	assert.NotContains(t, systemContent(emittedMessages(t, out.Body)), reminderSnippet)

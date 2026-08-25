@@ -65,9 +65,9 @@ func TestTranslationPlan_ImageConstraintShadowsBeforeEnforcement(t *testing.T) {
 	enforce := compatibilityService(TranslationCompatibilityEnforce).planTranslation(req)
 
 	assert.Empty(t, shadow.ExcludedModels, "shadow mode must preserve the pre-change candidate set")
-	_, shadowReported := shadow.ExcludedModels["deepseek/deepseek-v4-flash"]
+	_, shadowReported := shadow.ExcludedModels["deepseek-ai/deepseek-v4-flash"]
 	assert.False(t, shadowReported)
-	_, enforced := enforce.ExcludedModels["deepseek/deepseek-v4-flash"]
+	_, enforced := enforce.ExcludedModels["deepseek-ai/deepseek-v4-flash"]
 	assert.True(t, enforced, "known text-only models are hard excluded in enforce mode")
 }
 

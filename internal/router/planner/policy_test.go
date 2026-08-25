@@ -89,7 +89,7 @@ func TestDecide_UsesNamedProviderBindings(t *testing.T) {
 	base := planner.Inputs{
 		Pin: sessionpin.Pin{
 			Provider:        providers.ProviderMakora,
-			Model:           "deepseek/deepseek-v4-flash",
+			Model:           "deepseek-ai/deepseek-v4-flash",
 			LastTurnEndedAt: time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC),
 		},
 		Fresh: router.Decision{
@@ -98,7 +98,7 @@ func TestDecide_UsesNamedProviderBindings(t *testing.T) {
 		},
 		EstimatedInputTokens: 1_000_000,
 		AvailableModels: map[string]struct{}{
-			"deepseek/deepseek-v4-flash": {},
+			"deepseek-ai/deepseek-v4-flash": {},
 			"qwen/qwen3-coder-next":      {},
 		},
 	}

@@ -93,7 +93,7 @@ func newOverloadTestService(store *overloadStubPinStore) *Service {
 		nil,
 		store,
 		false,
-		"anthropic", "deepseek/deepseek-v4-flash",
+		"anthropic", "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 }

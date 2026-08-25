@@ -17,7 +17,7 @@
 #                          record and replay-or-record need AIAND_API_KEY
 #   AIAND_API_KEY         required only when SMOKE_PROXY_MODE != replay-only
 #   SMOKE_KEEP_STACK=1    leave the stack running after the tests (local iteration)
-#   SMOKE_PIN_MODEL       model every Messages scenario pins (default deepseek/deepseek-v4-flash)
+#   SMOKE_PIN_MODEL       model every Messages scenario pins (default deepseek-ai/deepseek-v4-flash)
 #   SMOKE_OPENAI_PIN_MODEL  model for OpenAI-path scenarios (default openai/gpt-oss-120b)
 #   SMOKE_CI_CACHE=1      layer-cache the server/mitmproxy builds via the GitHub
 #                          Actions cache backend (type=gha). Set only by

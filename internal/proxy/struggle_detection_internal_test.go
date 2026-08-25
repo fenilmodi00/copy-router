@@ -281,25 +281,25 @@ func TestHandleStruggleShadow_NilInstallationSkipsStore(t *testing.T) {
 // the operating points fired on turns 31/81 instead of ON turns 30/80 as Phase
 // 0 mined them. The stamped count is completed turns + this in-flight turn.
 func TestRunTurnLoop_PinTurnCountsCurrentTurnInclusively(t *testing.T) {
-	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek/deepseek-v4-pro-0813": {}}}
+	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek-ai/deepseek-v4-pro": {}}}
 	store := newStubPinStore()
 	store.getFound = true
 	store.getPin = sessionpin.Pin{
 		Provider:        providers.ProviderAnthropic,
-		Model:           "deepseek/deepseek-v4-pro-0813",
+		Model:           "deepseek-ai/deepseek-v4-pro",
 		Reason:          "fake",
 		PinnedUntil:     time.Now().Add(time.Hour),
 		TurnCount:       struggleEarlyTurns - 1,
 		FirstPinnedAt:   time.Now().Add(-struggleEarlyWall - time.Minute),
-		LastServedModel: "deepseek/deepseek-v4-pro-0813",
+		LastServedModel: "deepseek-ai/deepseek-v4-pro",
 	}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(fr.available).
 		WithPlannerEnabled(false)
 
 	env, err := translate.ParseAnthropic(
-		[]byte(`{"model":"deepseek/deepseek-v4-pro-0813","messages":[{"role":"user","content":"continue"}]}`),
+		[]byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"continue"}]}`),
 	)
 	require.NoError(t, err)
 	feats := env.RoutingFeatures(false)

@@ -136,7 +136,7 @@ const (
 // Model is one logical model — the unit the router decides on.
 type Model struct {
 	// ID is the public slash-form (or bare) model ID exposed to clients,
-	// e.g. "claude-opus-4-7" or "deepseek/deepseek-v4-pro".
+	// e.g. "claude-opus-4-7" or "deepseek-ai/deepseek-v4-pro".
 	ID string
 	// Tier is the coarse capability bucket. TierUnknown excludes the model
 	// from generic automatic routing; an HMM-only target may opt in separately.
@@ -200,13 +200,13 @@ var Models = []Model{
 	// aiand-only catalog for Build.io / v0.76 registry.
 	// Non-aiand bindings removed; registry upstream IDs resolve via ByIDOrUpstream.
 	// ReasoningEfforts mirrors live GET /v1/models reasoning_efforts (2026-08-25).
-	{ID: "deepseek/deepseek-v4-flash", Tier: TierLow, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, AgenticUse: AgenticLow,
+	{ID: "deepseek-ai/deepseek-v4-flash", Tier: TierLow, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, AgenticUse: AgenticLow,
 		ReasoningEfforts: []string{EffortNone, EffortHigh, EffortMax},
 		Providers: []ProviderBinding{
 			{Provider: providers.ProviderAiand, UpstreamID: "deepseek-ai/deepseek-v4-flash",
 				Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.250, CacheReadMultiplier: 0.08 / 0.150}},
 		}},
-	{ID: "deepseek/deepseek-v4-pro-0813", Tier: TierMid, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported,
+	{ID: "deepseek-ai/deepseek-v4-pro", Tier: TierMid, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported,
 		ReasoningEfforts: []string{EffortNone, EffortHigh, EffortMax},
 		Providers: []ProviderBinding{
 			{Provider: providers.ProviderAiand, UpstreamID: "deepseek-ai/deepseek-v4-pro",

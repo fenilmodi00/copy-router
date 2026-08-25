@@ -39,7 +39,7 @@ func TestHTTPDeciderPostsContractAndParsesResult(t *testing.T) {
 		TurnIndex:  3,
 		Candidates: []rl.Candidate{
 			{RosterID: "anthropic/claude-opus-4-8", Provider: providers.ProviderAnthropic},
-			{RosterID: "deepseek/deepseek-v4-flash", Provider: providers.ProviderMakora},
+			{RosterID: "deepseek-ai/deepseek-v4-flash", Provider: providers.ProviderMakora},
 		},
 	})
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestHTTPDeciderPostsContractAndParsesResult(t *testing.T) {
 	assert.Equal(t, "fix the bug", gotBody["prompt_text"])
 	assert.EqualValues(t, 3, gotBody["turn_index"])
 	assert.ElementsMatch(t,
-		[]any{"anthropic/claude-opus-4-8", "deepseek/deepseek-v4-flash"},
+		[]any{"anthropic/claude-opus-4-8", "deepseek-ai/deepseek-v4-flash"},
 		gotBody["candidate_models"])
 	providersMap, ok := gotBody["candidate_providers"].(map[string]any)
 	require.True(t, ok)

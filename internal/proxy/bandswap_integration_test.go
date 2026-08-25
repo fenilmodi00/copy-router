@@ -23,18 +23,18 @@ func TestOrderBandPair_ByTier(t *testing.T) {
 
 	anchorLarge := sessionpin.Pin{
 		Provider: "anthropic", Model: "moonshotai/kimi-k3",
-		PairedProvider: "anthropic", PairedModel: "deepseek/deepseek-v4-flash",
+		PairedProvider: "anthropic", PairedModel: "deepseek-ai/deepseek-v4-flash",
 	}
 	l, s := orderBandPair(anchorLarge)
-	want(l, s, "moonshotai/kimi-k3", "deepseek/deepseek-v4-flash")
+	want(l, s, "moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-flash")
 
 	// Same pair, anchor and runner-up swapped -> identical large/small split.
 	anchorSmall := sessionpin.Pin{
-		Provider: "anthropic", Model: "deepseek/deepseek-v4-flash",
+		Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash",
 		PairedProvider: "anthropic", PairedModel: "moonshotai/kimi-k3",
 	}
 	l, s = orderBandPair(anchorSmall)
-	want(l, s, "moonshotai/kimi-k3", "deepseek/deepseek-v4-flash")
+	want(l, s, "moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-flash")
 }
 
 // With the swap head disabled the sticky turn must serve the pin's anchor.
@@ -42,7 +42,7 @@ func TestBandSwapServed_DisabledServesAnchor(t *testing.T) {
 	s := &Service{} // bandSwap nil
 	pin := sessionpin.Pin{
 		Provider: "anthropic", Model: "moonshotai/kimi-k3",
-		PairedProvider: "anthropic", PairedModel: "deepseek/deepseek-v4-flash", Reason: "cluster",
+		PairedProvider: "anthropic", PairedModel: "deepseek-ai/deepseek-v4-flash", Reason: "cluster",
 	}
 	got := s.bandSwapServed(context.Background(), turntype.MainLoop, pin, router.Decision{}, false, nil, nil)
 	if got.Model != "moonshotai/kimi-k3" {
@@ -81,7 +81,7 @@ func TestBandSwapServed_UnservableChoiceFallsBackToAnchor(t *testing.T) {
 	// opus is the LARGE-tier member, haiku the SMALL-tier one, so orderBandPair
 	// is deterministic. Anchor the pin on whichever member the head would NOT
 	// pick, so honoring the head is a real swap away from the anchor.
-	const large, small = "moonshotai/kimi-k3", "deepseek/deepseek-v4-flash"
+	const large, small = "moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-flash"
 	served := large
 	if band == bandswap.Small {
 		served = small

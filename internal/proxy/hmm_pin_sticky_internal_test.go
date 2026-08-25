@@ -27,7 +27,7 @@ const hmmPinStickyTestFallbackReason = "arm-selector unavailable for 'high': arm
 func TestStickPinOnArmSelectorUnavailable(t *testing.T) {
 	const pinnedModel = "moonshotai/kimi-k3"         // catalog.TierHigh
 	const sameTierFresh = "claude-opus-4-6"       // catalog.TierHigh
-	const differentTierFresh = "deepseek/deepseek-v4-flash" // catalog.TierLow — different tier, but the legacy bandit draws within one cluster, not within one catalog tier, so tier is not what gates this case.
+	const differentTierFresh = "deepseek-ai/deepseek-v4-flash" // catalog.TierLow — different tier, but the legacy bandit draws within one cluster, not within one catalog tier, so tier is not what gates this case.
 	const pinnedGroup = "high"
 	const otherGroup = "low"
 
@@ -234,7 +234,7 @@ func TestHMMPinStickyOnArmSelectorUnavailableWiredIntoTurnLoop(t *testing.T) {
 				store,
 				false,
 				providers.ProviderAnthropic,
-				"deepseek/deepseek-v4-flash",
+				"deepseek-ai/deepseek-v4-flash",
 				nil,
 			).WithHMPinStickyOnArmSelectorUnavail(test.enabled).
 				WithPolicyStrategy(policy.StrategySpec{

@@ -116,9 +116,9 @@ func TestQwen3Samplers_NotInjectedForNonQwen(t *testing.T) {
 	env, err := translate.ParseOpenAI(body)
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
-		TargetModel:    "deepseek/deepseek-v4-pro",
+		TargetModel:    "deepseek-ai/deepseek-v4-pro",
 		TargetProvider: providers.ProviderOpenRouter,
-		Capabilities:   router.Lookup("deepseek/deepseek-v4-pro"),
+		Capabilities:   router.Lookup("deepseek-ai/deepseek-v4-pro"),
 	})
 	require.NoError(t, err)
 	var out map[string]any

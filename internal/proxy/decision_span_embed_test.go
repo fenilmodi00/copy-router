@@ -29,7 +29,7 @@ type embedTestRouter struct {
 func (r *embedTestRouter) Route(context.Context, router.Request) (router.Decision, error) {
 	return router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "cluster",
 		Metadata: r.metadata,
 	}, nil
@@ -84,7 +84,7 @@ func newEmbedTestService(t *testing.T, collector *bypassSpanCollector, rt router
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = emitter.Shutdown(context.Background()) })
 	return NewService(rt, map[string]providers.Client{providers.ProviderAnthropic: embedTestProvider{}}, emitter, false, nil, pins, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 }
 
 // decisionSpanEmbed drives one Anthropic turn and returns the exported
@@ -166,7 +166,7 @@ func TestDecisionSpan_EmbedMs_SurvivesPlannerStay(t *testing.T) {
 	store.getFound = true
 	store.getPin = sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
-		Model:       "deepseek/deepseek-v4-flash",
+		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      "cluster",
 		PinnedUntil: time.Now().Add(time.Hour),
 	}
@@ -230,7 +230,7 @@ func TestDecisionSpan_SidecarTimings_OnlySelectMsSet(t *testing.T) {
 func TestPinDecision_NeverRehydratesMetadata(t *testing.T) {
 	dec := pinDecision(sessionpin.Pin{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "compaction",
 	})
 	assert.Nil(t, dec.Metadata, "pins must never carry routing metadata — rehydrating it would replay stale sidecar timings")

@@ -314,7 +314,7 @@ func TestResolveForceModel_EffortSuffixPreserved(t *testing.T) {
 	assert.True(t, gotKnown, "known")
 	assert.Equal(t, "high", gotEffort, "effort")
 
-	_, _, _, noneEffort := resolveForceModelWithEffort("deepseek/deepseek-v4-flash:none")
+	_, _, _, noneEffort := resolveForceModelWithEffort("deepseek-ai/deepseek-v4-flash:none")
 	assert.Equal(t, "none", noneEffort, ":none suffix must strip as effort none")
 
 	_, _, _, maxEffort := resolveForceModelWithEffort("z-ai/glm-5.2:max")
@@ -328,7 +328,7 @@ func TestResolveForceModel_AcceptsUpstreamRegistryIDs(t *testing.T) {
 		input  string
 		wantID string
 	}{
-		{"deepseek-ai/deepseek-v4-flash", "deepseek/deepseek-v4-flash"},
+		{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
 		{"zai-org/glm-5.2", "z-ai/glm-5.2"},
 		{"moonshotai/kimi-k2.7-code", "moonshotai/kimi-k2.7"},
 		{"moonshotai/kimi-k3", "moonshotai/kimi-k3"},

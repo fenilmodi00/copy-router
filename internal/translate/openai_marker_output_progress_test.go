@@ -24,7 +24,7 @@ func newMarkerStreamingWriter(t *testing.T) (*translate.OpenAIRoutingMarkerWrite
 	t.Helper()
 	rec := httptest.NewRecorder()
 	rec.Header().Set("Content-Type", "text/event-stream")
-	w := translate.NewOpenAIRoutingMarkerWriter(rec, "deepseek/deepseek-v4-flash", "")
+	w := translate.NewOpenAIRoutingMarkerWriter(rec, "deepseek-ai/deepseek-v4-flash", "")
 	w.WriteHeader(http.StatusOK)
 	count := 0
 	require.True(t, w.ArmOutputProgress(func() { count++ }),
@@ -91,7 +91,7 @@ func TestMarkerOutputProgress_EventSpanningWrites(t *testing.T) {
 func TestMarkerOutputProgress_NotArmedWhenNotStreaming(t *testing.T) {
 	rec := httptest.NewRecorder()
 	rec.Header().Set("Content-Type", "application/json")
-	w := translate.NewOpenAIRoutingMarkerWriter(rec, "deepseek/deepseek-v4-flash", "")
+	w := translate.NewOpenAIRoutingMarkerWriter(rec, "deepseek-ai/deepseek-v4-flash", "")
 	w.WriteHeader(http.StatusOK)
 	assert.False(t, w.ArmOutputProgress(func() {}),
 		"ArmOutputProgress must report not-armed for a non-streaming writer")

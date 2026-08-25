@@ -122,7 +122,7 @@ PROBES = [
 
 # Verified against docs/aiand-live-catalog.md (pulled from GET /v1/models on 2026-08-24).
 # Skeleton had wrong IDs: z-ai/glm-5.2 -> zai-org/glm-5.2,
-# deepseek/deepseek-v4-flash -> deepseek-ai/deepseek-v4-flash,
+# deepseek-ai/deepseek-v4-flash -> deepseek-ai/deepseek-v4-flash,
 # moonshotai/kimi-k2.7 -> moonshotai/kimi-k2.7-code.
 MODELS = [
     "moonshotai/kimi-k3",

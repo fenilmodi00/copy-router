@@ -72,13 +72,13 @@ func TestProxyMessages_OverEngineerCap_CoveringSubscription_ServesFreeNo402(t *t
 	limit := int64(10_000_000)
 	repo := &capturingBillingRepo{userSpent: 10_002_854, userLimit: &limit} // over the cap
 
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-pro-0813"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-pro"}}
 	p := &fakeProvider{proxyResponse: bypassStreamResponse}
 	obs := usage.NewObserver([]byte("salt"), 10*time.Minute, time.Now)
 	obs.Record(obs.Key([]byte(subToken)), usage.Snapshot{
 		Primary: usage.Window{UsedPercent: 0.20, WindowMinutes: 300},
 	})
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: p}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: p}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithUsageObserver(obs).
 		WithBillingService(billing.NewService(repo))
 
@@ -92,7 +92,7 @@ func TestProxyMessages_OverEngineerCap_CoveringSubscription_ServesFreeNo402(t *t
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	req.Header.Set("Authorization", "Bearer "+subToken)
-	body := []byte(`{"model":"deepseek/deepseek-v4-pro-0813","messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`)
 
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec, req),
 		"an over-cap engineer with a covering subscription must not be 402'd")
@@ -116,9 +116,9 @@ func TestProxyMessages_OverEngineerCap_NoSubscription_402s(t *testing.T) {
 	limit := int64(10_000_000)
 	repo := &capturingBillingRepo{userSpent: 10_002_854, userLimit: &limit}
 
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-pro-0813"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-pro"}}
 	p := &fakeProvider{proxyResponse: bypassStreamResponse}
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: p}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: p}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithBillingService(billing.NewService(repo))
 
 	// Usage-bypass enabled but no subscription credential on the request.
@@ -128,7 +128,7 @@ func TestProxyMessages_OverEngineerCap_NoSubscription_402s(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"deepseek/deepseek-v4-pro-0813","messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`)
 
 	err := svc.ProxyMessages(ctx, body, rec, req)
 	require.Error(t, err, "an over-cap engineer with no covering subscription must be rejected")
@@ -151,7 +151,7 @@ func TestProxyMessages_OverEngineerCap_ExhaustedSubscription_Refuses402(t *testi
 	limit := int64(10_000_000)
 	repo := &capturingBillingRepo{userSpent: 10_002_854, userLimit: &limit} // over the engineer cap
 
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-pro-0813"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-pro"}}
 	p := &fakeProvider{proxyResponse: bypassStreamResponse}
 	obs := usage.NewObserver([]byte("salt"), 10*time.Minute, time.Now)
 	// Weekly window exhausted: the pre-dispatch guard reads this and refuses
@@ -160,7 +160,7 @@ func TestProxyMessages_OverEngineerCap_ExhaustedSubscription_Refuses402(t *testi
 	obs.Record(obs.Key([]byte(subToken)), usage.Snapshot{
 		Secondary: usage.Window{UsedPercent: 1.0, WindowMinutes: 10080},
 	})
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: p}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: p}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithUsageObserver(obs).
 		WithBillingService(billing.NewService(repo))
 
@@ -172,7 +172,7 @@ func TestProxyMessages_OverEngineerCap_ExhaustedSubscription_Refuses402(t *testi
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	req.Header.Set("Authorization", "Bearer "+subToken)
-	body := []byte(`{"model":"deepseek/deepseek-v4-pro-0813","messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`)
 
 	err := svc.ProxyMessages(ctx, body, rec, req)
 	require.Error(t, err, "over-cap engineer with an exhausted subscription must be refused")

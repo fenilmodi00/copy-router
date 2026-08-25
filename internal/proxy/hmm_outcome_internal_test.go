@@ -50,7 +50,7 @@ func TestReportPolicyOutcome_UsesFreshMetadataForStickyServedDecision(t *testing
 		},
 	}
 	served := router.Decision{
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Provider: providers.ProviderAnthropic,
 	}
 
@@ -67,7 +67,7 @@ func TestReportPolicyOutcome_UsesFreshMetadataForStickyServedDecision(t *testing
 		Truncated: false,
 	})
 
-	price, ok := catalog.PriceFor(providers.ProviderAnthropic, "deepseek/deepseek-v4-flash")
+	price, ok := catalog.PriceFor(providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash")
 	require.True(t, ok)
 	wantCost := catalog.EffectiveInputCost(inputTokens, 0, 0, price.InputUSDPer1M, price, providers.ProviderAnthropic) +
 		catalog.EffectiveOutputCost(outputTokens, price.OutputUSDPer1M)
@@ -77,7 +77,7 @@ func TestReportPolicyOutcome_UsesFreshMetadataForStickyServedDecision(t *testing
 		require.Equal(t, "route-fresh", payload["route_id"])
 		assert.Equal(t, "moonshotai/kimi-k2.7", payload["selected_model"])
 		assert.Equal(t, providers.ProviderFireworks, payload["selected_provider"])
-		assert.Equal(t, "deepseek/deepseek-v4-flash", payload["served_model"])
+		assert.Equal(t, "deepseek-ai/deepseek-v4-flash", payload["served_model"])
 		assert.Equal(t, providers.ProviderAnthropic, payload["served_provider"])
 		assert.Equal(t, false, payload["selected_served_model_match"])
 		assert.NotContains(t, payload, "training_exclusion_reason")
@@ -139,7 +139,7 @@ func TestReportPolicyOutcome_AuthoritativeMismatchFailsClosedForTraining(t *test
 		},
 	}
 	served := router.Decision{
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Provider: providers.ProviderAnthropic,
 	}
 	ctx := context.WithValue(context.Background(), PolicyTrainingAllowedContextKey{}, true)
@@ -163,7 +163,7 @@ func TestReportPolicyOutcome_AuthoritativeMismatchFailsClosedForTraining(t *test
 	select {
 	case payload := <-reporter.ch:
 		assert.Equal(t, "moonshotai/kimi-k3", payload["selected_model"])
-		assert.Equal(t, "deepseek/deepseek-v4-flash", payload["served_model"])
+		assert.Equal(t, "deepseek-ai/deepseek-v4-flash", payload["served_model"])
 		assert.Equal(t, false, payload["selected_served_model_match"])
 		assert.Equal(t, false, payload["training_allowed"])
 		assert.Equal(t, "selected_served_model_mismatch", payload["training_exclusion_reason"])

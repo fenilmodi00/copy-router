@@ -75,8 +75,8 @@ func TestPrepareOpenAIStripsBillingHeaderFromSystemArray(t *testing.T) {
 	env, err := ParseAnthropic(inbound)
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(nil, EmitOptions{
-		TargetModel:  "deepseek/deepseek-v4-pro",
-		Capabilities: router.Lookup("deepseek/deepseek-v4-pro"),
+		TargetModel:  "deepseek-ai/deepseek-v4-pro",
+		Capabilities: router.Lookup("deepseek-ai/deepseek-v4-pro"),
 	})
 	require.NoError(t, err)
 	body := string(prep.Body)

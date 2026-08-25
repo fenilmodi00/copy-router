@@ -95,7 +95,7 @@ func TestDispatchWithFallback_PrimarySucceedsNoRetry(t *testing.T) {
 	winnerIdx, err := s.dispatchWithFallback(context.Background(), failoverInputs{
 		w:               rec,
 		buf:             buf,
-		initialDecision: router.Decision{Model: "deepseek/deepseek-v4-pro-0813"},
+		initialDecision: router.Decision{Model: "deepseek-ai/deepseek-v4-pro"},
 		bindings: []catalog.ProviderBinding{
 			{Provider: "fireworks"},
 			{Provider: "openrouter"},
@@ -136,7 +136,7 @@ func TestDispatchWithFallback_RetriesOnRetryableBufferedError(t *testing.T) {
 	winnerIdx, err := s.dispatchWithFallback(context.Background(), failoverInputs{
 		w:               rec,
 		buf:             buf,
-		initialDecision: router.Decision{Model: "deepseek/deepseek-v4-pro-0813"},
+		initialDecision: router.Decision{Model: "deepseek-ai/deepseek-v4-pro"},
 		bindings: []catalog.ProviderBinding{
 			{Provider: "fireworks"},
 			{Provider: "openrouter"},
@@ -224,7 +224,7 @@ func TestDispatchWithFallback_RetriesOnTransportError(t *testing.T) {
 	winnerIdx, err := s.dispatchWithFallback(context.Background(), failoverInputs{
 		w:               rec,
 		buf:             buf,
-		initialDecision: router.Decision{Model: "deepseek/deepseek-v4-pro-0813"},
+		initialDecision: router.Decision{Model: "deepseek-ai/deepseek-v4-pro"},
 		bindings: []catalog.ProviderBinding{
 			{Provider: "fireworks"},
 			{Provider: "openrouter"},
@@ -264,7 +264,7 @@ func TestDispatchWithFallback_RetriesOnResponseHeaderTimeout(t *testing.T) {
 	winnerIdx, err := s.dispatchWithFallback(context.Background(), failoverInputs{
 		w:               rec,
 		buf:             buf,
-		initialDecision: router.Decision{Model: "deepseek/deepseek-v4-flash"},
+		initialDecision: router.Decision{Model: "deepseek-ai/deepseek-v4-flash"},
 		bindings: []catalog.ProviderBinding{
 			{Provider: providers.ProviderMakora},
 			{Provider: providers.ProviderOpenRouter},
@@ -346,7 +346,7 @@ func TestDispatchWithFallback_NoRetryOnNonRetryableStatus(t *testing.T) {
 	winnerIdx, err := s.dispatchWithFallback(context.Background(), failoverInputs{
 		w:               rec,
 		buf:             buf,
-		initialDecision: router.Decision{Model: "deepseek/deepseek-v4-pro-0813"},
+		initialDecision: router.Decision{Model: "deepseek-ai/deepseek-v4-pro"},
 		bindings: []catalog.ProviderBinding{
 			{Provider: "fireworks"},
 			{Provider: "openrouter"},
@@ -467,7 +467,7 @@ func TestDispatchWithFallback_BillingBlockedFailsOverToNextBinding(t *testing.T)
 	winnerIdx, err := s.dispatchWithFallback(context.Background(), failoverInputs{
 		w:               rec,
 		buf:             buf,
-		initialDecision: router.Decision{Model: "deepseek/deepseek-v4-pro-0813"},
+		initialDecision: router.Decision{Model: "deepseek-ai/deepseek-v4-pro"},
 		bindings: []catalog.ProviderBinding{
 			{Provider: "makora"},
 			{Provider: "together"},
@@ -503,7 +503,7 @@ func TestDispatchWithFallback_BillingBlockedSingleBindingFlushes(t *testing.T) {
 	_, err := s.dispatchWithFallback(context.Background(), failoverInputs{
 		w:               rec,
 		buf:             buf,
-		initialDecision: router.Decision{Model: "deepseek/deepseek-v4-pro-0813"},
+		initialDecision: router.Decision{Model: "deepseek-ai/deepseek-v4-pro"},
 		bindings:        []catalog.ProviderBinding{{Provider: "makora"}},
 		attempt: func(ctx context.Context, d router.Decision, p providers.Client) error {
 			buf.Seal()
@@ -542,7 +542,7 @@ func TestDispatchWithFallback_NoRetryAfterBytesFlushed(t *testing.T) {
 	winnerIdx, err := s.dispatchWithFallback(context.Background(), failoverInputs{
 		w:               rec,
 		buf:             buf,
-		initialDecision: router.Decision{Model: "deepseek/deepseek-v4-pro-0813"},
+		initialDecision: router.Decision{Model: "deepseek-ai/deepseek-v4-pro"},
 		bindings: []catalog.ProviderBinding{
 			{Provider: "fireworks"},
 			{Provider: "openrouter"},
@@ -581,7 +581,7 @@ func TestDispatchWithFallback_BothFailFinalBodyFlushed(t *testing.T) {
 	winnerIdx, err := s.dispatchWithFallback(context.Background(), failoverInputs{
 		w:               rec,
 		buf:             buf,
-		initialDecision: router.Decision{Model: "deepseek/deepseek-v4-pro-0813"},
+		initialDecision: router.Decision{Model: "deepseek-ai/deepseek-v4-pro"},
 		bindings: []catalog.ProviderBinding{
 			{Provider: "fireworks"},
 			{Provider: "openrouter"},
@@ -797,31 +797,31 @@ func TestResolveBindingsForDispatch(t *testing.T) {
 	t.Run("BYOK active returns single primary", func(t *testing.T) {
 		s := &Service{}
 		ctx := context.WithValue(context.Background(), CredentialsContextKey{}, &Credentials{APIKey: []byte("k"), Source: "client"})
-		bs := s.resolveBindingsForDispatch(ctx, router.Decision{Model: "deepseek/deepseek-v4-pro-0813", Provider: "fireworks"})
+		bs := s.resolveBindingsForDispatch(ctx, router.Decision{Model: "deepseek-ai/deepseek-v4-pro", Provider: "fireworks"})
 		require.Len(t, bs, 1)
 		assert.Equal(t, "fireworks", bs[0].Provider)
 	})
 	t.Run("nil deploymentKeyedProviders falls back to single attempt", func(t *testing.T) {
 		s := &Service{} // deploymentKeyedProviders == nil
-		bs := s.resolveBindingsForDispatch(context.Background(), router.Decision{Model: "deepseek/deepseek-v4-pro-0813", Provider: "fireworks"})
+		bs := s.resolveBindingsForDispatch(context.Background(), router.Decision{Model: "deepseek-ai/deepseek-v4-pro", Provider: "fireworks"})
 		require.Len(t, bs, 1, "legacy 'all registered' mode disables failover to avoid retrying on unwired providers")
 		assert.Equal(t, "fireworks", bs[0].Provider)
 	})
 	t.Run("multi-binding model with both keys returns ordered list", func(t *testing.T) {
 		s := &Service{deploymentKeyedProviders: map[string]struct{}{"fireworks": {}, "openrouter": {}}}
-		bs := s.resolveBindingsForDispatch(context.Background(), router.Decision{Model: "deepseek/deepseek-v4-pro-0813", Provider: "fireworks"})
-		require.GreaterOrEqual(t, len(bs), 2, "deepseek/deepseek-v4-pro-0813 must have at least 2 bindings in catalog")
+		bs := s.resolveBindingsForDispatch(context.Background(), router.Decision{Model: "deepseek-ai/deepseek-v4-pro", Provider: "fireworks"})
+		require.GreaterOrEqual(t, len(bs), 2, "deepseek-ai/deepseek-v4-pro must have at least 2 bindings in catalog")
 		assert.Equal(t, "fireworks", bs[0].Provider, "catalog order: fireworks primary")
 		assert.Equal(t, "openrouter", bs[1].Provider, "catalog order: openrouter fallback")
 	})
 	t.Run("selected temporal arm is first dispatch attempt", func(t *testing.T) {
 		s := &Service{deploymentKeyedProviders: map[string]struct{}{"fireworks": {}, "openrouter": {}}}
 		bs := s.resolveBindingsForDispatch(context.Background(), router.Decision{
-			Model:    "deepseek/deepseek-v4-pro-0813",
+			Model:    "deepseek-ai/deepseek-v4-pro",
 			Provider: "openrouter",
 			Metadata: &router.RoutingMetadata{
 				SelectedArmID:      "tq_arm_selected",
-				SelectedUpstreamID: "deepseek/deepseek-v4-pro-0813",
+				SelectedUpstreamID: "deepseek-ai/deepseek-v4-pro",
 				BindingIndex:       3,
 			},
 		})
@@ -838,7 +838,7 @@ func TestResolveBindingsForDispatch(t *testing.T) {
 	t.Run("excluded provider cannot be resurrected as a fallback binding", func(t *testing.T) {
 		s := &Service{deploymentKeyedProviders: map[string]struct{}{"fireworks": {}, "openrouter": {}}}
 		ctx := context.WithValue(context.Background(), InstallationExcludedProvidersContextKey{}, []string{"openrouter"})
-		bs := s.resolveBindingsForDispatch(ctx, router.Decision{Model: "deepseek/deepseek-v4-pro-0813", Provider: "fireworks"})
+		bs := s.resolveBindingsForDispatch(ctx, router.Decision{Model: "deepseek-ai/deepseek-v4-pro", Provider: "fireworks"})
 		require.Len(t, bs, 1, "openrouter fallback binding must be filtered out by the provider exclusion")
 		assert.Equal(t, "fireworks", bs[0].Provider)
 	})
@@ -847,7 +847,7 @@ func TestResolveBindingsForDispatch(t *testing.T) {
 		// dispatch 502s instead of serving a forbidden provider.
 		s := &Service{deploymentKeyedProviders: map[string]struct{}{"fireworks": {}, "openrouter": {}}}
 		ctx := context.WithValue(context.Background(), InstallationExcludedProvidersContextKey{}, []string{"fireworks", "openrouter"})
-		bs := s.resolveBindingsForDispatch(ctx, router.Decision{Model: "deepseek/deepseek-v4-pro-0813", Provider: "fireworks"})
+		bs := s.resolveBindingsForDispatch(ctx, router.Decision{Model: "deepseek-ai/deepseek-v4-pro", Provider: "fireworks"})
 		assert.Empty(t, bs, "no eligible binding may remain when the primary itself is excluded")
 	})
 	t.Run("catalog-miss model keeps legacy single-attempt primary", func(t *testing.T) {
@@ -863,7 +863,7 @@ func TestResolveBindingsForDispatch(t *testing.T) {
 		// would be an upstream bug — dispatch must not re-prepend the excluded primary.
 		s := &Service{deploymentKeyedProviders: map[string]struct{}{"fireworks": {}, "openrouter": {}}}
 		ctx := context.WithValue(context.Background(), InstallationExcludedProvidersContextKey{}, []string{"fireworks"})
-		bs := s.resolveBindingsForDispatch(ctx, router.Decision{Model: "deepseek/deepseek-v4-pro-0813", Provider: "fireworks"})
+		bs := s.resolveBindingsForDispatch(ctx, router.Decision{Model: "deepseek-ai/deepseek-v4-pro", Provider: "fireworks"})
 		require.NotEmpty(t, bs)
 		for _, b := range bs {
 			assert.NotEqual(t, "fireworks", b.Provider,

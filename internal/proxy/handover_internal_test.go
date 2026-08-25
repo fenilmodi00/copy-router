@@ -71,7 +71,7 @@ const canonicalAnthropicResponse = `{
   "id": "msg_test_001",
   "type": "message",
   "role": "assistant",
-  "model": "deepseek/deepseek-v4-flash",
+  "model": "deepseek-ai/deepseek-v4-flash",
   "stop_reason": "end_turn",
   "content": [
     {"type": "text", "text": "Refactor in progress: step 1 done, step 2 pending."}

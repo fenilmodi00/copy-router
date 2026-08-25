@@ -25,13 +25,13 @@ class FixedEmbedder:
 def test_roster_ids_dedupes_arms_across_clusters_in_first_seen_order() -> None:
     policy = object.__new__(FrozenPolicy)
     policy.clusters = {
-        "fast": {"arms": ["deepseek/deepseek-v4-flash", "openai/gpt-5.4-nano"]},
-        "balanced": {"arms": ["openai/gpt-5.6-luna", "deepseek/deepseek-v4-flash"]},
+        "fast": {"arms": ["deepseek-ai/deepseek-v4-flash", "openai/gpt-5.4-nano"]},
+        "balanced": {"arms": ["openai/gpt-5.6-luna", "deepseek-ai/deepseek-v4-flash"]},
         "empty": {},
     }
 
     assert policy.roster_ids() == [
-        "deepseek/deepseek-v4-flash",
+        "deepseek-ai/deepseek-v4-flash",
         "openai/gpt-5.4-nano",
         "openai/gpt-5.6-luna",
     ]
