@@ -301,6 +301,28 @@ func ThinkTagReasoningFor(id string) bool {
 	return m.ThinkTagReasoning
 }
 
+// CapabilitiesFor returns the wire-format ModelSpec for a catalog model.
+// When ReasoningEfforts is set, the spec advertises CapReasoning with those
+// levels so emit/force-effort clamp against the live ai& menu. Otherwise falls
+// back to router.Lookup (Anthropic/OpenAI/Gemini registry entries).
+func CapabilitiesFor(id string) router.ModelSpec {
+	if m, ok := ByIDOrUpstream(id); ok && len(m.ReasoningEfforts) > 0 {
+		levels := append([]string(nil), m.ReasoningEfforts...)
+		return router.NewSpecWithReasoning(router.ReasoningCapabilities{Levels: levels}, router.CapReasoning)
+	}
+	return router.Lookup(id)
+}
+
+// ReasoningEffortsFor returns a copy of the model's accepted effort levels, or
+// nil when the model takes no effort parameter / is unknown.
+func ReasoningEffortsFor(id string) []string {
+	m, ok := ByIDOrUpstream(id)
+	if !ok || len(m.ReasoningEfforts) == 0 {
+		return nil
+	}
+	return append([]string(nil), m.ReasoningEfforts...)
+}
+
 // IsAtOrBelow reports whether the model has a known tier at or below the
 // ceiling. Unknown-tier models return false.
 func IsAtOrBelow(id string, ceiling Tier) bool {

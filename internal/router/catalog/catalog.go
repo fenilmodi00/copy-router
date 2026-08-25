@@ -160,10 +160,25 @@ type Model struct {
 	// instead of reasoning_content; the Anthropic translator reroutes a
 	// leading <think> block into Anthropic thinking. Default false.
 	ThinkTagReasoning bool
+	// ReasoningEfforts is the ordered (least→most expensive) set of
+	// reasoning_effort values this model accepts on the ai& wire. Empty means
+	// the model takes no effort parameter. The ai& vocabulary is
+	// none/low/high/max; a few OpenAI-compat rows also list medium.
+	ReasoningEfforts []string
 	// Providers is the ordered fallback list. First binding whose
 	// Provider name is in the available set wins. Must be non-empty.
 	Providers []ProviderBinding
 }
+
+// Aiand effort vocabulary. Per-model ReasoningEfforts is a subset (or, for
+// OpenAI-compat rows, may also include "medium").
+const (
+	EffortNone   = "none"
+	EffortLow    = "low"
+	EffortMedium = "medium"
+	EffortHigh   = "high"
+	EffortMax    = "max"
+)
 
 // PrimaryProvider returns the first binding's provider name. Callers that
 // don't yet thread provider through (OTel emitter, billing debit hook)
@@ -184,40 +199,59 @@ func (m Model) PrimaryProvider() string {
 var Models = []Model{
 	// aiand-only catalog for Build.io / v0.76 registry.
 	// Non-aiand bindings removed; registry upstream IDs resolve via ByIDOrUpstream.
-	{ID: "deepseek/deepseek-v4-flash", Tier: TierLow, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, AgenticUse: AgenticLow, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAiand, UpstreamID: "deepseek-ai/deepseek-v4-flash",
-			Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.250, CacheReadMultiplier: 0.08 / 0.150}},
-	}},
-	{ID: "deepseek/deepseek-v4-pro-0813", Tier: TierMid, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAiand, UpstreamID: "deepseek-ai/deepseek-v4-pro",
-			Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 2.500, CacheReadMultiplier: 0.25 / 1.000}},
-	}},
-	{ID: "moonshotai/kimi-k2.7", Tier: TierHigh, ContextWindow: 262_144, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAiand, UpstreamID: "moonshotai/kimi-k2.7-code",
-			Price: Pricing{InputUSDPer1M: 0.750, OutputUSDPer1M: 3.500, CacheReadMultiplier: 0.20 / 0.750}},
-	}},
-	{ID: "moonshotai/kimi-k3", Tier: TierHigh, ContextWindow: 1_048_576, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAiand, UpstreamID: "moonshotai/kimi-k3",
-			Price: Pricing{InputUSDPer1M: 3.000, OutputUSDPer1M: 12.500, CacheReadMultiplier: 0.50 / 3.000}},
-	}},
-	{ID: "openai/gpt-oss-120b", Tier: TierLow, ContextWindow: 131_072, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAiand, UpstreamID: "openai/gpt-oss-120b",
-			Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.600, CacheReadMultiplier: 0.08 / 0.150}},
-	}},
-	{ID: "qwen/qwen3.6-27b", Tier: TierLow, ContextWindow: 262_144, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAiand, UpstreamID: "qwen/qwen3.6-27b",
-			Price: Pricing{InputUSDPer1M: 0.320, OutputUSDPer1M: 3.200, CacheReadMultiplier: 0.20 / 0.320}},
-	}},
-	{ID: "google/gemma-4-31b-it", Tier: TierLow, ContextWindow: 262_144, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAiand, UpstreamID: "google/gemma-4-31b-it",
-			Price: Pricing{InputUSDPer1M: 0.200, OutputUSDPer1M: 0.500, CacheReadMultiplier: 0.05 / 0.200}},
-	}},
-	{ID: "motif-technologies/motif-3", Tier: TierMid, ContextWindow: 262_144, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAiand, UpstreamID: "motif-technologies/motif-3",
-			Price: Pricing{InputUSDPer1M: 0.500, OutputUSDPer1M: 2.000, CacheReadMultiplier: 0.20 / 0.500}},
-	}},
-	{ID: "z-ai/glm-5.2", Tier: TierHigh, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAiand, UpstreamID: "zai-org/glm-5.2",
-			Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 4.000, CacheReadMultiplier: 0.30 / 1.000}},
-	}},
+	// ReasoningEfforts mirrors live GET /v1/models reasoning_efforts (2026-08-25).
+	{ID: "deepseek/deepseek-v4-flash", Tier: TierLow, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, AgenticUse: AgenticLow,
+		ReasoningEfforts: []string{EffortNone, EffortHigh, EffortMax},
+		Providers: []ProviderBinding{
+			{Provider: providers.ProviderAiand, UpstreamID: "deepseek-ai/deepseek-v4-flash",
+				Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.250, CacheReadMultiplier: 0.08 / 0.150}},
+		}},
+	{ID: "deepseek/deepseek-v4-pro-0813", Tier: TierMid, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported,
+		ReasoningEfforts: []string{EffortNone, EffortHigh, EffortMax},
+		Providers: []ProviderBinding{
+			{Provider: providers.ProviderAiand, UpstreamID: "deepseek-ai/deepseek-v4-pro",
+				Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 2.500, CacheReadMultiplier: 0.25 / 1.000}},
+		}},
+	{ID: "moonshotai/kimi-k2.7", Tier: TierHigh, ContextWindow: 262_144, ImageInput: ImageInputUnsupported,
+		ReasoningEfforts: []string{EffortHigh},
+		Providers: []ProviderBinding{
+			{Provider: providers.ProviderAiand, UpstreamID: "moonshotai/kimi-k2.7-code",
+				Price: Pricing{InputUSDPer1M: 0.750, OutputUSDPer1M: 3.500, CacheReadMultiplier: 0.20 / 0.750}},
+		}},
+	{ID: "moonshotai/kimi-k3", Tier: TierHigh, ContextWindow: 1_048_576,
+		ReasoningEfforts: []string{EffortLow, EffortHigh, EffortMax},
+		Providers: []ProviderBinding{
+			{Provider: providers.ProviderAiand, UpstreamID: "moonshotai/kimi-k3",
+				Price: Pricing{InputUSDPer1M: 3.000, OutputUSDPer1M: 12.500, CacheReadMultiplier: 0.50 / 3.000}},
+		}},
+	{ID: "openai/gpt-oss-120b", Tier: TierLow, ContextWindow: 131_072,
+		ReasoningEfforts: []string{EffortLow, EffortMedium, EffortHigh},
+		Providers: []ProviderBinding{
+			{Provider: providers.ProviderAiand, UpstreamID: "openai/gpt-oss-120b",
+				Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.600, CacheReadMultiplier: 0.08 / 0.150}},
+		}},
+	{ID: "qwen/qwen3.6-27b", Tier: TierLow, ContextWindow: 262_144,
+		ReasoningEfforts: []string{EffortNone, EffortHigh},
+		Providers: []ProviderBinding{
+			{Provider: providers.ProviderAiand, UpstreamID: "qwen/qwen3.6-27b",
+				Price: Pricing{InputUSDPer1M: 0.320, OutputUSDPer1M: 3.200, CacheReadMultiplier: 0.20 / 0.320}},
+		}},
+	{ID: "google/gemma-4-31b-it", Tier: TierLow, ContextWindow: 262_144,
+		ReasoningEfforts: []string{EffortNone, EffortHigh},
+		Providers: []ProviderBinding{
+			{Provider: providers.ProviderAiand, UpstreamID: "google/gemma-4-31b-it",
+				Price: Pricing{InputUSDPer1M: 0.200, OutputUSDPer1M: 0.500, CacheReadMultiplier: 0.05 / 0.200}},
+		}},
+	{ID: "motif-technologies/motif-3", Tier: TierMid, ContextWindow: 262_144,
+		ReasoningEfforts: []string{EffortLow, EffortMedium, EffortHigh},
+		Providers: []ProviderBinding{
+			{Provider: providers.ProviderAiand, UpstreamID: "motif-technologies/motif-3",
+				Price: Pricing{InputUSDPer1M: 0.500, OutputUSDPer1M: 2.000, CacheReadMultiplier: 0.20 / 0.500}},
+		}},
+	{ID: "z-ai/glm-5.2", Tier: TierHigh, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported,
+		ReasoningEfforts: []string{EffortNone, EffortHigh, EffortMax},
+		Providers: []ProviderBinding{
+			{Provider: providers.ProviderAiand, UpstreamID: "zai-org/glm-5.2",
+				Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 4.000, CacheReadMultiplier: 0.30 / 1.000}},
+		}},
 }

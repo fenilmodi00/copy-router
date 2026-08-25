@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"workweave/router/internal/providers"
+	"workweave/router/internal/router"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -152,6 +153,56 @@ func TestContextWindowFor_ResolvesUpstreamRegistryIDs(t *testing.T) {
 func TestValidateDeployed_V076Registry(t *testing.T) {
 	err := ValidateDeployed(loadV076DeployedModels(t))
 	assert.NoError(t, err)
+}
+
+func TestCatalog_EveryModelDeclaresReasoningEfforts(t *testing.T) {
+	for _, m := range Models {
+		require.NotEmptyf(t, m.ReasoningEfforts, "model %q must declare ReasoningEfforts (ai& live menu)", m.ID)
+		seen := make(map[string]struct{}, len(m.ReasoningEfforts))
+		for _, level := range m.ReasoningEfforts {
+			assert.Contains(t, map[string]struct{}{
+				EffortNone: {}, EffortLow: {}, EffortMedium: {}, EffortHigh: {}, EffortMax: {},
+			}, level, "%s: unexpected effort %q", m.ID, level)
+			_, dup := seen[level]
+			assert.Falsef(t, dup, "%s: duplicate effort %q", m.ID, level)
+			seen[level] = struct{}{}
+		}
+	}
+}
+
+func TestCatalog_AiandEffortVocabularyPresent(t *testing.T) {
+	// Across the catalog, the four ai& effort tiers must each appear on at
+	// least one model so force-effort / :suffix paths stay meaningful.
+	want := []string{EffortNone, EffortLow, EffortHigh, EffortMax}
+	have := make(map[string]bool, len(want))
+	for _, m := range Models {
+		for _, level := range m.ReasoningEfforts {
+			have[level] = true
+		}
+	}
+	for _, level := range want {
+		assert.Truef(t, have[level], "catalog must expose effort tier %q on at least one model", level)
+	}
+}
+
+func TestCapabilitiesFor_UsesCatalogReasoningEfforts(t *testing.T) {
+	spec := CapabilitiesFor("deepseek/deepseek-v4-flash")
+	require.True(t, spec.Supports(router.CapReasoning))
+	assert.Equal(t, []string{EffortNone, EffortHigh, EffortMax}, spec.Reasoning().Levels)
+
+	spec = CapabilitiesFor("deepseek-ai/deepseek-v4-flash") // upstream ID
+	assert.Equal(t, []string{EffortNone, EffortHigh, EffortMax}, spec.Reasoning().Levels)
+
+	spec = CapabilitiesFor("moonshotai/kimi-k3")
+	assert.Equal(t, []string{EffortLow, EffortHigh, EffortMax}, spec.Reasoning().Levels)
+
+	spec = CapabilitiesFor("openai/gpt-oss-120b")
+	assert.Equal(t, []string{EffortLow, EffortMedium, EffortHigh}, spec.Reasoning().Levels)
+}
+
+func TestReasoningEffortsFor(t *testing.T) {
+	assert.Equal(t, []string{EffortNone, EffortHigh, EffortMax}, ReasoningEffortsFor("z-ai/glm-5.2"))
+	assert.Nil(t, ReasoningEffortsFor("definitely-not-a-model"))
 }
 
 func TestValidateDeployed_FlagsMissing(t *testing.T) {
