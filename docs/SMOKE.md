@@ -1,11 +1,15 @@
 # Router pre-merge smoke suite
 
-The smoke suite boots the real router (docker compose stack) and drives it with
-deterministic request fixtures against the **aiand-only** catalog, asserting the
-behavior that in-process unit and conformance tests cannot see: HTTP status,
-response/usage shape, prompt-cache accounting, decision headers, and (via a
-pinned `openai/gpt-oss-120b` call) tool-schema translation on the OpenAI-compat
-path.
+The smoke suite drives a live router with deterministic request fixtures against
+the **aiand-only** catalog, asserting behavior that in-process unit and
+conformance tests cannot see: HTTP status, response/usage shape, prompt-cache
+accounting, decision headers, and (via a pinned `openai/gpt-oss-120b` call)
+tool-schema translation on the OpenAI-compat path.
+
+**Local default is host mode** (`make smoke-host`): an already-running router from
+`make setup` / `make dev` against Supabase session pooler (`PUBSUB_DISABLED=true`,
+no compose Postgres, no pubsub-emulator). See [HOST_WSL_SUPABASE.md](HOST_WSL_SUPABASE.md).
+CI still uses the compose + MITM path for key-free cassette replay.
 
 It exists because the regression class it targets is invisible to `go test`. Two
 concrete examples that motivated it:
@@ -75,37 +79,63 @@ When `SMOKE_ROUTER_KEY` is unset (e.g. bare `go test -tags smoke ./smoke/`
 without the orchestrator), `TestMain` prints a skip message and exits 0 so the
 package stays green in unit-test invocations.
 
-## Running locally
+## Running locally (host / Supabase)
+
+Preferred on WSL and Build.io-shaped deploys. No Docker daemon required for the
+suite itself.
 
 ```bash
-make smoke                                          # replay-only, no key needed
+make setup && make dev                              # router on :8080, Supabase
+make smoke-host                                     # or: SMOKE_HOST=1 make smoke
+# optional: reuse a key
+SMOKE_ROUTER_KEY=rk_… make smoke-host
+```
+
+`scripts/smoke/run.sh` in host mode:
+
+1. Checks `${SMOKE_BASE_URL:-http://localhost:8080}/health`.
+2. Uses `SMOKE_ROUTER_KEY`, or seeds one with `go run ./cmd/seed` against
+   `DATABASE_URL`.
+3. Runs `go test -tags smoke -count=1 -v ./smoke/`.
+4. Does not start or stop compose, MITM, or pubsub-emulator.
+
+Host mode talks to whatever upstream the running router is wired for. With
+`AIAND_API_KEY` in `.env.local` and no `HTTPS_PROXY`, that is live aiand (a few
+cents). The Anthropic-native "overflow rejected cleanly" cache subtest is
+skipped in host mode (aiand OpenAI-compat models do not hit that translate
+gate). Cassette replay of that case stays on the compose MITM path.
+
+Host mode also activates automatically when `SMOKE_ROUTER_KEY` is set and `/health`
+is already up (so a second `make smoke` against a live `make dev` does not try
+to boot compose).
+
+## Running via compose (CI / cassette refresh)
+
+```bash
+make smoke                                          # compose + MITM, replay-only
 AIAND_API_KEY=… SMOKE_PROXY_MODE=record make smoke  # refresh aiand cassettes
 ```
 
-That runs `scripts/smoke/run.sh`, which:
+Compose path steps:
 
-1. Writes an ephemeral `docker-compose.override.yml` that drops the pubsub
-   `8085` host binding (avoids a clash with the monorepo's own emulator) and
-   sets the router's `AIAND_API_KEY` (harmless placeholder in `replay-only`
-   mode — no request reaches a real provider — or the real key in
-   `record`/`replay-or-record`).
-2. `docker compose -f docker-compose.yml -f smoke/mitmproxy/docker-compose.yml
-   up -d --build server mitmproxy` and waits for `/health`.
+1. Writes `docker-compose.smoke-run.override.yml` with placeholder/real provider
+   keys for the `server` service (no pubsub-emulator stub).
+2. `docker compose -f docker-compose.yml -f docker-compose.smoke-run.override.yml
+   -f smoke/mitmproxy/docker-compose.yml up -d --build server mitmproxy` and
+   waits for `/health`.
 3. `docker compose run --rm seed` and parses the `rk_…` router key.
 4. `go test -tags smoke -count=1 -v ./smoke/`.
 5. On failure, dumps the last ~150 ANSI-stripped `server` + `mitmproxy` log
-   lines (the `ProxyMessages complete` and `mitmproxy: … key=…` lines are the
-   payload). Then tears the stack down.
+   lines, then tears the stack down.
 
-Iterating on a scenario? Keep the stack up between runs:
+Iterating on a compose scenario:
 
 ```bash
 SMOKE_KEEP_STACK=1 make smoke
-# ...edit a scenario...
 SMOKE_ROUTER_KEY=rk_… go test -tags smoke -count=1 -v ./smoke/ -run TestCaching
-# tear down when done:
-docker compose -f docker-compose.yml -f smoke/mitmproxy/docker-compose.yml down -v
-rm -f docker-compose.override.yml
+docker compose -f docker-compose.yml -f docker-compose.smoke-run.override.yml \
+  -f smoke/mitmproxy/docker-compose.yml down -v
+rm -f docker-compose.smoke-run.override.yml
 ```
 
 ## Cost

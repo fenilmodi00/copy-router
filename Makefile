@@ -14,7 +14,7 @@
 #   Local disposable Postgres: `make db` (Compose on 5433) or any other
 #   Postgres URL you already have running.
 
-.PHONY: generate generate-statusline build test test-verbose test-statusline test-install smoke initdb migrate-up migrate-down migrate-create seed setup full-setup db dev check fmt vet precommit install-hooks help install-cc uninstall-cc up up-hmm down down-hmm logs
+.PHONY: generate generate-statusline build test test-verbose test-statusline test-install smoke smoke-host initdb migrate-up migrate-down migrate-create seed setup full-setup db dev check fmt vet precommit install-hooks help install-cc uninstall-cc up up-hmm down down-hmm logs
 
 # Load DATABASE_URL from .env files (matches docker-compose defaults).
 -include .env.development
@@ -48,8 +48,10 @@ test-install: ## Run offline installer regression tests
 	@bash install/tests/key_reuse_test.sh
 	@bash install/tests/models_test.sh
 
-smoke: ## Pre-merge smoke suite: real router stack + real upstreams (scenarios still target the pre-ai& providers; re-record for ai& before relying on it)
+smoke: ## Pre-merge smoke suite (compose+MITM in CI; use smoke-host for local Supabase)
 	./scripts/smoke/run.sh
+smoke-host: ## Smoke against host make setup/dev + Supabase (no compose, no pubsub-emulator)
+	SMOKE_HOST=1 ./scripts/smoke/run.sh
 
 initdb: ## Create the database and router schema (idempotent)
 	@go run ./cmd/initdb

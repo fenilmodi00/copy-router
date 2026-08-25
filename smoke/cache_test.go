@@ -55,8 +55,13 @@ func TestCaching(t *testing.T) {
 		}
 	})
 
-	// Five explicit breakpoints exceed Anthropic's 4-cap; router must reject with 4xx.
+	// Five explicit breakpoints exceed Anthropic's 4-cap; router must reject with 4xx
+	// on the Anthropic-native path (compose MITM / cassette). Host mode pins aiand
+	// OpenAI-compat models that do not hit translate.ErrAnthropicCacheControlOverflow.
 	t.Run("overflow rejected cleanly by router", func(t *testing.T) {
+		if cfg.HostMode {
+			t.Skip("SMOKE_HOST=1: Anthropic 4-breakpoint overflow is compose/MITM-only")
+		}
 		body := newRequest("smoke-cache-overflow").tokens(32).
 			cachedTools(4).toolCache("5m").sysCache("5m").
 			text("Say: ok").build(t)

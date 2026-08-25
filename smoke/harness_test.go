@@ -39,6 +39,10 @@ type Config struct {
 	// OpenAIEnabled gates smoke/openai_test.go scenarios. Set SMOKE_OPENAI_ENABLED=0
 	// to skip when recording without an OPENAI_API_KEY. Defaults to true.
 	OpenAIEnabled bool
+	// HostMode is true when driving make setup/dev + Supabase (SMOKE_HOST=1).
+	// Anthropic-native cache overflow rejection is skipped: host pins aiand
+	// OpenAI-compat models that do not enforce Anthropic's 4-breakpoint cap.
+	HostMode bool
 }
 
 // cfg is populated by TestMain and read by every scenario.
@@ -70,9 +74,10 @@ func TestMain(m *testing.M) {
 		PinModel:       envOr("SMOKE_PIN_MODEL", "deepseek-ai/deepseek-v4-flash"),
 		OpenAIPinModel: envOr("SMOKE_OPENAI_PIN_MODEL", "openai/gpt-oss-120b"),
 		OpenAIEnabled:  envOr("SMOKE_OPENAI_ENABLED", "1") != "0",
+		HostMode:       envOr("SMOKE_HOST", "0") == "1",
 	}
 	if cfg.RouterKey == "" {
-		fmt.Fprintln(os.Stderr, "SMOKE_ROUTER_KEY unset — skipping smoke suite (seed one with `docker compose run --rm seed` to run live)")
+		fmt.Fprintln(os.Stderr, "SMOKE_ROUTER_KEY unset — skipping smoke suite (seed with `go run ./cmd/seed` or `make smoke-host`)")
 		os.Exit(0)
 	}
 

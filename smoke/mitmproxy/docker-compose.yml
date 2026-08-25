@@ -52,13 +52,8 @@ services:
         condition: service_healthy
     environment:
       HTTPS_PROXY: http://mitmproxy:8888
-      # Excludes the emulator/db/loopback hosts from the proxy. Go's transport
-      # (and the Pub/Sub client's gRPC dialer, which also honors HTTPS_PROXY)
-      # would otherwise try to CONNECT-tunnel the plaintext
-      # PUBSUB_EMULATOR_HOST gRPC traffic through mitmproxy — which only knows
-      # how to terminate real TLS to a real hostname — hanging until the
-      # per-replica subscription setup deadline panics the process.
-      NO_PROXY: pubsub-emulator,postgres,localhost,127.0.0.1
+      # Keep Postgres and loopback off the MITM path (plaintext DB traffic).
+      NO_PROXY: postgres,localhost,127.0.0.1
       SSL_CERT_DIR: /certs
     volumes:
       - mitm_certs:/certs:ro

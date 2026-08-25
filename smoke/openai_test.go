@@ -35,8 +35,11 @@ func TestOpenAIResponsesAPI(t *testing.T) {
 		r := callModel(t, body, cfg.OpenAIPinModel)
 
 		requireOKMessage(t, r)
-		if r.message.Usage.InputTokens <= 0 {
-			t.Errorf("want input_tokens > 0, got %d", r.message.Usage.InputTokens)
+		// After a warm system-prompt cache (e.g. prior TestCaching), providers may
+		// report input_tokens=0 with cache_read_input_tokens > 0.
+		if r.message.Usage.InputTokens <= 0 && r.message.Usage.CacheReadInputTokens <= 0 {
+			t.Errorf("want input_tokens > 0 or cache_read_input_tokens > 0, got input=%d cache_read=%d",
+				r.message.Usage.InputTokens, r.message.Usage.CacheReadInputTokens)
 		}
 		assertServedByModel(t, r, cfg.OpenAIPinModel, "aiand")
 	})
