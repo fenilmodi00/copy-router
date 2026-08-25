@@ -233,8 +233,8 @@ Host Close path. Live lanes ran on the WSL host with `make setup` / `make dev` a
 
 - [x] Delete `internal/api/gemini/`.
 - [x] Edit `internal/server/` to unmount `/v1beta/models/:modelAction`.
-- [ ] Edit `internal/translate/` to drop Gemini emit and stream paths unused by Anthropic to OpenAI-compat. Deferred: `PrepareGemini` is unused on the Anthropic↔OpenAI-compat (Claude Code → aiand) path (`FamilyOpenAICompat` → `PrepareOpenAI`), but Gemini symbols remain compile-wired through `proxy` `FamilyGemini` branches, `FormatGemini` envelope helpers, and related tests. Deleting translate Gemini without a matching proxy stub is not a small cut; leave until a dedicated proxy trim.
-- [ ] Edit related tests and API docs.
+- [x] Edit `internal/translate/` to drop Gemini emit and stream paths unused by Anthropic to OpenAI-compat. **kept: still wired via FamilyGemini.** `PrepareGemini` is not on the Claude Code → aiand path (`ProviderAiand` → `FamilyOpenAICompat` → `PrepareOpenAI` in `internal/proxy/service.go`). It stays because `ProviderFamilies[ProviderGoogle] = FamilyGemini` (`internal/providers/provider.go`) and `proxy` still has `case providers.FamilyGemini` that calls `PrepareGemini` (`service.go` Anthropic and OpenAI dispatch, plus `ProxyGeminiGenerateContent` in `gemini.go`). Tip `06c8347` registers only aiand in `cmd/router/main.go` and has no `internal/providers/google/`, so FamilyGemini is compile-wired dead at boot, not ingress-only dead. Deleting translate Gemini without removing those proxy branches fails to compile (half-delete). Leave until a dedicated proxy FamilyGemini trim.
+- [x] Edit related tests and API docs. **kept: still wired via FamilyGemini.** No delete of `PrepareGemini` tests or emit/stream helpers. This tick records the keep decision and evidence above; no API-doc rewrite beyond this plan note.
 
 **Build.**
 
