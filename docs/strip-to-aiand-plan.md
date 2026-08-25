@@ -103,10 +103,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Cold `curl /health` latency in ms.
-- [ ] Probe. `curl -o /dev/null -s -w '%{time_total}' http://127.0.0.1:8080/health` at trunk and at the head, interleaved five times each.
-- [ ] Baseline. Record the trunk median first.
-- [ ] Rule. Head median must stay within 50 ms of trunk median or the PR fails.
+- [x] Metric. Cold `curl /health` latency in ms.
+- [x] Probe. `curl -o /dev/null -s -w '%{time_total}' http://127.0.0.1:8080/health` at trunk and at the head, interleaved five times each.
+- [x] Baseline. Record the trunk median first. Trunk median ~0.92 ms (binary on `:8081`).
+- [x] Rule. Head median must stay within 50 ms of trunk median or the PR fails. Head median ~0.86 ms (**PASS**).
 
 **Review gate.** None. `docs-host` is not review-gated.
 
@@ -157,10 +157,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Binary size of `./bin/server` in bytes.
-- [ ] Probe. `stat -c%s bin/server` at trunk and at the head after `go build -tags ORT -o bin/server ./cmd/router`.
-- [ ] Baseline. Record the trunk size first.
-- [ ] Rule. Head size must be less than or equal to trunk size, or the PR fails.
+- [x] Metric. Binary size of `./bin/server` in bytes.
+- [x] Probe. `stat -c%s bin/server` at trunk and at the head after `go build -tags ORT -o bin/server ./cmd/router`.
+- [x] Baseline. Record the trunk size first. Pre-cut-pubsub `b08561d` = 83667632 B.
+- [x] Rule. Head size must be less than or equal to trunk size, or the PR fails. Head = 79976560 B (**PASS**).
 
 **Review gate.** None. `cut-pubsub` is not review-gated.
 
@@ -210,10 +210,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. `ResolveBinding` microbenchmark ns/op.
-- [ ] Probe. `go test ./internal/router/catalog/ -bench=ResolveBinding -benchtime=2s` at trunk and at the head, interleaved.
-- [ ] Baseline. Record the trunk ns/op first.
-- [ ] Rule. Head ns/op must not exceed trunk by more than 20 percent, or the PR fails.
+- [x] Metric. `ResolveBinding` microbenchmark ns/op.
+- [x] Probe. `go test ./internal/router/catalog/ -bench=ResolveBinding -benchtime=2s` at trunk and at the head, interleaved. Same three IDs on both tips (`z-ai/glm-5.2`, `moonshotai/kimi-k3`, `motif-technologies/motif-3`), available=`{aiand}`.
+- [x] Baseline. Record the trunk ns/op first. Pre-cut tip `a1c7434` mean **59.41 ns/op** (57.74, 61.08).
+- [ ] Rule. Head ns/op must not exceed trunk by more than 20 percent, or the PR fails. Head mean **77.90 ns/op** (76.79, 79.00) = **+31%** vs trunk (**FAIL**). Leave unchecked.
 
 **Review gate.** None. `cut-catalog` is not review-gated.
 
@@ -270,7 +270,7 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 **Review gate.** The operator reviews before merge.
 
 - [x] Copy lane 2 and lane 3 screenshots into `docs/media/cut-gemini-review-messages.png` and `docs/media/cut-gemini-review-stream.png`.
-- [ ] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/cut-gemini-review.mp4`.
+- [x] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/cut-gemini-review.mp4`. Host-built ~46 s review MP4 from PNGs + live `/v1/messages` capture (WSL `:0` x11grab blank).
 - [ ] Post the screenshots and the video in chat. Stop at merge-ready. Wait for the operator's click.
 
 **Merge.**
@@ -321,10 +321,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. Resident set size of `./bin/server` after boot idle, in MB.
-- [ ] Probe. Read RSS from `/proc/$(pidof server)/status` at trunk and at the head after 30 s idle.
-- [ ] Baseline. Record the trunk RSS first.
-- [ ] Rule. Head RSS must be less than or equal to trunk RSS plus 5 MB, or the PR fails.
+- [x] Metric. Resident set size of `./bin/server` after boot idle, in MB.
+- [x] Probe. Read RSS from `/proc/$(pidof server)/status` at trunk and at the head after 30 s idle.
+- [x] Baseline. Record the trunk RSS first. Trunk ~311 MB.
+- [x] Rule. Head RSS must be less than or equal to trunk RSS plus 5 MB, or the PR fails. Head ~272 MB (**PASS**).
 
 **Review gate.** None. `cut-sidecars-extras` is not review-gated.
 
@@ -380,7 +380,7 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 **Review gate.** The operator reviews before merge.
 
 - [x] Copy lane 7 and lane 8 screenshots into `docs/media/fix-tests-smoke-review-live.png` and `docs/media/fix-tests-smoke-review-stream.png`.
-- [ ] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/fix-tests-smoke-review.mp4`.
+- [x] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/fix-tests-smoke-review.mp4`. Host-built ~46 s review MP4 from PNGs + live `/v1/messages` capture (WSL `:0` x11grab blank).
 - [ ] Post the screenshots and the video in chat. Stop at merge-ready. Wait for the operator's click.
 
 **Merge.**
