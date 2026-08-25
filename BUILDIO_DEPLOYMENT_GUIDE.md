@@ -9,7 +9,7 @@ Deploy the router as a **single Docker container** on [build.io](https://www.bui
 | build.io app `router` | Exists (`ap-northeast-1`, stack `dockerfile`) |
 | Default URL | `https://router-<app-id>.onbld.com` (example: `https://router-568f5bb0.onbld.com`) |
 | Postgres | **Supabase** session-pooler `DATABASE_URL` (not a Build.io DB addon) |
-| Pub/Sub | **Disabled** (`PUBSUB_DISABLED=true`, `SERVER_REPLICAS=1`) |
+| Pub/Sub | **Removed** (adapter deleted; leave all `PUBSUB_*` unset; `SERVER_REPLICAS=1`) |
 | Env on Build.io | Set from `.env.production.local` / `.env.buildio` |
 
 ## Architecture
@@ -21,7 +21,7 @@ Internet ──► build.io LB (TLS) ──► router dyno ($PORT)
                               Supabase Postgres (DATABASE_URL)
 ```
 
-Pub/Sub is off for single-replica. Cache TTL (5 min) is the safety net. Re-enable only with full GCP config (see below).
+The GCP Pub/Sub adapter (`internal/pubsub`) is deleted. Installation cache invalidation is always NoOp. Run a single replica; the 5-minute cache TTL is the safety net. Leave all `PUBSUB_*` unset (they are ignored if present).
 
 ## Prerequisites
 
@@ -69,8 +69,7 @@ Copy-Item .env.buildio .env.production.local
 | `AIAND_API_KEY` | Provider key (selfhosted) |
 | `ROUTER_ADMIN_PASSWORD` | Admin UI |
 | `EXTERNAL_KEY_ENCRYPTION_KEY` | Tink AES-256-GCM JSON for BYOK |
-| `PUBSUB_DISABLED` | `true` for Build.io single replica |
-| `SERVER_REPLICAS` | `1` while Pub/Sub is off |
+| `SERVER_REPLICAS` | `1` (single-replica; no cross-replica invalidation) |
 
 Generate Tink keyset:
 
@@ -86,7 +85,7 @@ Never commit `.env.production.local`.
 
 ### Preferred: Build.io native Dockerfile
 
-App stack is already `dockerfile`. Connect the GitHub repo on the Deploy tab and deploy the branch. Build uses root `Dockerfile` / `heroku.yml` (`PUBSUB_DISABLED=true` baked into build config).
+App stack is already `dockerfile`. Connect the GitHub repo on the Deploy tab and deploy the branch. Build uses root `Dockerfile` / `heroku.yml`.
 
 ### Optional: Docker Hub prebuild
 
@@ -101,9 +100,9 @@ Then set the container image in the dashboard (or `CONTAINER_IMAGE` if your Buil
 
 ## Step 4: Config vars on Build.io
 
-Set from `.env.production.local`. Minimum keys: `DATABASE_URL`, `PUBSUB_DISABLED=true`, `SERVER_REPLICAS=1`, plus provider/admin/Tink secrets.
+Set from `.env.production.local`. Minimum keys: `DATABASE_URL`, `SERVER_REPLICAS=1`, plus provider/admin/Tink secrets.
 
-**Omit** `PUBSUB_PROJECT_ID`, `PUBSUB_EMULATOR_HOST`, and topic/subscription vars while disabled. Setting `PUBSUB_PROJECT_ID` without GCP credentials panics at boot → LB **502**.
+**Leave unset** all `PUBSUB_*` vars (`PUBSUB_DISABLED`, `PUBSUB_PROJECT_ID`, `PUBSUB_EMULATOR_HOST`, topic/subscription). The adapter is gone; leftover values are ignored and are not required for boot.
 
 ### Option A: helper script (API token)
 
@@ -115,14 +114,14 @@ $env:DATABASE_URL = '<supabase-session-pooler-uri>'
 .\scripts\buildio-set-safe-config.ps1 -EnvFile .env.production.local
 ```
 
-The script PATCHes safe defaults and DELETEs half-configured `PUBSUB_*` keys.
+The script PATCHes safe defaults and DELETEs leftover `PUBSUB_*` keys.
 
 ### Option B: `bld` CLI
 
 ```bash
 bld login
 bld config:set DATABASE_URL="<supabase-session-pooler-uri>" --app router
-bld config:set PUBSUB_DISABLED=true SERVER_REPLICAS=1 PORT=8080 --app router
+bld config:set SERVER_REPLICAS=1 PORT=8080 --app router
 # plus AIAND_API_KEY, ROUTER_ADMIN_PASSWORD, EXTERNAL_KEY_ENCRYPTION_KEY, ...
 ```
 
@@ -143,6 +142,8 @@ curl -skSf https://router-568f5bb0.onbld.com/v1/version
 
 Use `-k` if the platform cert is expired/misissued while debugging. Fix ACM under Overview → Hosts for production.
 
+Boot should log: `Installation cache invalidation is NoOp; single-replica OK (5-min TTL)`.
+
 | Endpoint | Description |
 |----------|-------------|
 | `GET /health` | Liveness |
@@ -153,21 +154,11 @@ Use `-k` if the platform cert is expired/misissued while debugging. Fix ACM unde
 
 ---
 
-## Pub/Sub: disable now, re-enable later
+## Pub/Sub adapter removed
 
-**Disable (current):** `PUBSUB_DISABLED=true` or empty `PUBSUB_PROJECT_ID`. Single replica only.
+The GCP Pub/Sub package (`internal/pubsub`) and compose emulator (`db/pubsub`) are deleted. There is no runtime path to turn Pub/Sub back on.
 
-**What you lose without Pub/Sub:** cross-replica API-key / cluster-list cache invalidation (stale up to ~5 min) and managed autopay signals. Fine for one dyno.
-
-**Re-enable without crash:**
-
-1. GCP project + topic + subscription prefix ready
-2. Dyno has Application Default Credentials (or equivalent) for Pub/Sub
-3. Set `PUBSUB_PROJECT_ID`, `PUBSUB_TOPIC_ROUTER_INVALIDATION`, `PUBSUB_SUBSCRIPTION_ROUTER_INVALIDATION` **together**
-4. Set `PUBSUB_DISABLED=false` (or unset)
-5. Then scale `SERVER_REPLICAS` > 1
-
-Never set `PUBSUB_PROJECT_ID` alone.
+**What that means:** no cross-replica API-key / cluster-list cache invalidation (stale up to ~5 min) and no managed autopay Pub/Sub signals. Fine for one dyno. Keep `SERVER_REPLICAS=1`.
 
 ---
 
@@ -177,10 +168,9 @@ Never set `PUBSUB_PROJECT_ID` alone.
 
 1. Confirm the hostname is `https://router-<app-id>.onbld.com` (Overview → Go), not `router.onbld.com`.
 2. If curl reports `SEC_E_CERT_EXPIRED` / certificate expired, fix ACM under Overview → Hosts. Until then, debugging may need `curl -k` (do not ship that to clients).
-3. `bld logs router` — look for Pub/Sub panic or missing env
-4. Confirm `PUBSUB_DISABLED=true` and no half-set `PUBSUB_*`
-5. Confirm `DATABASE_URL` is Supabase session pooler and migrations ran
-6. Confirm image listens on `$PORT` (Build injects it)
+3. `bld logs router` — look for missing env or DB connection errors
+4. Confirm `DATABASE_URL` is Supabase session pooler and migrations ran
+5. Confirm image listens on `$PORT` (Build injects it)
 
 ### Container exits immediately
 
@@ -190,7 +180,7 @@ Never set `PUBSUB_PROJECT_ID` alone.
 
 ### Rate limit / 429
 
-App analytics rate limit returns **429**, not 502. Upstream provider 429s are retried/failover. Persistent 502 with empty logs usually means crash-loop (Pub/Sub or boot panic), not rate limit.
+App analytics rate limit returns **429**, not 502. Upstream provider 429s are retried/failover. Persistent 502 with empty logs usually means crash-loop (boot panic), not rate limit.
 
 ### Wrong database addon
 
@@ -203,7 +193,7 @@ Detach Schema To Go / Ave To Go. Use only manual Supabase `DATABASE_URL`.
 | File | Purpose |
 |------|---------|
 | `Dockerfile` / `Dockerfile.buildio` | Production image |
-| `heroku.yml` | Dockerfile build + `PUBSUB_DISABLED` |
+| `heroku.yml` | Dockerfile build |
 | `build_and_push.ps1` | Optional Docker Hub helper |
 | `scripts/buildio-set-safe-config.ps1` | PATCH safe config vars via Build.io API |
 | `app.json` | Manifest (no DB addon; `DATABASE_URL` required) |
@@ -217,7 +207,7 @@ Detach Schema To Go / Ave To Go. Use only manual Supabase `DATABASE_URL`.
 
 - [ ] Supabase project + session-pooler `DATABASE_URL`
 - [ ] `migrate up` against Supabase
-- [ ] `.env.production.local` filled (`PUBSUB_DISABLED=true`)
+- [ ] `.env.production.local` filled (leave `PUBSUB_*` unset)
 - [ ] Config vars on Build.io app `router`
 - [ ] Deploy (native Dockerfile or Docker Hub image)
 - [ ] `curl https://router.onbld.com/health`
