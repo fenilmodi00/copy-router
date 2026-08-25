@@ -7,7 +7,7 @@ Full guide: **[BUILDIO_DEPLOYMENT_GUIDE.md](./BUILDIO_DEPLOYMENT_GUIDE.md)**
 | Artifact | Status |
 |----------|--------|
 | `Dockerfile` / `Dockerfile.buildio` | Production ONNX/CGO image |
-| `heroku.yml` | `PUBSUB_DISABLED=true`, `SERVER_REPLICAS=1` |
+| `heroku.yml` | `SERVER_REPLICAS=1` (Pub/Sub adapter removed) |
 | `app.json` | No Schema To Go; requires `DATABASE_URL` |
 | Supabase project `router` | `ap-northeast-1` (ref `ssmcjrszhaxbxlyfgthn`) |
 | build.io app `router` | `https://router-568f5bb0.onbld.com` |
@@ -19,7 +19,7 @@ Full guide: **[BUILDIO_DEPLOYMENT_GUIDE.md](./BUILDIO_DEPLOYMENT_GUIDE.md)**
 # 1. Secrets
 Copy-Item .env.buildio .env.production.local
 # Set DATABASE_URL from Supabase Connect → Session (:5432)
-# Keep PUBSUB_DISABLED=true
+# Leave all PUBSUB_* unset (adapter deleted; values ignored)
 
 # 2. Migrate once (direct or session pooler)
 # migrate -path db/migrations -database "$env:DATABASE_URL" up
@@ -36,5 +36,5 @@ curl -skSf https://router-568f5bb0.onbld.com/health
 ## Do not
 
 - Attach Schema To Go / Ave To Go
-- Copy `PUBSUB_PROJECT_ID` without GCP credentials (boot panic → 502)
+- Rely on `PUBSUB_*` for cache invalidation (adapter deleted; single-replica only)
 - Commit `.env.production.local`
