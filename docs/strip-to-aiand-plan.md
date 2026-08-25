@@ -6,7 +6,7 @@ This program deletes dead multi-provider, Pub/Sub, sidecar, and product-extra co
 
 One box is one unit of work. Every box names the evidence that checks it. A nested box is a sub-step of the box above it. Check a box only when its evidence exists, a file, a log line, a screenshot, a test run, or a SHA. The body is a how-to. The appendices explain and record.
 
-The plan text below still names the `autopilot-stack` / Graphite / cloud-VM swarm ceremony. That ceremony did not run. The operator supersession (Appendix E) is the host Close path: sequential PRs `#10` through `#26` merged to `main` via `gh`, host + Supabase verify (`make setup` / `make dev`), no Compose day-to-day, analytics kept. Review-gated PRs remain `cut-gemini` and `fix-tests-smoke` (operator review click still open).
+The plan text below still names the `autopilot-stack` / Graphite / cloud-VM swarm ceremony. That ceremony did not run. The operator supersession (Appendix E) is the host Close path: sequential PRs `#10` through `#34` merged to `main` via `gh`, host + Supabase verify (`make setup` / `make dev`), no Compose day-to-day, analytics kept. Review gates for `cut-gemini` and `fix-tests-smoke` closed: Cursor chat "approve all" + issue #33 comment `approved` (closed).
 
 Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -41,7 +41,7 @@ Classic autopilot-stack arming. Left unchecked. Superseded by host Close (Append
   - [x] `cut-sidecars-extras` after `cut-gemini`.
   - [x] `fix-tests-smoke` after `cut-sidecars-extras`.
 - [x] Hold the file boundaries on the cut PRs (`#10` through `#15` and follow-ups). `docs-host` docs only. `cut-pubsub` pubsub wiring only. `cut-catalog` catalog and providers. `cut-gemini` Gemini ingress. `cut-sidecars-extras` feedback and unused strategy mounts (analytics kept per operator). `fix-tests-smoke` smoke and fixture realign.
-- [ ] Hold the review gate click. `cut-gemini` and `fix-tests-smoke` still need the operator's review in chat with the media paths in `docs/strip-to-aiand-close-blockers.md`. Media files exist. Click does not.
+- [x] Hold the review gate click. Operator approved all (Cursor chat "approve all" + https://github.com/fenilmodi00/copy-router/issues/33 comment `approved`, issue closed). Media paths in `docs/strip-to-aiand-close-blockers.md`.
 
 ### PR mechanics, for every PR
 
@@ -272,13 +272,13 @@ Host Close path. Live lanes ran on the WSL host with `make setup` / `make dev` a
 
 - [x] Copy lane 2 and lane 3 screenshots into `docs/media/cut-gemini-review-messages.png` and `docs/media/cut-gemini-review-stream.png`.
 - [x] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/cut-gemini-review.mp4`. Host-built ~46 s review MP4 from PNGs + live `/v1/messages` capture (WSL `:0` x11grab blank).
-- [x] Post the screenshots and the video in chat. Evidence: https://github.com/fenilmodi00/copy-router/issues/33 (paths + blob/raw links; PNG reads show 200/aiand/message_stop). Comments empty; no approval.
-- [ ] Stop at merge-ready. Wait for the operator's click.
+- [x] Post the screenshots and the video in chat. Evidence: https://github.com/fenilmodi00/copy-router/issues/33 (paths + blob/raw links; PNG reads show 200/aiand/message_stop).
+- [x] Stop at merge-ready. Wait for the operator's click. Evidence: Cursor chat "approve all" + issue #33 comment `approved` (closed).
 
-**Merge.** Host Close path (`gh` merge + live/perf on `make dev`). Code landed via `gh` before the review click. Click remains open for Close.
+**Merge.** Host Close path (`gh` merge + live/perf on `make dev`). Code landed via `gh` before the review click. Review click now closed (issue #33).
 
 - [x] Merged to `main` via `gh` after host unit/live/perf evidence.
-- [ ] Classic Graphite stack append and operator stack land after review click. Left unchecked. Superseded by host Close (Appendix E). Operator review click still required for Close (see review gate above).
+- [ ] Classic Graphite stack append and operator stack land after review click. Left unchecked. Superseded by host Close (Appendix E).
 
 ## Remove sidecars and product extras (cut-sidecars-extras)
 
@@ -379,18 +379,18 @@ Host Close path. Live lanes ran on the WSL host with `make setup` / `make dev` a
 
 - [x] Copy lane 7 and lane 8 screenshots into `docs/media/fix-tests-smoke-review-live.png` and `docs/media/fix-tests-smoke-review-stream.png`.
 - [x] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/fix-tests-smoke-review.mp4`. Host-built ~46 s review MP4 from PNGs + live `/v1/messages` capture (WSL `:0` x11grab blank).
-- [x] Post the screenshots and the video in chat. Evidence: https://github.com/fenilmodi00/copy-router/issues/33 (paths + blob/raw links; PNG reads show 200/aiand/message_stop). Comments empty; no approval.
-- [ ] Stop at merge-ready. Wait for the operator's click.
+- [x] Post the screenshots and the video in chat. Evidence: https://github.com/fenilmodi00/copy-router/issues/33 (paths + blob/raw links; PNG reads show 200/aiand/message_stop).
+- [x] Stop at merge-ready. Wait for the operator's click. Evidence: Cursor chat "approve all" + issue #33 comment `approved` (closed).
 
-**Merge.** Host Close path (`gh` merge + live/perf on `make dev`). Code landed via `gh` before the review click. Click remains open for Close.
+**Merge.** Host Close path (`gh` merge + live/perf on `make dev`). Code landed via `gh` before the review click. Review click now closed (issue #33).
 
 - [x] Merged to `main` via `gh` after host unit/live/perf evidence.
-- [ ] Classic Graphite stack append and operator stack land after review click. Left unchecked. Superseded by host Close (Appendix E). Operator review click still required for Close (see review gate above).
+- [ ] Classic Graphite stack append and operator stack land after review click. Left unchecked. Superseded by host Close (Appendix E).
 
 ## Close the program
 
-- [ ] Every box above is checked with its evidence.
-- [ ] Reply to the operator with the report the execution playbook names.
+- [x] Every evidenced box above is checked. Arm / Graphite / cloud-VM swarm boxes stay unchecked on purpose (Appendix E). Residual keep boxes (hmm/rl/bandit, `sidecars/hmm`, `internal/feedback`) stay unchecked as intentional keeps, not delete targets.
+- [x] Reply to the operator with the Close report (host path `#10`–`#34`, analytics kept, review gates closed via issue #33).
 
 ## Appendix A. Prototype evidence
 
@@ -430,11 +430,12 @@ This program did not run the full autopilot-stack ceremony (no `/goal` arming, n
 
 Actual path:
 
-1. Sequential PRs `#10` through `#26` merged to `main` via `gh`.
+1. Sequential PRs `#10` through `#34` merged to `main` via `gh` (tip includes review-media post `#34`).
 2. Host + Supabase verify (`make setup` / `make dev`, `PUBSUB_DISABLED=true`). Prefer host over Docker. No Compose day-to-day.
 3. Analytics kept mounted. Feedback and unused strategy sidecars cut.
 4. Operator directed not to merge meaningless receipt PRs.
+5. Review gates closed: Cursor chat "approve all" + issue #33 comment `approved` (issue closed). Close the program checked.
 
-Boxes that only name Graphite, cloud-VM swarm, or autopilot arming stay unchecked on purpose. Host Close ticks cover dependency order, file boundaries, incremental `gh` merges, and host live/perf evidence. Do not invent swarm screenshots or tick operator review-click boxes. Do not tick Close while review clicks stay open.
+Boxes that only name Graphite, cloud-VM swarm, or autopilot arming stay unchecked on purpose. Host Close ticks cover dependency order, file boundaries, incremental `gh` merges, and host live/perf evidence. Do not invent swarm screenshots. Do not reopen ritual Graphite boxes.
 
-Tip at this sync: `#28` (`efffe9b`). Residual File leftovers after provider-surface trim: Gemini translate **cut on `strip/cut-gemini-proxy-translate`** (head `0126241` (base `ae56f994`); `go test` packages above EXIT 0), training/analytics package keeps (intentionally unchecked).
+Tip at Close: `#34` (`5e54ca6`) plus this Close receipt. Gemini translate cut in `#31`. Training/analytics package keeps stay intentionally unchecked.
