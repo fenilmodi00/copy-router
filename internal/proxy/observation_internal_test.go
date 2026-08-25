@@ -22,18 +22,18 @@ func TestBuildObservationContext_CapturesFreshOnStay(t *testing.T) {
 	// Final (served) decision = the pinned model, no metadata — the STAY shape.
 	served := router.Decision{
 		Provider: "anthropic",
-		Model:    "claude-opus-4-8",
+		Model:    "moonshotai/kimi-k3",
 		Reason:   "pin",
 	}
 	// Fresh scorer recommendation this turn: a cheaper model nearly ties opus.
 	fresh := router.Decision{
 		Provider: "anthropic",
-		Model:    "claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 		Reason:   "cluster:v-test",
 		Metadata: &router.RoutingMetadata{
-			CandidateModels: []string{"claude-opus-4-8", "claude-haiku-4-5"},
+			CandidateModels: []string{"moonshotai/kimi-k3", "deepseek/deepseek-v4-flash"},
 			ChosenScore:     0.82,
-			CandidateScores: map[string]float32{"claude-opus-4-8": 0.83, "claude-haiku-4-5": 0.82},
+			CandidateScores: map[string]float32{"moonshotai/kimi-k3": 0.83, "deepseek/deepseek-v4-flash": 0.82},
 			Propensity:      1.0,
 		},
 	}
@@ -45,19 +45,19 @@ func TestBuildObservationContext_CapturesFreshOnStay(t *testing.T) {
 	assert.Nil(t, obs.ChosenScore)
 
 	// Fresh columns must be populated from the scorer's recommendation.
-	assert.Equal(t, "claude-haiku-4-5", obs.FreshDecisionModel)
+	assert.Equal(t, "deepseek/deepseek-v4-flash", obs.FreshDecisionModel)
 	require.NotNil(t, obs.FreshCandidateScores, "fresh score vector must be captured on a STAY")
 	var got map[string]float32
 	require.NoError(t, json.Unmarshal(obs.FreshCandidateScores, &got))
-	assert.InDelta(t, 0.83, got["claude-opus-4-8"], 1e-6)
-	assert.InDelta(t, 0.82, got["claude-haiku-4-5"], 1e-6)
+	assert.InDelta(t, 0.83, got["moonshotai/kimi-k3"], 1e-6)
+	assert.InDelta(t, 0.82, got["deepseek/deepseek-v4-flash"], 1e-6)
 }
 
 // TestBuildObservationContext_NoScorerLeavesFreshNull: when the scorer did not
 // run (hard-pin / tool_result), fresh is a zero Decision, so the fresh columns
 // stay NULL rather than logging a phantom model.
 func TestBuildObservationContext_NoScorerLeavesFreshNull(t *testing.T) {
-	served := router.Decision{Provider: "anthropic", Model: "claude-opus-4-8", Reason: "tool_result_sc"}
+	served := router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "tool_result_sc"}
 
 	obs := buildObservationContext(context.Background(), served, router.Decision{}, CaptureOff)
 
@@ -70,10 +70,10 @@ func TestBuildObservationContext_NoScorerLeavesFreshNull(t *testing.T) {
 func TestBuildObservationContext_CapturesHMMStrategy(t *testing.T) {
 	served := router.Decision{
 		Provider: "anthropic",
-		Model:    "claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 		Reason:   "hmm_policy(label=explore)",
 		Metadata: &router.RoutingMetadata{
-			CandidateModels:      []string{"claude-opus-4-8", "claude-haiku-4-5"},
+			CandidateModels:      []string{"moonshotai/kimi-k3", "deepseek/deepseek-v4-flash"},
 			ChosenScore:          0.71,
 			Strategy:             string(router.StrategyHMM),
 			RouteID:              "route-abc-123",
@@ -145,10 +145,10 @@ func TestBuildObservationContext_SuppressesDebugRefWithoutDebugMode(t *testing.T
 func TestBuildObservationContext_DefaultsStrategyToActive(t *testing.T) {
 	served := router.Decision{
 		Provider: "anthropic",
-		Model:    "claude-opus-4-8",
+		Model:    "moonshotai/kimi-k3",
 		Reason:   "cluster:v-test",
 		Metadata: &router.RoutingMetadata{
-			CandidateModels: []string{"claude-opus-4-8"},
+			CandidateModels: []string{"moonshotai/kimi-k3"},
 			ChosenScore:     0.9,
 		},
 	}
@@ -163,11 +163,11 @@ func TestBuildObservationContext_DefaultsStrategyToActive(t *testing.T) {
 // fresh.Metadata on a sticky HMM turn so telemetry joins to the same id policyOutcomeRoute reports.
 func TestBuildObservationContext_StickyHMMRouteIDFromFresh(t *testing.T) {
 	// Served pin — no metadata, the sticky shape.
-	served := router.Decision{Provider: "anthropic", Model: "claude-opus-4-8", Reason: "pin"}
+	served := router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "pin"}
 	// Fresh HMM re-score this turn carries the correlation id.
 	fresh := router.Decision{
 		Provider: "anthropic",
-		Model:    "claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 		Reason:   "hmm_policy(label=explore)",
 		Metadata: &router.RoutingMetadata{
 			Strategy: string(router.StrategyHMM),
@@ -185,7 +185,7 @@ func TestBuildObservationContext_StickyHMMRouteIDFromFresh(t *testing.T) {
 // TestBuildObservationContext_HardPinLeavesStrategyNull verifies that turns bypassing routing
 // (no served metadata and no fresh re-score) leave strategy NULL, not the session's active strategy.
 func TestBuildObservationContext_HardPinLeavesStrategyNull(t *testing.T) {
-	served := router.Decision{Provider: "anthropic", Model: "claude-opus-4-8", Reason: "user_forced"}
+	served := router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "user_forced"}
 
 	// Request opted into HMM, but this turn was hard-pinned and never scored.
 	ctx := router.WithStrategy(context.Background(), router.StrategyHMM)

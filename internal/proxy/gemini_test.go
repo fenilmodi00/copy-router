@@ -81,7 +81,7 @@ func TestProxyGeminiGenerateContent_RestrictsRoutingToGeminiFamily(t *testing.T)
 func TestProxyGeminiGenerateContent_CrossFormatReturnsSentinel(t *testing.T) {
 	store := newFakePinStore()
 	// Cross-format from a Gemini envelope is deferred; handler maps to HTTP 501.
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash", Reason: "cluster"}}
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{

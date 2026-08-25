@@ -40,7 +40,7 @@ func (f *fakeCompactionSummarizer) Provider() string { return providers.Provider
 func alternatingAnthropicBody(nMsgs, perMsgPad int) []byte {
 	pad := strings.Repeat("x", perMsgPad)
 	var sb strings.Builder
-	sb.WriteString(`{"model":"claude-opus-4-8","system":"sys","messages":[`)
+	sb.WriteString(`{"model":"moonshotai/kimi-k3","system":"sys","messages":[`)
 	for i := range nMsgs {
 		if i > 0 {
 			sb.WriteString(",")
@@ -60,7 +60,7 @@ func alternatingAnthropicBody(nMsgs, perMsgPad int) []byte {
 func toolHeavyAnthropicBody(nPairs, contentBytes int) []byte {
 	pad := strings.Repeat("y", contentBytes)
 	var sb strings.Builder
-	sb.WriteString(`{"model":"claude-opus-4-8","messages":[`)
+	sb.WriteString(`{"model":"moonshotai/kimi-k3","messages":[`)
 	for i := range nPairs {
 		if i > 0 {
 			sb.WriteString(",")
@@ -189,23 +189,25 @@ func TestWithCompaction_ZeroPctDisables(t *testing.T) {
 }
 
 func TestSelectCompactionSummarizer_WindowAware(t *testing.T) {
+	prev := compactionSummarizerModels
+	compactionSummarizerModels = []string{"openai/gpt-oss-120b", "moonshotai/kimi-k3"}
+	t.Cleanup(func() { compactionSummarizerModels = prev })
+
 	s := &Service{}
-	assert.Equal(t, DefaultHandoverModel, s.selectCompactionSummarizer(1_000), "small history → cheap model")
-	assert.Equal(t, largeWindowSummarizerModel, s.selectCompactionSummarizer(300_000), "history over the cheap model's window → large-window model")
+	assert.Equal(t, "openai/gpt-oss-120b", s.selectCompactionSummarizer(1_000), "small history → cheaper small-window model")
+	assert.Equal(t, "moonshotai/kimi-k3", s.selectCompactionSummarizer(300_000), "history over gpt-oss window → large-window model")
 	assert.Equal(t, "", s.selectCompactionSummarizer(5_000_000), "history over every window → none")
 }
 
 func TestMaxEligibleContextWindow(t *testing.T) {
-	s := &Service{availableModels: map[string]struct{}{"claude-haiku-4-5": {}}}
-	assert.Equal(t, 200_000, s.maxEligibleContextWindow(nil, nil, 0))
-	assert.Equal(t, 200_000, s.maxEligibleContextWindow(nil, nil, 5_000), "Anthropic (signature-keeping) models ignore signature savings")
-	assert.Equal(t, 0, s.maxEligibleContextWindow(map[string]struct{}{"claude-haiku-4-5": {}}, nil, 0), "policy-excluding the only model leaves no window")
+	s := &Service{availableModels: map[string]struct{}{"deepseek/deepseek-v4-flash": {}}}
+	assert.Equal(t, 1_048_576, s.maxEligibleContextWindow(nil, nil, 0))
+	assert.Equal(t, 1_048_576+5_000, s.maxEligibleContextWindow(nil, nil, 5_000), "aiand flash strips Anthropic signatures, so sig savings expand the window")
+	assert.Equal(t, 0, s.maxEligibleContextWindow(map[string]struct{}{"deepseek/deepseek-v4-flash": {}}, nil, 0), "policy-excluding the only model leaves no window")
 
-	// A signature-stripping (non-Anthropic) model gets sigSavings added to its
-	// effective window, matching the context-overflow pre-filter's discount.
-	sStrip := &Service{availableModels: map[string]struct{}{"gpt-5.5": {}}}
-	assert.Equal(t, 1_050_000, sStrip.maxEligibleContextWindow(nil, nil, 0))
-	assert.Equal(t, 1_050_000+5_000, sStrip.maxEligibleContextWindow(nil, nil, 5_000), "stripping model gains signature savings as headroom")
+	sStrip := &Service{availableModels: map[string]struct{}{"openai/gpt-oss-120b": {}}}
+	assert.Equal(t, 131_072, sStrip.maxEligibleContextWindow(nil, nil, 0))
+	assert.Equal(t, 131_072+5_000, sStrip.maxEligibleContextWindow(nil, nil, 5_000), "stripping model gains signature savings as headroom")
 }
 
 func TestClassifyDispatchError_ContextWindowExceeded(t *testing.T) {

@@ -64,7 +64,7 @@ func (b *requestBuilder) build(t *testing.T) []byte {
 	}
 
 	req := map[string]any{
-		"model":      "claude-sonnet-4-5", // ignored by router; the force-model header pins the served model
+		"model":      "deepseek/deepseek-v4-pro-0813", // ignored by router; the force-model header pins the served model
 		"max_tokens": b.maxTokens,
 		"system":     []any{sysBlock},
 		"messages": []any{
@@ -152,7 +152,7 @@ func cacheControl(ttl string) map[string]any {
 func forceModelBody(t *testing.T, userID, model string) []byte {
 	t.Helper()
 	req := map[string]any{
-		"model":      "claude-sonnet-4-5",
+		"model":      "deepseek/deepseek-v4-pro-0813",
 		"max_tokens": 4096,
 		"messages": []any{
 			map[string]any{"role": "user", "content": "/force-model " + model},

@@ -187,7 +187,7 @@ func TestRecordCallLog_OffEmitsNothing(t *testing.T) {
 
 	buf := otel.NewBuffer(em)
 	ctx := buf.WithContext(context.Background())
-	base := otel.NewAttrBuilder(1).String("decision.model", "claude-opus-4-8").Build()
+	base := otel.NewAttrBuilder(1).String("decision.model", "moonshotai/kimi-k3").Build()
 	s.recordCallLog(ctx, base, false, []byte("req"), []byte("resp"), false)
 	otel.Flush(ctx)
 
@@ -201,14 +201,14 @@ func TestRecordCallLog_FullCapturesBodies(t *testing.T) {
 
 	buf := otel.NewBuffer(em)
 	ctx := buf.WithContext(context.Background())
-	base := otel.NewAttrBuilder(1).String("decision.model", "claude-opus-4-8").Build()
+	base := otel.NewAttrBuilder(1).String("decision.model", "moonshotai/kimi-k3").Build()
 	s.recordCallLog(ctx, base, false, []byte(`{"req":1}`), []byte(`{"resp":2}`), false)
 	otel.Flush(ctx)
 
 	require.NoError(t, em.Shutdown(context.Background()))
 	require.Equal(t, 1, coll.count(t))
 	a := coll.attrs(t)
-	assert.Equal(t, "claude-opus-4-8", a["decision.model"]) // base metadata carried over
+	assert.Equal(t, "moonshotai/kimi-k3", a["decision.model"]) // base metadata carried over
 	assert.Equal(t, `{"req":1}`, a["io.request_body"])
 	assert.Equal(t, `{"resp":2}`, a["io.response_body"])
 	assert.Empty(t, a["io.request_sha256"])
@@ -298,21 +298,21 @@ func TestApplyRoutingStateAttrs_EmitsExactThreadAndTransition(t *testing.T) {
 	res := turnLoopResult{
 		SessionKey:       key,
 		PinRole:          "default_high",
-		PriorServedModel: "claude-haiku-4-5",
+		PriorServedModel: "deepseek/deepseek-v4-flash",
 	}
 	b := otel.NewAttrBuilder(4)
-	applyRoutingStateAttrs(b, res, "claude-opus-4-7", key)
+	applyRoutingStateAttrs(b, res, "moonshotai/kimi-k3", key)
 	attrs := attrsByKey(b.Build())
 
 	assert.Equal(t, "0102030405060708090a0b0c0d0e0f10", attrs["routing.session_key"].GetStringValue())
 	assert.Equal(t, "default_high", attrs["routing.pin_role"].GetStringValue())
-	assert.Equal(t, "claude-haiku-4-5", attrs["routing.prior_served_model"].GetStringValue())
+	assert.Equal(t, "deepseek/deepseek-v4-flash", attrs["routing.prior_served_model"].GetStringValue())
 	assert.True(t, attrs["routing.model_changed"].GetBoolValue())
 }
 
 func TestApplyRoutingStateAttrs_FirstSelectionIsNotAChange(t *testing.T) {
 	b := otel.NewAttrBuilder(4)
-	applyRoutingStateAttrs(b, turnLoopResult{PinRole: sessionpin.DefaultRole}, "claude-haiku-4-5", [sessionpin.SessionKeyLen]byte{})
+	applyRoutingStateAttrs(b, turnLoopResult{PinRole: sessionpin.DefaultRole}, "deepseek/deepseek-v4-flash", [sessionpin.SessionKeyLen]byte{})
 	attrs := attrsByKey(b.Build())
 
 	assert.Empty(t, attrs["routing.session_key"].GetStringValue())
@@ -323,7 +323,7 @@ func TestApplyRoutingStateAttrs_FirstSelectionIsNotAChange(t *testing.T) {
 func TestApplyRoutingStateAttrs_UsesRequestKeyWhenRoutingKeyIsEmpty(t *testing.T) {
 	key := [sessionpin.SessionKeyLen]byte{1, 2, 3}
 	b := otel.NewAttrBuilder(4)
-	applyRoutingStateAttrs(b, turnLoopResult{}, "claude-haiku-4-5", key)
+	applyRoutingStateAttrs(b, turnLoopResult{}, "deepseek/deepseek-v4-flash", key)
 	attrs := attrsByKey(b.Build())
 
 	assert.Equal(t, "01020300000000000000000000000000", attrs["routing.session_key"].GetStringValue())
@@ -344,9 +344,9 @@ func TestApplyPlannerAttrs_OmitsDetailsWhenSkipped(t *testing.T) {
 
 func TestApplyPlannerAttrs_EmitsDetailsWhenEvaluated(t *testing.T) {
 	res := turnLoopResult{
-		Decision:     router.Decision{Model: "claude-haiku-4-5"},
-		Fresh:        router.Decision{Model: "claude-opus-4-7"},
-		PinModel:     "claude-haiku-4-5",
+		Decision:     router.Decision{Model: "deepseek/deepseek-v4-flash"},
+		Fresh:        router.Decision{Model: "moonshotai/kimi-k3"},
+		PinModel:     "deepseek/deepseek-v4-flash",
 		PinProvider:  providers.ProviderAnthropic,
 		PrefixBroken: true,
 		PlannerDecision: planner.Decision{

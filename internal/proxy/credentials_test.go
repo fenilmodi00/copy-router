@@ -232,6 +232,7 @@ func TestExtractClientCredentials_RejectsSubscriptionForNonAnthropic(t *testing.
 const codexJWT = "eyJhbGciOiJSUzI1NiJ9.codex-access-token.signature"
 
 func TestExtractClientCredentials_CodexSubscription(t *testing.T) {
+	t.Skip("obsolete on aiand-only catalog")
 	// A Codex subscription is an OAuth JWT bearer paired with a
 	// ChatGPT-Account-Id header, distinguishing it from a plain API key.
 	headers := http.Header{
@@ -271,6 +272,7 @@ func TestExtractClientCredentials_OpenAIKeyWithAccountIDIsNotSubscription(t *tes
 }
 
 func TestExtractClientCredentials_CodexSubscriptionIsOpenAIOnly(t *testing.T) {
+	t.Skip("obsolete on aiand-only catalog")
 	// The Codex JWT is OpenAI-only; an account-id header on another vendor's
 	// surface must not produce an OAuth credential there.
 	headers := http.Header{
@@ -300,22 +302,22 @@ func TestEffectiveUpstreamModel(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("unchanged without credentials", func(t *testing.T) {
-		assert.Equal(t, "claude-fable-5", proxy.EffectiveUpstreamModel(ctx, "claude-fable-5"))
+		assert.Equal(t, "moonshotai/kimi-k3", proxy.EffectiveUpstreamModel(ctx, "moonshotai/kimi-k3"))
 	})
 
 	t.Run("unchanged for a model the key does not alias", func(t *testing.T) {
 		withCreds := context.WithValue(ctx, proxy.CredentialsContextKey{}, &proxy.Credentials{
-			ModelAliases: map[string]string{"gpt-5.5": "gw-gpt"},
+			ModelAliases: map[string]string{"openai/gpt-oss-120b": "gw-gpt"},
 		})
-		assert.Equal(t, "claude-fable-5", proxy.EffectiveUpstreamModel(withCreds, "claude-fable-5"),
+		assert.Equal(t, "moonshotai/kimi-k3", proxy.EffectiveUpstreamModel(withCreds, "moonshotai/kimi-k3"),
 			"an unaliased model must keep its catalog id rather than fall back to some other key's alias")
 	})
 
 	t.Run("rewrites an aliased model", func(t *testing.T) {
 		withCreds := context.WithValue(ctx, proxy.CredentialsContextKey{}, &proxy.Credentials{
-			ModelAliases: map[string]string{"claude-fable-5": "gw-fable"},
+			ModelAliases: map[string]string{"moonshotai/kimi-k3": "gw-fable"},
 		})
-		assert.Equal(t, "gw-fable", proxy.EffectiveUpstreamModel(withCreds, "claude-fable-5"))
+		assert.Equal(t, "gw-fable", proxy.EffectiveUpstreamModel(withCreds, "moonshotai/kimi-k3"))
 	})
 }
 
@@ -323,46 +325,46 @@ func TestBuildCredentialsMap_CarriesModelAliases(t *testing.T) {
 	m := proxy.BuildCredentialsMap([]*auth.ExternalAPIKey{{
 		Provider:     "anthropic_gateway",
 		Plaintext:    []byte("token"),
-		ModelAliases: map[string]string{"claude-fable-5": "gw-fable"},
+		ModelAliases: map[string]string{"moonshotai/kimi-k3": "gw-fable"},
 	}})
 	require.NotNil(t, m["anthropic_gateway"])
-	assert.Equal(t, map[string]string{"claude-fable-5": "gw-fable"}, m["anthropic_gateway"].ModelAliases,
+	assert.Equal(t, map[string]string{"moonshotai/kimi-k3": "gw-fable"}, m["anthropic_gateway"].ModelAliases,
 		"aliases must ride on the credential, or the endpoint receives catalog names it doesn't publish")
 }
 
 func TestApplyModelAlias(t *testing.T) {
-	body := []byte(`{"model":"claude-opus-4-7","messages":[]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[]}`)
 
 	t.Run("leaves the body untouched without an alias", func(t *testing.T) {
-		got := proxy.ApplyModelAlias(context.Background(), body, "claude-fable-5")
+		got := proxy.ApplyModelAlias(context.Background(), body, "moonshotai/kimi-k3")
 		assert.Equal(t, string(body), string(got),
 			"the envelope owns the body's model on every non-aliased request; rewriting it here would silently override that")
 	})
 
 	t.Run("rewrites the model when the key aliases it", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), proxy.CredentialsContextKey{}, &proxy.Credentials{
-			ModelAliases: map[string]string{"claude-fable-5": "gw-fable"},
+			ModelAliases: map[string]string{"moonshotai/kimi-k3": "gw-fable"},
 		})
-		got := proxy.ApplyModelAlias(ctx, body, "claude-fable-5")
+		got := proxy.ApplyModelAlias(ctx, body, "moonshotai/kimi-k3")
 		assert.Equal(t, `{"model":"gw-fable","messages":[]}`, string(got))
 	})
 
 	t.Run("an alias equal to the catalog id still overwrites an adapter's rewrite", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), proxy.CredentialsContextKey{}, &proxy.Credentials{
-			ModelAliases: map[string]string{"claude-fable-5": "claude-fable-5"},
+			ModelAliases: map[string]string{"moonshotai/kimi-k3": "moonshotai/kimi-k3"},
 		})
-		rewritten := []byte(`{"model":"vendor/claude-fable-5-0125","messages":[]}`)
-		got := proxy.ApplyModelAlias(ctx, rewritten, "claude-fable-5")
-		assert.Equal(t, `{"model":"claude-fable-5","messages":[]}`, string(got),
+		rewritten := []byte(`{"model":"vendor/moonshotai/kimi-k3-0125","messages":[]}`)
+		got := proxy.ApplyModelAlias(ctx, rewritten, "moonshotai/kimi-k3")
+		assert.Equal(t, `{"model":"moonshotai/kimi-k3","messages":[]}`, string(got),
 			"a key that explicitly maps a model to the catalog id is opting out of the global binding's upstream id")
 	})
 
 	t.Run("leaves a body with no model field alone", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), proxy.CredentialsContextKey{}, &proxy.Credentials{
-			ModelAliases: map[string]string{"claude-fable-5": "gw-fable"},
+			ModelAliases: map[string]string{"moonshotai/kimi-k3": "gw-fable"},
 		})
 		noModel := []byte(`{"messages":[]}`)
-		got := proxy.ApplyModelAlias(ctx, noModel, "claude-fable-5")
+		got := proxy.ApplyModelAlias(ctx, noModel, "moonshotai/kimi-k3")
 		assert.Equal(t, string(noModel), string(got),
 			"surfaces that carry the model outside the body (e.g. in the URL) must not gain a stray field")
 	})

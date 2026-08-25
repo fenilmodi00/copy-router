@@ -29,20 +29,20 @@ func TestHandleNoProgressBreak_PreservesUserForcedPin(t *testing.T) {
 	store := &overwritingPinStore{
 		pin: sessionpin.Pin{
 			Provider:    "anthropic",
-			Model:       "claude-opus-4-8",
+			Model:       "moonshotai/kimi-k3",
 			Reason:      translate.ReasonUserForceModel,
 			PinnedUntil: time.Now().Add(time.Hour),
 		},
 		found: true,
 	}
 	svc := &Service{pinStore: store}
-	env, err := translate.ParseAnthropic([]byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"retry"}]}`))
+	env, err := translate.ParseAnthropic([]byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"retry"}]}`))
 	require.NoError(t, err)
 	rec := httptest.NewRecorder()
 
 	err = svc.handleNoProgressBreak(
 		context.Background(), rec, env, noProgressMatchThreshold, uuid.New(), key,
-		"default_high", "claude-opus-4-8", "anthropic", 10,
+		"default_high", "moonshotai/kimi-k3", "anthropic", 10,
 	)
 	require.NoError(t, err)
 
@@ -79,7 +79,7 @@ func TestComputeNoProgressFingerprint_PromptPrefixOnly(t *testing.T) {
 }
 
 func TestComputeNoProgressFingerprint_DistinguishesMessageCount(t *testing.T) {
-	d := router.Decision{Model: "gemini-3.1-pro-preview", Provider: "google"}
+	d := router.Decision{Model: "google/gemma-4-31b-it", Provider: "google"}
 	// A growing transcript must change the fingerprint even with a constant prompt prefix.
 	a := computeNoProgressFingerprint(d, "explore RSVP files", 10, "")
 	b := computeNoProgressFingerprint(d, "explore RSVP files", 12, "")
@@ -109,7 +109,7 @@ func TestComputeNoProgressFingerprint_IgnoresMessageCountWhenMarkerPresent(t *te
 func TestComputeNoProgressFingerprint_MessageCountStillCountsWithoutMarker(t *testing.T) {
 	// The tool-free path keeps message_count as its only fallback signal, so a
 	// growing transcript with no marker must still change the fingerprint.
-	d := router.Decision{Model: "gemini-3.1-pro-preview", Provider: "google"}
+	d := router.Decision{Model: "google/gemma-4-31b-it", Provider: "google"}
 	a := computeNoProgressFingerprint(d, "explore RSVP files", 10, "")
 	b := computeNoProgressFingerprint(d, "explore RSVP files", 12, "")
 	assert.NotEqual(t, a, b, "without a marker, message_count must still distinguish turns")
@@ -178,7 +178,7 @@ func TestNoProgressTracker_DoesNotTripWhenMessageCountGrows(t *testing.T) {
 	tr := newNoProgressTracker()
 	key := sessionKeyFromString("session-healthy-loop")
 	install := uuid.New()
-	d := router.Decision{Model: "gemini-3.1-pro-preview", Provider: "google"}
+	d := router.Decision{Model: "google/gemma-4-31b-it", Provider: "google"}
 	now := time.Now()
 
 	for i := 0; i < noProgressMatchThreshold*2; i++ {
@@ -213,7 +213,7 @@ func TestNoProgressTracker_TripsWhenMessageCountAndToolProgressFlat(t *testing.T
 	tr := newNoProgressTracker()
 	key := sessionKeyFromString("session-spawn-loop")
 	install := uuid.New()
-	d := router.Decision{Model: "gemini-3.1-pro-preview", Provider: "google"}
+	d := router.Decision{Model: "google/gemma-4-31b-it", Provider: "google"}
 	now := time.Now()
 	fp := computeNoProgressFingerprint(d, "spawn sub-agent", 2, "1\x00Agent\x00same-hash")
 
@@ -226,12 +226,12 @@ func TestNoProgressTracker_TripsWhenMessageCountAndToolProgressFlat(t *testing.T
 
 func TestToolProgressMarker_AdvancesWithToolCalls(t *testing.T) {
 	// Second turn appends a distinct tool call; the marker must change.
-	turn1 := []byte(`{"model":"claude-haiku-4-5","max_tokens":256,"messages":[` +
+	turn1 := []byte(`{"model":"deepseek/deepseek-v4-flash","max_tokens":256,"messages":[` +
 		`{"role":"user","content":"find the bug"},` +
 		`{"role":"assistant","content":[{"type":"tool_use","id":"1","name":"Grep","input":{"pattern":"scim","path":"/a"}}]},` +
 		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"1","content":"x"}]}` +
 		`]}`)
-	turn2 := []byte(`{"model":"claude-haiku-4-5","max_tokens":256,"messages":[` +
+	turn2 := []byte(`{"model":"deepseek/deepseek-v4-flash","max_tokens":256,"messages":[` +
 		`{"role":"user","content":"find the bug"},` +
 		`{"role":"assistant","content":[{"type":"tool_use","id":"1","name":"Grep","input":{"pattern":"scim","path":"/a"}}]},` +
 		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"1","content":"x"}]},` +
@@ -251,7 +251,7 @@ func TestToolProgressMarker_AdvancesWithToolCalls(t *testing.T) {
 }
 
 func TestToolProgressMarker_EmptyWithoutToolCalls(t *testing.T) {
-	body := []byte(`{"model":"claude-haiku-4-5","max_tokens":256,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek/deepseek-v4-flash","max_tokens":256,"messages":[{"role":"user","content":"hi"}]}`)
 	env, err := translate.ParseAnthropic(body)
 	require.NoError(t, err)
 	assert.Equal(t, "", toolProgressMarker(env), "a tool-free turn has no tool-progress marker")
@@ -534,7 +534,7 @@ func TestNoProgressTracker_ConcurrentFirstInsert_NoPanicOrDeadlock(t *testing.T)
 
 	tr := newNoProgressTracker()
 	install := uuid.New()
-	d := router.Decision{Model: "gemini-3.1-pro-preview", Provider: "google"}
+	d := router.Decision{Model: "google/gemma-4-31b-it", Provider: "google"}
 	now := time.Now()
 	fp := computeNoProgressFingerprint(d, "same stuck prompt", 1, "")
 
@@ -569,7 +569,7 @@ func TestNoProgressTracker_SequentialFiringGuarantee(t *testing.T) {
 	tr := newNoProgressTracker()
 	key := sessionKeyFromString("session-sequential-guarantee")
 	install := uuid.New()
-	d := router.Decision{Model: "gemini-3.1-pro-preview", Provider: "google"}
+	d := router.Decision{Model: "google/gemma-4-31b-it", Provider: "google"}
 	now := time.Now()
 	fp := computeNoProgressFingerprint(d, "stuck prompt", 2, "1\x00Agent\x00same-hash")
 

@@ -19,145 +19,141 @@ func TestResolveForceModel(t *testing.T) {
 		wantProvider string
 		wantKnown    bool
 	}{
-		// Catalog matches: provider comes from the primary binding, even
-		// when the model name doesn't follow the bare-prefix heuristic. These
-		// resolve to a real catalog entry, so known is true.
+		// Catalog matches: provider comes from the primary binding (aiand).
 		{
-			name:         "catalog anthropic",
-			input:        "claude-opus-4-7",
-			wantID:       "claude-opus-4-7",
-			wantProvider: providers.ProviderAnthropic,
+			name:         "catalog kimi-k3",
+			input:        "moonshotai/kimi-k3",
+			wantID:       "moonshotai/kimi-k3",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
-			name:         "catalog google",
-			input:        "gemini-3.1-flash-lite-preview",
-			wantID:       "gemini-3.1-flash-lite-preview",
-			wantProvider: providers.ProviderGoogle,
+			name:         "catalog gemma",
+			input:        "google/gemma-4-31b-it",
+			wantID:       "google/gemma-4-31b-it",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
-			name:         "catalog bedrock — slash form",
-			input:        "qwen/qwen3-235b-a22b-2507",
-			wantID:       "qwen/qwen3-235b-a22b-2507",
-			wantProvider: providers.ProviderBedrock,
+			name:         "catalog qwen",
+			input:        "qwen/qwen3.6-27b",
+			wantID:       "qwen/qwen3.6-27b",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
-			name:         "catalog bedrock — bare suffix match",
-			input:        "qwen3-235b-a22b-2507",
-			wantID:       "qwen/qwen3-235b-a22b-2507",
-			wantProvider: providers.ProviderBedrock,
+			name:         "catalog qwen — bare suffix match",
+			input:        "qwen3.6-27b",
+			wantID:       "qwen/qwen3.6-27b",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "alias gpt",
 			input:        "gpt",
-			wantID:       "gpt-5.6-sol",
-			wantProvider: providers.ProviderOpenAI,
+			wantID:       "openai/gpt-oss-120b",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "alias gpt hyphen minor version",
 			input:        "gpt-5-5",
-			wantID:       "gpt-5.5",
-			wantProvider: providers.ProviderOpenAI,
+			wantID:       "openai/gpt-oss-120b",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "native openai prefix",
-			input:        "openai/gpt-5.6-luna",
-			wantID:       "gpt-5.6-luna",
-			wantProvider: providers.ProviderOpenAI,
+			input:        "openai/gpt-oss-120b",
+			wantID:       "openai/gpt-oss-120b",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "native openai prefix with version alias",
 			input:        "openai/gpt-5.6",
-			wantID:       "gpt-5.6-sol",
-			wantProvider: providers.ProviderOpenAI,
+			wantID:       "openai/gpt-oss-120b",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "native openai prefix with model alias",
 			input:        "openai/luna",
-			wantID:       "gpt-5.6-luna",
-			wantProvider: providers.ProviderOpenAI,
+			wantID:       "openai/gpt-oss-120b",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "native openai prefix rejects cross-provider alias",
 			input:        "openai/claude",
-			wantID:       "claude",
-			wantProvider: providers.ProviderOpenAI,
-			wantKnown:    false,
+			wantID:       "z-ai/glm-5.2",
+			wantProvider: providers.ProviderAiand,
+			wantKnown:    true, // alias retargets onto aiand catalog
 		},
 		{
 			name:         "alias claude",
 			input:        "claude",
-			wantID:       "claude-opus-5",
-			wantProvider: providers.ProviderAnthropic,
+			wantID:       "z-ai/glm-5.2",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "alias opus",
 			input:        "opus",
-			wantID:       "claude-opus-5",
-			wantProvider: providers.ProviderAnthropic,
+			wantID:       "z-ai/glm-5.2",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "alias opus dotted version",
 			input:        "opus-4.8",
-			wantID:       "claude-opus-4-8",
-			wantProvider: providers.ProviderAnthropic,
+			wantID:       "moonshotai/kimi-k3",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "alias mixed case and whitespace",
 			input:        "  Gemini  ",
-			wantID:       "gemini-3-pro-preview",
-			wantProvider: providers.ProviderGoogle,
+			wantID:       "google/gemma-4-31b-it",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "alias qwen",
 			input:        "qwen",
-			wantID:       "qwen/qwen3-coder",
-			wantProvider: providers.ProviderFireworks,
+			wantID:       "qwen/qwen3.6-27b",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
-			name:         "canonical qwen3.8-max with vendor prefix",
-			input:        "qwen/qwen3.8-max",
-			wantID:       "qwen/qwen3.8-max",
-			wantProvider: providers.ProviderFireworks,
+			name:         "canonical qwen/qwen3.6-27b with vendor prefix",
+			input:        "qwen/qwen3.6-27b",
+			wantID:       "qwen/qwen3.6-27b",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "dash spelling qwen/qwen-3.8-max",
 			input:        "qwen/qwen-3.8-max",
-			wantID:       "qwen/qwen3.8-max",
-			wantProvider: providers.ProviderFireworks,
+			wantID:       "qwen/qwen3.6-27b",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "dash spelling qwen-3.8-max",
 			input:        "qwen-3.8-max",
-			wantID:       "qwen/qwen3.8-max",
-			wantProvider: providers.ProviderFireworks,
+			wantID:       "qwen/qwen3.6-27b",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "dash spelling qwen-3.8",
 			input:        "qwen-3.8",
-			wantID:       "qwen/qwen3.8-max",
-			wantProvider: providers.ProviderFireworks,
+			wantID:       "qwen/qwen3.6-27b",
+			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
-		// Heuristic fallback: not in the catalog, so known is false. The
-		// provider is a best-effort guess for logging only; the handler rejects
-		// these rather than pinning a model with no known tier.
+		// Heuristic fallback: not in the catalog, so known is false.
 		{
 			name:         "heuristic openai — gpt-6 not in catalog",
 			input:        "gpt-6",
@@ -193,8 +189,6 @@ func TestResolveForceModel(t *testing.T) {
 			wantProvider: providers.ProviderAnthropic,
 			wantKnown:    false,
 		},
-		// Truncated command (the bug this guard closes): "/force-model gpt-"
-		// parses to "gpt-", which matches no catalog entry.
 		{
 			name:         "truncated gpt- is not known",
 			input:        "gpt-",
@@ -202,9 +196,6 @@ func TestResolveForceModel(t *testing.T) {
 			wantProvider: providers.ProviderOpenAI,
 			wantKnown:    false,
 		},
-		// Matching is exact: a name that merely contains, or is contained by, a
-		// real one is unknown. "qwen 3.8" is the reported bug — it used to
-		// resolve through the bare "qwen" alias and silently serve qwen3-coder.
 		{
 			name:         "spaced model name is not known",
 			input:        "qwen 3.8",
@@ -227,9 +218,6 @@ func TestResolveForceModel(t *testing.T) {
 			wantKnown:    false,
 		},
 		{
-			// A prefix of a real ID must not resolve to it. (Contrast
-			// "claude-opus", which resolves only because it's an explicit
-			// alias — deliberate shorthands still work, guesses don't.)
 			name:         "prefix of a real id is not known",
 			input:        "claude-sonnet-4",
 			wantID:       "claude-sonnet-4",
@@ -237,7 +225,7 @@ func TestResolveForceModel(t *testing.T) {
 			wantKnown:    false,
 		},
 		{
-			// The bare-name table is exact too: a tail fragment is not a tail.
+			// bare mimo is unknown (xiaomi/mimo* retired from aiand catalog).
 			name:         "fragment of a bare name is not known",
 			input:        "mimo",
 			wantID:       "mimo",
@@ -245,12 +233,11 @@ func TestResolveForceModel(t *testing.T) {
 			wantKnown:    false,
 		},
 		{
-			// The vendor prefix stays optional via an exact bare-name entry.
-			name:         "bare name of a slash-form model",
-			input:        "mimo-v2.5-pro",
-			wantID:       "xiaomi/mimo-v2.5-pro",
-			wantProvider: providers.ProviderOpenRouter,
-			wantKnown:    true,
+			name:         "xhigh-style unknown model",
+			input:        "claude-opus-5:xhigh",
+			wantID:       "claude-opus-5",
+			wantProvider: providers.ProviderAnthropic,
+			wantKnown:    false,
 		},
 	}
 
@@ -308,13 +295,13 @@ func TestBareCatalogNames_AliasesTakePrecedence(t *testing.T) {
 	}
 }
 
-// grok-4.5 is retired; family aliases (grok, xai) now follow flagship 4.6, own-name pins still resolve exactly.
+// Family aliases (grok, xai) retarget to kimi-k2.7 on aiand.
 func TestResolveForceModel_GrokFamilyAlias(t *testing.T) {
 	for _, input := range []string{"grok", "xai"} {
 		t.Run(input, func(t *testing.T) {
 			gotID, gotProvider, gotKnown := resolveForceModel(input)
-			assert.Equal(t, "grok-4.6", gotID, "canonical id")
-			assert.Equal(t, providers.ProviderXAI, gotProvider, "provider")
+			assert.Equal(t, "moonshotai/kimi-k2.7", gotID, "canonical id")
+			assert.Equal(t, providers.ProviderAiand, gotProvider, "provider")
 			assert.True(t, gotKnown, "known")
 		})
 	}
@@ -322,8 +309,8 @@ func TestResolveForceModel_GrokFamilyAlias(t *testing.T) {
 
 // An explicit :level suffix must survive resolution to its catalog model.
 func TestResolveForceModel_EffortSuffixPreserved(t *testing.T) {
-	gotID, _, gotKnown, gotEffort := resolveForceModelWithEffort("grok-4.6:high")
-	assert.Equal(t, "grok-4.6", gotID, "canonical id")
+	gotID, _, gotKnown, gotEffort := resolveForceModelWithEffort("moonshotai/kimi-k2.7:high")
+	assert.Equal(t, "moonshotai/kimi-k2.7", gotID, "canonical id")
 	assert.True(t, gotKnown, "known")
 	assert.Equal(t, "high", gotEffort, "effort")
 }

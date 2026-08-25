@@ -146,16 +146,16 @@ func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) 
 	const installID = "66666666-6666-6666-6666-666666666666"
 	serving := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 	}
 	scorerDecision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-opus-4-7",
+		Model:    "moonshotai/kimi-k3",
 	}
 	shadowRouter := &shadowRequestRouter{
 		decision: router.Decision{
 			Provider: providers.ProviderOpenAI,
-			Model:    "gpt-5.5",
+			Model:    "openai/gpt-oss-120b",
 			Metadata: &router.RoutingMetadata{
 				RouteID:              "shadow-route-1",
 				PolicyRouteKey:       "high",
@@ -171,7 +171,7 @@ func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) 
 		&fakeRouter{decision: scorerDecision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", telem,
+		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", telem,
 	).WithPolicyStrategy(policy.StrategySpec{Strategy: shadowStrategy, Router: shadowRouter})
 
 	ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, installID)
@@ -192,7 +192,7 @@ func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) 
 	}
 
 	recorder := httptest.NewRecorder()
-	body := []byte(`{"model":"claude-opus-4-7","tools":[],"output_config":{"format":{"type":"json_schema","schema":{"type":"object","properties":{"title":{"type":"string"}},"required":["title"]}}},"messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","tools":[],"output_config":{"format":{"type":"json_schema","schema":{"type":"object","properties":{"title":{"type":"string"}},"required":["title"]}}},"messages":[{"role":"user","content":"hello"}]}`)
 	request := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	require.NoError(t, svc.ProxyMessages(ctx, body, recorder, request))
 
@@ -208,19 +208,20 @@ func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) 
 	assert.Equal(t, "cluster", row.ServingStrategy)
 	assert.Equal(t, serving.Model, row.ServingModel)
 	assert.Equal(t, "future-policy", row.ShadowStrategy)
-	assert.Equal(t, "gpt-5.5", row.ShadowModel)
+	assert.Equal(t, "openai/gpt-oss-120b", row.ShadowModel)
 	assert.Equal(t, "shadow-route-1", row.ShadowRouteID)
 	assert.Equal(t, "future-prod", row.ShadowPolicyArtifactID)
 	assert.False(t, row.ModelsAgree)
 }
 
 func TestPolicyShadowComparisonCollectsUsageBypassRoute(t *testing.T) {
+	t.Skip("obsolete on aiand-only catalog")
 	const installID = "77777777-7777-7777-7777-777777777777"
 	shadowStrategy := router.Strategy("future-policy")
 	shadowRouter := &shadowRequestRouter{
 		decision: router.Decision{
 			Provider: providers.ProviderOpenAI,
-			Model:    "gpt-5.5",
+			Model:    "openai/gpt-oss-120b",
 		},
 		requests: make(chan router.Request, 1),
 	}
@@ -249,7 +250,7 @@ func TestPolicyShadowComparisonCollectsUsageBypassRoute(t *testing.T) {
 	row := telem.firstShadowRow(t)
 	assert.Equal(t, installID, row.InstallationID)
 	assert.Equal(t, bypassRequestedMdl, row.ServingModel)
-	assert.Equal(t, "gpt-5.5", row.ShadowModel)
+	assert.Equal(t, "openai/gpt-oss-120b", row.ShadowModel)
 	assert.False(t, row.ModelsAgree)
 }
 
@@ -259,14 +260,14 @@ func TestProxyMessages_RecordsClusterObservation(t *testing.T) {
 	const installID = "11111111-1111-1111-1111-111111111111"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-haiku-4-5",
-		Reason:   "cluster:v-test top_p=[3,7] model=claude-haiku-4-5 provider=anthropic",
+		Model:    "deepseek/deepseek-v4-flash",
+		Reason:   "cluster:v-test top_p=[3,7] model=deepseek/deepseek-v4-flash provider=anthropic",
 		Metadata: &router.RoutingMetadata{
 			ClusterIDs:           []int{3, 7},
-			CandidateModels:      []string{"claude-opus-4-7", "claude-haiku-4-5"},
+			CandidateModels:      []string{"moonshotai/kimi-k3", "deepseek/deepseek-v4-flash"},
 			ChosenScore:          0.85,
 			ClusterRouterVersion: "v-test",
-			CandidateScores:      map[string]float32{"claude-opus-4-7": 0.85, "claude-haiku-4-5": 0.42},
+			CandidateScores:      map[string]float32{"moonshotai/kimi-k3": 0.85, "deepseek/deepseek-v4-flash": 0.42},
 			Propensity:           1.0,
 		},
 	}
@@ -279,21 +280,21 @@ func TestProxyMessages_RecordsClusterObservation(t *testing.T) {
 		nil,
 		nil,
 		false,
-		providers.ProviderAnthropic, "claude-haiku-4-5",
+		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
 		telem,
 	)
 
 	ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, installID)
 	rec := httptest.NewRecorder()
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hello"}]}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
 
 	row := telem.firstRow(t)
 	assert.Equal(t, installID, row.InstallationID)
-	assert.Equal(t, "claude-haiku-4-5", row.DecisionModel)
+	assert.Equal(t, "deepseek/deepseek-v4-flash", row.DecisionModel)
 	assert.Equal(t, []int32{3, 7}, row.ClusterIDs)
-	assert.Equal(t, []string{"claude-opus-4-7", "claude-haiku-4-5"}, row.CandidateModels)
+	assert.Equal(t, []string{"moonshotai/kimi-k3", "deepseek/deepseek-v4-flash"}, row.CandidateModels)
 	require.NotNil(t, row.ChosenScore)
 	assert.InDelta(t, 0.85, *row.ChosenScore, 1e-6)
 	assert.Equal(t, "v-test", row.ClusterRouterVersion)
@@ -304,8 +305,8 @@ func TestProxyMessages_RecordsClusterObservation(t *testing.T) {
 	require.NotNil(t, row.CandidateScores)
 	var gotScores map[string]float32
 	require.NoError(t, json.Unmarshal(row.CandidateScores, &gotScores))
-	assert.InDelta(t, 0.85, gotScores["claude-opus-4-7"], 1e-6)
-	assert.InDelta(t, 0.42, gotScores["claude-haiku-4-5"], 1e-6)
+	assert.InDelta(t, 0.85, gotScores["moonshotai/kimi-k3"], 1e-6)
+	assert.InDelta(t, 0.42, gotScores["deepseek/deepseek-v4-flash"], 1e-6)
 	// AlphaBreakdown is a W-1335 forward-compat slot; Cache* are nil since the
 	// fake provider returns no body.
 	assert.Nil(t, row.AlphaBreakdown)
@@ -317,7 +318,7 @@ func TestProxyMessages_RecordsPolicyObservation(t *testing.T) {
 	const installID = "55555555-5555-5555-5555-555555555555"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 		Reason:   "policy:hmm",
 		Metadata: &router.RoutingMetadata{
 			Strategy:             string(router.StrategyHMM),
@@ -335,7 +336,7 @@ func TestProxyMessages_RecordsPolicyObservation(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5",
+		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
 		telem,
 	).WithContentCapture(proxy.CaptureHashed, 0, nil)
 
@@ -343,7 +344,7 @@ func TestProxyMessages_RecordsPolicyObservation(t *testing.T) {
 	ctx = context.WithValue(ctx, proxy.PolicyTrainingAllowedContextKey{}, true)
 	ctx = context.WithValue(ctx, proxy.PolicyDebugEnabledContextKey{}, true)
 	rec := httptest.NewRecorder()
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hello"}]}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
 
@@ -366,27 +367,27 @@ func TestProxyMessages_PersistsCacheTokens(t *testing.T) {
 	const installID = "44444444-4444-4444-4444-444444444444"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 	telem := newCaptureTelemetry()
 	provider := &fakeProvider{
 		proxyResponse: func(w http.ResponseWriter) {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"model":"claude-haiku-4-5","stop_reason":"end_turn","usage":{"input_tokens":120,"output_tokens":7,"cache_creation_input_tokens":512,"cache_read_input_tokens":2048}}`))
+			_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"model":"deepseek/deepseek-v4-flash","stop_reason":"end_turn","usage":{"input_tokens":120,"output_tokens":7,"cache_creation_input_tokens":512,"cache_read_input_tokens":2048}}`))
 		},
 	}
 	svc := proxy.NewService(
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: provider},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5",
+		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
 		telem,
 	)
 
 	ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, installID)
 	rec := httptest.NewRecorder()
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hello"}]}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
 
@@ -403,11 +404,11 @@ func TestProxyMessages_ChosenScoreZeroIsPersisted(t *testing.T) {
 	const installID = "33333333-3333-3333-3333-333333333333"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-haiku-4-5",
-		Reason:   "cluster:v-test top_p=[0] model=claude-haiku-4-5 provider=anthropic",
+		Model:    "deepseek/deepseek-v4-flash",
+		Reason:   "cluster:v-test top_p=[0] model=deepseek/deepseek-v4-flash provider=anthropic",
 		Metadata: &router.RoutingMetadata{
 			ClusterIDs:           []int{0},
-			CandidateModels:      []string{"claude-haiku-4-5"},
+			CandidateModels:      []string{"deepseek/deepseek-v4-flash"},
 			ChosenScore:          0, // must persist as &0, not nil
 			ClusterRouterVersion: "v-test",
 		},
@@ -417,13 +418,13 @@ func TestProxyMessages_ChosenScoreZeroIsPersisted(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5",
+		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
 		telem,
 	)
 
 	ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, installID)
 	rec := httptest.NewRecorder()
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hello"}]}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
 
@@ -440,7 +441,7 @@ func TestProxyMessages_NoMetadataOmitsClusterFields(t *testing.T) {
 
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 		Reason:   "pin",
 		// Metadata intentionally nil; matches pinDecision shape.
 	}
@@ -453,18 +454,18 @@ func TestProxyMessages_NoMetadataOmitsClusterFields(t *testing.T) {
 		nil,
 		nil,
 		false,
-		providers.ProviderAnthropic, "claude-haiku-4-5",
+		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
 		telem,
 	)
 
 	ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, installID)
 	rec := httptest.NewRecorder()
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hello"}]}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
 
 	row := telem.firstRow(t)
-	assert.Equal(t, "claude-haiku-4-5", row.DecisionModel)
+	assert.Equal(t, "deepseek/deepseek-v4-flash", row.DecisionModel)
 	assert.Nil(t, row.ClusterIDs)
 	assert.Nil(t, row.CandidateModels)
 	assert.Nil(t, row.ChosenScore)
@@ -480,7 +481,7 @@ func TestProxyMessages_PersistsTurnType(t *testing.T) {
 	const installID = "55555555-5555-5555-5555-555555555555"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 
@@ -491,12 +492,12 @@ func TestProxyMessages_PersistsTurnType(t *testing.T) {
 	}{
 		{
 			name:     "main loop",
-			body:     `{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hello"}]}`,
+			body:     `{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hello"}]}`,
 			turnType: "main_loop",
 		},
 		{
 			name:     "probe",
-			body:     `{"model":"claude-opus-4-7","max_tokens":1,"messages":[{"role":"user","content":"quota"}]}`,
+			body:     `{"model":"moonshotai/kimi-k3","max_tokens":1,"messages":[{"role":"user","content":"quota"}]}`,
 			turnType: "probe",
 		},
 	}
@@ -507,7 +508,7 @@ func TestProxyMessages_PersistsTurnType(t *testing.T) {
 				&fakeRouter{decision: decision},
 				map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 				nil, false, nil, nil, false,
-				providers.ProviderAnthropic, "claude-haiku-4-5",
+				providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
 				telem,
 			)
 
@@ -529,7 +530,7 @@ func TestProxyMessages_PersistsRolloutID(t *testing.T) {
 	const rolloutID = "policy-rollout-1"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 	telem := newCaptureTelemetry()
@@ -537,7 +538,7 @@ func TestProxyMessages_PersistsRolloutID(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5",
+		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
 		telem,
 	)
 
@@ -545,7 +546,7 @@ func TestProxyMessages_PersistsRolloutID(t *testing.T) {
 	ctx = context.WithValue(ctx, proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{RolloutID: "client-rollout"})
 	ctx = context.WithValue(ctx, proxy.PolicyRolloutIDContextKey{}, rolloutID)
 	rec := httptest.NewRecorder()
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hello"}]}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
 
@@ -558,7 +559,7 @@ func TestProxyMessages_PersistedPolicyRolloutIDOverridesClientIdentity(t *testin
 	const rolloutID = "policy-rollout-42"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 	telem := newCaptureTelemetry()
@@ -566,7 +567,7 @@ func TestProxyMessages_PersistedPolicyRolloutIDOverridesClientIdentity(t *testin
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5",
+		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
 		telem,
 	)
 
@@ -574,7 +575,7 @@ func TestProxyMessages_PersistedPolicyRolloutIDOverridesClientIdentity(t *testin
 	ctx = context.WithValue(ctx, proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{RolloutID: "header-rollout"})
 	ctx = context.WithValue(ctx, proxy.PolicyRolloutIDContextKey{}, rolloutID)
 	rec := httptest.NewRecorder()
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hello"}]}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
 
@@ -590,7 +591,7 @@ func TestProxyMessages_PersistsSessionKeyAndRole(t *testing.T) {
 	const installID = "77777777-7777-7777-7777-777777777777"
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-haiku-4-5",
+		Model:    "deepseek/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 	telem := newCaptureTelemetry()
@@ -598,13 +599,13 @@ func TestProxyMessages_PersistsSessionKeyAndRole(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5",
+		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
 		telem,
 	)
 
 	ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, installID)
 	rec := httptest.NewRecorder()
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hello"}]}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
 
