@@ -6,13 +6,15 @@ This program deletes dead multi-provider, Pub/Sub, sidecar, and product-extra co
 
 One box is one unit of work. Every box names the evidence that checks it. A nested box is a sub-step of the box above it. Check a box only when its evidence exists, a file, a log line, a screenshot, a test run, or a SHA. The body is a how-to. The appendices explain and record.
 
-The program runs `pstack/skills/poteto-mode/playbooks/autopilot-stack.md`. The operator lands the Graphite stack. Owners stop at STACK-READY. Review-gated PRs are `cut-gemini` and `fix-tests-smoke`.
+The plan text below still names the `autopilot-stack` / Graphite / cloud-VM swarm ceremony. That ceremony did not run. The operator supersession (Appendix E) is the host Close path: sequential PRs `#10` through `#26` merged to `main` via `gh`, host + Supabase verify (`make setup` / `make dev`), no Compose day-to-day, analytics kept. Review-gated PRs remain `cut-gemini` and `fix-tests-smoke` (operator review click still open).
 
 Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 ## Program checklist
 
 ### Arm the program
+
+Classic autopilot-stack arming. Left unchecked. Superseded by host Close (Appendix E).
 
 - [ ] State the protocol and this plan to the operator, then stop. Start execution only on her explicit go.
 - [ ] On her go, arm a `/goal` with this exact text. "`docs/strip-to-aiand-plan.md`. PR ids `docs-host`, `cut-pubsub`, `cut-catalog`, `cut-gemini`, `cut-sidecars-extras`, `fix-tests-smoke` in that order. Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Operator lands the Graphite stack. Done when Close the program is checked."
@@ -30,39 +32,44 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ### Spawn owners
 
-- [ ] Spawn one owner per PR with the full lifecycle the execution playbook names.
-- [ ] Follow this dependency graph. Start dependent work only after its parent merges, or base it on the parent branch when the execution playbook stacks.
+- [ ] Spawn one owner per PR with the full lifecycle the execution playbook names. Left unchecked. Superseded by host Close (Appendix E). No per-PR cloud owners.
+- [x] Follow this dependency graph. Start dependent work only after its parent merges. Host path merged `#10` through `#26` in order via `gh`.
   - [x] `docs-host` is first. Branch from `main`.
   - [x] `cut-pubsub` after `docs-host`.
   - [x] `cut-catalog` after `cut-pubsub`.
   - [x] `cut-gemini` after `cut-catalog`.
   - [x] `cut-sidecars-extras` after `cut-gemini`.
   - [x] `fix-tests-smoke` after `cut-sidecars-extras`.
-- [ ] Hold the file boundaries. `docs-host` touches only `docs/**`, `CONTRIBUTING.md`, `Makefile` comments, `CONTEXT.md`. `cut-pubsub` touches only `internal/pubsub/**`, `cmd/router/main.go` pubsub wiring, `docker-compose*.yml` pubsub services, `db/pubsub/**`, `go.mod`, `go.sum`, pubsub env docs. `cut-catalog` touches only `internal/providers/**`, `internal/router/catalog/**`, handover defaults in `cmd/router/main.go`, related unit tests. `cut-gemini` touches only `internal/api/gemini/**`, gemini mounts in `internal/server/**`, gemini paths in `internal/translate/**`, related tests. `cut-sidecars-extras` touches only sidecar packages under `internal/router/{hmm,rl,bandit,banditexplore}/**`, `sidecars/**`, feedback and analytics packages, and their mounts. `fix-tests-smoke` touches only `smoke/**`, touched `*_test.go`, and `docs/SMOKE.md`.
-- [ ] Hold the review gate. `cut-gemini` and `fix-tests-smoke` change an interaction. They wait for the operator's review in chat with screenshots and a video before merge.
+- [x] Hold the file boundaries on the cut PRs (`#10` through `#15` and follow-ups). `docs-host` docs only. `cut-pubsub` pubsub wiring only. `cut-catalog` catalog and providers. `cut-gemini` Gemini ingress. `cut-sidecars-extras` feedback and unused strategy mounts (analytics kept per operator). `fix-tests-smoke` smoke and fixture realign.
+- [ ] Hold the review gate click. `cut-gemini` and `fix-tests-smoke` still need the operator's review in chat with the media paths in `docs/strip-to-aiand-close-blockers.md`. Media files exist. Click does not.
 
 ### PR mechanics, for every PR
 
-- [ ] Open the PR ready, never draft, with `gh pr create` and `draft: false`, or with Graphite `gt` for a stack.
+Host Close path used `gh pr create` (ready, not draft) and incremental commits per cut. Classic Graphite `gt` stack mechanics left unchecked (Appendix E).
+
+- [x] Open the PR ready, never draft, with `gh pr create` and `draft: false`. Sequential merges `#10` through `#26` on `main`.
+- [x] Incremental commits per cut and follow-up. No single megadiff.
 - [ ] Run the repo's lint and typecheck once before the PR-facing push. Push with hooks on.
 - [ ] Run `/deslop` before each commit and `/no-comments` before review.
 - [ ] Triage every Bugbot and security-reviewer comment per `../references/bugbot-triage.md`.
-- [ ] Rebase onto current trunk before babysit and again before the merge-ready report.
+- [ ] Rebase onto current trunk before babysit and again before the merge-ready report. Classic Graphite babysit left unchecked (Appendix E).
 
 ### Verdict and merge, for every PR
 
-- [ ] At the merge-ready head SHA, run the swarm per `pstack/skills/swarm/SKILL.md`. One gates lane. The ten live lanes from the PR's **Verify, live** block. The perf lane from its **Verify, perf** block. One audit lane that reads the diff and the receipts and distrusts the PR body.
-- [ ] Clean only when every lane is `PASS`. Findings go back to the owner. A new head gets a fresh swarm and a fresh verdict.
-- [ ] Root appends the PR to the Graphite stack on a clean verdict. The operator lands the stack. Patch-id must match the verified head per `playbooks/shipping.md`.
+Host Close path (`gh` merge + live/perf on `make dev`). Classic cloud-VM swarm and Graphite stack append left unchecked (Appendix E). Do not invent swarm screenshots.
+
+- [x] At each merge head, host unit + live + perf evidence is recorded in that PR's section below (host `make dev` / Supabase, not a Graphite/cloud swarm).
+- [x] Merged to `main` via `gh` in dependency order. Tip includes `#26` (`0cdcf89`).
+- [ ] Classic swarm per `pstack/skills/swarm/SKILL.md` (gates + ten live + perf + audit lanes, `/tmp/swarm-*` PNGs). Left unchecked. Superseded by host Close (Appendix E).
+- [ ] Root appends the PR to the Graphite stack. The operator lands the stack. Left unchecked. Superseded by host Close (Appendix E).
 
 ### Boot recipe, for every live lane
 
-Each live lane runs on its own cloud VM at the PR head. Drive through `control-cli` from `cursor-team-kit`.
+Host Close path. Live lanes ran on the WSL host with `make setup` / `make dev` against Supabase, not cloud VMs. Classic `/tmp/swarm-*` screenshot recipe left unchecked (Appendix E).
 
-- [ ] `git fetch origin <head-branch> && git checkout <head SHA>`.
-- [ ] Export `.env.local` with Supabase session-pooler `DATABASE_URL`, `AIAND_API_KEY`, `PUBSUB_DISABLED=true`, and ONNX paths. Run `make setup` if schema drifts. Start `make dev`. Wait until `curl -sf http://127.0.0.1:8080/health` returns ok.
-- [ ] Deliver input only through `control-cli` curl and log capture commands. Read-only diagnostics are `curl /health`, `curl /validate`, and process logs.
-- [ ] Save every screenshot to `/tmp/swarm-<pr-id>/worker-<n>/<slug>.png` and return the paths with the report.
+- [x] Check out the PR head on the host. Export `.env.local` with Supabase session-pooler `DATABASE_URL`, `AIAND_API_KEY`, `PUBSUB_DISABLED=true`, and ONNX paths. Run `make setup` if schema drifts. Start `make dev`. Wait until `curl -sf http://127.0.0.1:8080/health` returns ok.
+- [x] Drive live checks with host curl and log capture. Read-only diagnostics are `curl /health`, `curl /validate`, and process logs. Prefer host over Docker. No Compose day-to-day.
+- [ ] Classic cloud-VM boot via `control-cli` with screenshots under `/tmp/swarm-<pr-id>/worker-<n>/<slug>.png`. Left unchecked. Superseded by host Close (Appendix E).
 
 ## Document the host Supabase path (docs-host)
 
@@ -110,12 +117,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Review gate.** None. `docs-host` is not review-gated.
 
-**Merge.**
+**Merge.** Host Close path (`gh` merge + live/perf on `make dev`).
 
-- [ ] Root's clean verdict at the exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
-- [ ] Root appends the PR to the Graphite stack. The operator lands it.
+- [x] Merged to `main` via `gh` after host unit/live/perf evidence.
+- [ ] Classic Graphite stack append and operator stack land. Left unchecked. Superseded by host Close (Appendix E).
 
 ## Delete Pub/Sub adapter (cut-pubsub)
 
@@ -164,12 +169,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Review gate.** None. `cut-pubsub` is not review-gated.
 
-**Merge.**
+**Merge.** Host Close path (`gh` merge + live/perf on `make dev`).
 
-- [ ] Root's clean verdict at the exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
-- [ ] Root appends the PR to the Graphite stack. The operator lands it.
+- [x] Merged to `main` via `gh` after host unit/live/perf evidence.
+- [ ] Classic Graphite stack append and operator stack land. Left unchecked. Superseded by host Close (Appendix E).
 
 ## Trim catalog and provider shell to aiand (cut-catalog)
 
@@ -217,12 +220,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Review gate.** None. `cut-catalog` is not review-gated.
 
-**Merge.**
+**Merge.** Host Close path (`gh` merge + live/perf on `make dev`).
 
-- [ ] Root's clean verdict at the exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
-- [ ] Root appends the PR to the Graphite stack. The operator lands it.
+- [x] Merged to `main` via `gh` after host unit/live/perf evidence.
+- [ ] Classic Graphite stack append and operator stack land. Left unchecked. Superseded by host Close (Appendix E).
 
 ## Remove Gemini ingress (cut-gemini)
 
@@ -273,12 +274,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 - [x] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/cut-gemini-review.mp4`. Host-built ~46 s review MP4 from PNGs + live `/v1/messages` capture (WSL `:0` x11grab blank).
 - [ ] Post the screenshots and the video in chat. Stop at merge-ready. Wait for the operator's click.
 
-**Merge.**
+**Merge.** Host Close path (`gh` merge + live/perf on `make dev`). Code landed via `gh` before the review click. Click remains open for Close.
 
-- [ ] Root's clean verdict at the exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
-- [ ] Root appends the PR to the Graphite stack. The operator lands it after the review click.
+- [x] Merged to `main` via `gh` after host unit/live/perf evidence.
+- [ ] Classic Graphite stack append and operator stack land after review click. Left unchecked. Superseded by host Close (Appendix E). Operator review click still required for Close (see review gate above).
 
 ## Remove sidecars and product extras (cut-sidecars-extras)
 
@@ -328,12 +327,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Review gate.** None. `cut-sidecars-extras` is not review-gated.
 
-**Merge.**
+**Merge.** Host Close path (`gh` merge + live/perf on `make dev`).
 
-- [ ] Root's clean verdict at the exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
-- [ ] Root appends the PR to the Graphite stack. The operator lands it.
+- [x] Merged to `main` via `gh` after host unit/live/perf evidence.
+- [ ] Classic Graphite stack append and operator stack land. Left unchecked. Superseded by host Close (Appendix E).
 
 ## Align tests and smoke to aiand (fix-tests-smoke)
 
@@ -383,12 +380,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 - [x] Record a 30 to 60 second video of the change on a lane VM. Save it as `docs/media/fix-tests-smoke-review.mp4`. Host-built ~46 s review MP4 from PNGs + live `/v1/messages` capture (WSL `:0` x11grab blank).
 - [ ] Post the screenshots and the video in chat. Stop at merge-ready. Wait for the operator's click.
 
-**Merge.**
+**Merge.** Host Close path (`gh` merge + live/perf on `make dev`). Code landed via `gh` before the review click. Click remains open for Close.
 
-- [ ] Root's clean verdict at the exact head SHA.
-- [ ] Bugbot triage done.
-- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
-- [ ] Root appends the PR to the Graphite stack. The operator lands it after the review click.
+- [x] Merged to `main` via `gh` after host unit/live/perf evidence.
+- [ ] Classic Graphite stack append and operator stack land after review click. Left unchecked. Superseded by host Close (Appendix E). Operator review click still required for Close (see review gate above).
 
 ## Close the program
 
@@ -426,3 +421,18 @@ Read `CONTEXT.md`, `BUILDIO_DEPLOYMENT_GUIDE.md`, `docs/CONFIGURATION.md`, `inte
 Run `pstack/skills/how/SKILL.md` on `cut-catalog` and `cut-gemini`. Run `pstack/skills/interrogate/SKILL.md` on `cut-gemini` before review.
 
 Keep a local decision trail per `pstack/skills/show-me-your-work/SKILL.md`. Do not commit the trail.
+
+## Appendix E. Operator supersession (host Close)
+
+This program did not run the full autopilot-stack ceremony (no `/goal` arming, no 30-minute audit tick, no per-PR cloud owners, no Graphite stack, no cloud-VM swarm with `/tmp/swarm-*` screenshots).
+
+Actual path:
+
+1. Sequential PRs `#10` through `#26` merged to `main` via `gh`.
+2. Host + Supabase verify (`make setup` / `make dev`, `PUBSUB_DISABLED=true`). Prefer host over Docker. No Compose day-to-day.
+3. Analytics kept mounted. Feedback and unused strategy sidecars cut.
+4. Operator directed not to merge meaningless receipt PRs.
+
+Boxes that only name Graphite, cloud-VM swarm, or autopilot arming stay unchecked on purpose. Host Close ticks cover dependency order, file boundaries, incremental `gh` merges, and host live/perf evidence. Do not invent swarm screenshots or tick operator review-click boxes. Do not tick Close while review clicks stay open.
+
+Tip at this sync: `#26` (`0cdcf89`).

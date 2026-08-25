@@ -1,6 +1,6 @@
 # Strip-to-aiand Close blockers
 
-Tip: post-`d61527c` Close lane (ResolveBinding `e6aa944` / #23 still in ancestry). Verification mode: **host + Supabase only** (`make setup` / `make dev`, `PUBSUB_DISABLED=true`). No Docker Compose / `make db` for Close. Analytics stays mounted.
+Tip: `#26` (`0cdcf89`). Verification mode: **host + Supabase only** (`make setup` / `make dev`, `PUBSUB_DISABLED=true`). No Docker Compose / `make db` for Close. Analytics stays mounted. Operator supersession: host Close path (Appendix E in `docs/strip-to-aiand-plan.md`). No Graphite/cloud-VM swarm ceremony.
 
 ## Cleared on host (this lane)
 
@@ -19,14 +19,15 @@ Tip: post-`d61527c` Close lane (ResolveBinding `e6aa944` / #23 still in ancestry
 | Host smoke replay + Rule | Interleaved `SMOKE_HOST=1` twice each: base `e7ad086` mean **47.70 s** vs head `e6aa944` mean **44.46 s** = **−6.8%** (**PASS**, ≤25%) |
 | cut-catalog `ResolveBinding` Rule | Index-map fix `e6aa944` / #23. Head mean **30.66 ns/op** vs trunk **54.31 ns/op** (**PASS**) |
 | cut-gemini router-overhead Rule | `AccessLog` only has total `latency_ms`. Probe used `ProxyMessages complete` `route_ms`. Trunk `87cca0a` median **312 ms**; head `faf1507` median **314 ms** (**PASS**, +2 ms) |
+| Dependency order + file boundaries + incremental `gh` merges | `#10` through `#26` on `main`. Plan ritual boxes updated to host Close where honest |
 
 ## Still operator / sibling
 
 | Gate | Status | Why |
 |---|---|---|
 | Operator review click | **OPERATOR** | Post media in chat, then click cut-gemini + fix-tests-smoke. Paths: `docs/media/cut-gemini-review-messages.png`, `docs/media/cut-gemini-review-stream.png`, `docs/media/cut-gemini-review.mp4`, `docs/media/fix-tests-smoke-review-live.png`, `docs/media/fix-tests-smoke-review-stream.png`, `docs/media/fix-tests-smoke-review.mp4` |
-| Process / Graphite / swarm ritual boxes | **OPERATOR / historical** | Code path already on main via host Close. Leave open; no operator message superseded the Graphite/swarm ceremony |
+| Arm / Graphite / cloud-VM swarm boxes | **Left unchecked** | Superseded by host Close (plan Appendix E). Do not invent swarm screenshots or tick as PASS |
 
 ## Do not invent
 
-Do not tick Close while operator review clicks or ritual boxes stay open. cut-sidecars unit is cleared.
+Do not tick Close while operator review clicks stay open. Do not fake Graphite/swarm PASS. cut-sidecars unit is cleared. Tip includes `#26` (`0cdcf89`).
