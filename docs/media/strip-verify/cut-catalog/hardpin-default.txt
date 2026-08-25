@@ -1,0 +1,12 @@
+CMD: curl -H Authorization: Bearer REDACTED -H Content-Type: application/json -H x-weave-force-model: claude-sonnet-4-5 -d {"model":"claude-sonnet-4-5","max_tokens":16,"messages":[{"role":"user","content":"hi"}]} http://127.0.0.1:8080/v1/messages
+HTTP/1.1 400 Bad Request
+Content-Type: application/json; charset=utf-8
+Date: Tue, 25 Aug 2026 11:59:10 GMT
+Content-Length: 204
+
+
+---curl_w---
+http_code=400
+time_total=0.004645
+---body---
+{"error":{"message":"\"claude-sonnet-4-5\" is not a known model. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek/deepseek-v4-flash, or z-ai/glm-5.2.","type":"invalid_request_error"},"type":"error"}

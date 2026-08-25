@@ -1,0 +1,3 @@
+VmRSS:	  295640 kB
+pid=77569
+note=absolute RSS; no pre-strip trunk process

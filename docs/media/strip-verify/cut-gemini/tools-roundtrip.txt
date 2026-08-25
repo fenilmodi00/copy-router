@@ -1,0 +1,29 @@
+CMD: curl -H Authorization: Bearer REDACTED -H Content-Type: application/json -d {"model":"claude-sonnet-4-5","max_tokens":64,"tools":[{"name":"echo","description":"echo","input_schema":{"type":"object","properties":{"x":{"type":"string"}}}}],"messages":[{"role":"user","content":"call echo with x=1"}]} http://127.0.0.1:8080/v1/messages
+HTTP/1.1 200 OK
+Access-Control-Allow-Credentials: true
+Access-Control-Expose-Headers: traceparent,X-Request-ID,X-Cost,X-Cost-Currency,X-Inference-Ms,X-Reasoning-Effort,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Policy,Retry-After
+Cf-Ray: a30a6e567c1189f6-BOM
+Content-Type: application/json
+Date: Tue, 25 Aug 2026 11:59:31 GMT
+Server: cloudflare
+Strict-Transport-Security: max-age=2592000
+Traceparent: 00-38986897f1e6c78d6f1135044b57b8f4-bb15e1c0d5aee8be-01
+Vary: Origin
+X-Model: deepseek-ai/deepseek-v4-flash
+X-Org-Id: 936861a6-bc7c-43e9-8dc0-f0b6d849f501
+X-Processing-Ms: 1281
+X-Ratelimit-Limit: 1000
+X-Ratelimit-Remaining: 999
+X-Request-Id: 2653178f-9282-45ca-9156-fcb3b481c95f
+X-Router-Context-Window: 1048576
+X-Router-Decision: cluster:v0.76 top_p=[5,9,11,15] model=deepseek-ai/deepseek-v4-flash provider=aiand
+X-Router-Model: deepseek-ai/deepseek-v4-flash
+X-Router-Provider: aiand
+Transfer-Encoding: chunked
+
+
+---curl_w---
+http_code=200
+time_total=2.890621
+---body---
+{"id":"chatcmpl-01a038ca-3551-7a41-97ff-96df5880c4c2","type":"message","role":"assistant","model":"deepseek-ai/deepseek-v4-flash","content":[{"type":"thinking","thinking":"The user wants me to call the echo function with x=1. However, the parameter expects a string type, so I need to pass \"1\" as a string."},{"type":"text","text":"\u000a\u000a"}],"stop_reason":"max_tokens","stop_sequence":null,"usage":{"input_tokens":267,"output_tokens":64}}

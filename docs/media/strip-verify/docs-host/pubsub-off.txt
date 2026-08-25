@@ -1,0 +1,1 @@
+10:{"time":"2026-08-25T11:56:32.193736371Z","severity":"WARNING","message":"Installation cache invalidation is NoOp; single-replica OK (5-min TTL)"}

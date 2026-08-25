@@ -1,0 +1,12 @@
+CMD: curl -H Authorization: Bearer REDACTED -H Content-Type: application/json -d {"messages":[{"role":"user","content":"hello"}]} http://127.0.0.1:8080/v1/route
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Tue, 25 Aug 2026 11:59:26 GMT
+Content-Length: 149
+
+
+---curl_w---
+http_code=200
+time_total=0.027070
+---body---
+{"model":"motif-technologies/motif-3","provider":"aiand","reason":"cluster:v0.76 top_p=[5,10,12,15] model=motif-technologies/motif-3 provider=aiand"}

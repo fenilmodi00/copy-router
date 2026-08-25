@@ -1,0 +1,1 @@
+{"error":{"message":"\"claude-sonnet-4-5\" is not a known model. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek/deepseek-v4-flash, or z-ai/glm-5.2.","type":"invalid_request_error"},"type":"error"}

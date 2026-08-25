@@ -1,0 +1,22 @@
+make setup: initdb permission denied (expected on shared Supabase)
+make seed: PASS (see seed.log)
+  claude  # The installer wires settings.json — no shell exports needed afterwards
+
+=== Claude Code (manual fallback) ===
+  Keep Claude Code's Anthropic auth unchanged; send the router key
+  in a router-only custom header.
+    export ANTHROPIC_BASE_URL=http://localhost:8080
+    export ANTHROPIC_CUSTOM_HEADERS='X-Weave-Router-Key: rk_REDACTED'
+    claude
+
+=== Codex ===
+  Keep Codex's OpenAI auth unchanged; send the router key
+  in a router-only custom header.
+    export OPENAI_BASE_URL=http://localhost:8080/v1
+    export OPENAI_EXTRA_HEADERS='X-Weave-Router-Key: rk_REDACTED'
+    codex
+
+=== Cursor ===
+  1. Open Cursor Settings > Models > Override OpenAI Base URL
+     Set to: http://localhost:8080/v1
+  2. Paste the Weave Router key as the API key: rk_REDACTED

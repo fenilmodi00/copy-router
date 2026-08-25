@@ -1,0 +1,1 @@
+{"id":"chatcmpl-01a038ca-6151-7c42-bb84-3fdde13ed3d9","type":"message","role":"assistant","model":"deepseek-ai/deepseek-v4-flash","content":[{"type":"thinking","thinking":"嗯，用户只发了一个词“ping”。这很可能是一个网络技术相关的"}],"stop_reason":"max_tokens","stop_sequence":null,"usage":{"input_tokens":5,"output_tokens":16}}

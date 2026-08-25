@@ -1,0 +1,5 @@
+4:{"time":"2026-08-25T11:59:02.971098945Z","severity":"INFO","message":"ai& provider enabled","base_url":"https://api.aiand.com/v1"}
+14:{"time":"2026-08-25T11:59:04.454287759Z","severity":"INFO","message":"Explore sub-agent hard-pin enabled","provider":"aiand","model":"deepseek-ai/deepseek-v4-flash"}
+15:{"time":"2026-08-25T11:59:04.45431447Z","severity":"INFO","message":"Hard-pin model resolved","provider":"aiand","model":"deepseek-ai/deepseek-v4-flash","byok_only":false}
+17:{"time":"2026-08-25T11:59:04.45631497Z","severity":"INFO","message":"Handover summarizer wired","provider":"aiand","model":"deepseek/deepseek-v4-flash","timeout_ms":8000}
+91:{"time":"2026-08-25T11:59:07.687951158Z","severity":"INFO","message":"Starting Weave router","providers":["aiand"],"addr":":8080"}

@@ -1,0 +1,5 @@
+docs/HOST_WSL_SUPABASE.md:47:PUBSUB_DISABLED=true
+docs/HOST_WSL_SUPABASE.md:62:Leave `PUBSUB_PROJECT_ID` **empty / unset**. Empty `PUBSUB_PROJECT_ID` with `PUBSUB_DISABLED=true` is the safe single-replica shape.
+docs/HOST_WSL_SUPABASE.md:74:- Safe: `PUBSUB_DISABLED=true` and no other `PUBSUB_*` vars.
+docs/HOST_WSL_SUPABASE.md:78:Boot log when disabled looks like: `Pub/Sub invalidation disabled (PUBSUB_DISABLED=true or PUBSUB_PROJECT_ID unset); single-replica OK`.
+BUILDIO_DEPLOYMENT_GUIDE.md:105:**Leave unset** all `PUBSUB_*` vars (`PUBSUB_DISABLED`, `PUBSUB_PROJECT_ID`, `PUBSUB_EMULATOR_HOST`, topic/subscription). The adapter is gone; leftover values are ignored and are not required for boot.

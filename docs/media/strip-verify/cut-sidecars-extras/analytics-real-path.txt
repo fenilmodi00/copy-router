@@ -1,0 +1,19 @@
+=== /v1/analytics/decisions (plan slug) ===
+HTTP/1.1 404 Not Found
+Content-Type: text/plain
+Date: Tue, 25 Aug 2026 12:01:15 GMT
+Content-Length: 18
+
+http=404
+404 page not found
+=== /v1/analytics/routing-decisions (real mount) ===
+HTTP/1.1 401 Unauthorized
+Content-Type: application/json; charset=utf-8
+Date: Tue, 25 Aug 2026 12:01:15 GMT
+Content-Length: 23
+
+http=401
+{"error":"invalid_key"}
+=== /v1/analytics/schema ===
+http=401
+{"error":"invalid_key"}

@@ -1,0 +1,6 @@
+3:Run `make setup` and `make dev` on the host against Supabase session pooler.
+26:- Network reachability to Supabase session pooler host on **port 5432**
+29:## Database URL: session pooler only
+32:2. Copy the URI. Port must be **5432**.
+35:**Avoid** the **transaction** pooler on port **6543**. Migrate and the Go `pgx` pool use prepared statements; transaction pooler breaks that path unless you disable prepared statements (not supported here).
+45:DATABASE_URL=postgresql://REDACTED@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require

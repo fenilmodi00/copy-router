@@ -1,0 +1,12 @@
+CMD: curl -H Authorization: Bearer REDACTED -H Content-Type: application/json -d {} http://127.0.0.1:8080/v1beta/models/x:generateContent
+HTTP/1.1 404 Not Found
+Content-Type: text/plain
+Date: Tue, 25 Aug 2026 11:59:14 GMT
+Content-Length: 18
+
+
+---curl_w---
+http_code=404
+time_total=0.000982
+---body---
+404 page not found

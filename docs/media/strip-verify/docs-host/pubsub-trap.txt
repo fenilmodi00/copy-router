@@ -1,0 +1,5 @@
+62:Leave `PUBSUB_PROJECT_ID` **empty / unset**. Empty `PUBSUB_PROJECT_ID` with `PUBSUB_DISABLED=true` is the safe single-replica shape.
+72:Half-configured Pub/Sub panics at boot.
+75:- Safe: all `PUBSUB_*` unset (empty `PUBSUB_PROJECT_ID` also skips Pub/Sub).
+76:- **Forbidden:** set `PUBSUB_PROJECT_ID` alone (or project ID without topic, subscription, and GCP credentials). Boot panics; a load balancer sees **502**.
+78:Boot log when disabled looks like: `Pub/Sub invalidation disabled (PUBSUB_DISABLED=true or PUBSUB_PROJECT_ID unset); single-replica OK`.

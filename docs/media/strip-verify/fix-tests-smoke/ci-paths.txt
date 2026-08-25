@@ -1,0 +1,15 @@
+.github/workflows/smoke.yml:5:# record/replay MITM proxy (smoke/mitmproxy/) and drives it with
+.github/workflows/smoke.yml:11:# smoke/mitmproxy/cassettes/ — no upstream API keys, safe on fork PRs, fully
+.github/workflows/smoke.yml:22:      - 'internal/proxy/**'
+.github/workflows/smoke.yml:23:      - 'internal/translate/**'
+.github/workflows/smoke.yml:24:      - 'internal/providers/**'
+.github/workflows/smoke.yml:25:      - 'internal/router/catalog/**'
+.github/workflows/smoke.yml:26:      - 'cmd/router/**'
+.github/workflows/smoke.yml:38:      proxy_mode:
+.github/workflows/smoke.yml:39:        description: 'MITM proxy mode'
+.github/workflows/smoke.yml:78:          SMOKE_PROXY_MODE: ${{ github.event.inputs.proxy_mode || 'replay-only' }}
+.github/workflows/smoke.yml:83:          # Layers the server/mitmproxy Docker builds against the GitHub
+.github/workflows/smoke.yml:84:          # Actions cache (type=gha) via smoke/mitmproxy/docker-compose.ci-cache.yml
+.github/workflows/smoke.yml:141:          if git diff --quiet -- smoke/mitmproxy/cassettes/ && \
+.github/workflows/smoke.yml:142:             [ -z "$(git status --porcelain -- smoke/mitmproxy/cassettes/)" ]; then
+.github/workflows/smoke.yml:150:          git add smoke/mitmproxy/cassettes/

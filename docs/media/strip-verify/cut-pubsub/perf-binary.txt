@@ -1,0 +1,3 @@
+head_bytes=79990512
+note=no pre-strip trunk binary available on host; absolute size only
+deps: no cloud.google.com/go/pubsub

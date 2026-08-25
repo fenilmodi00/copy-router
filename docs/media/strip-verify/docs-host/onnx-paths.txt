@@ -1,0 +1,6 @@
+57:ROUTER_ONNX_ASSETS_DIR=/absolute/path/to/repo/assets
+58:ROUTER_ONNX_LIBRARY_DIR=/absolute/path/to/onnxruntime/lib
+59:CGO_LDFLAGS=-L/absolute/path/to/onnxruntime/lib -L/absolute/path/to/libtokenizers -lonnxruntime
+130:export ROUTER_ONNX_ASSETS_DIR="$(pwd)/assets"
+131:export ROUTER_ONNX_LIBRARY_DIR="$HOME/opt/onnxruntime/lib"
+132:export CGO_LDFLAGS="-L$HOME/opt/onnxruntime/lib -L$HOME/opt/libtokenizers -lonnxruntime"

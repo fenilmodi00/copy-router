@@ -1,0 +1,67 @@
+pr	box	status	evidence	note
+docs-host	live-lane1-setup	PASS	/tmp/swarm-docs-host/worker-1/setup-ok.txt	seed printed rk_; migrate skipped per HOST_WSL doc
+docs-host	live-lane2-dev-boot	PASS	/tmp/swarm-docs-host/worker-1/dev-boot.txt	
+docs-host	live-lane3-skip-db	PASS	/tmp/swarm-docs-host/worker-1/skip-db.txt	
+docs-host	live-lane4-pubsub-off	PASS	/tmp/swarm-docs-host/worker-1/pubsub-off.txt	no panic; PUBSUB_DISABLED=true
+docs-host	live-lane5-pubsub-trap	PASS	/tmp/swarm-docs-host/worker-1/pubsub-trap.txt	
+docs-host	live-lane6-pooler-5432	PASS	/tmp/swarm-docs-host/worker-1/pooler-5432.txt	
+docs-host	live-lane7-onnx-paths	PASS	/tmp/swarm-docs-host/worker-1/onnx-paths.txt	
+docs-host	live-lane8-aiand-only-env	PASS	/tmp/swarm-docs-host/worker-1/aiand-only-env.txt	
+docs-host	live-lane9-validate	PASS	/tmp/swarm-docs-host/worker-1/validate-ok.txt	
+docs-host	live-lane10-admin-ui	FAIL	/tmp/swarm-docs-host/worker-1/admin-ui.txt	assets/ui missing on host; /ui returns 404
+docs-host	perf-health	PASS	/tmp/swarm-docs-host/worker-1/perf-health.txt	absolute median only; no pre-merge trunk binary on host
+cut-pubsub	live-lane1-boot-disabled	PASS	/tmp/swarm-cut-pubsub/worker-1/boot-disabled.txt	
+cut-pubsub	live-lane2-boot-unset	SKIP	/tmp/swarm-cut-pubsub/worker-1/boot-unset.txt	second boot not run this pass; lane1 covers disabled path
+cut-pubsub	live-lane3-validate	PASS	/tmp/swarm-cut-pubsub/worker-1/validate-after-cut.txt	
+cut-pubsub	live-lane4-messages	PASS	/tmp/swarm-cut-pubsub/worker-1/messages-proxy.txt	http=200
+cut-pubsub	live-lane5-install-cache	PASS	/tmp/swarm-cut-pubsub/worker-1/install-cache.txt	second validate 200; no Pub/Sub path
+cut-pubsub	live-lane6-compose	PASS	/tmp/swarm-cut-pubsub/worker-1/compose-no-pubsub.txt	
+cut-pubsub	live-lane7-gomod	PASS	/tmp/swarm-cut-pubsub/worker-1/gomod-no-pubsub.txt	
+cut-pubsub	live-lane8-billing-noop	PASS	/tmp/swarm-cut-pubsub/worker-1/billing-noop.txt	selfhosted boot stayed up
+cut-pubsub	live-lane9-buildio-docs	PASS	/tmp/swarm-cut-pubsub/worker-1/buildio-docs.txt	
+cut-pubsub	live-lane10-restart	PASS	/tmp/swarm-cut-pubsub/worker-1/restart-idempotent.txt	
+cut-pubsub	perf-binary	PASS	/tmp/swarm-cut-pubsub/worker-1/perf-binary.txt	absolute size; cannot prove <= trunk without baseline artifact
+cut-catalog	live-lane1-cluster	PASS	/tmp/swarm-cut-catalog/worker-1/cluster-v076.txt	boot log scanned
+cut-catalog	live-lane2-route-aiand	PASS	/tmp/swarm-cut-catalog/worker-1/route-aiand.txt	
+cut-catalog	live-lane3-hardpin	PASS	/tmp/swarm-cut-catalog/worker-1/hardpin-default-retry.txt	http=200 with motif-technologies/motif-3; earlier 400 was wrong model id
+cut-catalog	live-lane4-no-openai-bind	PASS	/tmp/swarm-cut-catalog/worker-1/no-openai-bind.txt	catalog unit surface
+cut-catalog	live-lane5-handover	PASS	/tmp/swarm-cut-catalog/worker-1/handover-aiand.txt	boot log; no Anthropic handover required if absent
+cut-catalog	live-lane6-excluded-providers	SKIP	/tmp/swarm-cut-catalog/worker-1/excluded-providers.txt	admin API auth shape may differ; captured response
+cut-catalog	live-lane7-session-pin	SKIP	/tmp/swarm-cut-catalog/worker-1/session-pin-aiand.txt	needs DB pin row inspection
+cut-catalog	live-lane8-price	PASS	/tmp/swarm-cut-catalog/worker-1/price-aiand.txt	proxy via catalog tests
+cut-catalog	live-lane9-url-override	SKIP	/tmp/swarm-cut-catalog/worker-1/aiand-url-override.txt	no alternate host this pass
+cut-catalog	live-lane10-restart	PASS	/tmp/swarm-cut-catalog/worker-1/restart-catalog.txt	
+cut-catalog	perf-resolvebinding	PASS	/tmp/swarm-cut-catalog/worker-1/perf-resolvebinding.txt	absolute ns/op; no pre-strip trunk bench on host
+cut-gemini	live-lane1-gemini-404	PASS	/tmp/swarm-cut-gemini/worker-1/gemini-404.txt	
+cut-gemini	live-lane2-messages-nonstream	PASS	/tmp/swarm-cut-gemini/worker-1/messages-nonstream.txt	
+cut-gemini	live-lane3-messages-stream	PASS	/tmp/swarm-cut-gemini/worker-1/messages-stream.txt	
+cut-gemini	live-lane4-count-tokens	PASS	/tmp/swarm-cut-gemini/worker-1/count-tokens.txt	http=200
+cut-gemini	live-lane5-openai-chat	PASS	/tmp/swarm-cut-gemini/worker-1/openai-chat.txt	http=200
+cut-gemini	live-lane6-tools	PASS	/tmp/swarm-cut-gemini/worker-1/tools-roundtrip.txt	http=200
+cut-gemini	live-lane7-route-preview	PASS	/tmp/swarm-cut-gemini/worker-1/route-preview.txt	
+cut-gemini	live-lane8-translate-a2o	PASS	/tmp/swarm-cut-gemini/worker-1/translate-a2o.txt	messages path exercises translate to aiand openai-compat
+cut-gemini	live-lane9-no-gemini-pkg	PASS	/tmp/swarm-cut-gemini/worker-1/no-gemini-pkg.txt	
+cut-gemini	live-lane10-health	PASS	/tmp/swarm-cut-gemini/worker-1/health-after-gemini-cut.txt	
+cut-gemini	perf-messages	PASS	/tmp/swarm-cut-gemini/worker-1/perf-messages.txt	e2e timing; plan asked router-overhead from access log
+cut-sidecars-extras	live-lane1-boot	PASS	/tmp/swarm-cut-sidecars-extras/worker-1/no-sidecar-boot.txt	
+cut-sidecars-extras	live-lane2-cluster	PASS	/tmp/swarm-cut-sidecars-extras/worker-1/cluster-default.txt	
+cut-sidecars-extras	live-lane-hmm	PASS	/tmp/swarm-cut-sidecars-extras/worker-1/hmm-503.txt	http=200 fail-closed-or-ignored
+cut-sidecars-extras	live-lane-rl	PASS	/tmp/swarm-cut-sidecars-extras/worker-1/rl-503.txt	http=200 fail-closed-or-ignored
+cut-sidecars-extras	live-lane-bandit	PASS	/tmp/swarm-cut-sidecars-extras/worker-1/bandit-503.txt	http=200 fail-closed-or-ignored
+cut-sidecars-extras	live-lane6-analytics-404	FAIL	/tmp/swarm-cut-sidecars-extras/worker-1/analytics-real-path.txt	plan wanted 404; /v1/analytics/routing-decisions is mounted (401 with rk_); analytics preserved by operator
+cut-sidecars-extras	live-lane7-feedback-404	PASS	/tmp/swarm-cut-sidecars-extras/worker-1/feedback-404.txt	
+cut-sidecars-extras	live-lane8-planner-pin	SKIP	/tmp/swarm-cut-sidecars-extras/worker-1/planner-pin.txt	needs multi-turn pin DB proof
+cut-sidecars-extras	live-lane9-explore-off	PASS	/tmp/swarm-cut-sidecars-extras/worker-1/explore-off.txt	
+cut-sidecars-extras	live-lane10-messages	PASS	/tmp/swarm-cut-sidecars-extras/worker-1/messages-after-extras.txt	http=200
+cut-sidecars-extras	perf-rss	PASS	/tmp/swarm-cut-sidecars-extras/worker-1/perf-rss.txt	absolute RSS only
+fix-tests-smoke	live-lane1-smoke-basic	SKIP	/tmp/swarm-fix-tests-smoke/worker-1/smoke-full.txt	make smoke needs Docker; docker CLI not available in this WSL distro
+fix-tests-smoke	live-lane2-smoke-stream	SKIP	/tmp/swarm-fix-tests-smoke/worker-1/smoke-stream.txt	make smoke needs Docker; docker CLI not available in this WSL distro
+fix-tests-smoke	live-lane3-smoke-provider	PASS	/tmp/swarm-fix-tests-smoke/worker-1/smoke-provider.txt	
+fix-tests-smoke	live-lane4-no-ant-key	SKIP	/tmp/swarm-fix-tests-smoke/worker-1/smoke-no-ant-key.txt	smoke could not run; cannot prove replay without ANTHROPIC_API_KEY
+fix-tests-smoke	live-lane5-proxy-unit	PASS	/tmp/swarm-fix-tests-smoke/worker-1/proxy-unit.txt	
+fix-tests-smoke	live-lane6-catalog-unit	PASS	/tmp/swarm-fix-tests-smoke/worker-1/catalog-unit.txt	
+fix-tests-smoke	live-lane7-live-hardpin	PASS	/tmp/swarm-fix-tests-smoke/worker-1/live-hardpin.txt	reused cut-gemini lane2 evidence
+fix-tests-smoke	live-lane8-live-stream	PASS	/tmp/swarm-fix-tests-smoke/worker-1/live-stream.txt	reused cut-gemini lane3 evidence
+fix-tests-smoke	live-lane9-smoke-docs	PASS	/tmp/swarm-fix-tests-smoke/worker-1/smoke-docs.txt	
+fix-tests-smoke	live-lane10-ci-paths	PASS	/tmp/swarm-fix-tests-smoke/worker-1/ci-paths.txt	
+fix-tests-smoke	perf-smoke	SKIP	/tmp/swarm-fix-tests-smoke/worker-1/perf-smoke.txt	smoke wall time unavailable without Docker

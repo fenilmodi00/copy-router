@@ -1,0 +1,12 @@
+CMD: curl -H Authorization: Bearer REDACTED -H Content-Type: application/json -d {"model":"claude-sonnet-4-5","messages":[{"role":"user","content":"hi"}]} http://127.0.0.1:8080/v1/messages/count_tokens
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Tue, 25 Aug 2026 11:59:21 GMT
+Content-Length: 19
+
+
+---curl_w---
+http_code=200
+time_total=0.000893
+---body---
+{"input_tokens":18}

@@ -1,0 +1,24 @@
+docs/SMOKE.md:4:deterministic request fixtures against the **aiand-only** catalog, asserting the
+docs/SMOKE.md:28:## Architecture: a record/replay proxy sits between the router and its providers
+docs/SMOKE.md:32:(`internal/providers/httputil`), so pointing the `server` container at it via
+docs/SMOKE.md:35:per CONNECT-target hostname. With the aiand-only catalog, replay targets the
+docs/SMOKE.md:36:aiand OpenAI-compat upstream; no `ANTHROPIC_API_KEY` is required for
+docs/SMOKE.md:55:This means the CI job needs **no provider API keys at all** for its normal
+docs/SMOKE.md:64:  `internal/providers/**`, `internal/router/catalog/**`, `cmd/router/**`,
+docs/SMOKE.md:82:AIAND_API_KEY=… SMOKE_PROXY_MODE=record make smoke  # refresh aiand cassettes
+docs/SMOKE.md:90:   mode — no request reaches a real provider — or the real key in
+docs/SMOKE.md:116:provider `aiand`), and cap `max_tokens` — a full refresh is ~15 real calls, a
+docs/SMOKE.md:127:| Expected `x-router-provider` | `aiand` |
+smoke/basic_test.go:67:// outbound HTTPS provider calls — not the router's plain-HTTP sidecar hop — so
+smoke/basic_test.go:101:// assertServedByPin checks the x-router-model / x-router-provider decision
+smoke/basic_test.go:105:	assertServedByModel(t, r, cfg.PinModel, "aiand")
+smoke/basic_test.go:109:// model/provider pair, for scenarios that pin something other than the
+smoke/basic_test.go:110:// suite-wide default (e.g. a gpt-5.x model on the direct OpenAI provider).
+smoke/basic_test.go:129:	headerRouterProvider = "x-router-provider"
+smoke/harness_test.go:4:// compose stack and drives real aiand upstream APIs, asserting HTTP status,
+smoke/harness_test.go:33:	// PinModel is forced via x-weave-force-model so decisions land on aiand
+smoke/harness_test.go:37:	// (default openai/gpt-oss-120b — served via aiand).
+smoke/openai_test.go:29:		assertServedByModel(t, r, cfg.OpenAIPinModel, "aiand")
+smoke/openai_test.go:41:		assertServedByModel(t, r, cfg.OpenAIPinModel, "aiand")
+smoke/mitmproxy/docker-compose.yml:15:# (internal/providers/httputil), so pointing the server at this proxy via
+smoke/mitmproxy/docker-compose.yml:20:# intercepts calls to any upstream provider (Anthropic, OpenAI, ...) the smoke

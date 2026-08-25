@@ -1,0 +1,18 @@
+28:## Architecture: a record/replay proxy sits between the router and its providers
+35:per CONNECT-target hostname. With the aiand-only catalog, replay targets the
+37:`replay-only` CI.
+43:| `replay-only` (CI default) | Serves cassettes committed under `smoke/mitmproxy/cassettes/`; a cache miss is a clean 502, not a hang | No |
+45:| `replay-or-record` (local default) | Serves from cache, falls back to live + record on a miss | Only for the first run of a new scenario |
+49:given scenario hashes identically run to run — this is what makes `replay-only`
+56:path-gated run — it replays what's already checked in. **Replay does not need
+66:  sidecar, and the frontend never trigger it. It runs in `replay-only` mode —
+70:  `make smoke` (replay-only by default) or
+71:  `AIAND_API_KEY=… SMOKE_PROXY_MODE=record make smoke` (real API, updates
+81:make smoke                                          # replay-only, no key needed
+82:AIAND_API_KEY=… SMOKE_PROXY_MODE=record make smoke  # refresh aiand cassettes
+89:   sets the router's `AIAND_API_KEY` (harmless placeholder in `replay-only`
+91:   `record`/`replay-or-record`).
+103:SMOKE_KEEP_STACK=1 make smoke
+113:`replay-only` runs make zero upstream calls. `record`/`replay-or-record` pin
+133:3. Record once with `AIAND_API_KEY=… SMOKE_PROXY_MODE=record make smoke`, commit
+135:   `make smoke` (replay-only) stays green.

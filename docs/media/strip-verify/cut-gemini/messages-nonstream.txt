@@ -1,0 +1,29 @@
+CMD: curl -H Authorization: Bearer REDACTED -H Content-Type: application/json -d {"model":"claude-sonnet-4-5","max_tokens":64,"stream":false,"messages":[{"role":"user","content":"Say hi in one word"}]} http://127.0.0.1:8080/v1/messages
+HTTP/1.1 200 OK
+Access-Control-Allow-Credentials: true
+Access-Control-Expose-Headers: traceparent,X-Request-ID,X-Cost,X-Cost-Currency,X-Inference-Ms,X-Reasoning-Effort,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Policy,Retry-After
+Cf-Ray: a30a6e17fff189f6-BOM
+Content-Type: application/json
+Date: Tue, 25 Aug 2026 11:59:23 GMT
+Server: cloudflare
+Strict-Transport-Security: max-age=2592000
+Traceparent: 00-c6e1989dd9cbd9febbb9d7ca0fa34fec-6a45eea2230717ea-01
+Vary: Origin
+X-Model: deepseek-ai/deepseek-v4-flash
+X-Org-Id: 936861a6-bc7c-43e9-8dc0-f0b6d849f501
+X-Processing-Ms: 2727
+X-Ratelimit-Limit: 1000
+X-Ratelimit-Remaining: 999
+X-Request-Id: 424972e2-d3bd-4ed1-8e2a-08e0183a63bf
+X-Router-Context-Window: 1048576
+X-Router-Decision: classifier_hard_pin
+X-Router-Model: deepseek-ai/deepseek-v4-flash
+X-Router-Provider: aiand
+Transfer-Encoding: chunked
+
+
+---curl_w---
+http_code=200
+time_total=3.361229
+---body---
+{"id":"chatcmpl-01a038ca-146e-7ad0-a43c-262b536f211e","type":"message","role":"assistant","model":"deepseek-ai/deepseek-v4-flash","content":[{"type":"thinking","thinking":"We need to respond with a single word greeting. \"Hi\" is already one word. So just say \"Hi\"."},{"type":"text","text":"Hi"}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":9,"output_tokens":27}}

@@ -1,0 +1,7 @@
+sample_1=0.000658
+sample_2=0.001006
+sample_3=0.000620
+sample_4=0.000777
+sample_5=0.000776
+median_s=0.000776
+note=single-SHA host; trunk==head; absolute median recorded (no pre-strip binary)

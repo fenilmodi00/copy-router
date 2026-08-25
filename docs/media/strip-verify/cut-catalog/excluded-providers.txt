@@ -1,0 +1,12 @@
+CMD: curl -u admin:REDACTED_ADMIN_PASSWORD http://127.0.0.1:8080/admin/v1/config
+HTTP/1.1 401 Unauthorized
+Content-Type: application/json; charset=utf-8
+Date: Tue, 25 Aug 2026 11:59:11 GMT
+Content-Length: 34
+
+
+---curl_w---
+http_code=401
+time_total=0.001715
+---body---
+{"error":"admin_session_required"}

@@ -1,0 +1,29 @@
+CMD: curl -H Authorization: Bearer REDACTED -H Content-Type: application/json -d {"model":"claude-sonnet-4-5","max_tokens":32,"messages":[{"role":"user","content":"ping"}]} http://127.0.0.1:8080/v1/messages
+HTTP/1.1 200 OK
+Access-Control-Allow-Credentials: true
+Access-Control-Expose-Headers: traceparent,X-Request-ID,X-Cost,X-Cost-Currency,X-Inference-Ms,X-Reasoning-Effort,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Policy,Retry-After
+Cf-Ray: a30a6d582a2efa1c-BOM
+Content-Type: application/json
+Date: Tue, 25 Aug 2026 11:58:56 GMT
+Server: cloudflare
+Strict-Transport-Security: max-age=2592000
+Traceparent: 00-20f35c2138515fe8d994c35296a4fc6d-a4030b73b200bdcc-01
+Vary: Origin
+X-Model: deepseek-ai/deepseek-v4-flash
+X-Org-Id: 936861a6-bc7c-43e9-8dc0-f0b6d849f501
+X-Processing-Ms: 6489
+X-Ratelimit-Limit: 1000
+X-Ratelimit-Remaining: 999
+X-Request-Id: b133f678-12a5-4732-adb3-bd91d5a3c863
+X-Router-Context-Window: 1048576
+X-Router-Decision: classifier_hard_pin
+X-Router-Model: deepseek-ai/deepseek-v4-flash
+X-Router-Provider: aiand
+Transfer-Encoding: chunked
+
+
+---curl_w---
+http_code=200
+time_total=7.575935
+---body---
+{"id":"chatcmpl-01a038c9-aca3-7ab2-9841-21941e656ecd","type":"message","role":"assistant","model":"deepseek-ai/deepseek-v4-flash","content":[{"type":"thinking","thinking":"好的，用户只输入了“ping”这个词。这很可能是一个网络技术相关的查询。用户可能是在问ping命令的含义、用法，或者遇到了网络"}],"stop_reason":"max_tokens","stop_sequence":null,"usage":{"input_tokens":5,"output_tokens":32}}

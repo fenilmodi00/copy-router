@@ -1,0 +1,3 @@
+CMD hardpin model=motif-technologies/motif-3
+http=200
+{"id":"chatcmpl-01a038cb-65fb-75e2-81c6-3c4d21cb31ff","type":"message","role":"assistant","model":"motif-technologies/motif-3","content":[{"type":"thinking","thinking":"We need to respond: greeting. Simple \"Hello! How can I assistI have to give the solution"}],"stop_reason":"max_tokens","stop_sequence":null,"usage":{"input_tokens":8,"output_tokens":16}}

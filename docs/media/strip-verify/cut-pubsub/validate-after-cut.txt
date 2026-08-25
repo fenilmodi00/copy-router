@@ -1,0 +1,12 @@
+CMD: curl -H Authorization: Bearer REDACTED http://127.0.0.1:8080/validate
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Tue, 25 Aug 2026 11:58:43 GMT
+Content-Length: 94
+
+
+---curl_w---
+http_code=200
+time_total=0.000925
+---body---
+{"valid":true,"installation":{"id":"bbabcac4-1b22-438e-8e07-2500544ac23a","name":"Dashboard"}}

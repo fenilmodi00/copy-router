@@ -1,0 +1,6 @@
+sample_1=2.198749
+sample_2=1.353159
+sample_3=1.412231
+sample_4=1.354426
+sample_5=2.155512
+note=end-to-end including upstream; router-only overhead not separated without access-log stamps

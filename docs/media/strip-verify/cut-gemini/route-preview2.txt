@@ -1,0 +1,12 @@
+CMD: curl -H Authorization: Bearer REDACTED -H Content-Type: application/json -d {"messages":[{"role":"user","content":"hello"}]} http://127.0.0.1:8080/v1/route/preview
+HTTP/1.1 403 Forbidden
+Content-Type: application/json; charset=utf-8
+Date: Tue, 25 Aug 2026 11:59:27 GMT
+Content-Length: 115
+
+
+---curl_w---
+http_code=403
+time_total=0.001180
+---body---
+{"error":{"message":"Route preview isn't enabled for this installation.","type":"permission_error"},"type":"error"}

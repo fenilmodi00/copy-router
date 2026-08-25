@@ -1,0 +1,29 @@
+CMD: curl -H Authorization: Bearer REDACTED -H Content-Type: application/json -d {"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}],"max_tokens":8} http://127.0.0.1:8080/v1/chat/completions
+HTTP/1.1 200 OK
+Access-Control-Allow-Credentials: true
+Access-Control-Expose-Headers: traceparent,X-Request-ID,X-Cost,X-Cost-Currency,X-Inference-Ms,X-Reasoning-Effort,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Policy,Retry-After
+Cf-Ray: a30a6e488e7e89f6-BOM
+Content-Type: application/json
+Date: Tue, 25 Aug 2026 11:59:29 GMT
+Server: cloudflare
+Strict-Transport-Security: max-age=2592000
+Traceparent: 00-eb61425ddb3c01311417300dff17a516-d19d17a1c102dff7-01
+Vary: Origin
+X-Model: deepseek-ai/deepseek-v4-flash
+X-Org-Id: 936861a6-bc7c-43e9-8dc0-f0b6d849f501
+X-Processing-Ms: 1045
+X-Ratelimit-Limit: 1000
+X-Ratelimit-Remaining: 999
+X-Request-Id: b9412f45-7252-49ce-a0ad-94ba3b53b974
+X-Router-Context-Window: 1048576
+X-Router-Decision: classifier_hard_pin
+X-Router-Model: deepseek-ai/deepseek-v4-flash
+X-Router-Provider: aiand
+Transfer-Encoding: chunked
+
+
+---curl_w---
+http_code=200
+time_total=2.653005
+---body---
+{"id":"chatcmpl-01a038ca-2c99-7f43-a4da-ffb13d4a7758","object":"chat.completion","created":1787659168,"model":"deepseek-ai/DeepSeek-V4-Flash","choices":[{"index":0,"message":{"role":"assistant","content":null,"refusal":null,"annotations":null,"audio":null,"function_call":null,"tool_calls":[],"reasoning_content":"好的，用户只发了一个“hi"},"logprobs":null,"finish_reason":"length"}],"service_tier":"auto","system_fingerprint":"aigateway","usage":{"prompt_tokens":5,"total_tokens":13,"completion_tokens":8,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens_details":{"reasoning_tokens":8}}}

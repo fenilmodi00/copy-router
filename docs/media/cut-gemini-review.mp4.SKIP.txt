@@ -1,0 +1,1 @@
+SKIP: no screen capture tooling on this WSL host; text receipts only

@@ -1,0 +1,7 @@
+4:Skip Compose Postgres. This matches the Build.io single-replica path.
+9:## Skip list
+15:| `make db` | Starts Compose Postgres on port 5433. Host mode uses Supabase instead. |
+16:| `make full-setup` | Boots Compose, then seed, then Claude Code wiring. Wrong for Supabase host mode. |
+37:Put the URI in `.env.local` as `DATABASE_URL`. Do not commit `.env.local`.
+41:aiand-only minimal set. Do not add Anthropic or OpenAI provider keys for this path.
+140:Local Compose Postgres remains documented in [CONTRIBUTING.md](../CONTRIBUTING.md) (`make db` on port 5433). Use that only when you intentionally run a disposable local database. Host WSL + Supabase operators stay on this page.

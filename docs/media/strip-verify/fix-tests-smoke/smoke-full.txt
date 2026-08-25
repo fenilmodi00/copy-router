@@ -1,0 +1,26 @@
+./scripts/smoke/run.sh
+
+[1;36m[smoke][0m writing docker-compose.smoke-run.override.yml
+
+[1;36m[smoke][0m building and starting the router stack (proxy mode: replay-only)
+
+The command 'docker' could not be found in this WSL 2 distro.
+We recommend to activate the WSL integration in Docker Desktop settings.
+
+For details about using Docker Desktop with WSL 2, visit:
+
+https://docs.docker.com/go/wsl2/
+
+
+[1;31m[smoke][0m smoke run failed (exit 1); dumping server + mitmproxy logs:
+
+The command 'docker' could not be found in this WSL 2 distro.
+We recommend to activate the WSL integration in Docker Desktop settings.
+
+For details about using Docker Desktop with WSL 2, visit:
+
+https://docs.docker.com/go/wsl2/
+
+make: *** [Makefile:52: smoke] Error 1
+Command exited with non-zero status 2
+elapsed_sec=0.22

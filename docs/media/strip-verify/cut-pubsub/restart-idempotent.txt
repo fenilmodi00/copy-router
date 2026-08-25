@@ -1,0 +1,3 @@
+{"status":"ok"}restart1_health=200
+{"status":"ok"}restart2_health=200
+no panic/pubsub errors
