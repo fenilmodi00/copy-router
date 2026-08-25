@@ -245,7 +245,7 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Translate and server tests. Run `go test ./internal/translate/ ./internal/server/ ./internal/api/anthropic/ ./internal/api/openai/ -count=1`. Host tip `e6aa944`: `translate` + `server` ok; full command FAIL on `TestMessagesHandler_AgentShadowDoesNotUpsertRouterUser` (`claude-opus-4-8` rejected as non-canonical after catalog trim). Leave open until that fixture is aiand-aligned.
+- [x] Translate and server tests. Run `go test ./internal/translate/ ./internal/server/ ./internal/api/anthropic/ ./internal/api/openai/ -count=1`. Host tip after AgentShadow fixture realign: EXIT=0 (`deepseek-ai/deepseek-v4-flash` + `ProviderAiand`).
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.6-fast-xhigh` at the PR head, per the boot recipe.
 
@@ -304,7 +304,7 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Router and server tests. Run `go test ./internal/router/... ./internal/server/ ./cmd/router/ -count=1`. Host tip `e6aa944`: FAIL on `internal/router/rl` `TestRouteImageTurnDropsImageUnsupported` (no eligible vision candidate after catalog trim). Leave open until RL fixtures use aiand vision-capable ids.
+- [ ] Router and server tests. Run `go test ./internal/router/... ./internal/server/ ./cmd/router/ -count=1`. Host tip `dbaf94d`+: FAIL across `cluster`, `planner`, `policy`, and `rl` fixtures still naming deleted multi-provider catalog models. Not a one-test fix; leave open.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.6-fast-xhigh` at the PR head, per the boot recipe.
 
