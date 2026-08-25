@@ -33,14 +33,12 @@ const (
 	// compactionSummaryOutputReserve is headroom (summary output + margin) the
 	// selected summarizer model needs above the history it must ingest.
 	compactionSummaryOutputReserve = DefaultCompactionMaxTokens + 8_000
-	// largeWindowSummarizerModel is the big-context Anthropic-family model used
-	// to summarize histories too large for the cheap default summarizer. It is
-	// Anthropic-family so the Anthropic-only ProviderSummarizer can target it
-	// with no cross-format translation.
-	largeWindowSummarizerModel = "claude-fable-5"
+	// largeWindowSummarizerModel is the big-context aiand catalog model used
+	// to summarize histories too large for the cheap default summarizer.
+	largeWindowSummarizerModel = "moonshotai/kimi-k3"
 )
 
-// compactionSummarizerModels are the Anthropic-family models the cascade may
+// compactionSummarizerModels are the aiand catalog IDs the cascade may
 // summarize with, ordered cheapest-first. The selector picks the first whose
 // context window can ingest the (post-Tier-1) history plus summary headroom.
 var compactionSummarizerModels = []string{DefaultHandoverModel, largeWindowSummarizerModel}

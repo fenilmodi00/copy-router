@@ -101,7 +101,7 @@ func ClassifyDispatchError(err error) (DispatchErrorClass, bool) {
 		return DispatchErrorClass{
 			Kind:       DispatchErrorForcedModelUnknown,
 			Status:     http.StatusBadRequest,
-			Message:    forcedUnknown.Error() + ". Use a full model ID, e.g. claude-opus-5, gpt-5.6-sol, or gemini-3-pro-preview.",
+			Message:    forcedUnknown.Error() + ". Use a full model ID, e.g. moonshotai/kimi-k3, deepseek/deepseek-v4-flash, or z-ai/glm-5.2.",
 			LogLevel:   "warn",
 			LogMessage: "Rejected request: forced model is not a known model",
 		}, true

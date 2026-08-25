@@ -22,8 +22,8 @@ import (
 )
 
 // DefaultHandoverModel summarizes prior conversation before a mid-session
-// model switch. Haiku-class is intentional: summarization is cheap.
-const DefaultHandoverModel = "claude-haiku-4-5"
+// model switch. Flash-class is intentional: summarization is cheap.
+const DefaultHandoverModel = "deepseek/deepseek-v4-flash"
 
 // DefaultHandoverTimeout bounds the summarizer call. Tuned for ~5-7s p95
 // observed for haiku-class summarization of ~20k-token sessions.
