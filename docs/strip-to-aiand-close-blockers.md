@@ -6,7 +6,7 @@ Tip: `#31` (`3217595`) Gemini translate cut, or newer (`0c36f03` deslop on tip).
 
 | Gate | Status | Why |
 |---|---|---|
-| Operator review click | **OPERATOR** | Post media in chat, then click `cut-gemini` + `fix-tests-smoke`. Paths: `docs/media/cut-gemini-review-messages.png`, `docs/media/cut-gemini-review-stream.png`, `docs/media/cut-gemini-review.mp4`, `docs/media/fix-tests-smoke-review-live.png`, `docs/media/fix-tests-smoke-review-stream.png`, `docs/media/fix-tests-smoke-review.mp4` |
+| Operator review click | **OPERATOR** | Post done on https://github.com/fenilmodi00/copy-router/issues/33. Awaiting comment `approved` on #33. Do not invent approval. Hold / Wait / Close stay open. Paths: `docs/media/cut-gemini-review-messages.png`, `docs/media/cut-gemini-review-stream.png`, `docs/media/cut-gemini-review.mp4`, `docs/media/fix-tests-smoke-review-live.png`, `docs/media/fix-tests-smoke-review-stream.png`, `docs/media/fix-tests-smoke-review.mp4` |
 | Close the program | **blocked** | Do not tick Close or invent the review click. Arm / Graphite / swarm boxes stay unchecked on purpose (Appendix E). Residual unchecked file boxes: hmm/rl/bandit + `sidecars/hmm` + `internal/feedback` (**kept for training/analytics**, not delete targets). Gemini translate residual **cut** in `#31` (`3217595`; head `0126241`). Host smoke receipts at tip: `/tmp/close-receipts/0c36f03/VERDICT.txt` (ALL_PASS). |
 
 Do not invent operator approval.
