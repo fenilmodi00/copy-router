@@ -8,51 +8,64 @@ import (
 	"workweave/router/internal/router"
 )
 
-// byID is built once at init from Models so accessors are O(1).
-var byID map[string]Model
-
-// byUpstreamID resolves an upstream API model ID (e.g. "zai-org/glm-5.2", stored
-// as the registry model field) back to its canonical catalog Model. Consulted
-// only on a ByID miss so catalog-ID priority is preserved.
-var byUpstreamID map[string]Model
+var byID map[string]int
+var byUpstreamID map[string]int
 
 func init() {
-	byID = make(map[string]Model, len(Models))
-	byUpstreamID = make(map[string]Model)
-	for _, m := range Models {
-		byID[m.ID] = m
+	byID = make(map[string]int, len(Models))
+	byUpstreamID = make(map[string]int)
+	for i := range Models {
+		m := Models[i]
+		byID[m.ID] = i
 		for _, b := range m.Providers {
 			if b.UpstreamID == "" || b.UpstreamID == m.ID {
 				continue
 			}
-			indexUpstreamID(b.UpstreamID, m)
+			indexUpstreamID(b.UpstreamID, i)
 		}
 	}
 }
 
-// indexUpstreamID records both the exact UpstreamID and its lower-case form so
-// callers that normalize input (e.g. /force-model) still resolve ai& registry
-// IDs like deepseek-ai/deepseek-v4-flash without renaming catalog IDs.
-func indexUpstreamID(upstreamID string, m Model) {
+func indexUpstreamID(upstreamID string, i int) {
 	if _, exists := byUpstreamID[upstreamID]; !exists {
-		byUpstreamID[upstreamID] = m
+		byUpstreamID[upstreamID] = i
 	}
 	if lower := strings.ToLower(upstreamID); lower != upstreamID {
 		if _, exists := byUpstreamID[lower]; !exists {
-			byUpstreamID[lower] = m
+			byUpstreamID[lower] = i
 		}
 	}
+}
+
+func modelIndex(id string) (int, bool) {
+	if i, ok := byID[id]; ok {
+		return i, true
+	}
+	if base := router.StripDateSuffix(id); base != id {
+		if i, ok := byID[base]; ok {
+			return i, true
+		}
+	}
+	if i, ok := byUpstreamID[id]; ok {
+		return i, true
+	}
+	if lower := strings.ToLower(id); lower != id {
+		if i, ok := byUpstreamID[lower]; ok {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 // ByID returns the model with the given ID. If the exact ID isn't found,
 // retries after stripping a trailing Anthropic (-20251001) or OpenAI (-2024-08-06) date suffix.
 func ByID(id string) (Model, bool) {
-	if m, ok := byID[id]; ok {
-		return m, true
+	if i, ok := byID[id]; ok {
+		return Models[i], true
 	}
 	if base := router.StripDateSuffix(id); base != id {
-		if m, ok := byID[base]; ok {
-			return m, true
+		if i, ok := byID[base]; ok {
+			return Models[i], true
 		}
 	}
 	return Model{}, false
@@ -64,36 +77,25 @@ func ByID(id string) (Model, bool) {
 // never rerouted. Upstream bindings themselves are unchanged — this only
 // resolves names clients see on /v1/router/models back to the catalog row.
 func ByIDOrUpstream(id string) (Model, bool) {
-	if m, ok := ByID(id); ok {
-		return m, true
-	}
-	if m, ok := byUpstreamID[id]; ok {
-		return m, true
-	}
-	if lower := strings.ToLower(id); lower != id {
-		if m, ok := byUpstreamID[lower]; ok {
-			return m, true
-		}
+	if i, ok := modelIndex(id); ok {
+		return Models[i], true
 	}
 	return Model{}, false
 }
 
-// resolveModelForWindow is the ContextWindowFor path; same resolution as
-// ByIDOrUpstream so registry upstream IDs get the real window, not 128K.
 func resolveModelForWindow(id string) (Model, bool) {
 	return ByIDOrUpstream(id)
 }
 
 // ResolveBinding returns the first ProviderBinding whose Provider is in
-// `available`. Accepts catalog IDs or binding UpstreamIDs (via ByIDOrUpstream)
-// so v0.76 registry fields resolve without renaming rows. Used at boot to pick
-// each routable model's upstream.
+// `available`. Accepts catalog IDs or binding UpstreamIDs so registry fields
+// resolve without renaming rows.
 func ResolveBinding(id string, available map[string]struct{}) (ProviderBinding, bool) {
-	m, ok := ByIDOrUpstream(id)
+	i, ok := modelIndex(id)
 	if !ok {
 		return ProviderBinding{}, false
 	}
-	for _, b := range m.Providers {
+	for _, b := range Models[i].Providers {
 		if _, ok := available[b.Provider]; ok {
 			return b, true
 		}

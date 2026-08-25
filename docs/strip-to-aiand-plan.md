@@ -213,7 +213,7 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 - [x] Metric. `ResolveBinding` microbenchmark ns/op.
 - [x] Probe. `go test ./internal/router/catalog/ -bench=ResolveBinding -benchtime=2s` at trunk and at the head, interleaved. Same three IDs on both tips (`z-ai/glm-5.2`, `moonshotai/kimi-k3`, `motif-technologies/motif-3`), available=`{aiand}`.
 - [x] Baseline. Record the trunk ns/op first. Pre-cut tip `a1c7434` mean **59.41 ns/op** (57.74, 61.08).
-- [ ] Rule. Head ns/op must not exceed trunk by more than 20 percent, or the PR fails. Head mean **77.90 ns/op** (76.79, 79.00) = **+31%** vs trunk (**FAIL**). Leave unchecked.
+- [x] Rule. Head ns/op must not exceed trunk by more than 20 percent, or the PR fails. After index-map lookup fix: interleaved mean trunk **54.31 ns/op** (54.20, 54.75, 53.98) vs head **30.66 ns/op** (31.58, 30.04, 30.36) = **−43.5%** (**PASS**). Prior regressing tip was **77.90 ns/op** (+31%).
 
 **Review gate.** None. `cut-catalog` is not review-gated.
 
