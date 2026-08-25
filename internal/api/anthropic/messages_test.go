@@ -321,21 +321,21 @@ func TestMessagesHandler_HappyPathServesUpstreamResponse(t *testing.T) {
 func TestMessagesHandler_AgentShadowDoesNotUpsertRouterUser(t *testing.T) {
 	users := &countingUserRepository{}
 	authSvc := auth.NewService(nil, nil, nil, users, nil, nil, nil)
-	provider := &fakeProviderClient{proxyBody: `{"id":"msg_eval","type":"message","role":"assistant","model":"claude-opus-4-8","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":3}}`}
-	svc := newTestService(&fakeRouter{}, providers.ProviderAnthropic, provider)
+	provider := &fakeProviderClient{proxyBody: `{"id":"msg_eval","type":"message","role":"assistant","model":"deepseek-ai/deepseek-v4-flash","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":3}}`}
+	svc := newTestService(&fakeRouter{}, providers.ProviderAiand, provider)
 
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		c.Set("router_installation", &auth.Installation{ID: uuid.NewString()})
 		ctx := context.WithValue(c.Request.Context(), proxy.AgentShadowEvalContextKey{}, proxy.AgentShadowEvaluation{
-			Model: "claude-opus-4-8", RolloutID: "pilot-1", StateID: "state-1",
+			Model: "deepseek-ai/deepseek-v4-flash", RolloutID: "pilot-1", StateID: "state-1",
 		})
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	})
 	engine.POST("/v1/messages", anthropicapi.MessagesHandler(svc, authSvc))
-	body := []byte(`{"model":"claude-sonnet-4-5","messages":[{"role":"user","content":"hi"}],"metadata":{"user_id":"{\"account_uuid\":\"real-account\",\"email\":\"person@example.com\"}"},"max_tokens":4096}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-flash","messages":[{"role":"user","content":"hi"}],"metadata":{"user_id":"{\"account_uuid\":\"real-account\",\"email\":\"person@example.com\"}"},"max_tokens":4096}`)
 
 	recorder := postMessages(engine, body)
 
