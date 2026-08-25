@@ -251,7 +251,7 @@ func stripEffortSuffix(model string) (effort string, modelOut string) {
 // ensuring the colon is only treated as a suffix separator for known levels.
 func looksLikeEffortAlias(tail string) bool {
 	switch strings.ToLower(strings.TrimSpace(tail)) {
-	case "fast", "low", "medium", "med", "high", "max", "xhigh",
+	case "none", "disabled", "off", "fast", "low", "medium", "med", "high", "max", "xhigh",
 		"ultra", "minimal", "min":
 		return true
 	default:

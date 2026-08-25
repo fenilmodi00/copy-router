@@ -994,7 +994,10 @@ func resolveOpenAIOverrides(body []byte, opts EmitOptions) EmitOverrides {
 
 // Anthropic adaptive effort levels referenced by emit logic. Every adaptive
 // model accepts low/medium/high/max; xhigh requires router.CapXhighEffort.
+// "none" is the ai& (and Gemini) disable tier — a first-class wire level, not
+// only a parse-time alias for ReasoningDisabled.
 const (
+	effortNone   = "none"
 	effortLow    = "low"
 	effortMedium = "medium"
 	effortHigh   = "high"
@@ -1003,10 +1006,12 @@ const (
 )
 
 // CanonicalizeEffort maps user-facing aliases (fast/minimal/ultra) to canonical
-// wire strings (low/medium/high/max/xhigh). Unknown values pass through so
+// wire strings (none/low/medium/high/max/xhigh). Unknown values pass through so
 // IsValidEffort can reject typos at the boundary.
 func CanonicalizeEffort(level string) string {
 	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "none", "disabled", "off":
+		return effortNone
 	case "fast", "low", "minimal", "min":
 		return effortLow
 	case "medium", "med":
@@ -1027,24 +1032,33 @@ func CanonicalizeEffort(level string) string {
 // rather than forward garbage to a provider.
 func IsValidEffort(level string) bool {
 	switch CanonicalizeEffort(level) {
-	case effortLow, effortMedium, effortHigh, effortMax, effortXhigh:
+	case effortNone, effortLow, effortMedium, effortHigh, effortMax, effortXhigh:
 		return true
 	default:
 		return false
 	}
 }
 
-// ResolveForceEffort canonicalizes level and applies the per-model cap
-// (xhigh → max on non-CapXhighEffort). Empty input → "".
+// ResolveForceEffort canonicalizes level, applies the per-model xhigh cap, and
+// clamps to the model's declared Reasoning().Levels when present. Empty → "".
 func ResolveForceEffort(caps router.ModelSpec, level string) string {
 	if level == "" {
 		return ""
 	}
 	canonical := CanonicalizeEffort(level)
 	if canonical == effortXhigh && !caps.Supports(router.CapXhighEffort) {
-		return effortMax
+		canonical = effortMax
 	}
-	return canonical
+	levels := caps.Reasoning().Levels
+	if len(levels) == 0 {
+		return canonical
+	}
+	for _, candidate := range levels {
+		if candidate == canonical {
+			return canonical
+		}
+	}
+	return nearestReasoningLevel(levels, canonical)
 }
 
 // resolveForceEffort is the package-private variant of ResolveForceEffort;

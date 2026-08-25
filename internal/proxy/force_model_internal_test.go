@@ -313,6 +313,12 @@ func TestResolveForceModel_EffortSuffixPreserved(t *testing.T) {
 	assert.Equal(t, "moonshotai/kimi-k2.7", gotID, "canonical id")
 	assert.True(t, gotKnown, "known")
 	assert.Equal(t, "high", gotEffort, "effort")
+
+	_, _, _, noneEffort := resolveForceModelWithEffort("deepseek/deepseek-v4-flash:none")
+	assert.Equal(t, "none", noneEffort, ":none suffix must strip as effort none")
+
+	_, _, _, maxEffort := resolveForceModelWithEffort("z-ai/glm-5.2:max")
+	assert.Equal(t, "max", maxEffort)
 }
 
 // /v1/router/models on ai& deploys lists UpstreamIDs. Force-model must accept

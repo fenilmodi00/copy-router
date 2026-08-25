@@ -285,7 +285,7 @@ func (s *Service) bypassToAnthropic(
 	opts := translate.EmitOptions{
 		TargetModel:           decision.Model,
 		TargetProvider:        decision.Provider,
-		Capabilities:          router.Lookup(decision.Model),
+		Capabilities:          catalog.CapabilitiesFor(decision.Model),
 		IncludeStreamUsage:    s.usageRequired(),
 		EnableExtendedContext: shouldEnableExtendedContext(env.FullTokenEstimate(), outputReserve),
 		// When the session previously served a different model, strip thinking

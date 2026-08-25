@@ -161,6 +161,10 @@ func TestCanonicalizeEffort(t *testing.T) {
 		{"fast", "low"},
 		{"minimal", "low"},
 		{"min", "low"},
+		{"none", "none"},
+		{"NONE", "none"},
+		{"disabled", "none"},
+		{"off", "none"},
 		{"medium", "medium"},
 		{"med", "medium"},
 		{"high", "high"},
@@ -180,6 +184,7 @@ func TestCanonicalizeEffort(t *testing.T) {
 // IsValidEffort accepts canonical levels and alias forms; rejects typos.
 func TestIsValidEffort(t *testing.T) {
 	valid := []string{
+		"none", "off", "disabled",
 		"low", "medium", "high", "max", "xhigh",
 		"fast", "minimal", "ultra", "min", "med",
 	}
@@ -197,8 +202,12 @@ func TestIsValidEffort(t *testing.T) {
 }
 
 // TestResolveForceEffort applies per-model xhigh cap (xhigh→max on
-// non-CapXhighEffort targets).
+// non-CapXhighEffort targets) and clamps to declared Reasoning levels.
 func TestResolveForceEffort(t *testing.T) {
+	aiandFlash := router.NewSpecWithReasoning(
+		router.ReasoningCapabilities{Levels: []string{"none", "high", "max"}},
+		router.CapReasoning,
+	)
 	cases := []struct {
 		name  string
 		level string
@@ -210,6 +219,9 @@ func TestResolveForceEffort(t *testing.T) {
 		{"low_no_cap", "low", router.NewSpec(), "low"},
 		{"ultra_alias_resolved", "ultra", router.NewSpec(router.CapAdaptiveThinking, router.CapXhighEffort), "xhigh"},
 		{"fast_alias_resolved", "fast", router.NewSpec(), "low"},
+		{"none_passes_when_listed", "none", aiandFlash, "none"},
+		{"low_clamps_to_none_on_flash", "low", aiandFlash, "none"},
+		{"medium_clamps_to_high_on_flash", "medium", aiandFlash, "high"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
