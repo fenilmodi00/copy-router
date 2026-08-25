@@ -24,9 +24,15 @@ Tip: post-`dbaf94d` Close lane (ResolveBinding `e6aa944` / #23 still in ancestry
 | Gate | Status | Why |
 |---|---|---|
 | Operator review click | **OPERATOR** | Post media in chat, then click cut-gemini + fix-tests-smoke. Paths: `docs/media/cut-gemini-review-messages.png`, `docs/media/cut-gemini-review-stream.png`, `docs/media/cut-gemini-review.mp4`, `docs/media/fix-tests-smoke-review-live.png`, `docs/media/fix-tests-smoke-review-stream.png`, `docs/media/fix-tests-smoke-review.mp4` |
-| cut-sidecars-extras unit command | **OPEN** | Exact `go test ./internal/router/... ./internal/server/ ./cmd/router/ -count=1` FAIL across many `cluster` / `planner` / `policy` / `rl` fixtures still pinned to deleted multi-provider catalog models. Needs a dedicated aiand fixture realign PR, not Close docs |
+| cut-sidecars-extras unit command | **CLEARED** | `go test ./internal/router/... ./internal/server/ ./cmd/router/ -count=1` EXIT 0 after aiand fixture realign (planner/policy/rl/cluster). Packages kept; fixtures only |
 | Process / Graphite / swarm ritual boxes | **OPERATOR / historical** | Code path already on main via host Close. Leave open; no operator message superseded the Graphite/swarm ceremony |
+
+## Cleared after fixture realign
+
+| Gate | Evidence |
+|---|---|
+| cut-sidecars Verify, unit | `go test ./internal/router/... ./internal/server/ ./cmd/router/ -count=1` EXIT 0 on host tip after aiand catalog fixture realign |
 
 ## Do not invent
 
-Do not tick Close while cut-sidecars unit, review clicks, or ritual boxes stay open.
+Do not tick Close while operator review clicks or ritual boxes stay open. Unit gate for cut-sidecars is cleared.

@@ -304,7 +304,7 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-c
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Router and server tests. Run `go test ./internal/router/... ./internal/server/ ./cmd/router/ -count=1`. Host tip `dbaf94d`+: FAIL across `cluster`, `planner`, `policy`, and `rl` fixtures still naming deleted multi-provider catalog models. Not a one-test fix; leave open.
+- [x] Router and server tests. Run `go test ./internal/router/... ./internal/server/ ./cmd/router/ -count=1`. EXIT 0 after aiand fixture realign (`cluster` / `planner` / `policy` / `rl` pins → catalog IDs + `ProviderAiand`).
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.6-fast-xhigh` at the PR head, per the boot recipe.
 

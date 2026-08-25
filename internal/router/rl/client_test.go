@@ -24,7 +24,7 @@ func TestHTTPDeciderPostsContractAndParsesResult(t *testing.T) {
 		require.NoError(t, json.Unmarshal(raw, &gotBody))
 		// Mirror router_policy_server.py's success envelope.
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"model":       "anthropic/claude-opus-4-8",
+			"model":       "moonshotai/kimi-k3",
 			"score":       1.875,
 			"score_label": "DPO score",
 			"reason":      "rl_policy artifact=main_q_dpo.pkl",
@@ -38,8 +38,8 @@ func TestHTTPDeciderPostsContractAndParsesResult(t *testing.T) {
 		PromptText: "fix the bug",
 		TurnIndex:  3,
 		Candidates: []rl.Candidate{
-			{RosterID: "anthropic/claude-opus-4-8", Provider: providers.ProviderAnthropic},
-			{RosterID: "deepseek-ai/deepseek-v4-flash", Provider: providers.ProviderMakora},
+			{RosterID: "moonshotai/kimi-k3", Provider: providers.ProviderAiand},
+			{RosterID: "deepseek-ai/deepseek-v4-flash", Provider: providers.ProviderAiand},
 		},
 	})
 	require.NoError(t, err)
@@ -48,13 +48,13 @@ func TestHTTPDeciderPostsContractAndParsesResult(t *testing.T) {
 	assert.Equal(t, "fix the bug", gotBody["prompt_text"])
 	assert.EqualValues(t, 3, gotBody["turn_index"])
 	assert.ElementsMatch(t,
-		[]any{"anthropic/claude-opus-4-8", "deepseek-ai/deepseek-v4-flash"},
+		[]any{"moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-flash"},
 		gotBody["candidate_models"])
 	providersMap, ok := gotBody["candidate_providers"].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, providers.ProviderAnthropic, providersMap["anthropic/claude-opus-4-8"])
+	assert.Equal(t, providers.ProviderAiand, providersMap["moonshotai/kimi-k3"])
 
-	assert.Equal(t, "anthropic/claude-opus-4-8", res.Model)
+	assert.Equal(t, "moonshotai/kimi-k3", res.Model)
 	assert.InDelta(t, 1.875, res.Score, 1e-9)
 	assert.Equal(t, "DPO score", res.ScoreLabel)
 	assert.Equal(t, "implementing a fix", res.StateLabel)
@@ -66,7 +66,7 @@ func TestHTTPDeciderAttachesStaticHeaders(t *testing.T) {
 		gotKey = r.Header.Get("Modal-Key")
 		gotSecret = r.Header.Get("Modal-Secret")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"model": "anthropic/claude-opus-4-8",
+			"model": "moonshotai/kimi-k3",
 			"score": 1.0,
 		})
 	}))
@@ -79,7 +79,7 @@ func TestHTTPDeciderAttachesStaticHeaders(t *testing.T) {
 	_, err := d.Decide(context.Background(), rl.Query{
 		PromptText: "x",
 		Candidates: []rl.Candidate{
-			{RosterID: "anthropic/claude-opus-4-8", Provider: providers.ProviderAnthropic},
+			{RosterID: "moonshotai/kimi-k3", Provider: providers.ProviderAiand},
 		},
 	})
 	require.NoError(t, err)

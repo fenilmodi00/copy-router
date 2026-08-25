@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"workweave/router/internal/providers"
 	"workweave/router/internal/router/catalog"
 
 	"github.com/stretchr/testify/assert"
@@ -178,6 +179,17 @@ func loadV0_70(t *testing.T) *Scorer {
 	return s
 }
 
+func loadV0_76(t *testing.T) *Scorer {
+	t.Helper()
+	bundle, err := LoadBundle("v0.76")
+	require.NoError(t, err)
+	require.True(t, bundle.IsV2)
+	s, err := NewScorer(bundle, DefaultConfig(), &fakeEmbedder{dim: bundle.Centroids.Dim},
+		map[string]struct{}{providers.ProviderAiand: {}})
+	require.NoError(t, err)
+	return s
+}
+
 func TestApplyDialAlpha_HoldsEachClusterAtItsDeclaredFloor(t *testing.T) {
 	s := loadV0_70(t)
 	knobs := s.defaultActiveKnobs()
@@ -214,30 +226,19 @@ func TestApplyDialAlpha_NilFloorIsUniformDial(t *testing.T) {
 }
 
 func TestApplyDialAlpha_AgenticStaysOnCapableModelAtLowDial(t *testing.T) {
-	// Reported bug: a price-leaning dial routed the agentic cluster (0) to a
-	// model that can't drive the Claude Code tool protocol (minimax-m3 grepping
-	// for a skill instead of running it). Fix moved the guard off the quality
-	// weight (old 0.88 floor pinned Opus, killing the dial) and onto the
-	// candidate pool: has_tools turns drop catalog.AgenticLowSet, so a low dial
-	// demotes to the cheapest harness-capable model instead of an incapable one.
-	s := loadV0_70(t)
+	s := loadV0_76(t)
 
-	// Realized agentic alpha at the price extreme = the declared floor.
 	knobs := s.defaultActiveKnobs()
 	s.applyDialAlpha(0.0, knobs.Alpha, knobs.AlphaFloor)
 	top := topPNearest(s.centroids.Row(0), s.centroids, s.cfg.TopP)
 
 	low := catalog.AgenticLowSet()
 
-	// Precondition: without the gate, the price extreme falls through to an
-	// agentic-incapable model — the bug the gate exists to fix.
 	full, _ := argmax(s.blendScoresV2(top, knobs, s.models, nil, nil, 0), s.models)
 	_, fullIncapable := low[full]
 	require.Truef(t, fullIncapable,
 		"precondition: without the gate the price-extreme dial must fall through to an AgenticLow model, got %s", full)
 
-	// WITH the gate the realized winner is harness-capable, and the gate changed
-	// the routed model.
 	gated := make([]string, 0, len(s.models))
 	for _, m := range s.models {
 		if _, drop := low[m]; drop {

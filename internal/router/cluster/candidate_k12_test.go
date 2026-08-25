@@ -5,32 +5,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"workweave/router/internal/providers"
 )
 
-// TestCandidateK12Loads is the load-gate for the candidate-k12 bake-off bundle:
-// the prod-turn re-cluster (K=12) + in-house harness-faithful quality candidate
-// must parse end-to-end, construct a Scorer, and route the offline-screen mix.
-// It asserts the properties the staging bake-off relies on (K=12, 21 models,
-// quality present for every cluster, fable-5/glm-5.2/sonnet-5 routable) and pins
-// the per-cluster argmax to the offline screen's picks (glm-5.2/fable-5-led).
 func TestCandidateK12Loads(t *testing.T) {
 	bundle, err := LoadBundle("candidate-k12")
 	require.NoError(t, err, "candidate-k12 must parse end-to-end")
 	require.True(t, bundle.IsV2, "candidate-k12 is a v2 bundle (quality_means present)")
 
-	// K=12 geometry.
 	require.NotNil(t, bundle.Centroids)
 	assert.Equal(t, 12, bundle.Centroids.K, "candidate-k12 must be a K=12 re-cluster")
 	assert.Equal(t, 768, bundle.Centroids.Dim, "jina-v2-base-code-int8 is 768-dim")
 	assert.Equal(t, EmbedderJinaV2, bundle.EmbedderID())
 	assert.Equal(t, 768, bundle.EmbedDim())
 
-	// 21 deployed models.
 	models := bundle.Registry.Models()
 	assert.Len(t, models, 21, "candidate-k12 roster is 21 models")
 
-	// Quality present for every (cluster, model): the loader validates this, but
-	// assert it explicitly so a regression is legible.
 	for k := 0; k < bundle.Centroids.K; k++ {
 		row, ok := bundle.QualityMeans[k]
 		require.Truef(t, ok, "quality_means missing cluster %d", k)
@@ -40,52 +32,40 @@ func TestCandidateK12Loads(t *testing.T) {
 		}
 	}
 
-	// The roster + axes for this candidate must include the incumbent arm
-	// (glm-5.2) and the catalog still tracks fable-5 as a passthrough entry.
-	for _, m := range []string{"claude-fable-5", "z-ai/glm-5.2"} {
+	for _, m := range []string{"claude-fable-5", "z-ai/glm-5.2", "moonshotai/kimi-k2.7"} {
 		assert.Contains(t, models, m, "%s must be a deployed model", m)
 		_, ok := bundle.ModelAxes[m]
 		assert.Truef(t, ok, "%s must have operational axes", m)
 	}
 
-	// Provider set covering every provider the 21-model roster binds to (the
-	// staging bake-off deploy carries keys for all seven). Restricting to a
-	// subset would drop OSS models (e.g. glm-5.2 on fireworks) from the
-	// eligible pool and the per-cluster argmax would no longer reflect the
-	// offline screen.
-	providers := map[string]struct{}{
-		"anthropic": {}, "openai": {}, "google": {},
-		"fireworks": {}, "makora": {}, "openrouter": {}, "bedrock": {},
-	}
+	providers := map[string]struct{}{providers.ProviderAiand: {}}
 
-	// Build a real Scorer through the jina-v2 fake embedder (matches id/dim, so
-	// NewScorer's embedder guard passes without ONNX).
 	s, err := NewScorer(bundle, DefaultConfig(), &fakeEmbedder{dim: bundle.Centroids.Dim}, providers)
 	require.NoError(t, err, "candidate-k12 must construct a Scorer")
 
-	// glm-5.2 routable; fable-5 retired to passthrough, deliberately excluded.
 	routable := RoutableModelSet(bundle.Registry, providers)
-	for _, m := range []string{"z-ai/glm-5.2", "claude-sonnet-5"} {
+	for _, m := range []string{"z-ai/glm-5.2", "moonshotai/kimi-k2.7"} {
 		_, ok := routable[m]
-		assert.Truef(t, ok, "%s must be routable", m)
+		assert.Truef(t, ok, "%s must be routable under aiand", m)
 	}
-	_, fableRoutable := routable["claude-fable-5"]
-	assert.Falsef(t, fableRoutable, "fable-5 retired from routing; must not be a cluster target")
+	for _, m := range []string{
+		"claude-fable-5", "claude-haiku-4-5", "claude-opus-4-7", "claude-opus-4-8",
+		"claude-sonnet-4-6", "claude-sonnet-5", "deepseek/deepseek-v4-flash",
+		"deepseek/deepseek-v4-pro", "gemini-3.1-flash-lite-preview", "gpt-5.5",
+		"minimax/minimax-m3",
+	} {
+		_, ok := routable[m]
+		assert.Falsef(t, ok, "%s must not be routable under aiand-only providers", m)
+	}
 
-	// Per-cluster argmax through the live v2 blend (the authoritative runtime
-	// path: blendScoresV2 over a single cluster with the bundle's default knobs =
-	// alpha 0.7). Must match the offline screen's picks: glm-5.2-led coding mix
-	// with fable-5 on the rest.
 	knobs := s.defaultActiveKnobs()
 	require.Len(t, knobs.Alpha, 12, "default_routing_knobs.alpha must be a length-12 vector")
 	for i, a := range knobs.Alpha {
 		assert.InDeltaf(t, 0.7, a, 1e-9, "cluster %d alpha must be the 0.7 sweet spot", i)
 	}
 
-	// 16 of the frozen bundle's 21: deepseek-v4-pro, opus-4-8, qwen3.7-plus,
-	// gpt-5.5 and fable-5 retired to passthrough; fable-5 led 4 clusters so
-	// dropping it reshapes the wins below.
-	require.Len(t, s.models, 16, "retired models must be the only ones dropped under the full provider set")
+	require.Len(t, s.models, 2, "only catalog-overlapping models resolve under aiand")
+	assert.ElementsMatch(t, []string{"moonshotai/kimi-k2.7", "z-ai/glm-5.2"}, s.models)
 
 	wins := map[string]int{}
 	for c := 0; c < bundle.Centroids.K; c++ {
@@ -95,12 +75,9 @@ func TestCandidateK12Loads(t *testing.T) {
 		wins[winner]++
 	}
 
-	// fable-5 retired: c1→sonnet-5, c7/c10/c11→glm-5.2; mix still glm-5.2-led.
-	assert.Equal(t, 11, wins["z-ai/glm-5.2"], "glm-5.2 must lead 11 clusters at alpha=0.7 after fable-5 retirement")
-	assert.Equal(t, 1, wins["claude-sonnet-5"], "claude-sonnet-5 must lead 1 cluster at alpha=0.7 after fable-5 retirement")
-	// No retired-to-passthrough model should win a cluster.
-	assert.Zero(t, wins["claude-fable-5"], "fable-5 is retired; no cluster should route to it")
-	// No opus/haiku/legacy-sonnet cluster wins — the whole point of the candidate.
-	assert.Zero(t, wins["claude-opus-4-8"], "no cluster should route to opus-4-8 at the screen alpha")
-	assert.Zero(t, wins["claude-haiku-4-5"], "no cluster should route to haiku at the screen alpha")
+	assert.Equal(t, 12, wins["z-ai/glm-5.2"], "glm-5.2 must lead all 12 clusters at alpha=0.7")
+	assert.Zero(t, wins["moonshotai/kimi-k2.7"], "kimi-k2.7 must win zero clusters at alpha=0.7 in this pool")
+	assert.Zero(t, wins["claude-fable-5"], "fable-5 is not routable; no cluster should route to it")
+	assert.Zero(t, wins["claude-opus-4-8"], "legacy models must win zero clusters")
+	assert.Zero(t, wins["claude-haiku-4-5"], "legacy models must win zero clusters")
 }
