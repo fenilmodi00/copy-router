@@ -14,7 +14,7 @@ Tip: `0897b35`+ (this Close docs PR on top). Verification mode: **host + Supabas
 | docs-host health latency | Interleaved `curl /health` trunk binary on `:8081` vs host on `:8080`; medians ~0.92 ms vs ~0.86 ms (**PASS**, within 50 ms) |
 | cut-sidecars RSS | VmRSS after idle: trunk ~311 MB, head ~272 MB (**PASS**, head ≤ trunk + 5 MB) |
 | Host smoke replay | `SMOKE_HOST=1` / `make smoke-host` against `make dev` :8080, EXIT=0, ~48 s wall, no compose / pubsub-emulator (#20 / `e7ad086`) |
-| cut-catalog `ResolveBinding` Metric/Probe/Baseline | Interleaved `go test ./internal/router/catalog/ -bench=BenchmarkResolveBinding -benchtime=2s` on pre-cut tip `a1c7434` vs head, same three IDs present on both (`z-ai/glm-5.2`, `moonshotai/kimi-k3`, `motif-technologies/motif-3`), available=`{aiand}`. Trunk mean **59.41 ns/op**; head mean **77.90 ns/op** |
+| cut-catalog `ResolveBinding` Metric/Probe/Baseline | Interleaved `go test ./internal/router/catalog/ -bench=BenchmarkResolveBinding -benchtime=2s` on pre-cut tip `a1c7434` vs head, same three IDs present on both (`z-ai/glm-5.2`, `moonshotai/kimi-k3`, `motif-technologies/motif-3`), available=`{aiand}`. Original FAIL: trunk mean **59.41 ns/op**, regressing head **77.90 ns/op**. After index-map fix: trunk **54.31 ns/op**, head **30.66 ns/op** (**PASS**) |
 
 ## Still operator / sibling
 
@@ -22,10 +22,10 @@ Tip: `0897b35`+ (this Close docs PR on top). Verification mode: **host + Supabas
 |---|---|---|
 | Operator review click | **OPERATOR** | PNGs + MP4s are on the branch/main; post them in chat; wait for click on cut-gemini + fix-tests-smoke |
 | Smoke Rule vs trunk | **UNPROVEN** | Head wall ~48 s via `make smoke-host`. Pre-#20 tip has no host smoke path (compose+MITM only). Host-only Close cannot run an interleaved trunk `make smoke-host` mean |
-| cut-catalog `ResolveBinding` Rule | **FAIL** | Head mean 77.90 ns/op exceeds trunk mean 59.41 ns/op by **+31%** (limit ≤20%). Absolute delta ~18 ns/op. Do not tick the Rule box |
+| cut-catalog `ResolveBinding` Rule | **PASS** | Index maps into `Models` remove Model duffcopy on `ResolveBinding`. Interleaved head mean **30.66 ns/op** ≤ trunk **54.31 ns/op** + 20%. Rule ticked in plan |
 | cut-gemini messages router-overhead | **UNPROVEN** | Plan wants access-log overhead before upstream. `AccessLog` only emits total `latency_ms` (includes upstream). `ProxyMessages complete` logs `route_ms` (samples ~499–1640 ms on this host, embeds included) but that is not the access-log probe, and no pre-cut-gemini trunk interleaved baseline was taken |
 | Process / Graphite / swarm ritual boxes | **OPERATOR / historical** | Arm, spawn, merge-ritual checkboxes are program process; code path already on main. Prefer leave open unless operator marks N/A |
 
 ## Do not invent
 
-Absolute head samples without a comparable trunk rebuild do not satisfy trunk-vs-head rules. Host smoke PASS clears replay lanes and the wall-time probe; it does not clear the Rule without a trunk baseline. Access-log `latency_ms` is not router-overhead-before-upstream. A ResolveBinding Rule fail stays a fail even when the absolute ns/op is small.
+Absolute head samples without a comparable trunk rebuild do not satisfy trunk-vs-head rules. Host smoke PASS clears replay lanes and the wall-time probe; it does not clear the Rule without a trunk baseline. Access-log `latency_ms` is not router-overhead-before-upstream.
