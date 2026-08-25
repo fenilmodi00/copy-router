@@ -21,7 +21,7 @@ func TestCanonicalModel(t *testing.T) {
 		{"sonnet 1m variant", "claude-sonnet-4-6[1m]", "claude-sonnet-4-6", true},
 		{"fable 1m variant", "claude-fable-5[1m]", "claude-fable-5", true},
 		{"no tag", "claude-opus-4-8", "claude-opus-4-8", false},
-		{"oss model untouched", "deepseek/deepseek-v4-pro", "deepseek/deepseek-v4-pro", false},
+		{"oss model untouched", "deepseek-ai/deepseek-v4-pro", "deepseek-ai/deepseek-v4-pro", false},
 		{"empty", "", "", false},
 		{"tag only at end", "claude[1m]-opus", "claude[1m]-opus", false},
 	}

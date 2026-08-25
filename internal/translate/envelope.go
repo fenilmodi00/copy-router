@@ -994,7 +994,10 @@ func resolveOpenAIOverrides(body []byte, opts EmitOptions) EmitOverrides {
 
 // Anthropic adaptive effort levels referenced by emit logic. Every adaptive
 // model accepts low/medium/high/max; xhigh requires router.CapXhighEffort.
+// "none" is the ai& (and Gemini) disable tier — a first-class wire level, not
+// only a parse-time alias for ReasoningDisabled.
 const (
+	effortNone   = "none"
 	effortLow    = "low"
 	effortMedium = "medium"
 	effortHigh   = "high"
@@ -1003,10 +1006,12 @@ const (
 )
 
 // CanonicalizeEffort maps user-facing aliases (fast/minimal/ultra) to canonical
-// wire strings (low/medium/high/max/xhigh). Unknown values pass through so
+// wire strings (none/low/medium/high/max/xhigh). Unknown values pass through so
 // IsValidEffort can reject typos at the boundary.
 func CanonicalizeEffort(level string) string {
 	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "none", "disabled", "off":
+		return effortNone
 	case "fast", "low", "minimal", "min":
 		return effortLow
 	case "medium", "med":
@@ -1027,24 +1032,33 @@ func CanonicalizeEffort(level string) string {
 // rather than forward garbage to a provider.
 func IsValidEffort(level string) bool {
 	switch CanonicalizeEffort(level) {
-	case effortLow, effortMedium, effortHigh, effortMax, effortXhigh:
+	case effortNone, effortLow, effortMedium, effortHigh, effortMax, effortXhigh:
 		return true
 	default:
 		return false
 	}
 }
 
-// ResolveForceEffort canonicalizes level and applies the per-model cap
-// (xhigh → max on non-CapXhighEffort). Empty input → "".
+// ResolveForceEffort canonicalizes level, applies the per-model xhigh cap, and
+// clamps to the model's declared Reasoning().Levels when present. Empty → "".
 func ResolveForceEffort(caps router.ModelSpec, level string) string {
 	if level == "" {
 		return ""
 	}
 	canonical := CanonicalizeEffort(level)
 	if canonical == effortXhigh && !caps.Supports(router.CapXhighEffort) {
-		return effortMax
+		canonical = effortMax
 	}
-	return canonical
+	levels := caps.Reasoning().Levels
+	if len(levels) == 0 {
+		return canonical
+	}
+	for _, candidate := range levels {
+		if candidate == canonical {
+			return canonical
+		}
+	}
+	return nearestReasoningLevel(levels, canonical)
 }
 
 // resolveForceEffort is the package-private variant of ResolveForceEffort;
@@ -1207,9 +1221,8 @@ var modelMaxOutputTokens = map[string]int{
 	"qwen/qwen3-coder-next":            16384, // Bedrock (primary) caps Qwen models at 16K output
 	"qwen/qwen3-235b-a22b-2507":        16384,
 	"qwen/qwen3-next-80b-a3b-instruct": 16384,
-	"deepseek/deepseek-v4-flash":       131072, // DeepSeek V4 documents 384K max output
-	"deepseek/deepseek-v4-pro":         131072,
-	"deepseek/deepseek-v4-pro-0813":    131072,
+	"deepseek-ai/deepseek-v4-flash":       131072, // DeepSeek V4 documents 384K max output
+	"deepseek-ai/deepseek-v4-pro":         131072,
 	"minimax/minimax-m3":               131072, // 512K context, output up to the window
 	"minimax/minimax-m2.7":             65536,
 	"z-ai/glm-5":                       65536,

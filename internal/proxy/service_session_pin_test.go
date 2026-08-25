@@ -216,7 +216,7 @@ func newPinSvc(fr *fakeRouter, store *fakePinStore) *proxy.Service {
 		store,
 		false,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 }
@@ -231,7 +231,7 @@ func newPinSvcWithTelemetry(fr *fakeRouter, store *fakePinStore, telemetry proxy
 		store,
 		false,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		telemetry,
 	)
 }
@@ -266,7 +266,7 @@ func TestService_SessionPin_PostgresHitKeepsPinnedModel(t *testing.T) {
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
 		Provider:      "anthropic",
-		Model:         "deepseek/deepseek-v4-flash",
+		Model:         "deepseek-ai/deepseek-v4-flash",
 		Reason:        "cluster:v0.2",
 		PinnedUntil:   time.Now().Add(30 * time.Minute),
 		FirstPinnedAt: time.Now().Add(-5 * time.Minute),
@@ -281,7 +281,7 @@ func TestService_SessionPin_PostgresHitKeepsPinnedModel(t *testing.T) {
 
 	// Scorer runs even on a pin hit, but planner keeps the pin (no prior-turn usage).
 	assert.Equal(t, 1, fr.routeCalls, "scorer runs every MainLoop turn under the planner")
-	assert.Equal(t, "deepseek/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel))
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel))
 	waitForUpsert(t, store)
 }
 
@@ -327,7 +327,7 @@ func TestService_SessionPin_ImageTurnEvictsTextOnlyPin(t *testing.T) {
 // Every turn must consult Postgres for its pin — there is no in-process cache.
 func TestService_SessionPin_EveryTurnReadsPostgres(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek/deepseek-v4-flash", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -348,7 +348,7 @@ func TestService_SessionPin_EveryTurnReadsPostgres(t *testing.T) {
 func TestService_SessionPin_StoreErrorFallsThroughToFreshRoute(t *testing.T) {
 	store := newFakePinStore()
 	store.getErr = errors.New("postgres unreachable")
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek/deepseek-v4-flash", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -364,7 +364,7 @@ func TestService_SessionPin_ExpiredPinIsIgnored(t *testing.T) {
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
 		Provider:    "anthropic",
-		Model:       "deepseek/deepseek-v4-flash",
+		Model:       "deepseek-ai/deepseek-v4-flash",
 		PinnedUntil: time.Now().Add(-1 * time.Minute), // expired
 	}
 	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "fresh"}}
@@ -383,7 +383,7 @@ func TestService_SessionPin_ExpiredPinIsIgnored(t *testing.T) {
 func TestService_SessionPin_EvalOverrideHeaderKeepsSessionKeyPinning(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
-	store.pin = sessionpin.Pin{Provider: "anthropic", Model: "deepseek/deepseek-v4-flash", PinnedUntil: time.Now().Add(time.Hour), Reason: "pinned"}
+	store.pin = sessionpin.Pin{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash", PinnedUntil: time.Now().Add(time.Hour), Reason: "pinned"}
 	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
@@ -396,7 +396,7 @@ func TestService_SessionPin_EvalOverrideHeaderKeepsSessionKeyPinning(t *testing.
 	// Scorer still runs, but the pin wins under ReasonNoPriorUsage.
 	assert.Equal(t, 1, fr.routeCalls, "scorer runs every MainLoop turn under the planner")
 	assert.Equal(t, 2, store.getCalls)
-	assert.Equal(t, "deepseek/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel))
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel))
 }
 
 // compactionBody triggers the compaction detector (§3.4).
@@ -482,7 +482,7 @@ func TestService_HardPin_Compaction_ByokOnly_NoEligibleProviderErrors(t *testing
 
 // classifierBody: small max_tokens, no tools — DetectFromEnvelope hard-pins
 // this, bypassing the scorer that normally applies excluded_models.
-const classifierBody = `{"model":"deepseek/deepseek-v4-flash","max_tokens":5,"messages":[{"role":"user","content":"hello"}]}`
+const classifierBody = `{"model":"deepseek-ai/deepseek-v4-flash","max_tokens":5,"messages":[{"role":"user","content":"hello"}]}`
 
 // Regression guard: excluded_models must be honored on the hard-pin tier too.
 // Prod symptom: an excluded gemini model still got all utility traffic
@@ -492,7 +492,7 @@ func TestService_HardPin_Classifier_AppliesExcludedModels(t *testing.T) {
 	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 
 	const excludedModel = "google/gemma-4-31b-it"
-	const allowedFallback = "deepseek/deepseek-v4-flash"
+	const allowedFallback = "deepseek-ai/deepseek-v4-flash"
 
 	// Mimics cluster.FastestModelInSet: fastest candidate is excluded, so
 	// resolver must fall through to the next allowed candidate.
@@ -543,7 +543,7 @@ func TestService_HardPin_CompactionAlwaysRoutesToHaiku(t *testing.T) {
 	require.NoError(t, svc.ProxyMessages(ctx, []byte(compactionBody), rec, httpReq))
 
 	assert.Equal(t, 0, fr.routeCalls, "compaction must bypass the cluster scorer")
-	assert.Equal(t, "deepseek/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel))
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel))
 	assert.Equal(t, 1, store.getCalls, "compaction must check for an explicit user-forced pin before the hard-pin fast path")
 
 	select {
@@ -565,7 +565,7 @@ func TestService_HardPin_ExploreRoutesToHaikuWhenFlagOn(t *testing.T) {
 		store,
 		true,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -575,7 +575,7 @@ func TestService_HardPin_ExploreRoutesToHaikuWhenFlagOn(t *testing.T) {
 	require.NoError(t, svc.ProxyMessages(ctx, []byte(exploreBody), rec, httpReq))
 
 	assert.Equal(t, 0, fr.routeCalls, "Explore must bypass cluster scorer when hardPinExplore=on")
-	assert.Equal(t, "deepseek/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel))
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel))
 
 	select {
 	case <-store.upsertCh:
@@ -601,7 +601,7 @@ func TestService_HardPin_HMMExploreBypassesBootHardPin(t *testing.T) {
 		store,
 		true,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithHMMRouter(fr)
 
@@ -619,7 +619,7 @@ func TestService_HMMSubAgentUsesFreshDecision(t *testing.T) {
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
-		Model:       "deepseek/deepseek-v4-flash",
+		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      "hmm_policy:tool_execution(label=explore)",
 		PinnedUntil: time.Now().Add(time.Hour),
 	}
@@ -647,7 +647,7 @@ func TestService_HMMSubAgentUsesFreshDecision(t *testing.T) {
 func TestService_HMMFeedbackKeyUsesClientSessionBeforeCompaction(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	body := []byte(`{
-		"model":"deepseek/deepseek-v4-flash",
+		"model":"deepseek-ai/deepseek-v4-flash",
 		"max_tokens":195000,
 		"messages":[
 			{"role":"user","content":"` + strings.Repeat("x", 30_000) + `"},
@@ -670,13 +670,13 @@ func TestService_HMMFeedbackKeyUsesClientSessionBeforeCompaction(t *testing.T) {
 	store := newFakePinStore()
 	fr := &fakeRouter{decision: router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "hmm_policy(label=balanced)",
 		Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMM)},
 	}}
 	svc := newPinSvc(fr, store).
 		WithHMMRouter(fr).
-		WithAvailableModels(map[string]struct{}{"deepseek/deepseek-v4-flash": {}}).
+		WithAvailableModels(map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}).
 		WithCompaction(nil, proxy.DefaultCompactionTriggerPct)
 
 	ctx := router.WithStrategy(authedCtx(uuid.NewString()), router.StrategyHMM)
@@ -777,7 +777,7 @@ func TestService_HardPin_SubAgentOverrideRoutesIndependentlyOfHardPin(t *testing
 		store,
 		false, // hardPinExplore=false: override alone must still hard-pin
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder")
 
@@ -789,7 +789,7 @@ func TestService_HardPin_SubAgentOverrideRoutesIndependentlyOfHardPin(t *testing
 	assert.Equal(t, 0, fr.routeCalls, "sub-agent override must bypass the cluster scorer")
 	assert.Equal(t, "local/qwen3-coder", rec.Header().Get(proxy.HeaderRouterModel))
 	assert.Equal(t, providers.ProviderOpenRouter, rec.Header().Get(proxy.HeaderRouterProvider))
-	assert.NotEqual(t, "deepseek/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel),
+	assert.NotEqual(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel),
 		"must not fall back to the shared hardPinProvider/hardPinModel pair")
 }
 
@@ -810,7 +810,7 @@ func TestService_HardPin_SubAgentOverrideLeavesMainLoopUnaffected(t *testing.T) 
 		store,
 		false,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder")
 
@@ -837,7 +837,7 @@ func TestService_HardPin_NoSubAgentOverrideUsesSharedHardPin(t *testing.T) {
 		store,
 		true, // hardPinExplore=true, no override configured
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -847,7 +847,7 @@ func TestService_HardPin_NoSubAgentOverrideUsesSharedHardPin(t *testing.T) {
 	require.NoError(t, svc.ProxyMessages(ctx, []byte(exploreBody), rec, httpReq))
 
 	assert.Equal(t, 0, fr.routeCalls)
-	assert.Equal(t, "deepseek/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel),
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel),
 		"must fall back to the shared hardPinProvider/hardPinModel pair")
 }
 
@@ -867,7 +867,7 @@ func TestService_HardPin_PartialSubAgentOverrideFallsThroughToScorer(t *testing.
 		store,
 		false, // hardPinExplore=false
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithSubAgentOverride("", "nonempty-model") // provider empty: incomplete override
 
@@ -902,7 +902,7 @@ func TestService_HardPin_SubAgentOverrideYieldsToHMMStrategy(t *testing.T) {
 		store,
 		false,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder").WithHMMRouter(fr)
 
@@ -932,7 +932,7 @@ func TestService_HardPin_SubAgentOverrideIneligibleProviderErrors(t *testing.T) 
 		store,
 		false,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder")
 
@@ -964,7 +964,7 @@ func newOpenAIPinSvc(fr *fakeRouter, store *fakePinStore) *proxy.Service {
 		},
 		nil, false, nil,
 		store,
-		false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash",
+		false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 }
@@ -1223,7 +1223,7 @@ func TestService_HardPin_BypassesTierCeiling(t *testing.T) {
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	// Haiku-requesting body with the compaction system marker → hard-pin
 	// triggers; tier ceiling is Low but hard-pin must bypass it.
-	body := `{"model":"deepseek/deepseek-v4-flash","system":"Your task is to create a detailed summary of the conversation so far.","messages":[{"role":"user","content":"go"}]}`
+	body := `{"model":"deepseek-ai/deepseek-v4-flash","system":"Your task is to create a detailed summary of the conversation so far.","messages":[{"role":"user","content":"go"}]}`
 	require.NoError(t, svc.ProxyMessages(ctx, []byte(body), rec, httpReq))
 
 	assert.Equal(t, "moonshotai/kimi-k3", rec.Header().Get(proxy.HeaderRouterModel), "operator hard-pin must win over the tier ceiling")
@@ -1232,7 +1232,7 @@ func TestService_HardPin_BypassesTierCeiling(t *testing.T) {
 // haikuClampBody requests haiku (Low); scorer returns opus (High) — router
 // honors the upgrade instead of downgrading to a cheap in-tier model.
 const haikuClampBody = `{
-	"model":"deepseek/deepseek-v4-flash",
+	"model":"deepseek-ai/deepseek-v4-flash",
 	"system":"sys",
 	"messages":[{"role":"user","content":"summarize this"}]
 }`
@@ -1327,7 +1327,7 @@ func TestService_LoopEscalationPin_HonoredAsImmutableSticky(t *testing.T) {
 		PinnedUntil: time.Now().Add(30 * time.Minute),
 	}
 	// Scorer would pick a cheap model; the escalation pin must win.
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash", Reason: "cluster:v0.65"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.65"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1368,11 +1368,11 @@ func TestService_LoopEscalation_DoesNotOverwriteUserForcedPin(t *testing.T) {
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
-		Model:       "deepseek/deepseek-v4-flash",
+		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(30 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash", Reason: "cluster:v0.65"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.65"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1383,7 +1383,7 @@ func TestService_LoopEscalation_DoesNotOverwriteUserForcedPin(t *testing.T) {
 	for _, p := range store.upserts {
 		assert.NotEqual(t, translate.ReasonLoopEscalation, p.Reason, "escalation must not overwrite a user_forced pin")
 	}
-	assert.Equal(t, "deepseek/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel), "session stays on the user's forced model, not opus")
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel), "session stays on the user's forced model, not opus")
 }
 
 // A forced pin whose provider isn't in EnabledProviders must not be served —
@@ -1397,7 +1397,7 @@ func TestService_UserForcedPin_IneligibleProviderFallsThrough(t *testing.T) {
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(30 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster"}}
 	// newPinSvc only registers Anthropic, so EnabledProviders == {anthropic}.
 	svc := newPinSvc(fr, store)
 
@@ -1407,14 +1407,14 @@ func TestService_UserForcedPin_IneligibleProviderFallsThrough(t *testing.T) {
 	require.NoError(t, svc.ProxyMessages(ctx, []byte(pinTestBody), rec, httpReq))
 
 	assert.Equal(t, 1, fr.routeCalls, "ineligible-provider forced pin must fall through to the scorer")
-	assert.Equal(t, "deepseek/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel), "must dispatch to the eligible provider, not gpt-5/openai")
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel), "must dispatch to the eligible provider, not gpt-5/openai")
 }
 
 // x-weave-force-model is the headless equivalent of /force-model: it must
 // write an immutable user_forced pin for the alias-resolved canonical model.
 func TestService_ForceModelHeader_WritesUserForcedPin(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1444,7 +1444,7 @@ func TestService_ForceModelHeader_WritesUserForcedPin(t *testing.T) {
 // them like the force took.
 func TestService_ForceModelHeader_UnknownModelRejected(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())

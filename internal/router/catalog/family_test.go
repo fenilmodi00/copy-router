@@ -12,8 +12,8 @@ func TestFamilyAndVersion(t *testing.T) {
 		{"z-ai/glm-5.2", "z-ai/glm", [2]int{5, 2}, true},
 		{"moonshotai/kimi-k2.7", "moonshotai/kimi-k", [2]int{2, 7}, true},
 		{"moonshotai/kimi-k3", "moonshotai/kimi-k", [2]int{3, 0}, true},
-		{"deepseek/deepseek-v4-flash", "deepseek/deepseek-v-flash", [2]int{4, 0}, true},
-		{"deepseek/deepseek-v4-pro-0813", "deepseek/deepseek-v-pro-0813", [2]int{4, 0}, true},
+		{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v-flash", [2]int{4, 0}, true},
+		{"deepseek-ai/deepseek-v4-pro", "deepseek-ai/deepseek-v-pro", [2]int{4, 0}, true},
 		{"openai/gpt-oss-120b", "", [2]int{}, false},
 	}
 	for _, tt := range tests {
@@ -66,8 +66,8 @@ func TestFamilyDuplicates(t *testing.T) {
 
 func TestFamilyDuplicates_NoFalsePositiveOnDistinctSizes(t *testing.T) {
 	ids := []string{
-		"deepseek/deepseek-v4-flash",
-		"deepseek/deepseek-v4-pro-0813",
+		"deepseek-ai/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-pro",
 	}
 	if dups := FamilyDuplicates(ids); len(dups) != 0 {
 		t.Errorf("FamilyDuplicates(%v) = %v, want no duplicates", ids, dups)

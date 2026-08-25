@@ -28,12 +28,12 @@ func TestBuildObservationContext_CapturesFreshOnStay(t *testing.T) {
 	// Fresh scorer recommendation this turn: a cheaper model nearly ties opus.
 	fresh := router.Decision{
 		Provider: "anthropic",
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "cluster:v-test",
 		Metadata: &router.RoutingMetadata{
-			CandidateModels: []string{"moonshotai/kimi-k3", "deepseek/deepseek-v4-flash"},
+			CandidateModels: []string{"moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-flash"},
 			ChosenScore:     0.82,
-			CandidateScores: map[string]float32{"moonshotai/kimi-k3": 0.83, "deepseek/deepseek-v4-flash": 0.82},
+			CandidateScores: map[string]float32{"moonshotai/kimi-k3": 0.83, "deepseek-ai/deepseek-v4-flash": 0.82},
 			Propensity:      1.0,
 		},
 	}
@@ -45,12 +45,12 @@ func TestBuildObservationContext_CapturesFreshOnStay(t *testing.T) {
 	assert.Nil(t, obs.ChosenScore)
 
 	// Fresh columns must be populated from the scorer's recommendation.
-	assert.Equal(t, "deepseek/deepseek-v4-flash", obs.FreshDecisionModel)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", obs.FreshDecisionModel)
 	require.NotNil(t, obs.FreshCandidateScores, "fresh score vector must be captured on a STAY")
 	var got map[string]float32
 	require.NoError(t, json.Unmarshal(obs.FreshCandidateScores, &got))
 	assert.InDelta(t, 0.83, got["moonshotai/kimi-k3"], 1e-6)
-	assert.InDelta(t, 0.82, got["deepseek/deepseek-v4-flash"], 1e-6)
+	assert.InDelta(t, 0.82, got["deepseek-ai/deepseek-v4-flash"], 1e-6)
 }
 
 // TestBuildObservationContext_NoScorerLeavesFreshNull: when the scorer did not
@@ -70,10 +70,10 @@ func TestBuildObservationContext_NoScorerLeavesFreshNull(t *testing.T) {
 func TestBuildObservationContext_CapturesHMMStrategy(t *testing.T) {
 	served := router.Decision{
 		Provider: "anthropic",
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "hmm_policy(label=explore)",
 		Metadata: &router.RoutingMetadata{
-			CandidateModels:      []string{"moonshotai/kimi-k3", "deepseek/deepseek-v4-flash"},
+			CandidateModels:      []string{"moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-flash"},
 			ChosenScore:          0.71,
 			Strategy:             string(router.StrategyHMM),
 			RouteID:              "route-abc-123",
@@ -167,7 +167,7 @@ func TestBuildObservationContext_StickyHMMRouteIDFromFresh(t *testing.T) {
 	// Fresh HMM re-score this turn carries the correlation id.
 	fresh := router.Decision{
 		Provider: "anthropic",
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "hmm_policy(label=explore)",
 		Metadata: &router.RoutingMetadata{
 			Strategy: string(router.StrategyHMM),

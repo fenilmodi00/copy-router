@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"workweave/router/internal/providers"
+	"workweave/router/internal/router"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,12 +52,12 @@ func TestByID_UnknownReturnsFalse(t *testing.T) {
 }
 
 func TestPriceFor_UnknownProviderForKnownModel(t *testing.T) {
-	_, ok := PriceFor(providers.ProviderOpenAI, "deepseek/deepseek-v4-flash")
+	_, ok := PriceFor(providers.ProviderOpenAI, "deepseek-ai/deepseek-v4-flash")
 	assert.False(t, ok)
 }
 
 func TestPriceFor_KnownAiandPair(t *testing.T) {
-	p, ok := PriceFor(providers.ProviderAiand, "deepseek/deepseek-v4-flash")
+	p, ok := PriceFor(providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash")
 	require.True(t, ok)
 	assert.Equal(t, 0.150, p.InputUSDPer1M)
 	assert.Equal(t, 0.250, p.OutputUSDPer1M)
@@ -65,13 +66,13 @@ func TestPriceFor_KnownAiandPair(t *testing.T) {
 
 func TestResolveBinding_PicksAiand(t *testing.T) {
 	avail := map[string]struct{}{providers.ProviderAiand: {}}
-	b, ok := ResolveBinding("deepseek/deepseek-v4-flash", avail)
+	b, ok := ResolveBinding("deepseek-ai/deepseek-v4-flash", avail)
 	require.True(t, ok)
 	assert.Equal(t, providers.ProviderAiand, b.Provider)
 	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", b.UpstreamID)
 
 	availNoAiand := map[string]struct{}{providers.ProviderOpenAI: {}}
-	_, ok = ResolveBinding("deepseek/deepseek-v4-flash", availNoAiand)
+	_, ok = ResolveBinding("deepseek-ai/deepseek-v4-flash", availNoAiand)
 	assert.False(t, ok)
 }
 
@@ -107,8 +108,8 @@ func TestResolveBinding_V076RegistryIDs(t *testing.T) {
 }
 
 func TestTierFor_KnownAndUnknown(t *testing.T) {
-	assert.Equal(t, TierLow, TierFor("deepseek/deepseek-v4-flash"))
-	assert.Equal(t, TierMid, TierFor("deepseek/deepseek-v4-pro-0813"))
+	assert.Equal(t, TierLow, TierFor("deepseek-ai/deepseek-v4-flash"))
+	assert.Equal(t, TierMid, TierFor("deepseek-ai/deepseek-v4-pro"))
 	assert.Equal(t, TierHigh, TierFor("z-ai/glm-5.2"))
 	assert.Equal(t, TierHigh, TierFor("moonshotai/kimi-k3"))
 	assert.Equal(t, TierUnknown, TierFor("definitely-not-a-model"))
@@ -120,8 +121,8 @@ func TestByIDOrUpstream_MapsAiandRegistryIDs(t *testing.T) {
 		wantID     string
 		wantWireID string
 	}{
-		{"deepseek-ai/deepseek-v4-flash", "deepseek/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
-		{"deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
+		{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
+		{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
 		{"zai-org/glm-5.2", "z-ai/glm-5.2", "zai-org/glm-5.2"},
 		{"moonshotai/kimi-k2.7-code", "moonshotai/kimi-k2.7", "moonshotai/kimi-k2.7-code"},
 	}
@@ -141,7 +142,7 @@ func TestContextWindowFor_ResolvesUpstreamRegistryIDs(t *testing.T) {
 	assert.Equal(t, 1_048_576, ContextWindowFor("zai-org/glm-5.2"),
 		"upstream ID zai-org/glm-5.2 must resolve to z-ai/glm-5.2's 1M window")
 	assert.Equal(t, 1_048_576, ContextWindowFor("deepseek-ai/deepseek-v4-flash"),
-		"upstream ID deepseek-ai/deepseek-v4-flash must resolve to deepseek/deepseek-v4-flash's 1M window")
+		"upstream ID deepseek-ai/deepseek-v4-flash must resolve to deepseek-ai/deepseek-v4-flash's 1M window")
 	assert.Equal(t, 262_144, ContextWindowFor("moonshotai/kimi-k2.7-code"),
 		"upstream ID moonshotai/kimi-k2.7-code must resolve to moonshotai/kimi-k2.7's 256K window")
 	assert.Equal(t, 1_048_576, ContextWindowFor("moonshotai/kimi-k3"))
@@ -154,8 +155,58 @@ func TestValidateDeployed_V076Registry(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestCatalog_EveryModelDeclaresReasoningEfforts(t *testing.T) {
+	for _, m := range Models {
+		require.NotEmptyf(t, m.ReasoningEfforts, "model %q must declare ReasoningEfforts (ai& live menu)", m.ID)
+		seen := make(map[string]struct{}, len(m.ReasoningEfforts))
+		for _, level := range m.ReasoningEfforts {
+			assert.Contains(t, map[string]struct{}{
+				EffortNone: {}, EffortLow: {}, EffortMedium: {}, EffortHigh: {}, EffortMax: {},
+			}, level, "%s: unexpected effort %q", m.ID, level)
+			_, dup := seen[level]
+			assert.Falsef(t, dup, "%s: duplicate effort %q", m.ID, level)
+			seen[level] = struct{}{}
+		}
+	}
+}
+
+func TestCatalog_AiandEffortVocabularyPresent(t *testing.T) {
+	// Across the catalog, the four ai& effort tiers must each appear on at
+	// least one model so force-effort / :suffix paths stay meaningful.
+	want := []string{EffortNone, EffortLow, EffortHigh, EffortMax}
+	have := make(map[string]bool, len(want))
+	for _, m := range Models {
+		for _, level := range m.ReasoningEfforts {
+			have[level] = true
+		}
+	}
+	for _, level := range want {
+		assert.Truef(t, have[level], "catalog must expose effort tier %q on at least one model", level)
+	}
+}
+
+func TestCapabilitiesFor_UsesCatalogReasoningEfforts(t *testing.T) {
+	spec := CapabilitiesFor("deepseek-ai/deepseek-v4-flash")
+	require.True(t, spec.Supports(router.CapReasoning))
+	assert.Equal(t, []string{EffortNone, EffortHigh, EffortMax}, spec.Reasoning().Levels)
+
+	spec = CapabilitiesFor("deepseek-ai/deepseek-v4-flash") // upstream ID
+	assert.Equal(t, []string{EffortNone, EffortHigh, EffortMax}, spec.Reasoning().Levels)
+
+	spec = CapabilitiesFor("moonshotai/kimi-k3")
+	assert.Equal(t, []string{EffortLow, EffortHigh, EffortMax}, spec.Reasoning().Levels)
+
+	spec = CapabilitiesFor("openai/gpt-oss-120b")
+	assert.Equal(t, []string{EffortLow, EffortMedium, EffortHigh}, spec.Reasoning().Levels)
+}
+
+func TestReasoningEffortsFor(t *testing.T) {
+	assert.Equal(t, []string{EffortNone, EffortHigh, EffortMax}, ReasoningEffortsFor("z-ai/glm-5.2"))
+	assert.Nil(t, ReasoningEffortsFor("definitely-not-a-model"))
+}
+
 func TestValidateDeployed_FlagsMissing(t *testing.T) {
-	err := ValidateDeployed([]string{"deepseek/deepseek-v4-flash"})
+	err := ValidateDeployed([]string{"deepseek-ai/deepseek-v4-flash"})
 	assert.NoError(t, err)
 
 	err = ValidateDeployed([]string{"definitely-not-a-model"})

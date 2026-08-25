@@ -168,8 +168,8 @@ func TestProxy_DevModeEnvKeyUsedWhenNoCredentialsOnContext(t *testing.T) {
 	// Inbound has only x-api-key (Anthropic-format client like Claude Code).
 	// No Authorization header — ExtractClientCredentials returns nil for OpenRouter.
 	clientReq.Header.Set("X-Api-Key", "rk_router_key")
-	prep := providers.PreparedRequest{Body: []byte(`{"model":"deepseek/deepseek-v4-pro","messages":[]}`), Headers: make(http.Header)}
-	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek/deepseek-v4-pro"}, prep, rec, clientReq)
+	prep := providers.PreparedRequest{Body: []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[]}`), Headers: make(http.Header)}
+	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek-ai/deepseek-v4-pro"}, prep, rec, clientReq)
 
 	require.NoError(t, err)
 	assert.Equal(t, "Bearer sk-or-v1-env-key", gotAuth,
@@ -214,9 +214,9 @@ func TestProxy_BuffersErrorBodyAndDoesNotTouchWriter(t *testing.T) {
 	c := openaicompat.NewClient("test-key", upstream.URL+"/api/v1")
 	rec := httptest.NewRecorder()
 	clientReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
-	prep := providers.PreparedRequest{Body: []byte(`{"model":"deepseek/deepseek-v4-pro","messages":[]}`), Headers: make(http.Header)}
+	prep := providers.PreparedRequest{Body: []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[]}`), Headers: make(http.Header)}
 
-	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek/deepseek-v4-pro"}, prep, rec, clientReq)
+	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek-ai/deepseek-v4-pro"}, prep, rec, clientReq)
 
 	require.Error(t, err)
 	var buffered *providers.UpstreamErrorResponse

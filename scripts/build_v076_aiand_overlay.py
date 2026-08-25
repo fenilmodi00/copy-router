@@ -20,7 +20,7 @@ from pathlib import Path
 # --- model-name rename map (v0.75 key -> v0.76 ai& catalog ID) ---
 RENAME_MAP = {
     "z-ai/glm-5.2": "zai-org/glm-5.2",
-    "deepseek/deepseek-v4-flash": "deepseek-ai/deepseek-v4-flash",
+    "deepseek-ai/deepseek-v4-flash": "deepseek-ai/deepseek-v4-flash",
     "moonshotai/kimi-k2.7": "moonshotai/kimi-k2.7-code",
 }
 KEEP_OLD = list(RENAME_MAP.keys())

@@ -310,8 +310,8 @@ func TestClientOmitsV2CandidateFieldsFromV1(t *testing.T) {
 		SchemaVersion: policy.SchemaVersionV1,
 		Candidates: []policy.Candidate{{
 			ArmID:                        "arm-fireworks",
-			RosterID:                     "deepseek/deepseek-v4-pro",
-			CatalogID:                    "deepseek/deepseek-v4-pro",
+			RosterID:                     "deepseek-ai/deepseek-v4-pro",
+			CatalogID:                    "deepseek-ai/deepseek-v4-pro",
 			Provider:                     providers.ProviderFireworks,
 			BindingIndex:                 0,
 			Endpoint:                     string(router.EndpointAnthropicMessages),
@@ -346,7 +346,7 @@ func TestClientPostsArmProviderMapForV2(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(routeResponse{
 			SchemaVersion:    policy.SchemaVersionV2,
 			SelectedArmID:    "arm-fireworks",
-			SelectedRosterID: "deepseek/deepseek-v4-pro",
+			SelectedRosterID: "deepseek-ai/deepseek-v4-pro",
 		})
 	}))
 	defer server.Close()
@@ -356,15 +356,15 @@ func TestClientPostsArmProviderMapForV2(t *testing.T) {
 		Candidates: []policy.Candidate{
 			{
 				ArmID:        "arm-fireworks",
-				RosterID:     "deepseek/deepseek-v4-pro",
-				CatalogID:    "deepseek/deepseek-v4-pro",
+				RosterID:     "deepseek-ai/deepseek-v4-pro",
+				CatalogID:    "deepseek-ai/deepseek-v4-pro",
 				Provider:     providers.ProviderFireworks,
 				BindingIndex: 0,
 			},
 			{
 				ArmID:        "arm-makora",
-				RosterID:     "deepseek/deepseek-v4-pro",
-				CatalogID:    "deepseek/deepseek-v4-pro",
+				RosterID:     "deepseek-ai/deepseek-v4-pro",
+				CatalogID:    "deepseek-ai/deepseek-v4-pro",
 				Provider:     providers.ProviderMakora,
 				BindingIndex: 1,
 			},

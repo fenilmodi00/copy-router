@@ -59,7 +59,7 @@ func ByID(id string) (Model, bool) {
 }
 
 // ByIDOrUpstream returns the model for a catalog ID or any binding UpstreamID
-// (e.g. "deepseek-ai/deepseek-v4-flash" → deepseek/deepseek-v4-flash). Catalog
+// (e.g. "deepseek-ai/deepseek-v4-flash" → deepseek-ai/deepseek-v4-flash). Catalog
 // IDs win first so a catalog ID that equals some other model's UpstreamID is
 // never rerouted. Upstream bindings themselves are unchanged — this only
 // resolves names clients see on /v1/router/models back to the catalog row.
@@ -299,6 +299,28 @@ func ThinkTagReasoningFor(id string) bool {
 		return false
 	}
 	return m.ThinkTagReasoning
+}
+
+// CapabilitiesFor returns the wire-format ModelSpec for a catalog model.
+// When ReasoningEfforts is set, the spec advertises CapReasoning with those
+// levels so emit/force-effort clamp against the live ai& menu. Otherwise falls
+// back to router.Lookup (Anthropic/OpenAI/Gemini registry entries).
+func CapabilitiesFor(id string) router.ModelSpec {
+	if m, ok := ByIDOrUpstream(id); ok && len(m.ReasoningEfforts) > 0 {
+		levels := append([]string(nil), m.ReasoningEfforts...)
+		return router.NewSpecWithReasoning(router.ReasoningCapabilities{Levels: levels}, router.CapReasoning)
+	}
+	return router.Lookup(id)
+}
+
+// ReasoningEffortsFor returns a copy of the model's accepted effort levels, or
+// nil when the model takes no effort parameter / is unknown.
+func ReasoningEffortsFor(id string) []string {
+	m, ok := ByIDOrUpstream(id)
+	if !ok || len(m.ReasoningEfforts) == 0 {
+		return nil
+	}
+	return append([]string(nil), m.ReasoningEfforts...)
 }
 
 // IsAtOrBelow reports whether the model has a known tier at or below the

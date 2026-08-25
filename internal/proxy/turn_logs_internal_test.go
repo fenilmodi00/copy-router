@@ -298,7 +298,7 @@ func TestApplyRoutingStateAttrs_EmitsExactThreadAndTransition(t *testing.T) {
 	res := turnLoopResult{
 		SessionKey:       key,
 		PinRole:          "default_high",
-		PriorServedModel: "deepseek/deepseek-v4-flash",
+		PriorServedModel: "deepseek-ai/deepseek-v4-flash",
 	}
 	b := otel.NewAttrBuilder(4)
 	applyRoutingStateAttrs(b, res, "moonshotai/kimi-k3", key)
@@ -306,13 +306,13 @@ func TestApplyRoutingStateAttrs_EmitsExactThreadAndTransition(t *testing.T) {
 
 	assert.Equal(t, "0102030405060708090a0b0c0d0e0f10", attrs["routing.session_key"].GetStringValue())
 	assert.Equal(t, "default_high", attrs["routing.pin_role"].GetStringValue())
-	assert.Equal(t, "deepseek/deepseek-v4-flash", attrs["routing.prior_served_model"].GetStringValue())
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", attrs["routing.prior_served_model"].GetStringValue())
 	assert.True(t, attrs["routing.model_changed"].GetBoolValue())
 }
 
 func TestApplyRoutingStateAttrs_FirstSelectionIsNotAChange(t *testing.T) {
 	b := otel.NewAttrBuilder(4)
-	applyRoutingStateAttrs(b, turnLoopResult{PinRole: sessionpin.DefaultRole}, "deepseek/deepseek-v4-flash", [sessionpin.SessionKeyLen]byte{})
+	applyRoutingStateAttrs(b, turnLoopResult{PinRole: sessionpin.DefaultRole}, "deepseek-ai/deepseek-v4-flash", [sessionpin.SessionKeyLen]byte{})
 	attrs := attrsByKey(b.Build())
 
 	assert.Empty(t, attrs["routing.session_key"].GetStringValue())
@@ -323,7 +323,7 @@ func TestApplyRoutingStateAttrs_FirstSelectionIsNotAChange(t *testing.T) {
 func TestApplyRoutingStateAttrs_UsesRequestKeyWhenRoutingKeyIsEmpty(t *testing.T) {
 	key := [sessionpin.SessionKeyLen]byte{1, 2, 3}
 	b := otel.NewAttrBuilder(4)
-	applyRoutingStateAttrs(b, turnLoopResult{}, "deepseek/deepseek-v4-flash", key)
+	applyRoutingStateAttrs(b, turnLoopResult{}, "deepseek-ai/deepseek-v4-flash", key)
 	attrs := attrsByKey(b.Build())
 
 	assert.Equal(t, "01020300000000000000000000000000", attrs["routing.session_key"].GetStringValue())
@@ -344,9 +344,9 @@ func TestApplyPlannerAttrs_OmitsDetailsWhenSkipped(t *testing.T) {
 
 func TestApplyPlannerAttrs_EmitsDetailsWhenEvaluated(t *testing.T) {
 	res := turnLoopResult{
-		Decision:     router.Decision{Model: "deepseek/deepseek-v4-flash"},
+		Decision:     router.Decision{Model: "deepseek-ai/deepseek-v4-flash"},
 		Fresh:        router.Decision{Model: "moonshotai/kimi-k3"},
-		PinModel:     "deepseek/deepseek-v4-flash",
+		PinModel:     "deepseek-ai/deepseek-v4-flash",
 		PinProvider:  providers.ProviderAnthropic,
 		PrefixBroken: true,
 		PlannerDecision: planner.Decision{

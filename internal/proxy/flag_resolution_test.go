@@ -17,7 +17,7 @@ import (
 func newFlagTestService(embedOnly bool) *proxy.Service {
 	return proxy.NewService(
 		nil, map[string]providers.Client{}, nil, embedOnly, nil, nil,
-		false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil,
+		false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
 	)
 }
 

@@ -6,12 +6,13 @@ Single source of truth for per-model data: capability tier, ordered list of prov
 
 ## What's here
 
-- `Model` — one struct per logical model. Fields: `ID`, `Tier`, `ContextWindow`, `Providers []ProviderBinding`.
+- `Model` — one struct per logical model. Fields: `ID`, `Tier`, `ContextWindow`, `ReasoningEfforts`, `Providers []ProviderBinding`.
 - `ProviderBinding` — one `(Provider, UpstreamID, Price)` tuple. A model's bindings are ordered: the first whose `Provider` name is in the deploy's available set wins.
 - `Pricing` — per-binding input / output / cache-read pricing.
-- `Tier` — Low / Mid / High.
+- `Tier` — Low / Mid / High (capability bucket for routing, distinct from effort).
+- `ReasoningEfforts` — ordered ai& `reasoning_effort` menu for the model (`none` / `low` / `high` / `max`, plus `medium` on a few OpenAI-compat rows). Empty = no effort parameter. Looked up via `CapabilitiesFor` / `ReasoningEffortsFor`.
 - `ContextWindow` — model's total input+output token budget in tokens. 0 falls back to `DefaultContextWindow` (128K).
-- Lookup helpers: `ByID`, `ResolveBinding`, `PriceFor(provider, id)`, `PrimaryPriceFor(id)`, `TierFor`, `IsAtOrBelow`, `AllowedAtOrBelow`, `AllPrimaryPricing`, `ValidateDeployed`, `ContextWindowFor`.
+- Lookup helpers: `ByID`, `ResolveBinding`, `PriceFor(provider, id)`, `PrimaryPriceFor(id)`, `TierFor`, `IsAtOrBelow`, `AllowedAtOrBelow`, `AllPrimaryPricing`, `ValidateDeployed`, `ContextWindowFor`, `CapabilitiesFor`, `ReasoningEffortsFor`.
 - Cost math: `EffectiveInputCost`, `EffectiveOutputCost` — the OTel emitter, telemetry write path, and billing debit hook all funnel through these.
 
 ## Adding a model
@@ -41,4 +42,4 @@ The cluster scorer resolves each routable model's binding at boot via `ResolveBi
 
 - **Don't read pricing from a parallel table.** The OTel emitter, planner, billing hook, and install-script generator all funnel through this package. A second price table guarantees drift.
 - **Don't add a runtime mutation API.** The catalog is compile-time data; per-deploy filtering happens through `ResolveBinding(id, available)`, not by mutating `Models`.
-- **Don't fold non-routable model metadata (e.g. `ModelSpec` wire-format capabilities) here yet.** Those live in `internal/router/model.go`. If that file grows past its current scope, surface a separate `Capabilities` field on `Model` rather than entangling them.
+- **Don't duplicate ReasoningEfforts in `internal/router/model.go`.** ai& menus live on `Model.ReasoningEfforts`; `CapabilitiesFor` builds the CapReasoning `ModelSpec`. Keep Anthropic/OpenAI/Gemini adaptive specs in `model.go`'s registry.

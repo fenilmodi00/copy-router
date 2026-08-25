@@ -1173,7 +1173,7 @@ func TestScorer_DeployedModelsReturnsBootCandidates(t *testing.T) {
 // A bundle is frozen at training time, so its registry keeps naming models
 // the catalog has since retired (untiered). Those must not stay routable.
 func TestScorer_DropsCatalogRetiredRegistryEntries(t *testing.T) {
-	const retired = "deepseek/deepseek-v4-pro"
+	const retired = "deepseek-ai/deepseek-v4-pro"
 	m, ok := catalog.ByID(retired)
 	require.True(t, ok, "test premise: retired model is still in the catalog for passthrough")
 	require.Equal(t, catalog.TierUnknown, m.Tier, "test premise: retired model is untiered")
@@ -1183,13 +1183,13 @@ func TestScorer_DropsCatalogRetiredRegistryEntries(t *testing.T) {
 	c0[0] = 1
 	cb := buildCentroidsBlob(t, 1, dim, c0)
 	rb := []byte(`{"rankings": {"0": {
-		"deepseek/deepseek-v4-pro": 0.99,
-		"deepseek/deepseek-v4-flash": 0.50
+		"deepseek-ai/deepseek-v4-pro": 0.99,
+		"deepseek-ai/deepseek-v4-flash": 0.50
 	}}}`)
 	regb := []byte(`{
 		"deployed_models": [
-			{"model": "deepseek/deepseek-v4-pro", "provider": "together", "bench_column": "x", "proxy": true},
-			{"model": "deepseek/deepseek-v4-flash", "provider": "makora", "bench_column": "y", "proxy": true}
+			{"model": "deepseek-ai/deepseek-v4-pro", "provider": "together", "bench_column": "x", "proxy": true},
+			{"model": "deepseek-ai/deepseek-v4-flash", "provider": "makora", "bench_column": "y", "proxy": true}
 		]
 	}`)
 	cfg := cfgForTest()
@@ -1205,7 +1205,7 @@ func TestScorer_DropsCatalogRetiredRegistryEntries(t *testing.T) {
 	// It outranks flash in the bundle, so it would win argmax if eligible.
 	got, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100)})
 	require.NoError(t, err)
-	assert.Equal(t, "deepseek/deepseek-v4-flash", got.Model)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", got.Model)
 }
 
 func TestScorer_V2DynamicScoring(t *testing.T) {

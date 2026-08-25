@@ -158,7 +158,7 @@ func TestMaybeRepinOnRefusal_RepinsToFallbackModel(t *testing.T) {
 func TestMaybeRepinOnRefusal_PrefersPairedModel(t *testing.T) {
 	store := &repinFakeStore{
 		hasPin: true,
-		getPin: sessionpin.Pin{PairedModel: "deepseek/deepseek-v4-flash", PairedProvider: "anthropic"},
+		getPin: sessionpin.Pin{PairedModel: "deepseek-ai/deepseek-v4-flash", PairedProvider: "anthropic"},
 	}
 	s := &Service{pinStore: store, cyberRefusalFallbackModel: "moonshotai/kimi-k2.7"}
 	obs := &refusalObserver{refused: true}
@@ -169,8 +169,8 @@ func TestMaybeRepinOnRefusal_PrefersPairedModel(t *testing.T) {
 	if len(store.upserts) != 1 {
 		t.Fatalf("expected 1 upsert, got %d", len(store.upserts))
 	}
-	if got := store.upserts[0].Model; got != "deepseek/deepseek-v4-flash" {
-		t.Fatalf("re-pinned to %q, want the pin's PairedModel deepseek/deepseek-v4-flash", got)
+	if got := store.upserts[0].Model; got != "deepseek-ai/deepseek-v4-flash" {
+		t.Fatalf("re-pinned to %q, want the pin's PairedModel deepseek-ai/deepseek-v4-flash", got)
 	}
 	if got := store.upserts[0].Provider; got != "anthropic" {
 		t.Fatalf("re-pin provider = %q, want anthropic (from PairedProvider)", got)

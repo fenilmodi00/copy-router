@@ -19,7 +19,7 @@ func TestResolveDefaultBaselineModel(t *testing.T) {
 		}
 		os.Unsetenv("ROUTER_DEFAULT_BASELINE_MODEL")
 		t.Cleanup(require)
-		assert.Equal(t, "deepseek/deepseek-v4-pro-0813", resolveDefaultBaselineModel())
+		assert.Equal(t, "deepseek-ai/deepseek-v4-pro", resolveDefaultBaselineModel())
 	})
 
 	t.Run("explicit empty disables substitution", func(t *testing.T) {
@@ -33,7 +33,7 @@ func TestResolveDefaultBaselineModel(t *testing.T) {
 	})
 
 	t.Run("whitespace trimmed", func(t *testing.T) {
-		t.Setenv("ROUTER_DEFAULT_BASELINE_MODEL", "  deepseek/deepseek-v4-flash  ")
-		assert.Equal(t, "deepseek/deepseek-v4-flash", resolveDefaultBaselineModel())
+		t.Setenv("ROUTER_DEFAULT_BASELINE_MODEL", "  deepseek-ai/deepseek-v4-flash  ")
+		assert.Equal(t, "deepseek-ai/deepseek-v4-flash", resolveDefaultBaselineModel())
 	})
 }

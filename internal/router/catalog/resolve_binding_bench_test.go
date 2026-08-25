@@ -10,7 +10,7 @@ import (
 func BenchmarkResolveBinding(b *testing.B) {
 	available := map[string]struct{}{providers.ProviderAiand: {}}
 	models := []string{
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		"z-ai/glm-5.2",
 		"moonshotai/kimi-k3",
 		"motif-technologies/motif-3",

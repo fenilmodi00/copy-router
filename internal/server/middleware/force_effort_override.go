@@ -23,7 +23,7 @@ func WithForceEffortOverride() gin.HandlerFunc {
 			return
 		}
 		if !translate.IsValidEffort(raw) {
-			abortInvalidKnob(c, ForceEffortOverrideHeader+" must be one of: low, medium, high, max, xhigh (or aliases fast/minimal/ultra).")
+			abortInvalidKnob(c, ForceEffortOverrideHeader+" must be one of: none, low, medium, high, max, xhigh (or aliases off/disabled/fast/minimal/ultra).")
 			return
 		}
 		canonical := translate.CanonicalizeEffort(raw)

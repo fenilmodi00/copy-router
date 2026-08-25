@@ -28,7 +28,7 @@ func TestPrepareOpenAI_AnthropicSource_InjectsDeepSeekProviderHint(t *testing.T)
 	require.NoError(t, err)
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
-		TargetModel:  "deepseek/deepseek-v4-pro",
+		TargetModel:  "deepseek-ai/deepseek-v4-pro",
 		Capabilities: router.ModelSpec{},
 	})
 	require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestPrepareOpenAI_OpenAISource_InjectsProviderHint(t *testing.T) {
 	require.NoError(t, err)
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
-		TargetModel: "deepseek/deepseek-v4-pro",
+		TargetModel: "deepseek-ai/deepseek-v4-pro",
 	})
 	require.NoError(t, err)
 
@@ -105,7 +105,7 @@ func TestPrepareOpenAI_AnthropicSource_DisablesReasoningForDeepSeek(t *testing.T
 	require.NoError(t, err)
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
-		TargetModel: "deepseek/deepseek-v4-pro",
+		TargetModel: "deepseek-ai/deepseek-v4-pro",
 	})
 	require.NoError(t, err)
 
@@ -120,7 +120,7 @@ func TestPrepareOpenAI_OpenAISource_DisablesReasoningForDeepSeek(t *testing.T) {
 	require.NoError(t, err)
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
-		TargetModel: "deepseek/deepseek-v4-pro",
+		TargetModel: "deepseek-ai/deepseek-v4-pro",
 	})
 	require.NoError(t, err)
 
@@ -185,8 +185,8 @@ func TestPrepareOpenAI_AnthropicSource_SkipsHintsForNonOpenRouterProvider(t *tes
 		target   string
 		provider string
 	}{
-		{"fireworks dispatches deepseek", "deepseek/deepseek-v4-pro", providers.ProviderFireworks},
-		{"makora dispatches deepseek", "deepseek/deepseek-v4-flash", providers.ProviderMakora},
+		{"fireworks dispatches deepseek", "deepseek-ai/deepseek-v4-pro", providers.ProviderFireworks},
+		{"makora dispatches deepseek", "deepseek-ai/deepseek-v4-flash", providers.ProviderMakora},
 		{"bedrock dispatches moonshotai", "moonshotai/kimi-k2.5", providers.ProviderBedrock},
 		{"bedrock dispatches qwen", "qwen/qwen3-coder-next", providers.ProviderBedrock},
 	}
@@ -215,7 +215,7 @@ func TestPrepareOpenAI_OpenAISource_SkipsHintsForNonOpenRouterProvider(t *testin
 	require.NoError(t, err)
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
-		TargetModel:    "deepseek/deepseek-v4-pro",
+		TargetModel:    "deepseek-ai/deepseek-v4-pro",
 		TargetProvider: providers.ProviderFireworks,
 	})
 	require.NoError(t, err)
@@ -230,7 +230,7 @@ func TestPrepareOpenAI_ExplicitOpenRouterProviderStillGetsHints(t *testing.T) {
 	require.NoError(t, err)
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
-		TargetModel:    "deepseek/deepseek-v4-pro",
+		TargetModel:    "deepseek-ai/deepseek-v4-pro",
 		TargetProvider: providers.ProviderOpenRouter,
 	})
 	require.NoError(t, err)

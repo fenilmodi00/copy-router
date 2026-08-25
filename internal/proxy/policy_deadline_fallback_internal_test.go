@@ -119,7 +119,7 @@ func buildPolicyDeadlineFallbackService(
 		store,
 		false,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithPolicyDeadlineFallback(fallbackEnabled).
 		WithPolicyDeadlineDefaultModel(defaultModel).
@@ -167,7 +167,7 @@ func runPolicyDeadlineFallbackTurnLoop(
 func TestTurnLoop_DeadlineFallbackToPin(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	strategy := router.Strategy("policy-deadline-fallback-pin-test")
-	const pinnedModel = "deepseek/deepseek-v4-pro-0813"
+	const pinnedModel = "deepseek-ai/deepseek-v4-pro"
 	const pinnedProvider = providers.ProviderAnthropic
 
 	store := newStubPinStore()
@@ -210,7 +210,7 @@ func TestTurnLoop_DeadlineFallbackToPin(t *testing.T) {
 func TestTurnLoop_DeadlineFallbackDefaultExcludedFailsClosed(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	strategy := router.Strategy("policy-deadline-fallback-default-excluded-test")
-	const defaultModel = "deepseek/deepseek-v4-flash"
+	const defaultModel = "deepseek-ai/deepseek-v4-flash"
 
 	store := newStubPinStore()
 	store.getFound = false
@@ -233,7 +233,7 @@ func TestTurnLoop_DeadlineFallbackDefaultExcludedFailsClosed(t *testing.T) {
 func TestTurnLoop_DeadlineFallbackToTierThreeDefault(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	strategy := router.Strategy("policy-deadline-fallback-default-test")
-	const defaultModel = "deepseek/deepseek-v4-flash"
+	const defaultModel = "deepseek-ai/deepseek-v4-flash"
 
 	store := newStubPinStore()
 	store.getFound = false // no pin: session start
@@ -279,7 +279,7 @@ func TestTurnLoop_DeadlineFallbackNoPinNoDefault(t *testing.T) {
 func TestTurnLoop_DeadlineFallbackKillSwitchOff(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	strategy := router.Strategy("policy-deadline-fallback-killswitch-test")
-	const pinnedModel = "deepseek/deepseek-v4-pro-0813"
+	const pinnedModel = "deepseek-ai/deepseek-v4-pro"
 
 	store := newStubPinStore()
 	store.getFound = true
@@ -306,7 +306,7 @@ func TestTurnLoop_DeadlineFallbackKillSwitchOff(t *testing.T) {
 func TestTurnLoop_DeadlineFallbackContractViolationStillFailsClosed(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	strategy := router.Strategy("policy-deadline-fallback-contract-violation-test")
-	const pinnedModel = "deepseek/deepseek-v4-pro-0813"
+	const pinnedModel = "deepseek-ai/deepseek-v4-pro"
 
 	store := newStubPinStore()
 	store.getFound = true
@@ -320,7 +320,7 @@ func TestTurnLoop_DeadlineFallbackContractViolationStillFailsClosed(t *testing.T
 		LastServedModel: pinnedModel,
 	}
 
-	svc := buildPolicyDeadlineFallbackService(t, strategy, policyContractViolationTestErr, store, true, "deepseek/deepseek-v4-flash")
+	svc := buildPolicyDeadlineFallbackService(t, strategy, policyContractViolationTestErr, store, true, "deepseek-ai/deepseek-v4-flash")
 
 	_, err := runPolicyDeadlineFallbackTurnLoop(t, svc, strategy)
 

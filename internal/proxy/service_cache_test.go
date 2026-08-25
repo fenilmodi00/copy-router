@@ -60,7 +60,7 @@ func anthropicBody(prompt string, stream bool) []byte {
 func decisionWithEmbedding(emb []float32, clusterIDs []int) router.Decision {
 	return router.Decision{
 		Provider: "anthropic",
-		Model:    "deepseek/deepseek-v4-flash",
+		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "test",
 		Metadata: &router.RoutingMetadata{
 			Embedding:  emb,
@@ -89,7 +89,7 @@ func TestService_Cache_HitShortCircuitsProvider(t *testing.T) {
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0, 1, 2, 3})}
 	c := cache.New(cache.DefaultConfig())
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 
 	ctx := proxyContextWithExternalID(t, "tenant-1")
 	body := anthropicBody("ping", false)
@@ -115,7 +115,7 @@ func TestService_Cache_StreamingBypasses(t *testing.T) {
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0})}
 	c := cache.New(cache.DefaultConfig())
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 
 	ctx := proxyContextWithExternalID(t, "tenant-1")
 	body := anthropicBody("streaming please", true)
@@ -137,9 +137,9 @@ func TestService_Cache_HeuristicDecisionBypasses(t *testing.T) {
 		proxyResponse: func(w http.ResponseWriter) { _, _ = w.Write([]byte(`{"id":"x"}`)) },
 	}
 	// Decision with no Metadata — what the heuristic router produces.
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek/deepseek-v4-flash", Reason: "heuristic"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash", Reason: "heuristic"}}
 	c := cache.New(cache.DefaultConfig())
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 
 	ctx := proxyContextWithExternalID(t, "tenant-1")
 	body := anthropicBody("ask", false)
@@ -162,7 +162,7 @@ func TestService_Cache_MissingExternalIDBypasses(t *testing.T) {
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0})}
 	c := cache.New(cache.DefaultConfig())
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 
 	body := anthropicBody("ask", false)
 
@@ -197,7 +197,7 @@ func TestService_Cache_HitOmitsFeedbackLink(t *testing.T) {
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0, 1, 2, 3})}
 	c := cache.New(cache.DefaultConfig())
 	signer := feedback.NewSigner("cache-secret", time.Hour)
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithFeedback(nil, signer, "https://router.example.com")
 
 	ctx := context.WithValue(proxyContextWithExternalID(t, "tenant-1"), proxy.InstallationIDContextKey{}, uuid.New().String())
@@ -221,7 +221,7 @@ func TestService_Cache_DisabledByNilCache(t *testing.T) {
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0})}
 	// nil cache equivalent to ROUTER_SEMANTIC_CACHE_ENABLED=false.
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 
 	ctx := proxyContextWithExternalID(t, "tenant-1")
 	body := anthropicBody("ask", false)

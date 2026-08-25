@@ -3004,7 +3004,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	opts := translate.EmitOptions{
 		TargetModel:                       decision.Model,
 		TargetProvider:                    decision.Provider,
-		Capabilities:                      router.Lookup(decision.Model),
+		Capabilities:                      catalog.CapabilitiesFor(decision.Model),
 		IncludeStreamUsage:                s.usageRequired(),
 		SessionAffinity:                   sessionAffinityHint(routeRes.SessionKey),
 		ModelSwitched:                     routeRes.modelSwitched(),
@@ -3409,7 +3409,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		baselineOpts := opts
 		baselineOpts.TargetModel = baselineModel
 		baselineOpts.TargetProvider = providers.ProviderAnthropic
-		baselineOpts.Capabilities = router.Lookup(baselineModel)
+		baselineOpts.Capabilities = catalog.CapabilitiesFor(baselineModel)
 		// Recompute against the model that actually serves, not the cost-routed
 		// OSS id — otherwise PrepareAnthropic may leave stale signed thinking
 		// blocks the baseline model rejects (400). Compare bare model IDs:
@@ -3551,7 +3551,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		siblingOpts := opts
 		siblingOpts.TargetModel = siblingDecision.Model
 		siblingOpts.TargetProvider = siblingDecision.Provider
-		siblingOpts.Capabilities = router.Lookup(siblingDecision.Model)
+		siblingOpts.Capabilities = catalog.CapabilitiesFor(siblingDecision.Model)
 		// The turn now serves a model the session hasn't seen, so signed
 		// thinking blocks from the prior model must not be replayed verbatim.
 		siblingOpts.ModelSwitched = true
@@ -5312,7 +5312,7 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	opts := translate.EmitOptions{
 		TargetModel:           decision.Model,
 		TargetProvider:        decision.Provider,
-		Capabilities:          router.Lookup(decision.Model),
+		Capabilities:          catalog.CapabilitiesFor(decision.Model),
 		IncludeStreamUsage:    s.usageRequired(),
 		SessionAffinity:       sessionAffinityHint(routeRes.SessionKey),
 		ModelSwitched:         routeRes.modelSwitched(),

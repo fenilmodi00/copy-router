@@ -15,8 +15,8 @@ import (
 // 1M for flash/kimi-k3/pro, 131072 for gpt-oss.
 func TestContextWindowForRequest_CatalogWindows(t *testing.T) {
 	assert.Equal(t, 1_048_576, contextWindowForRequest("moonshotai/kimi-k3"))
-	assert.Equal(t, 1_048_576, contextWindowForRequest("deepseek/deepseek-v4-pro-0813"))
-	assert.Equal(t, 1_048_576, contextWindowForRequest("deepseek/deepseek-v4-flash"))
+	assert.Equal(t, 1_048_576, contextWindowForRequest("deepseek-ai/deepseek-v4-pro"))
+	assert.Equal(t, 1_048_576, contextWindowForRequest("deepseek-ai/deepseek-v4-flash"))
 	assert.Equal(t, 131_072, contextWindowForRequest("openai/gpt-oss-120b"))
 }
 
@@ -26,14 +26,14 @@ func TestExcludeContextOverflowModels_KeepsLargeWindowModel(t *testing.T) {
 	available := map[string]struct{}{
 		"moonshotai/kimi-k3":     {},
 		"openai/gpt-oss-120b":    {},
-		"deepseek/deepseek-v4-flash": {},
+		"deepseek-ai/deepseek-v4-flash": {},
 	}
 
 	out, overflowed := excludeContextOverflowModels(250_000, 0, 8_000, nil, nil, available)
 
 	assert.Contains(t, overflowed, "openai/gpt-oss-120b", "131K model overflows a 258K request")
 	assert.NotContains(t, overflowed, "moonshotai/kimi-k3", "1M model must stay eligible")
-	assert.NotContains(t, overflowed, "deepseek/deepseek-v4-flash", "1M flash must stay eligible")
+	assert.NotContains(t, overflowed, "deepseek-ai/deepseek-v4-flash", "1M flash must stay eligible")
 	_, kimiExcluded := out["moonshotai/kimi-k3"]
 	assert.False(t, kimiExcluded, "kimi-k3 must not be added to the denylist")
 }
@@ -43,7 +43,7 @@ func TestExcludeContextOverflowModels_KeepsLargeWindowModel(t *testing.T) {
 func TestExcludeContextOverflowModels_NoOverflowUnderWindow(t *testing.T) {
 	available := map[string]struct{}{
 		"moonshotai/kimi-k3":         {},
-		"deepseek/deepseek-v4-flash": {},
+		"deepseek-ai/deepseek-v4-flash": {},
 	}
 
 	out, overflowed := excludeContextOverflowModels(10_000, 0, 8_000, nil, nil, available)

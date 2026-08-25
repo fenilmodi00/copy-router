@@ -412,7 +412,7 @@ func main() {
 	// policyDeadlineDefaultModel is the tier-3 static fallback on a deadline miss with no pin; empty = fail-closed.
 	policyDeadlineDefaultModel := config.GetOr("ROUTER_POLICY_DEADLINE_DEFAULT_MODEL", "")
 	handoverProviderName := config.GetOr("ROUTER_HANDOVER_PROVIDER", providers.ProviderAiand)
-	handoverModel := config.GetOr("ROUTER_HANDOVER_MODEL", "deepseek/deepseek-v4-flash")
+	handoverModel := config.GetOr("ROUTER_HANDOVER_MODEL", "deepseek-ai/deepseek-v4-flash")
 	handoverTimeout := parseEnvDurationMs("ROUTER_HANDOVER_TIMEOUT_MS", proxy.DefaultHandoverTimeout)
 	// Kept as the interface type: a typed-nil *ProviderSummarizer would defeat
 	// the orchestrator's `!= nil` check.
@@ -1366,12 +1366,12 @@ const (
 
 // resolveDefaultBaselineModel returns the cost-comparison baseline used when
 // RequestedModel has no pricing entry. Uses os.LookupEnv directly (not
-// config.GetOr) to distinguish unset (-> deepseek/deepseek-v4-pro-0813) from
+// config.GetOr) to distinguish unset (-> deepseek-ai/deepseek-v4-pro) from
 // explicit "" (-> no substitution), per the contract in .env.example.
 func resolveDefaultBaselineModel() string {
 	v, ok := os.LookupEnv("ROUTER_DEFAULT_BASELINE_MODEL")
 	if !ok {
-		return "deepseek/deepseek-v4-pro-0813"
+		return "deepseek-ai/deepseek-v4-pro"
 	}
 	return strings.TrimSpace(v)
 }

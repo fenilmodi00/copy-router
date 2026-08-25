@@ -9,18 +9,18 @@ import (
 
 func TestBaselineFor(t *testing.T) {
 	t.Run("known model returns itself", func(t *testing.T) {
-		s := &Service{defaultBaselineModel: "deepseek/deepseek-v4-pro-0813"}
+		s := &Service{defaultBaselineModel: "deepseek-ai/deepseek-v4-pro"}
 		assert.Equal(t, "moonshotai/kimi-k3", s.baselineFor("moonshotai/kimi-k3"))
 	})
 
 	t.Run("unknown model returns baseline", func(t *testing.T) {
-		s := &Service{defaultBaselineModel: "deepseek/deepseek-v4-pro-0813"}
-		assert.Equal(t, "deepseek/deepseek-v4-pro-0813", s.baselineFor("weave-router"))
+		s := &Service{defaultBaselineModel: "deepseek-ai/deepseek-v4-pro"}
+		assert.Equal(t, "deepseek-ai/deepseek-v4-pro", s.baselineFor("weave-router"))
 	})
 
 	t.Run("empty model returns baseline", func(t *testing.T) {
-		s := &Service{defaultBaselineModel: "deepseek/deepseek-v4-pro-0813"}
-		assert.Equal(t, "deepseek/deepseek-v4-pro-0813", s.baselineFor(""))
+		s := &Service{defaultBaselineModel: "deepseek-ai/deepseek-v4-pro"}
+		assert.Equal(t, "deepseek-ai/deepseek-v4-pro", s.baselineFor(""))
 	})
 
 	t.Run("unknown model with no baseline returns empty", func(t *testing.T) {
@@ -31,8 +31,8 @@ func TestBaselineFor(t *testing.T) {
 
 func TestWithDefaultBaselineModel(t *testing.T) {
 	s := &Service{}
-	s.WithDefaultBaselineModel("deepseek/deepseek-v4-pro-0813")
-	assert.Equal(t, "deepseek/deepseek-v4-pro-0813", s.defaultBaselineModel)
+	s.WithDefaultBaselineModel("deepseek-ai/deepseek-v4-pro")
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", s.defaultBaselineModel)
 }
 
 // The baseline rescue path must check the allowlist directly: passthrough-only

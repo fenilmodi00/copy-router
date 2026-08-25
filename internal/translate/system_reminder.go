@@ -2,7 +2,6 @@ package translate
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -18,7 +17,7 @@ import (
 // (aider/coders/editblock_prompts.py); this is the router equivalent for
 // Anthropic-style Edit calls reaching DeepSeek via OpenRouter.
 func openRouterSystemReminder(model string) string {
-	if strings.HasPrefix(model, "deepseek/") {
+	if isDeepSeekModel(model) {
 		return deepseekToolUseReminder
 	}
 	return ""

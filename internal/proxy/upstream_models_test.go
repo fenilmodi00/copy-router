@@ -42,7 +42,7 @@ func (nonListerClient) Passthrough(context.Context, providers.PreparedRequest, h
 }
 
 func upstreamModelsService(providerMap map[string]providers.Client) *proxy.Service {
-	return proxy.NewService(nil, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+	return proxy.NewService(nil, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 }
 
 func TestListUpstreamModels_PassesCredentialsToLister(t *testing.T) {

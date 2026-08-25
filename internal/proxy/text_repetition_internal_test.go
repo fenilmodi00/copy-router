@@ -84,7 +84,7 @@ func TestDetectTextRepetition_FiresThroughSystemReminderToolResults(t *testing.T
 			}},
 		)
 	}
-	body, err := json.Marshal(map[string]any{"model": "deepseek/deepseek-v4-pro-0813", "messages": msgs, "max_tokens": 256})
+	body, err := json.Marshal(map[string]any{"model": "deepseek-ai/deepseek-v4-pro", "messages": msgs, "max_tokens": 256})
 	if err != nil {
 		t.Fatal(err)
 	}

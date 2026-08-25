@@ -60,7 +60,7 @@ func TestComputeNoProgressFingerprint_StableAcrossCalls(t *testing.T) {
 
 func TestComputeNoProgressFingerprint_DistinguishesModel(t *testing.T) {
 	d1 := router.Decision{Model: "qwen/qwen3-235b-a22b-2507", Provider: "bedrock"}
-	d2 := router.Decision{Model: "deepseek/deepseek-v4-flash", Provider: "deepinfra"}
+	d2 := router.Decision{Model: "deepseek-ai/deepseek-v4-flash", Provider: "deepinfra"}
 	a := computeNoProgressFingerprint(d1, "explore", 1, "")
 	b := computeNoProgressFingerprint(d2, "explore", 1, "")
 	assert.NotEqual(t, a, b)
@@ -87,7 +87,7 @@ func TestComputeNoProgressFingerprint_DistinguishesMessageCount(t *testing.T) {
 }
 
 func TestComputeNoProgressFingerprint_DistinguishesToolProgress(t *testing.T) {
-	d := router.Decision{Model: "deepseek/deepseek-v4-flash", Provider: "deepinfra"}
+	d := router.Decision{Model: "deepseek-ai/deepseek-v4-flash", Provider: "deepinfra"}
 	// Explore sub-agent case: message count and prompt stay flat but tool-call
 	// history advances — the fingerprint must still diverge.
 	a := computeNoProgressFingerprint(d, "investigate the bug", 5, "42\x00Read\x00hash-a")
@@ -195,7 +195,7 @@ func TestNoProgressTracker_DoesNotTripWhenToolProgressGrows(t *testing.T) {
 	tr := newNoProgressTracker()
 	key := sessionKeyFromString("session-explore")
 	install := uuid.New()
-	d := router.Decision{Model: "deepseek/deepseek-v4-flash", Provider: "deepinfra"}
+	d := router.Decision{Model: "deepseek-ai/deepseek-v4-flash", Provider: "deepinfra"}
 	now := time.Now()
 
 	for i := 0; i < noProgressMatchThreshold*2; i++ {
@@ -226,12 +226,12 @@ func TestNoProgressTracker_TripsWhenMessageCountAndToolProgressFlat(t *testing.T
 
 func TestToolProgressMarker_AdvancesWithToolCalls(t *testing.T) {
 	// Second turn appends a distinct tool call; the marker must change.
-	turn1 := []byte(`{"model":"deepseek/deepseek-v4-flash","max_tokens":256,"messages":[` +
+	turn1 := []byte(`{"model":"deepseek-ai/deepseek-v4-flash","max_tokens":256,"messages":[` +
 		`{"role":"user","content":"find the bug"},` +
 		`{"role":"assistant","content":[{"type":"tool_use","id":"1","name":"Grep","input":{"pattern":"scim","path":"/a"}}]},` +
 		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"1","content":"x"}]}` +
 		`]}`)
-	turn2 := []byte(`{"model":"deepseek/deepseek-v4-flash","max_tokens":256,"messages":[` +
+	turn2 := []byte(`{"model":"deepseek-ai/deepseek-v4-flash","max_tokens":256,"messages":[` +
 		`{"role":"user","content":"find the bug"},` +
 		`{"role":"assistant","content":[{"type":"tool_use","id":"1","name":"Grep","input":{"pattern":"scim","path":"/a"}}]},` +
 		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"1","content":"x"}]},` +
@@ -251,7 +251,7 @@ func TestToolProgressMarker_AdvancesWithToolCalls(t *testing.T) {
 }
 
 func TestToolProgressMarker_EmptyWithoutToolCalls(t *testing.T) {
-	body := []byte(`{"model":"deepseek/deepseek-v4-flash","max_tokens":256,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-flash","max_tokens":256,"messages":[{"role":"user","content":"hi"}]}`)
 	env, err := translate.ParseAnthropic(body)
 	require.NoError(t, err)
 	assert.Equal(t, "", toolProgressMarker(env), "a tool-free turn has no tool-progress marker")

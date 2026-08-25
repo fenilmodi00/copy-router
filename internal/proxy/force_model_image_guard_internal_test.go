@@ -23,7 +23,7 @@ const toolResultImageBody = `{"model":"google/gemma-4-31b-it","messages":[
 	{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":[
 		{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AAA"}}]}]}]}`
 
-const textOnlyForcedModel = "deepseek/deepseek-v4-flash"
+const textOnlyForcedModel = "deepseek-ai/deepseek-v4-flash"
 const imageCapableModel = "google/gemma-4-31b-it"
 
 // Regression: a user-forced pin skipped every automatic capability gate, so an
@@ -44,7 +44,7 @@ func TestRunTurnLoop_ForcedTextOnlyModel_DropsPinForImageTurn(t *testing.T) {
 		PinnedUntil: time.Now().Add(time.Hour),
 	}}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAiand, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(fr.available).
 		WithPlannerEnabled(false)
 
@@ -85,7 +85,7 @@ func TestRunTurnLoop_ForcedTextOnlyModel_HonoredWithoutImages(t *testing.T) {
 		PinnedUntil: time.Now().Add(time.Hour),
 	}}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAiand, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(fr.available).
 		WithPlannerEnabled(false)
 

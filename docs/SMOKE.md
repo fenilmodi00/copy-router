@@ -111,7 +111,7 @@ rm -f docker-compose.override.yml
 ## Cost
 
 `replay-only` runs make zero upstream calls. `record`/`replay-or-record` pin
-every Messages scenario to `deepseek/deepseek-v4-flash` and OpenAI-path
+every Messages scenario to `deepseek-ai/deepseek-v4-flash` and OpenAI-path
 scenarios to `openai/gpt-oss-120b` (both via `x-weave-force-model` onto
 provider `aiand`), and cap `max_tokens` — a full refresh is ~15 real calls, a
 few cents.
@@ -122,7 +122,7 @@ See `smoke/*_test.go`. Defaults:
 
 | Knob | Default |
 |---|---|
-| `SMOKE_PIN_MODEL` | `deepseek/deepseek-v4-flash` |
+| `SMOKE_PIN_MODEL` | `deepseek-ai/deepseek-v4-flash` |
 | `SMOKE_OPENAI_PIN_MODEL` | `openai/gpt-oss-120b` |
 | Expected `x-router-provider` | `aiand` |
 

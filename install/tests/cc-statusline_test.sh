@@ -107,7 +107,7 @@ fi
 transcript="$work/transcript.jsonl"
 cat > "$transcript" <<'JSONL'
 {"type":"user","message":{"role":"user","content":"hi"}}
-{"type":"assistant","message":{"id":"msg_test_1","model":"deepseek/deepseek-v4-pro","usage":{"input_tokens":10000,"output_tokens":2000,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+{"type":"assistant","message":{"id":"msg_test_1","model":"deepseek-ai/deepseek-v4-pro","usage":{"input_tokens":10000,"output_tokens":2000,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
 JSONL
 
 # "upstream" is the real script; "installed" copies are mutated per-case to
@@ -158,7 +158,7 @@ echo "cc-statusline.sh"
 c="$work/c1"; mkdir -p "$c/cache"; make_installed "$c/cc.sh"
 out="$(render "$c/cc.sh" "$c/cache" "file://$upstream" "$STALE_MODEL")"
 check_not_contains "priced selection reports nonzero savings" "$out" 'saved $0.00'
-check_contains "priced selection still names the routed model" "$out" "deepseek/deepseek-v4-pro"
+check_contains "priced selection still names the routed model" "$out" "deepseek-ai/deepseek-v4-pro"
 check "priced selection writes no miss stamp" "$(count_stamps "$c/cache" .miss.)" 0
 
 # The bug this path exists for: an unpriced selection renders $0.00, and the
@@ -249,7 +249,7 @@ fi
 # Malformed pricing must fail closed: no crash, no refresh loop.
 c="$work/c5"; mkdir -p "$c/cache"; make_installed_bad_prices "$c/cc.sh"
 out="$(render "$c/cc.sh" "$c/cache" "file://$upstream" "$STALE_MODEL")"
-check_contains "malformed prices still render the routed model" "$out" "deepseek/deepseek-v4-pro"
+check_contains "malformed prices still render the routed model" "$out" "deepseek-ai/deepseek-v4-pro"
 sleep 1
 check "malformed prices trigger no refresh" "$(count_stamps "$c/cache" .miss.)" 0
 
@@ -505,7 +505,7 @@ out="$(echo "{\"model\":{\"id\":\"$STALE_MODEL\"},\"transcript_path\":\"$transcr
   | XDG_CACHE_HOME="$c/cache" WEAVE_STATUSLINE_UPDATE=0 WEAVE_COMMANDS_UPDATE=0 HOME="$c/home" \
     WEAVE_ROUTER_BASE_URL= ANTHROPIC_BASE_URL= WEAVE_ROUTER_KEY= ANTHROPIC_CUSTOM_HEADERS= \
     bash "$c/proj/.claude/cc-statusline.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')"
-check_contains "visible org still renders the statusline" "$out" "deepseek/deepseek-v4-pro"
+check_contains "visible org still renders the statusline" "$out" "deepseek-ai/deepseek-v4-pro"
 
 # A fresh hidden cache decides without any network access: the install points
 # at an unreachable endpoint, but the pre-seeded fresh cache blanks the
@@ -534,7 +534,7 @@ out="$(echo "{\"model\":{\"id\":\"$STALE_MODEL\"},\"transcript_path\":\"$transcr
     WEAVE_ROUTER_BASE_URL= ANTHROPIC_BASE_URL= WEAVE_ROUTER_KEY= ANTHROPIC_CUSTOM_HEADERS= \
     WEAVE_DISPLAY_SETTINGS_TTL_SECONDS=0 \
     bash "$c/proj/.claude/cc-statusline.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')"
-check_contains "stale hidden cache fails open when the router is unreachable" "$out" "deepseek/deepseek-v4-pro"
+check_contains "stale hidden cache fails open when the router is unreachable" "$out" "deepseek-ai/deepseek-v4-pro"
 sleep 1
 check "failed refresh leaves the stale cache untouched" "$(cat "$cache_file" 2>/dev/null)" "1"
 
@@ -547,7 +547,7 @@ out="$(echo "{\"model\":{\"id\":\"$STALE_MODEL\"},\"transcript_path\":\"$transcr
   | XDG_CACHE_HOME="$c/cache" WEAVE_STATUSLINE_UPDATE=0 WEAVE_COMMANDS_UPDATE=0 HOME="$c/home" \
     WEAVE_ROUTER_BASE_URL= ANTHROPIC_BASE_URL= WEAVE_ROUTER_KEY= ANTHROPIC_CUSTOM_HEADERS= \
     bash "$c/proj/.claude/cc-statusline.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')"
-check_contains "cache miss with an unreachable router renders normally" "$out" "deepseek/deepseek-v4-pro"
+check_contains "cache miss with an unreachable router renders normally" "$out" "deepseek-ai/deepseek-v4-pro"
 sleep 1
 check "failed refresh writes no cache file" "$(test -f "$cache_file" && echo present || echo absent)" "absent"
 

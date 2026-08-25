@@ -33,24 +33,24 @@ func TestProxyMessages_KeepaliveDuringUpstreamSilence(t *testing.T) {
 			}
 		}
 
-		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek/deepseek-v4-pro-0813","choices":[{"index":0,"delta":{"role":"assistant","content":"thinking"},"finish_reason":null}]}` + "\n\n")
+		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-pro","choices":[{"index":0,"delta":{"role":"assistant","content":"thinking"},"finish_reason":null}]}` + "\n\n")
 		// The stall: committed, then nothing the translator can forward.
 		time.Sleep(upstreamSilence)
-		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek/deepseek-v4-pro-0813","choices":[{"index":0,"delta":{"content":" done"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":2}}` + "\n\n")
+		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-pro","choices":[{"index":0,"delta":{"content":" done"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":2}}` + "\n\n")
 		write("data: [DONE]\n\n")
 	}))
 	defer upstream.Close()
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek/deepseek-v4-pro-0813"}},
+		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek-ai/deepseek-v4-pro"}},
 		map[string]providers.Client{"fireworks": openaicompat.NewClient("test-fw-key", upstream.URL)},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil,
+		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{"fireworks": {}}).
 		WithSSEKeepalive(40 * time.Millisecond)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"deepseek/deepseek-v4-pro-0813","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 
 	require.NoError(t, svc.ProxyMessages(context.Background(), body, rec, req))
 
@@ -81,23 +81,23 @@ func TestProxyMessages_KeepaliveDisabledLeavesStreamUnpadded(t *testing.T) {
 				flusher.Flush()
 			}
 		}
-		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek/deepseek-v4-pro-0813","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}` + "\n\n")
+		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-pro","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}` + "\n\n")
 		time.Sleep(150 * time.Millisecond)
-		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek/deepseek-v4-pro-0813","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1}}` + "\n\n")
+		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-pro","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1}}` + "\n\n")
 		write("data: [DONE]\n\n")
 	}))
 	defer upstream.Close()
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek/deepseek-v4-pro-0813"}},
+		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek-ai/deepseek-v4-pro"}},
 		map[string]providers.Client{"fireworks": openaicompat.NewClient("test-fw-key", upstream.URL)},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil,
+		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{"fireworks": {}}).
 		WithSSEKeepalive(0)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"deepseek/deepseek-v4-pro-0813","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 
 	require.NoError(t, svc.ProxyMessages(context.Background(), body, rec, req))
 

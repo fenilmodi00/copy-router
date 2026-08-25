@@ -751,7 +751,7 @@ func TestAnthropicSSETranslator_StreamingReasoningEmitsThinkingBlock(t *testing.
 // rather than the OpenRouter-normalized `reasoning`. Both paths must work.
 func TestAnthropicSSETranslator_StreamingReasoningContentField(t *testing.T) {
 	rec := httptest.NewRecorder()
-	translator := translate.NewAnthropicSSETranslator(rec, "deepseek/deepseek-v4-pro", nil)
+	translator := translate.NewAnthropicSSETranslator(rec, "deepseek-ai/deepseek-v4-pro", nil)
 
 	translator.Header().Set("Content-Type", "text/event-stream")
 	translator.WriteHeader(http.StatusOK)
@@ -779,7 +779,7 @@ func TestAnthropicSSETranslator_StreamingReasoningContentField(t *testing.T) {
 // drop whitespace-only leading content when the turn ends on tool_use.
 func TestAnthropicSSETranslator_WhitespaceOnlyContentBeforeToolCallSuppressed(t *testing.T) {
 	rec := httptest.NewRecorder()
-	translator := translate.NewAnthropicSSETranslator(rec, "deepseek/deepseek-v4-pro", nil)
+	translator := translate.NewAnthropicSSETranslator(rec, "deepseek-ai/deepseek-v4-pro", nil)
 
 	translator.Header().Set("Content-Type", "text/event-stream")
 	translator.WriteHeader(http.StatusOK)
@@ -809,7 +809,7 @@ func TestAnthropicSSETranslator_WhitespaceOnlyContentBeforeToolCallSuppressed(t 
 // content instead of dropped (only the trailing-before-tool_use case drops it).
 func TestAnthropicSSETranslator_WhitespaceFlushedWhenRealTextFollows(t *testing.T) {
 	rec := httptest.NewRecorder()
-	translator := translate.NewAnthropicSSETranslator(rec, "deepseek/deepseek-v4-pro", nil)
+	translator := translate.NewAnthropicSSETranslator(rec, "deepseek-ai/deepseek-v4-pro", nil)
 
 	translator.Header().Set("Content-Type", "text/event-stream")
 	translator.WriteHeader(http.StatusOK)
@@ -876,7 +876,7 @@ func TestAnthropicSSETranslator_EmptyStreamEmitsSyntheticMessage(t *testing.T) {
 
 func TestAnthropicSSETranslator_RoutingMarkerEmittedBeforeUpstreamContent(t *testing.T) {
 	rec := httptest.NewRecorder()
-	marker := "✦ **Weave Router** → deepseek/deepseek-v4-pro (openrouter) · reason: switched to save on cache reads\n\n"
+	marker := "✦ **Weave Router** → deepseek-ai/deepseek-v4-pro (openrouter) · reason: switched to save on cache reads\n\n"
 	translator := translate.NewAnthropicSSETranslator(rec, "gpt-4o", nil).
 		WithRoutingMarker(marker)
 
@@ -898,7 +898,7 @@ func TestAnthropicSSETranslator_RoutingMarkerEmittedBeforeUpstreamContent(t *tes
 	body := rec.Body.String()
 	// Marker's trailing newlines get JSON-escaped in the SSE data field;
 	// match the prose only.
-	markerProse := "✦ **Weave Router** → deepseek/deepseek-v4-pro (openrouter) · reason: switched to save on cache reads"
+	markerProse := "✦ **Weave Router** → deepseek-ai/deepseek-v4-pro (openrouter) · reason: switched to save on cache reads"
 	startIdx := strings.Index(body, "event: message_start")
 	markerIdx := strings.Index(body, markerProse)
 	helloIdx := strings.Index(body, `"text":"Hello"`)

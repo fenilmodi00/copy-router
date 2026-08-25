@@ -21,7 +21,7 @@ import (
 
 func newChatStreamingWriter(t *testing.T) (*translate.AnthropicSSETranslator, *int) {
 	t.Helper()
-	w := translate.NewAnthropicSSETranslator(httptest.NewRecorder(), "deepseek/deepseek-v4-flash", nil)
+	w := translate.NewAnthropicSSETranslator(httptest.NewRecorder(), "deepseek-ai/deepseek-v4-flash", nil)
 	require.NoError(t, w.Prelude(true))
 	count := 0
 	require.True(t, w.ArmOutputProgress(func() { count++ }),
@@ -78,7 +78,7 @@ func TestAnthropicSSEOutputProgress_KeepalivesDoNotCount(t *testing.T) {
 func TestAnthropicSSEOutputProgress_NotArmedWhenNotStreaming(t *testing.T) {
 	// The buffered (non-streaming) path translates only at Finalize, so it has
 	// nothing to mark mid-stream; arming there would guarantee a false trip.
-	w := translate.NewAnthropicSSETranslator(httptest.NewRecorder(), "deepseek/deepseek-v4-flash", nil)
+	w := translate.NewAnthropicSSETranslator(httptest.NewRecorder(), "deepseek-ai/deepseek-v4-flash", nil)
 	require.NoError(t, w.Prelude(false))
 	assert.False(t, w.ArmOutputProgress(func() {}),
 		"ArmOutputProgress must report not-armed for a non-streaming client")

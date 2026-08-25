@@ -52,7 +52,7 @@ func TestForceModelCommand_RejectsSoleProviderExcluded(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic))
 
 	env := forceCommandEnv(t)
@@ -74,7 +74,7 @@ func TestForceModelCommand_RejectsExcludedModel(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic))
 
 	ctx := context.WithValue(context.Background(),
@@ -95,7 +95,7 @@ func TestForceModelCommand_AllowsWhenOneBindingSurvives(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderBedrock, providers.ProviderOpenRouter))
 
 	env := forceCommandEnv(t)
@@ -116,7 +116,7 @@ func TestForceModelCommand_RejectsWhenEveryBindingExcluded(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderBedrock, providers.ProviderOpenRouter))
 
 	env := forceCommandEnv(t)
@@ -135,7 +135,7 @@ func TestForceModelCommand_RejectsWhenEveryBindingExcluded(t *testing.T) {
 func TestForceModelCommand_SessionStrikeOutDoesNotReject(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic))
 
 	ctx := context.WithValue(context.Background(),
@@ -156,7 +156,7 @@ func TestForceModelHeader_RejectsExcludedModel(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic))
 
 	env := forceCommandEnv(t)
@@ -180,7 +180,7 @@ func TestForceModelHeader_UnfencedInstallationUnaffected(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil)
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
 
 	env := forceCommandEnv(t)
 	req, err := http.NewRequest(http.MethodPost, "/v1/messages", nil)
@@ -199,7 +199,7 @@ func TestForceModelHeader_UnfencedInstallationUnaffected(t *testing.T) {
 // mid-session; the pre-exclusion pin would otherwise silently re-route.
 func TestTurnLoop_ForcedPinToNewlyExcludedProviderRejects(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
-	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek/deepseek-v4-flash": {}}}
+	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}}
 	store := &overwritingPinStore{pin: sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
 		Model:       "z-ai/glm-5.2",
@@ -207,7 +207,7 @@ func TestTurnLoop_ForcedPinToNewlyExcludedProviderRejects(t *testing.T) {
 		PinnedUntil: pinNeverExpires,
 	}, found: true}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic))
 
 	env := forceCommandEnv(t)
@@ -227,7 +227,7 @@ func TestTurnLoop_ForcedPinToNewlyExcludedProviderRejects(t *testing.T) {
 // explicit user force fails the request; automatic pins degrade gracefully.
 func TestTurnLoop_AutomaticPinToExcludedProviderStillFallsThrough(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
-	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek/deepseek-v4-flash": {}}}
+	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}}
 	store := &overwritingPinStore{pin: sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
 		Model:       "z-ai/glm-5.2",
@@ -235,7 +235,7 @@ func TestTurnLoop_AutomaticPinToExcludedProviderStillFallsThrough(t *testing.T) 
 		PinnedUntil: time.Now().Add(time.Hour),
 	}, found: true}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic))
 
 	env := forceCommandEnv(t)
@@ -254,7 +254,7 @@ func TestForceModelCommand_AllowsWhenAnotherKeyedBindingServes(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(
 			providers.ProviderAnthropic, providers.ProviderAnthropicGateway))
 
@@ -279,7 +279,7 @@ func TestForceModelCommand_RejectsDeploymentExcludedModel(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic)).
 		WithExcludedModelsOverride([]string{"z-ai/glm-5.2"})
 
@@ -297,7 +297,7 @@ func TestForceModelCommand_RejectsDeploymentExcludedModel(t *testing.T) {
 // must move the pin to a permitted binding, not silently drop it to the scorer.
 func TestTurnLoop_ForcedPinFollowsSurvivingBinding(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
-	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek/deepseek-v4-flash": {}}}
+	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}}
 	store := &overwritingPinStore{pin: sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
 		Model:       "z-ai/glm-5.2",
@@ -305,7 +305,7 @@ func TestTurnLoop_ForcedPinFollowsSurvivingBinding(t *testing.T) {
 		PinnedUntil: pinNeverExpires,
 	}, found: true}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(
 			providers.ProviderAnthropic, providers.ProviderAnthropicGateway))
 
@@ -330,7 +330,7 @@ func TestTurnLoop_ForcedPinFollowsSurvivingBinding(t *testing.T) {
 // cover the remapped binding, or a 529 strike on it vetoes the force.
 func TestTurnLoop_StrikeExemptionCoversRemappedBinding(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
-	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek/deepseek-v4-flash": {}}}
+	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}}
 	store := &overwritingPinStore{pin: sessionpin.Pin{
 		Provider:          providers.ProviderAnthropic,
 		Model:             "z-ai/glm-5.2",
@@ -339,7 +339,7 @@ func TestTurnLoop_StrikeExemptionCoversRemappedBinding(t *testing.T) {
 		DisabledProviders: []string{providers.ProviderAnthropicGateway},
 	}, found: true}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(
 			providers.ProviderAnthropic, providers.ProviderAnthropicGateway))
 
@@ -362,7 +362,7 @@ func TestTurnLoop_StrikeExemptionCoversRemappedBinding(t *testing.T) {
 // fast path needs the same remap or the force loses probe/compaction turns.
 func TestTurnLoop_HardPinnedTurnForcedPinFollowsSurvivingBinding(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
-	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek/deepseek-v4-flash": {}}}
+	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}}
 	store := &overwritingPinStore{pin: sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
 		Model:       "z-ai/glm-5.2",
@@ -370,7 +370,7 @@ func TestTurnLoop_HardPinnedTurnForcedPinFollowsSurvivingBinding(t *testing.T) {
 		PinnedUntil: pinNeverExpires,
 	}, found: true}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(
 			providers.ProviderAnthropic, providers.ProviderAnthropicGateway))
 
@@ -413,7 +413,7 @@ func TestClassifyDispatchError_ForcedModelExcluded(t *testing.T) {
 func TestForcedModelBinding_RejectsPassthroughModelOutsideAllowlist(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic)).
 		// nil availableModels enumerates the full catalog and masks the passthrough-
 		// only bypass; must be a routing-targets-only universe.
@@ -433,7 +433,7 @@ func TestForcedModelBinding_RejectsPassthroughModelOutsideAllowlist(t *testing.T
 func TestForcedModelBinding_AllowsPassthroughModelInsideAllowlist(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic))
 
 	ctx := context.WithValue(context.Background(),
@@ -449,7 +449,7 @@ func TestForcedModelBinding_AllowsPassthroughModelInsideAllowlist(t *testing.T) 
 func TestForcedModelBinding_NoAllowlistLeavesPassthroughForcingUnchanged(t *testing.T) {
 	t.Skip("obsolete on aiand-only catalog")
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic))
 
 	binding, reason := svc.forcedModelBinding(context.Background(), "moonshotai/kimi-k3", providers.ProviderAnthropic)

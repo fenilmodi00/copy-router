@@ -16,7 +16,7 @@ func catalogRosterID(model catalog.Model) string { return model.ID }
 
 func TestManagedResolverUsesCurrentProvidersAndNeverOpenRouter(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("deepseek/deepseek-v4-pro", "xiaomi/mimo-v2.5-pro"),
+		set("deepseek-ai/deepseek-v4-pro", "xiaomi/mimo-v2.5-pro"),
 		set(providers.ProviderFireworks, providers.ProviderOpenRouter),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
@@ -25,7 +25,7 @@ func TestManagedResolverUsesCurrentProvidersAndNeverOpenRouter(t *testing.T) {
 	resolved := resolver.Resolve(router.Request{})
 
 	require.Len(t, resolved.Candidates, 1)
-	assert.Equal(t, "deepseek/deepseek-v4-pro", resolved.Candidates[0].CatalogID)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", resolved.Candidates[0].CatalogID)
 	assert.Equal(t, providers.ProviderFireworks, resolved.Candidates[0].Provider)
 	assert.Equal(t, "accounts/fireworks/models/deepseek-v4-pro", resolved.Candidates[0].UpstreamID)
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
@@ -137,7 +137,7 @@ func TestResolverAppliesHardFiltersAndPreferenceRanks(t *testing.T) {
 
 func TestResolverBuildsMappingOnlyFromFinalSoftFilteredPool(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "deepseek/deepseek-v4-flash"),
+		set("claude-opus-4-8", "deepseek-ai/deepseek-v4-flash"),
 		set(providers.ProviderAnthropic, providers.ProviderMakora),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
@@ -146,7 +146,7 @@ func TestResolverBuildsMappingOnlyFromFinalSoftFilteredPool(t *testing.T) {
 	resolved := resolver.Resolve(router.Request{HasImages: true})
 
 	assert.Equal(t, []string{"claude-opus-4-8"}, resolved.CandidateModels())
-	_, leaked := resolved.ByRosterID["deepseek/deepseek-v4-flash"]
+	_, leaked := resolved.ByRosterID["deepseek-ai/deepseek-v4-flash"]
 	assert.False(t, leaked)
 }
 

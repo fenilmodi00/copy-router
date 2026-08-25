@@ -68,12 +68,12 @@ var forceModelAliases = map[string]string{
 	"sonnet":        "moonshotai/kimi-k2.7",
 	"claude-sonnet": "moonshotai/kimi-k2.7",
 	"sonnet-5":      "moonshotai/kimi-k2.7",
-	"sonnet-4-6":    "deepseek/deepseek-v4-pro-0813",
-	"sonnet-4.6":    "deepseek/deepseek-v4-pro-0813",
-	"haiku":         "deepseek/deepseek-v4-flash",
-	"claude-haiku":  "deepseek/deepseek-v4-flash",
-	"haiku-4-5":     "deepseek/deepseek-v4-flash",
-	"haiku-4.5":     "deepseek/deepseek-v4-flash",
+	"sonnet-4-6":    "deepseek-ai/deepseek-v4-pro",
+	"sonnet-4.6":    "deepseek-ai/deepseek-v4-pro",
+	"haiku":         "deepseek-ai/deepseek-v4-flash",
+	"claude-haiku":  "deepseek-ai/deepseek-v4-flash",
+	"haiku-4-5":     "deepseek-ai/deepseek-v4-flash",
+	"haiku-4.5":     "deepseek-ai/deepseek-v4-flash",
 	// GPT / OpenAI family → gpt-oss on aiand.
 	"gpt":           "openai/gpt-oss-120b",
 	"openai":        "openai/gpt-oss-120b",
@@ -109,9 +109,9 @@ var forceModelAliases = map[string]string{
 	"gemini-3-6-flash":      "google/gemma-4-31b-it",
 	"gemini-3-5-flash-lite": "google/gemma-4-31b-it",
 	"gemini-3-7-flash":      "google/gemma-4-31b-it",
-	"deepseek":              "deepseek/deepseek-v4-flash",
-	"deepseek-pro":          "deepseek/deepseek-v4-pro-0813",
-	"deepseek-flash":        "deepseek/deepseek-v4-flash",
+	"deepseek":              "deepseek-ai/deepseek-v4-flash",
+	"deepseek-pro":          "deepseek-ai/deepseek-v4-pro",
+	"deepseek-flash":        "deepseek-ai/deepseek-v4-flash",
 	"qwen":                  "qwen/qwen3.6-27b",
 	"qwen-coder":            "qwen/qwen3.6-27b",
 	"qwen3.7-plus":          "qwen/qwen3.6-27b",
@@ -132,11 +132,11 @@ var forceModelAliases = map[string]string{
 	"glm-5.2":      "z-ai/glm-5.2",
 	"glm-5.1":      "z-ai/glm-5.2",
 	"glm-5":        "z-ai/glm-5.2",
-	"minimax":      "deepseek/deepseek-v4-flash",
-	"minimax-m3":   "deepseek/deepseek-v4-flash",
-	"minimax-m2.7": "deepseek/deepseek-v4-flash",
-	"mistral":      "deepseek/deepseek-v4-flash",
-	"aiand":        "deepseek/deepseek-v4-flash",
+	"minimax":      "deepseek-ai/deepseek-v4-flash",
+	"minimax-m3":   "deepseek-ai/deepseek-v4-flash",
+	"minimax-m2.7": "deepseek-ai/deepseek-v4-flash",
+	"mistral":      "deepseek-ai/deepseek-v4-flash",
+	"aiand":        "deepseek-ai/deepseek-v4-flash",
 }
 
 // resolveForceModel is the legacy two-return surface. New pin-and-effort
@@ -251,7 +251,7 @@ func stripEffortSuffix(model string) (effort string, modelOut string) {
 // ensuring the colon is only treated as a suffix separator for known levels.
 func looksLikeEffortAlias(tail string) bool {
 	switch strings.ToLower(strings.TrimSpace(tail)) {
-	case "fast", "low", "medium", "med", "high", "max", "xhigh",
+	case "none", "disabled", "off", "fast", "low", "medium", "med", "high", "max", "xhigh",
 		"ultra", "minimal", "min":
 		return true
 	default:
@@ -415,9 +415,9 @@ func (s *Service) handleForceModelCommand(
 			"session_key_hex", fmt.Sprintf("%x", sessionKey),
 			"role", role,
 		)
-		msg = fmt.Sprintf("✦ **Weave Router** → force-model: %q isn't a recognized model · keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek/deepseek-v4-flash, or z-ai/glm-5.2.\n\n", cmd.Model)
+		msg = fmt.Sprintf("✦ **Weave Router** → force-model: %q isn't a recognized model · keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek-ai/deepseek-v4-flash, or z-ai/glm-5.2.\n\n", cmd.Model)
 		if env.SourceFormat() == translate.FormatOpenAI {
-			msg = fmt.Sprintf("Weave Router: force-model: %q isn't a recognized model; keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek/deepseek-v4-flash, or z-ai/glm-5.2.", cmd.Model)
+			msg = fmt.Sprintf("Weave Router: force-model: %q isn't a recognized model; keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek-ai/deepseek-v4-flash, or z-ai/glm-5.2.", cmd.Model)
 		}
 	} else if binding, reason := s.forcedModelBinding(ctx, canonicalModel, provider); reason != "" {
 		// Exclusions outrank the force. Pinning anyway would look accepted and

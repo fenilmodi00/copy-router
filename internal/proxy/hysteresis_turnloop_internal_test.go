@@ -72,7 +72,7 @@ func TestTurnLoopHoldsPinnedEffortOnLowGapEscalation(t *testing.T) {
 				store,
 				false,
 				providers.ProviderAnthropic,
-				"deepseek/deepseek-v4-flash",
+				"deepseek-ai/deepseek-v4-flash",
 				nil,
 			).WithPolicyStrategy(policy.StrategySpec{
 				Strategy:     strategy,

@@ -111,9 +111,9 @@ func TestFeedbackSpans_UseDistinctNamesAndSchemas(t *testing.T) {
 	// --- Pipeline B: /router-feedback slash command ---
 	store := newFakePinStore()
 	store.hasPin = true
-	store.pin = sessionpin.Pin{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-flash", LastServedModel: "deepseek/deepseek-v4-flash"}
+	store.pin = sessionpin.Pin{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", LastServedModel: "deepseek-ai/deepseek-v4-flash"}
 	feedbackStore := &fakeFeedbackStore{}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek/deepseek-v4-pro-0813", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-pro", Reason: "cluster"}}
 	cmdSvc := proxy.NewService(
 		fr,
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
@@ -123,12 +123,12 @@ func TestFeedbackSpans_UseDistinctNamesAndSchemas(t *testing.T) {
 		store,
 		false,
 		providers.ProviderAnthropic,
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithRouterFeedbackStore(feedbackStore)
 
 	const body = `{
-		"model":"deepseek/deepseek-v4-pro-0813",
+		"model":"deepseek-ai/deepseek-v4-pro",
 		"max_tokens":1024,
 		"messages":[
 			{"role":"user","content":"/router-feedback got stuck on Haiku for too long"}

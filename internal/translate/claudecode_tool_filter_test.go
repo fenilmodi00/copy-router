@@ -117,7 +117,7 @@ func TestStripCCTools_AnthropicSourceOpenAITarget_DropsCCOnlyKeepsReal(t *testin
 	env, err := translate.ParseAnthropic([]byte(claudeCodeMixedToolBody))
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	names := emittedToolNames(t, out.Body)
@@ -180,7 +180,7 @@ func TestKeepOrchestrationTools_OpenAITarget_KeepsOrchestrationDropsRest(t *test
 	require.NoError(t, err)
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
-		TargetModel:                       "deepseek/deepseek-v4-pro",
+		TargetModel:                       "deepseek-ai/deepseek-v4-pro",
 		KeepCrossVendorOrchestrationTools: true,
 	})
 	require.NoError(t, err)
@@ -211,7 +211,7 @@ func TestKeepOrchestrationTools_OpenAITarget_NormalizesTypelessAnyOf(t *testing.
 	require.NoError(t, err)
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
-		TargetModel:                       "deepseek/deepseek-v4-pro",
+		TargetModel:                       "deepseek-ai/deepseek-v4-pro",
 		KeepCrossVendorOrchestrationTools: true,
 	})
 	require.NoError(t, err)
@@ -256,7 +256,7 @@ func TestKeepOrchestrationTools_EmitOptionsZeroValue_StripsAll(t *testing.T) {
 	env, err := translate.ParseAnthropic([]byte(claudeCodeMixedToolBody))
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	names := emittedToolNames(t, out.Body)
@@ -283,7 +283,7 @@ func TestStripCCTools_NoCCToolsNoRewrite(t *testing.T) {
 	env, err := translate.ParseAnthropic(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	assert.ElementsMatch(t, []string{"Read", "Bash"}, emittedToolNames(t, out.Body))
@@ -300,7 +300,7 @@ func TestStripCCTools_NoToolsAtAll(t *testing.T) {
 	env, err := translate.ParseAnthropic(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	var doc map[string]any
@@ -325,7 +325,7 @@ func TestStripCCTools_AllToolsCCOnly_DropsToEmpty(t *testing.T) {
 	env, err := translate.ParseAnthropic(src)
 	require.NoError(t, err)
 
-	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek/deepseek-v4-pro"})
+	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{TargetModel: "deepseek-ai/deepseek-v4-pro"})
 	require.NoError(t, err)
 
 	assert.Empty(t, emittedToolNames(t, out.Body))

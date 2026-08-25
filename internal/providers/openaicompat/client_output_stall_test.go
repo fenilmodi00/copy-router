@@ -102,7 +102,7 @@ func streamsKeepalivesForever(interval time.Duration) *httptest.Server {
 
 func chatPrep() providers.PreparedRequest {
 	return providers.PreparedRequest{
-		Body:    []byte(`{"model":"deepseek/deepseek-v4-flash","messages":[{"role":"user","content":"hi"}],"stream":true}`),
+		Body:    []byte(`{"model":"deepseek-ai/deepseek-v4-flash","messages":[{"role":"user","content":"hi"}],"stream":true}`),
 		Headers: make(http.Header),
 	}
 }
@@ -120,7 +120,7 @@ func TestProxy_OutputStallAbortsRetryable_ByteAliveNoOutput(t *testing.T) {
 	clientReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
 
 	start := time.Now()
-	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek/deepseek-v4-flash"}, chatPrep(), w, clientReq)
+	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek-ai/deepseek-v4-flash"}, chatPrep(), w, clientReq)
 	elapsed := time.Since(start)
 
 	require.Error(t, err, "a byte-alive/output-silent stream must surface an error, not hang")
@@ -164,7 +164,7 @@ func TestProxy_OutputFlowingStreamIsNotOutputStalled(t *testing.T) {
 	w := &fakeProgressWriter{armReturns: true, markOnWrite: true}
 	clientReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
 
-	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek/deepseek-v4-flash"}, chatPrep(), w, clientReq)
+	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek-ai/deepseek-v4-flash"}, chatPrep(), w, clientReq)
 
 	require.NoError(t, err, "a stream that keeps producing output must never trip the output-stall watchdog")
 	assert.Positive(t, w.bytesIn)
@@ -190,7 +190,7 @@ func TestProxy_NotArmedWriterStillByteIdleGuarded(t *testing.T) {
 	clientReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
 
 	start := time.Now()
-	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek/deepseek-v4-flash"}, chatPrep(), w, clientReq)
+	err := c.Proxy(context.Background(), router.Decision{Model: "deepseek-ai/deepseek-v4-flash"}, chatPrep(), w, clientReq)
 	elapsed := time.Since(start)
 
 	require.Error(t, err)

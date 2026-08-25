@@ -59,10 +59,10 @@ type recordCase struct {
 // cases mirror the conformance suite's fixtures. Keep them in sync: a new
 // conformance case that wants live-recorded input adds an entry here.
 var cases = []recordCase{
-	{"openai_chat/basic_text.upstream.sse", formatOpenAIChat, "deepseek/deepseek-v4-pro", providers.ProviderOpenRouter,
-		`{"model":"deepseek/deepseek-v4-pro","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`},
-	{"openai_chat/toolcall.upstream.sse", formatOpenAIChat, "deepseek/deepseek-v4-pro", providers.ProviderOpenRouter,
-		`{"model":"deepseek/deepseek-v4-pro","stream":true,"max_tokens":1024,"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Weather in NYC?"}]}`},
+	{"openai_chat/basic_text.upstream.sse", formatOpenAIChat, "deepseek-ai/deepseek-v4-pro", providers.ProviderOpenRouter,
+		`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`},
+	{"openai_chat/toolcall.upstream.sse", formatOpenAIChat, "deepseek-ai/deepseek-v4-pro", providers.ProviderOpenRouter,
+		`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Weather in NYC?"}]}`},
 	{"gemini_native/basic_text.upstream.sse", formatGemini, "gemini-3.1-pro-preview", providers.ProviderGoogle,
 		`{"model":"gemini-3.1-pro-preview","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`},
 	{"gemini_native/toolcall.upstream.sse", formatGemini, "gemini-3.1-pro-preview", providers.ProviderGoogle,

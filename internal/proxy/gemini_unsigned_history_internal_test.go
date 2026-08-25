@@ -16,7 +16,7 @@ func TestExcludeGemini3xOnUnsignedHistory_ExcludesGeminiKeepsOthers(t *testing.T
 		"gemini-3-pro-preview":  {},
 		"gemini-3.5-flash":      {},
 		"moonshotai/kimi-k3":    {},
-		"deepseek/deepseek-v4-pro-0813": {},
+		"deepseek-ai/deepseek-v4-pro": {},
 	}
 	env, err := translate.ParseAnthropic([]byte(`{"model":"x","messages":[{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{}}]}]}`))
 	require.NoError(t, err)

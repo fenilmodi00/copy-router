@@ -49,16 +49,16 @@ func TestCustomBindingsFromKeys_ProvidersAreOrdered(t *testing.T) {
 		{
 			Provider:     providers.ProviderOpenAIGateway,
 			Plaintext:    []byte("pat"),
-			ModelAliases: map[string]string{"deepseek/deepseek-v4-pro-0813": "deepseek/deepseek-v4-pro-0813"},
+			ModelAliases: map[string]string{"deepseek-ai/deepseek-v4-pro": "deepseek-ai/deepseek-v4-pro"},
 		},
 		{
 			Provider:     providers.ProviderAnthropicGateway,
 			Plaintext:    []byte("pat"),
-			ModelAliases: map[string]string{"deepseek/deepseek-v4-pro-0813": "deepseek/deepseek-v4-pro-0813"},
+			ModelAliases: map[string]string{"deepseek-ai/deepseek-v4-pro": "deepseek-ai/deepseek-v4-pro"},
 		},
 	}
 
 	assert.Equal(t,
 		[]string{providers.ProviderAnthropicGateway, providers.ProviderOpenAIGateway},
-		customBindingsFromKeys(keys)["deepseek/deepseek-v4-pro-0813"])
+		customBindingsFromKeys(keys)["deepseek-ai/deepseek-v4-pro"])
 }

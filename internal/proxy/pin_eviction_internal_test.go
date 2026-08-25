@@ -100,7 +100,7 @@ func newEvictionTestService(store *evictionStubPinStore) *Service {
 		nil,
 		store,
 		false,
-		"anthropic", "deepseek/deepseek-v4-flash",
+		"anthropic", "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 }
@@ -173,7 +173,7 @@ func TestExpireSessionPinInvalidatesPostCommandContinuation(t *testing.T) {
 	store := &evictionStubPinStore{continuations: map[string]sessionpin.Pin{
 		continuationRole: {
 			Provider:    providers.ProviderAnthropic,
-			Model:       "deepseek/deepseek-v4-flash",
+			Model:       "deepseek-ai/deepseek-v4-flash",
 			PinnedUntil: time.Now().Add(time.Minute),
 		},
 	}}
