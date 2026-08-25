@@ -11,7 +11,6 @@ type WireFormat string
 const (
 	WireFormatAnthropic WireFormat = "anthropic_messages"
 	WireFormatOpenAI    WireFormat = "openai"
-	WireFormatGemini    WireFormat = "gemini"
 )
 
 // TranslationEndpoint identifies the source endpoint contract within a wire
@@ -22,7 +21,6 @@ const (
 	EndpointAnthropicMessages TranslationEndpoint = "messages"
 	EndpointOpenAIChat        TranslationEndpoint = "chat_completions"
 	EndpointOpenAIResponses   TranslationEndpoint = "responses"
-	EndpointGeminiGenerate    TranslationEndpoint = "generate_content"
 )
 
 // TranslationRequirements records semantics which must survive a route. It is
@@ -153,7 +151,7 @@ type Request struct {
 	// rather than reporting a large exclusion list.
 	AllowedModels map[string]struct{}
 	// SafetyExcludedModels holds only the hard request-time constraints a model
-	// physically cannot satisfy: context-window overflow and gemini-unsigned
+	// physically cannot satisfy: context-window overflow
 	// history — not the installation's excluded_models policy. The bypass gate
 	// consults this so policy exclusions don't block pass-through, but physical
 	// constraints still do.

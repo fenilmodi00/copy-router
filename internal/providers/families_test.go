@@ -46,7 +46,6 @@ func TestFamilyForKnownProviders(t *testing.T) {
 	cases := map[string]providers.TranslationFamily{
 		providers.ProviderAnthropic:  providers.FamilyAnthropic,
 		providers.ProviderOpenAI:     providers.FamilyOpenAICompat,
-		providers.ProviderGoogle:     providers.FamilyGemini,
 		providers.ProviderOpenRouter: providers.FamilyOpenAICompat,
 		providers.ProviderFireworks:  providers.FamilyOpenAICompat,
 		providers.ProviderBedrock:    providers.FamilyOpenAICompat,
@@ -59,6 +58,8 @@ func TestFamilyForKnownProviders(t *testing.T) {
 		assert.Equalf(t, want == providers.FamilyOpenAICompat, providers.IsOpenAICompat(p),
 			"IsOpenAICompat for %q", p)
 	}
+	assert.Equal(t, providers.FamilyUnknown, providers.FamilyFor(providers.ProviderGoogle),
+		"ProviderGoogle is name-only; not dispatchable")
 }
 
 // TestAllProvidersSorted asserts AllProviders returns a deterministic sorted

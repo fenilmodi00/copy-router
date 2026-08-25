@@ -60,7 +60,6 @@ func (s *Service) anthropicRoutingRequest(ctx context.Context, body []byte, head
 		excluded,
 		s.availableModels,
 	)
-	excluded, _ = excludeGemini3xOnUnsignedHistory(env, excluded, s.availableModels)
 
 	organizationID, _ := ctx.Value(ExternalIDContextKey{}).(string)
 	installationID := ""

@@ -24,8 +24,6 @@ func (e *RequestEnvelope) RewriteForHandover(summary string) int {
 		return e.rewriteAnthropicForHandover(summary)
 	case FormatOpenAI:
 		return e.rewriteOpenAIForHandover(summary)
-	case FormatGemini:
-		return e.rewriteGeminiForHandover(summary)
 	default:
 		return 0
 	}
@@ -45,8 +43,6 @@ func (e *RequestEnvelope) TrimLastNMessages(n int) int {
 		return e.trimAnthropicLastN(n)
 	case FormatOpenAI:
 		return e.trimOpenAILastN(n)
-	case FormatGemini:
-		return e.trimGeminiLastN(n)
 	default:
 		return 0
 	}
@@ -247,75 +243,6 @@ func (e *RequestEnvelope) trimOpenAILastN(n int) int {
 	return len(others) - n
 }
 
-// rewriteGeminiForHandover mirrors the Anthropic path against Gemini's
-// `contents` array. systemInstruction is untouched.
-func (e *RequestEnvelope) rewriteGeminiForHandover(summary string) int {
-	contents := gjson.GetBytes(e.body, "contents")
-	if !contents.IsArray() {
-		return 0
-	}
-	all := contents.Array()
-	if len(all) == 0 {
-		return 0
-	}
-
-	var latestUser gjson.Result
-	for i := len(all) - 1; i >= 0; i-- {
-		if all[i].Get("role").String() == "user" {
-			latestUser = all[i]
-			break
-		}
-	}
-
-	tagged := HandoverSummaryTag + summary
-	summaryEntry := map[string]any{
-		"role":  "model",
-		"parts": []any{map[string]any{"text": tagged}},
-	}
-	summaryRaw, _ := json.Marshal(summaryEntry)
-
-	rebuilt := make([]string, 0, 2)
-	rebuilt = append(rebuilt, string(summaryRaw))
-	preserved := 0
-	if latestUser.Exists() {
-		rebuilt = append(rebuilt, latestUser.Raw)
-		preserved = 1
-	}
-
-	elided := max(len(all)-preserved, 0)
-
-	newContents := "[" + strings.Join(rebuilt, ",") + "]"
-	out, err := sjson.SetRawBytes(e.body, "contents", []byte(newContents))
-	if err != nil {
-		return 0
-	}
-	e.body = out
-	return elided
-}
-
-func (e *RequestEnvelope) trimGeminiLastN(n int) int {
-	contents := gjson.GetBytes(e.body, "contents")
-	if !contents.IsArray() {
-		return 0
-	}
-	all := contents.Array()
-	if len(all) <= n {
-		return 0
-	}
-	keep := all[len(all)-n:]
-	rebuilt := make([]string, 0, len(keep))
-	for _, m := range keep {
-		rebuilt = append(rebuilt, m.Raw)
-	}
-	newContents := "[" + strings.Join(rebuilt, ",") + "]"
-	out, err := sjson.SetRawBytes(e.body, "contents", []byte(newContents))
-	if err != nil {
-		return 0
-	}
-	e.body = out
-	return len(all) - len(keep)
-}
-
 // stripOrphanedAnthropicToolResults drops tool_result blocks whose tool_use_id
 // has no matching tool_use among the set's assistant messages; user messages
 // left empty afterward are omitted entirely. Also returns the number of blocks
@@ -513,8 +440,7 @@ func stripOrphanedOpenAIToolCalls(msgs []string) ([]string, int) {
 // on orphaned IDs that other providers silently accept. This pass runs once
 // per turn so a session is never bricked by a single mid-stream failure that
 // left a dangling tool_use block on the wire. Returns the total count of
-// blocks/messages stripped; zero when clean or when the format is Gemini
-// (Gemini doesn't validate pairing).
+// blocks/messages stripped; zero when clean.
 func (e *RequestEnvelope) SanitizeOrphanedToolCalls() int {
 	if e == nil {
 		return 0

@@ -70,6 +70,8 @@ func TestClassifyDispatchError_NoEligibleProviderIsClientErrorAndWarns(t *testin
 
 // ErrAllowlistEmptiesPool wraps ErrNoEligibleProvider, so switch ordering is
 // load-bearing: the generic case must not match first and misattribute the cause.
+// ErrAllowlistEmptiesPool wraps ErrNoEligibleProvider, so switch ordering is
+// load-bearing: the generic case must not match first and misattribute the cause.
 func TestClassifyDispatchError_AllowlistEmptiesPoolPrecedesNoEligibleProvider(t *testing.T) {
 	cls, ok := proxy.ClassifyDispatchError(cluster.ErrAllowlistEmptiesPool)
 
@@ -213,6 +215,8 @@ func TestClassifyDispatchError_ForcedClusterUnsupportedStrategyIs400(t *testing.
 
 // The unservable error is raised inside the policy router, so it must classify
 // through the wrap chain Route returns it in — not just bare.
+// The unservable error is raised inside the policy router, so it must classify
+// through the wrap chain Route returns it in — not just bare.
 func TestClassifyDispatchError_ForcedClusterUnservableIs400(t *testing.T) {
 	err := fmt.Errorf("route: %w", &policy.ForcedClusterUnservableError{
 		Cluster: "explore",
@@ -230,18 +234,6 @@ func TestClassifyDispatchError_ForcedClusterUnservableIs400(t *testing.T) {
 }
 
 // Build-time intrinsic-incompatibility must classify as a clear 502.
-func TestClassifyDispatchError_RoutedModelIncompatibleIs502(t *testing.T) {
-	err := fmt.Errorf("translate anthropic request to gemini: %w", translate.ErrGeminiUnsignedToolHistory)
-
-	cls, ok := proxy.ClassifyDispatchError(err)
-
-	require.True(t, ok)
-	assert.Equal(t, proxy.DispatchErrorRoutedModelIncompatible, cls.Kind)
-	assert.Equal(t, http.StatusBadGateway, cls.Status)
-	assert.False(t, cls.Kind.IsClientError(), "the routed model was incompatible, not the client's request")
-	assert.Equal(t, "warn", cls.LogLevel)
-}
-
 func TestClassifyDispatchError_ReasoningIncompatibleClassifiesAsRoutedModelIncompatible(t *testing.T) {
 	err := fmt.Errorf("emit body: %w", translate.ErrReasoningIncompatible)
 

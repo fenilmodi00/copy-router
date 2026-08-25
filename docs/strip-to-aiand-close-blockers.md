@@ -7,6 +7,6 @@ Tip: `#28` (`efffe9b`) or newer after provider-surface trim merges. Verification
 | Gate | Status | Why |
 |---|---|---|
 | Operator review click | **OPERATOR** | Post media in chat, then click `cut-gemini` + `fix-tests-smoke`. Paths: `docs/media/cut-gemini-review-messages.png`, `docs/media/cut-gemini-review-stream.png`, `docs/media/cut-gemini-review.mp4`, `docs/media/fix-tests-smoke-review-live.png`, `docs/media/fix-tests-smoke-review-stream.png`, `docs/media/fix-tests-smoke-review.mp4` |
-| Close the program | **blocked** | Do not tick Close or invent the review click. Arm / Graphite / swarm boxes stay unchecked on purpose (Appendix E). Residual unchecked file boxes: Gemini translate (deferred; still proxy-wired), hmm/rl/bandit + `sidecars/hmm` + `internal/feedback` (**kept for training/analytics**, not delete targets). |
+| Close the program | **blocked** | Do not tick Close or invent the review click. Arm / Graphite / swarm boxes stay unchecked on purpose (Appendix E). Residual unchecked file boxes: hmm/rl/bandit + `sidecars/hmm` + `internal/feedback` (**kept for training/analytics**, not delete targets). Gemini translate deferred residual was **cut** on `strip/cut-gemini-proxy-translate` (base `ae56f994` + wave; `go test ./internal/proxy/ ./internal/translate/ ./internal/api/... ./internal/server/... ./internal/providers/ -count=1` and `go build ./cmd/router` EXIT 0). |
 
 Do not invent operator approval.

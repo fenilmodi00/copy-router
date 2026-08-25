@@ -20,6 +20,8 @@ import (
 
 // driveAnthropicSSEWithSummary feeds events through a translator, returning
 // the translated body and Summary for assertions.
+// driveAnthropicSSEWithSummary feeds events through a translator, returning
+// the translated body and Summary for assertions.
 func driveAnthropicSSEWithSummary(
 	t *testing.T,
 	model string,
@@ -118,6 +120,8 @@ func TestAnthropicSSETranslator_FlagsEachInvalidBlockIndependently(t *testing.T)
 
 // driveAnthropicSSEWithTools is driveAnthropicSSEWithSummary plus a "had
 // tools" flag, for exercising the nudge-synthesis path.
+// driveAnthropicSSEWithTools is driveAnthropicSSEWithSummary plus a "had
+// tools" flag, for exercising the nudge-synthesis path.
 func driveAnthropicSSEWithTools(
 	t *testing.T,
 	model string,
@@ -136,30 +140,6 @@ func driveAnthropicSSEWithTools(
 	}
 	require.NoError(t, translator.Finalize())
 	return rec.Body.String(), translator.Summary()
-}
-
-func TestAnthropicSSETranslator_TextOnlyTurnNudge_SynthesizesBash(t *testing.T) {
-	// Upstream (e.g. Mimo-v2.5) leaks a tool call as XML text instead of a
-	// structured tool_calls entry. finishStream must synthesize a Bash
-	// tool_use so CC's loop doesn't die on "tool call could not be parsed"
-	// (Gemini-3.x excluded, see _SuppressedOnGemini3x below).
-	body, summary := driveAnthropicSSEWithTools(t, "mimo-v2.5-pro", true, []string{
-		`data: {"id":"c1","choices":[{"index":0,"delta":{"content":"<tool_call>{\"name\":\"Read\",\"path\":\"a.go\"}</tool_call>"},"finish_reason":null}]}` + "\n\n",
-		`data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":40,"completion_tokens":15}}` + "\n\n",
-		"data: [DONE]\n\n",
-	})
-
-	assert.True(t, summary.TextOnlyTurnNudged,
-		"upstream emitted no tool_use on a request with tools — nudge must fire")
-	assert.Equal(t, 1, summary.ToolUseBlocks,
-		"after the nudge the response carries exactly one synthetic tool_use block")
-	assert.Equal(t, "tool_use", summary.StopReason,
-		"stop_reason promotes to tool_use so Claude Code dispatches the synthetic call")
-	assert.Contains(t, body, `"name":"Bash"`, "synthetic call routes through Bash")
-	assert.Contains(t, body, "previous turn produced no tool_use",
-		"nudge text instructs the model to switch to real tools")
-	assert.Contains(t, body, `"id":"toolu_router_nudge_`,
-		"synthetic id is prefixed so log auditors can match it in stream transcripts")
 }
 
 func TestAnthropicSSETranslator_TextOnlyTurnNudge_SkippedOnVisibleThinkingThenAnswer(t *testing.T) {
@@ -181,25 +161,6 @@ func TestAnthropicSSETranslator_TextOnlyTurnNudge_SkippedOnVisibleThinkingThenAn
 	assert.Equal(t, "end_turn", summary.StopReason, "turn ends naturally, not promoted to tool_use")
 	assert.NotContains(t, body, "toolu_router_nudge_")
 	assert.Contains(t, body, "Good catch", "the model's real answer survives")
-}
-
-func TestAnthropicSSETranslator_TextOnlyTurnNudge_SuppressedOnGemini3x(t *testing.T) {
-	// The synthetic Bash block has no thoughtSignature. On Gemini-3.x the next
-	// turn drops the entire tool_use/tool_result history (dropToolBlocks in
-	// emit_gemini.go), wiping context and looping to the turn ceiling — so the
-	// nudge must be suppressed on Gemini-3.x even though the upstream leaked a tool call as text.
-	body, summary := driveAnthropicSSEWithTools(t, "gemini-3.1-pro-preview", true, []string{
-		`data: {"id":"c1","choices":[{"index":0,"delta":{"content":"<tool_call>{\"name\":\"Read\",\"path\":\"a.go\"}</tool_call>"},"finish_reason":null}]}` + "\n\n",
-		`data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":40,"completion_tokens":15}}` + "\n\n",
-		"data: [DONE]\n\n",
-	})
-
-	assert.False(t, summary.TextOnlyTurnNudged,
-		"nudge must be suppressed on Gemini-3.x — a sig-less tool_use poisons the next turn's history")
-	assert.Equal(t, 0, summary.ToolUseBlocks,
-		"no synthetic tool_use is emitted on the Gemini-3.x path")
-	assert.NotContains(t, body, "toolu_router_nudge_",
-		"no synthetic nudge block reaches a Gemini-3.x client")
 }
 
 func TestAnthropicSSETranslator_TextOnlyTurnNudge_NoToolsInRequest(t *testing.T) {

@@ -307,57 +307,6 @@ func (c *sequencedGeminiClient) Passthrough(_ context.Context, _ providers.Prepa
 	return nil
 }
 
-// TestProxyMessages_GeminiValidated400RetriesWithAuto reproduces Jerry's
-// "Request contains an invalid argument" session: a tools-with-no-forced-choice
-// Gemini 3.x turn goes out under functionCallingConfig.mode=VALIDATED, Gemini
-// can't compile a tool schema into its decode grammar and 400s the whole
-// request pre-commit, and the router rescues it by re-emitting the SAME tools
-// under mode=AUTO. Asserts both attempts fire, the second carries AUTO, and the
-// client sees a clean Anthropic stream rather than the upstream 400.
-func TestProxyMessages_GeminiValidated400RetriesWithAuto(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	geminiSSE := `data: {"candidates":[{"content":{"parts":[{"text":"I am an AI assistant."}],"role":"model"},"index":0}]}` + "\n\n" +
-		`data: {"candidates":[{"content":{"parts":[]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":4,"totalTokenCount":9}}` + "\n\n"
-
-	client := &sequencedGeminiClient{
-		responses: []func(w http.ResponseWriter) error{
-			// Call 1: VALIDATED-mode INVALID_ARGUMENT, pre-commit (no write).
-			func(http.ResponseWriter) error {
-				return &providers.UpstreamStatusError{Status: http.StatusBadRequest}
-			},
-			// Call 2: AUTO mode compiles fine and streams a valid response.
-			func(w http.ResponseWriter) error {
-				w.WriteHeader(http.StatusOK)
-				_, _ = io.WriteString(w, geminiSSE)
-				return nil
-			},
-		},
-	}
-
-	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderGoogle, Model: "google/gemma-4-31b-it"}},
-		map[string]providers.Client{providers.ProviderGoogle: client},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderGoogle: {}})
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"google/gemma-4-31b-it","stream":true,` +
-		`"tools":[{"name":"Read","input_schema":{"type":"object","properties":{"file_path":{"type":"string"}},"required":["file_path"]}}],` +
-		`"messages":[{"role":"user","content":"who are you"}]}`)
-
-	err := svc.ProxyMessages(context.Background(), body, rec, req)
-	require.NoError(t, err, "the AUTO-mode retry must rescue a VALIDATED-mode 400")
-
-	require.Len(t, client.bodies, 2, "first VALIDATED attempt 400s, second AUTO attempt runs")
-	assert.Contains(t, string(client.bodies[0]), `"mode":"VALIDATED"`, "first attempt requested VALIDATED decoding")
-	assert.Contains(t, string(client.bodies[1]), `"mode":"AUTO"`, "the retry downgraded the tool mode to AUTO")
-	assert.NotContains(t, string(client.bodies[1]), `"mode":"VALIDATED"`)
-
-	respBody := rec.Body.String()
-	assert.Contains(t, respBody, "event: message_start", "client sees the rescued Anthropic stream")
-	assert.Contains(t, respBody, "event: message_stop")
-}
 
 // TestProxyMessages_GeminiNon400NotRetried guards the gate: a non-400 Gemini
 // error (e.g. 503) must NOT trigger the AUTO downgrade — that path is reserved

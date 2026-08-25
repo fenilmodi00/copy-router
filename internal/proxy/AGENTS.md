@@ -11,7 +11,6 @@ Routing/dispatch service. Per-action orchestrator that composes scorer, planner,
 - `Route` — returns `router.Decision`
 - `ProxyMessages` — Anthropic Messages surface
 - `ProxyOpenAIChatCompletion` — OpenAI Chat Completions
-- `ProxyGemini` — Gemini native generateContent
 
 Plus the action loop, handover adapter, cache writer, and session-key derivation in sibling files.
 
@@ -142,7 +141,7 @@ forwards them).
 
 Only the Anthropic Messages surface is wrapped today — that is where the failure
 was observed. `KeepaliveWriter` takes the frame as a parameter, so adding the
-OpenAI/Gemini surfaces is a wiring change plus their own frame.
+OpenAI surface is a wiring change plus their own frame.
 
 ## `OnUpstreamMeta` callbacks
 

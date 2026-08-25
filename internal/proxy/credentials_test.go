@@ -75,13 +75,6 @@ func TestExtractClientCredentials_OpenAI(t *testing.T) {
 	assert.Equal(t, "client", creds.Source)
 }
 
-func TestExtractClientCredentials_Google(t *testing.T) {
-	headers := http.Header{"Authorization": []string{"Bearer goog-client-key"}}
-	creds := proxy.ExtractClientCredentials("google", headers)
-	require.NotNil(t, creds)
-	assert.Equal(t, []byte("goog-client-key"), creds.APIKey)
-}
-
 // Makora/Together were missing from the old literal Bearer-branch list, so a
 // client-supplied key was dropped; keying off the translation family fixes it.
 func TestExtractClientCredentials_OpenAICompatBearer(t *testing.T) {

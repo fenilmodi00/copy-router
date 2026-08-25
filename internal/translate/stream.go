@@ -1245,14 +1245,6 @@ func (t *AnthropicSSETranslator) synthesizeTextOnlyTurnNudge() error {
 			return nil
 		}
 	}
-	if isGemini3xModel(t.requestModel) || isGemini3xModel(t.modelFromUpstream) {
-		observability.Get().Debug(
-			"AnthropicSSE suppressed text-only-turn nudge on Gemini-3.x (sig-less tool_use would poison next-turn history)",
-			"upstream_model", t.modelFromUpstream,
-			"request_model", t.requestModel,
-		)
-		return nil
-	}
 	blockIdx := t.blockIdx
 	id := "toolu_router_nudge_" + t.messageID
 	if err := t.emitContentBlockStartTool(blockIdx, id, "Bash", ""); err != nil {

@@ -29,7 +29,6 @@ Three concentric layers. Imports flow inward only.
 |  |  internal/api/anthropic   (/v1/messages, passthrough,       |  |
 |  |                            /v1/route)                       |  |
 |  |  internal/api/openai      (/v1/chat/completions)            |  |
-|  |  internal/api/gemini      (/v1beta/models/:modelAction)     |  |
 |  |  internal/api/feedback    (/f/<token> no-login feedback     |  |
 |  |                            page; deliberately no auth       |  |
 |  |                            middleware)                      |  |
@@ -78,7 +77,7 @@ Three concentric layers. Imports flow inward only.
 |  |  |  internal/proxy     (routing/dispatch service:        |  |  |
 |  |  |                      Route, ProxyMessages,            |  |  |
 |  |  |                      ProxyOpenAIChatCompletion,       |  |  |
-|  |  |                      ProxyGemini; action loop,          |  |  |
+|  |  |                      action loop,                       |  |  |
 |  |  |                      handover adapter, cache writer,  |  |  |
 |  |  |                      session-key derivation)          |  |  |
 |  |  |  internal/proxy/usage (Anthropic unified-limit        |  |  |
@@ -216,7 +215,7 @@ If new helper doesn't fit, justify new package in code comment before creating.
 - **`selfhosted`** (default): full dashboard at `/ui/*`, `/admin/v1/*` API (auth, metrics, keys, provider-keys, config, excluded-models), dashboard cookie auth all mounted. Provider keys read from env vars; missing keys keep providers registered for client-passthrough but exclude from hard-pin resolution.
 - **`managed`**: dashboard + `/admin/v1/*` not mounted at all — Weave-managed deploys have separate control plane. Every provider registered with empty deployment key; proxy service in BYOK-only mode, so request without BYOK or client-supplied auth for chosen provider 400s rather than silently spending platform budget. Setting variable to any other value panics at boot. BYOK is **opt-in per installation** here (`byok_enabled` on the installation row, set by the control plane): until it's set, `withAPIKey` strips external keys so a stored key can't spend against a credit-billed deployment. An opted-in BYOK turn debits no inference cost; a platform fee (`BYOK_FEE_RATE`, default 0) may be charged as a separate `byok_fee` ledger row.
 
-When adding new endpoint, put inside `selfhosted` block in `server.Register` unless part of product surface (`/v1/*`, `/v1beta/*`, `/health`, `/validate`). Do not re-expose admin surface in managed mode.
+When adding new endpoint, put inside `selfhosted` block in `server.Register` unless part of product surface (`/v1/*`, `/health`, `/validate`). Do not re-expose admin surface in managed mode.
 
 ## Eval harness (sibling `router-internal/eval/`)
 
