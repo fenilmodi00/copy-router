@@ -1,7 +1,6 @@
 package translate
 
 import (
-	"encoding/json"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -28,8 +27,6 @@ func (e *RequestEnvelope) ClearOldToolResults(keepRecent int) int {
 		return e.clearOldToolResultsAnthropic(keepRecent)
 	case FormatOpenAI:
 		return e.clearOldToolResultsOpenAI(keepRecent)
-	case FormatGemini:
-		return e.clearOldToolResultsGemini(keepRecent)
 	default:
 		return 0
 	}
@@ -51,8 +48,6 @@ func (e *RequestEnvelope) RewriteForCompaction(summary string, keepRecentTurns i
 		return e.rewriteAnthropicForCompaction(summary, keepRecentTurns)
 	case FormatOpenAI:
 		return e.rewriteOpenAIForCompaction(summary, keepRecentTurns)
-	case FormatGemini:
-		return e.rewriteGeminiForCompaction(summary, keepRecentTurns)
 	default:
 		return 0
 	}
@@ -188,75 +183,6 @@ func (e *RequestEnvelope) clearOldToolResultsOpenAI(keepRecent int) int {
 	return e.setMessages(rebuilt, cleared)
 }
 
-func (e *RequestEnvelope) clearOldToolResultsGemini(keepRecent int) int {
-	contents := gjson.GetBytes(e.body, "contents")
-	if !contents.IsArray() {
-		return 0
-	}
-	all := contents.Array()
-
-	total := 0
-	for _, c := range all {
-		c.Get("parts").ForEach(func(_, p gjson.Result) bool {
-			if p.Get("functionResponse").Exists() {
-				total++
-			}
-			return true
-		})
-	}
-	cutoff := total - keepRecent
-	if cutoff <= 0 {
-		return 0
-	}
-
-	seen, cleared := 0, 0
-	rebuilt := make([]string, 0, len(all))
-	for _, c := range all {
-		parts := c.Get("parts")
-		if !parts.IsArray() {
-			rebuilt = append(rebuilt, c.Raw)
-			continue
-		}
-		newParts := make([]string, 0, len(parts.Array()))
-		changed := false
-		parts.ForEach(func(_, p gjson.Result) bool {
-			if p.Get("functionResponse").Exists() {
-				seen++
-				if seen <= cutoff {
-					np, err := sjson.SetBytes([]byte(p.Raw), "functionResponse.response", map[string]any{"result": ClearedToolResultPlaceholder})
-					if err == nil {
-						newParts = append(newParts, string(np))
-						cleared++
-						changed = true
-						return true
-					}
-				}
-			}
-			newParts = append(newParts, p.Raw)
-			return true
-		})
-		if !changed {
-			rebuilt = append(rebuilt, c.Raw)
-			continue
-		}
-		newPartsRaw := "[" + strings.Join(newParts, ",") + "]"
-		nc, err := sjson.SetRawBytes([]byte(c.Raw), "parts", []byte(newPartsRaw))
-		if err != nil {
-			rebuilt = append(rebuilt, c.Raw)
-			continue
-		}
-		rebuilt = append(rebuilt, string(nc))
-	}
-	if cleared == 0 {
-		return 0
-	}
-	out, err := sjson.SetRawBytes(e.body, "contents", []byte("["+strings.Join(rebuilt, ",")+"]"))
-	if err != nil {
-		return 0
-	}
-	e.body = out
-	return cleared
-}
 
 // setMessages writes rebuilt back to the "messages" array and returns ret on
 // success, 0 on marshal failure. Shared by the Anthropic/OpenAI message-array
@@ -321,35 +247,3 @@ func (e *RequestEnvelope) rewriteOpenAIForCompaction(summary string, keepRecent 
 	return e.setMessages(rebuilt, elided)
 }
 
-func (e *RequestEnvelope) rewriteGeminiForCompaction(summary string, keepRecent int) int {
-	contents := gjson.GetBytes(e.body, "contents")
-	if !contents.IsArray() {
-		return 0
-	}
-	all := contents.Array()
-	if len(all) == 0 {
-		return 0
-	}
-	start := userAlignedStart(all, keepRecent)
-	kept := all[start:]
-
-	tagged := HandoverSummaryTag + summary
-	summaryEntry := map[string]any{
-		"role":  "model",
-		"parts": []any{map[string]any{"text": tagged}},
-	}
-	summaryRaw, _ := json.Marshal(summaryEntry)
-
-	rebuilt := make([]string, 0, len(kept)+1)
-	rebuilt = append(rebuilt, string(summaryRaw))
-	for _, m := range kept {
-		rebuilt = append(rebuilt, m.Raw)
-	}
-	elided := max(len(all)-len(kept), 0)
-	out, err := sjson.SetRawBytes(e.body, "contents", []byte("["+strings.Join(rebuilt, ",")+"]"))
-	if err != nil {
-		return 0
-	}
-	e.body = out
-	return elided
-}

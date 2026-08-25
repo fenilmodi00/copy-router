@@ -10,7 +10,7 @@
 //
 // Usage (from the repo root):
 //
-//	RECORD=1 OPENAI_API_KEY=… GOOGLE_API_KEY=… OPENROUTER_API_KEY=… \
+//	RECORD=1 OPENAI_API_KEY=… OPENROUTER_API_KEY=… \
 //	    go run ./scripts/record_provider_fixtures
 //
 // After recording, regenerate the goldens and review the diff:
@@ -44,7 +44,6 @@ type format int
 const (
 	formatOpenAIChat format = iota
 	formatOpenAIResponses
-	formatGemini
 	formatAnthropic
 )
 
@@ -63,10 +62,6 @@ var cases = []recordCase{
 		`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`},
 	{"openai_chat/toolcall.upstream.sse", formatOpenAIChat, "deepseek-ai/deepseek-v4-pro", providers.ProviderOpenRouter,
 		`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Weather in NYC?"}]}`},
-	{"gemini_native/basic_text.upstream.sse", formatGemini, "gemini-3.1-pro-preview", providers.ProviderGoogle,
-		`{"model":"gemini-3.1-pro-preview","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`},
-	{"gemini_native/toolcall.upstream.sse", formatGemini, "gemini-3.1-pro-preview", providers.ProviderGoogle,
-		`{"model":"gemini-3.1-pro-preview","stream":true,"max_tokens":1024,"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Weather in NYC?"}]}`},
 	{"responses/toolcall.upstream.sse", formatOpenAIResponses, "gpt-5.5", providers.ProviderOpenAI,
 		`{"model":"gpt-5.5","stream":true,"max_tokens":2048,"thinking":{"type":"enabled","budget_tokens":24576},"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Weather in NYC?"}]}`},
 }
@@ -154,8 +149,6 @@ func prepare(env *translate.RequestEnvelope, f format, opts translate.EmitOption
 		return env.PrepareOpenAI(http.Header{}, opts)
 	case formatOpenAIResponses:
 		return env.PrepareOpenAIResponses(http.Header{}, opts)
-	case formatGemini:
-		return env.PrepareGemini(http.Header{}, opts)
 	case formatAnthropic:
 		return env.PrepareAnthropic(http.Header{}, opts)
 	default:
@@ -173,9 +166,6 @@ func endpoint(c recordCase, apiKey string, prep providers.PreparedRequest) (stri
 		return "https://api.openai.com/v1/chat/completions", map[string]string{"Authorization": "Bearer " + apiKey}
 	case formatOpenAIResponses:
 		return "https://api.openai.com/v1/responses", map[string]string{"Authorization": "Bearer " + apiKey}
-	case formatGemini:
-		return "https://generativelanguage.googleapis.com/v1beta/models/" + c.model + ":streamGenerateContent?alt=sse",
-			map[string]string{"x-goog-api-key": apiKey}
 	case formatAnthropic:
 		return "https://api.anthropic.com/v1/messages",
 			map[string]string{"x-api-key": apiKey, "anthropic-version": "2023-06-01"}
@@ -191,8 +181,6 @@ func apiKeyFor(f format) (key, env string) {
 		return os.Getenv("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY"
 	case formatOpenAIResponses:
 		return os.Getenv("OPENAI_API_KEY"), "OPENAI_API_KEY"
-	case formatGemini:
-		return os.Getenv("GOOGLE_API_KEY"), "GOOGLE_API_KEY"
 	case formatAnthropic:
 		return os.Getenv("ANTHROPIC_API_KEY"), "ANTHROPIC_API_KEY"
 	default:

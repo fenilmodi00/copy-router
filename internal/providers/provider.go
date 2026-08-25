@@ -47,9 +47,9 @@ func ObserveUpstreamHeaders(ctx context.Context, h http.Header) {
 // even though the provider looked "enabled" at boot. ValidateDispatchable and
 // the table test catch this at boot instead of in production.
 //
-// Composition root (cmd/router/main.go) registers ProviderAiand only. The other
-// Provider* names stay because proxy/translate/BYOK/custom-binding paths and
-// tests still key off them for wire-family dispatch; they are not unused.
+// Composition root (cmd/router/main.go) registers ProviderAiand only. Other
+// Provider* names stay as wire-family / BYOK / test fixtures. ProviderGoogle
+// is name-only (force_model / hmm / rl / otel); it has no ProviderFamilies entry.
 const (
 	ProviderAnthropic  = "anthropic"
 	ProviderOpenAI     = "openai"
@@ -89,18 +89,15 @@ const (
 	// FamilyOpenAICompat speaks the OpenAI Chat Completions wire format
 	// (aiand and every other OpenAI-compatible upstream).
 	FamilyOpenAICompat
-	// FamilyGemini speaks the Google Generative Language (Gemini) wire format.
-	// Ingress /v1beta is unmounted; the family remains for translate/proxy
-	// branches that still compile against FormatGemini.
-	FamilyGemini
 )
 
 // ProviderFamilies is the single source of truth for cross-format dispatch;
-// keep it covering EVERY Provider* constant (see the three-map note above).
+// keep it covering EVERY dispatchable Provider* constant (see the three-map
+// note above). ProviderGoogle remains as a name constant for hmm/rl/force_model
+// /otel but is intentionally absent here (FamilyUnknown).
 var ProviderFamilies = map[string]TranslationFamily{
 	ProviderAnthropic:  FamilyAnthropic,
 	ProviderOpenAI:     FamilyOpenAICompat,
-	ProviderGoogle:     FamilyGemini,
 	ProviderOpenRouter: FamilyOpenAICompat,
 	ProviderFireworks:  FamilyOpenAICompat,
 	ProviderBedrock:    FamilyOpenAICompat,
@@ -158,7 +155,6 @@ func ValidateDispatchable(registered []string) error {
 var APIKeyEnvVars = map[string]string{
 	ProviderAnthropic:  "ANTHROPIC_API_KEY",
 	ProviderOpenAI:     "OPENAI_API_KEY",
-	ProviderGoogle:     "GOOGLE_API_KEY",
 	ProviderOpenRouter: "OPENROUTER_API_KEY",
 	ProviderFireworks:  "FIREWORKS_API_KEY",
 	ProviderBedrock:    "AWS_BEARER_TOKEN_BEDROCK",
@@ -200,7 +196,6 @@ func RequiresBaseURL(provider string) bool {
 var CacheTTL = map[string]time.Duration{
 	ProviderAnthropic:  time.Hour,
 	ProviderOpenAI:     5 * time.Minute,
-	ProviderGoogle:     5 * time.Minute,
 	ProviderOpenRouter: 5 * time.Minute,
 	ProviderFireworks:  5 * time.Minute,
 	ProviderBedrock:    5 * time.Minute,
@@ -509,21 +504,10 @@ type PreparedRequest struct {
 // applied to the upstream request body. Surfaced in the ProxyMessages-
 // complete log with keys:
 //   - cc_only_tools_stripped
-//   - gemini_reminder_injected
-//   - gemini_validated_tool_mode
 type RequestMutationStats struct {
 	// CCOnlyToolsStripped counts Claude-Code-only tools removed before
 	// dispatching to a non-Anthropic upstream. See claudecode_tool_filter.go.
 	CCOnlyToolsStripped int
-	// GeminiReminderInjected is true when the Gemini 3.x tool-use reminder was
-	// appended to systemInstruction. See translate/system_reminder.go.
-	GeminiReminderInjected bool
-	// GeminiValidatedToolMode is true when functionCallingConfig.mode=VALIDATED
-	// was set (Gemini 3.x, tools present, no forced tool_choice). Such requests
-	// can 400 with a generic INVALID_ARGUMENT when Gemini can't compile the
-	// tool schema; the proxy uses this to decide if an AUTO-mode retry is worth
-	// attempting. See translate/emit_gemini.go.
-	GeminiValidatedToolMode bool
 	// Transformations carries stable, structured request transformation
 	// outcomes. Aggregate fields above remain during the migration for existing
 	// dashboards and callers.

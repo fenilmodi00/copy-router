@@ -2,7 +2,6 @@ package translate_test
 
 import (
 	"encoding/json"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,32 +43,6 @@ func emittedToolNames(t *testing.T, body []byte) []string {
 	return out
 }
 
-// emittedGeminiToolNames extracts function-declaration names from an emitted
-// Gemini request body.
-func emittedGeminiToolNames(t *testing.T, body []byte) []string {
-	t.Helper()
-	var doc map[string]any
-	require.NoError(t, json.Unmarshal(body, &doc))
-	tools, _ := doc["tools"].([]any)
-	var out []string
-	for _, t := range tools {
-		tool, _ := t.(map[string]any)
-		if tool == nil {
-			continue
-		}
-		decls, _ := tool["functionDeclarations"].([]any)
-		for _, d := range decls {
-			decl, _ := d.(map[string]any)
-			if decl == nil {
-				continue
-			}
-			if name, _ := decl["name"].(string); name != "" {
-				out = append(out, name)
-			}
-		}
-	}
-	return out
-}
 
 // claudeCodeMixedToolBody is a representative Anthropic request body carrying
 // coding + scheduling tools interleaved with CC-only control-plane tools.
@@ -129,17 +102,6 @@ func TestStripCCTools_AnthropicSourceOpenAITarget_DropsCCOnlyKeepsReal(t *testin
 	assert.NotContains(t, names, "ToolSearch")
 }
 
-func TestStripCCTools_AnthropicSourceGeminiTarget_DropsCCOnlyKeepsReal(t *testing.T) {
-	env, err := translate.ParseAnthropic([]byte(claudeCodeMixedToolBody))
-	require.NoError(t, err)
-
-	out, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-3.1-pro-preview"})
-	require.NoError(t, err)
-
-	names := emittedGeminiToolNames(t, out.Body)
-	assert.ElementsMatch(t, keptOnNonAnthropicDefault, names,
-		"Anthropic→Gemini keeps scheduling tools and drops CC-only control-plane schemas")
-}
 
 func TestStripCCTools_AnthropicSourceAnthropicTarget_KeepsCCOnly(t *testing.T) {
 	// Anthropic models DO know how to dispatch Task/Skill/etc. via the
@@ -227,27 +189,6 @@ func TestKeepOrchestrationTools_OpenAITarget_NormalizesTypelessAnyOf(t *testing.
 		"OpenAI requires every anyOf branch to declare a type")
 }
 
-func TestKeepOrchestrationTools_GeminiTarget_KeepsOrchestrationDropsRest(t *testing.T) {
-	env, err := translate.ParseAnthropic([]byte(claudeCodeMixedToolBody))
-	require.NoError(t, err)
-
-	out, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{
-		TargetModel:                       "gemini-3.1-pro-preview",
-		KeepCrossVendorOrchestrationTools: true,
-	})
-	require.NoError(t, err)
-
-	names := emittedGeminiToolNames(t, out.Body)
-	assert.ElementsMatch(t, []string{
-		"Read", "Edit", "Write", "Bash", "NotebookEdit",
-		"ScheduleWakeup", "CronCreate", "Monitor", "BashOutput", "KillShell",
-		"Task", "Agent", "TaskCreate", "TaskUpdate", "TaskList",
-		"EnterPlanMode", "ExitPlanMode", "UpdatePlan", "Skill", "Workflow",
-	}, names, "Anthropic→Gemini keeps orchestration + scheduling tools when the flag is on")
-	assert.NotContains(t, names, "SendMessage")
-	assert.NotContains(t, names, "AskUserQuestion")
-	assert.NotContains(t, names, "ToolSearch")
-}
 
 func TestKeepOrchestrationTools_EmitOptionsZeroValue_StripsAll(t *testing.T) {
 	// Zero-value EmitOptions strips CC-only control-plane tools (incl.

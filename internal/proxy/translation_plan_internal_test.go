@@ -42,22 +42,6 @@ func TestTranslationPlan_NativeResponsesFiltersToOpenAIFamilyInShadow(t *testing
 	requireExclusion(t, plan, "native_wire_family_required", providers.ProviderAnthropic, true)
 }
 
-func TestTranslationPlan_GeminiIngressNeverOffersForeignFamily(t *testing.T) {
-	svc := compatibilityService(TranslationCompatibilityShadow)
-	plan := svc.planTranslation(router.Request{
-		EnabledProviders: map[string]struct{}{
-			providers.ProviderAnthropic: {},
-			providers.ProviderGoogle:    {},
-		},
-		TranslationRequirements: router.TranslationRequirements{
-			SourceFormat: router.WireFormatGemini,
-			Endpoint:     router.EndpointGeminiGenerate,
-		},
-	})
-
-	assert.Equal(t, map[string]struct{}{providers.ProviderGoogle: {}}, plan.EnabledProviders)
-	requireExclusion(t, plan, "native_wire_family_required", providers.ProviderAnthropic, true)
-}
 
 func TestTranslationPlan_ImageConstraintShadowsBeforeEnforcement(t *testing.T) {
 	req := router.Request{TranslationRequirements: router.TranslationRequirements{Images: true}}

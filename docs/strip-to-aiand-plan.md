@@ -233,8 +233,8 @@ Host Close path. Live lanes ran on the WSL host with `make setup` / `make dev` a
 
 - [x] Delete `internal/api/gemini/`.
 - [x] Edit `internal/server/` to unmount `/v1beta/models/:modelAction`.
-- [x] Edit `internal/translate/` to drop Gemini emit and stream paths unused by Anthropic to OpenAI-compat. **kept: still wired via FamilyGemini.** `PrepareGemini` is not on the Claude Code → aiand path (`ProviderAiand` → `FamilyOpenAICompat` → `PrepareOpenAI` in `internal/proxy/service.go`). It stays because `ProviderFamilies[ProviderGoogle] = FamilyGemini` (`internal/providers/provider.go`) and `proxy` still has `case providers.FamilyGemini` that calls `PrepareGemini` (`service.go` Anthropic and OpenAI dispatch, plus `ProxyGeminiGenerateContent` in `gemini.go`). Tip `06c8347` registers only aiand in `cmd/router/main.go` and has no `internal/providers/google/`, so FamilyGemini is compile-wired dead at boot, not ingress-only dead. Deleting translate Gemini without removing those proxy branches fails to compile (half-delete). Leave until a dedicated proxy FamilyGemini trim.
-- [x] Edit related tests and API docs. **kept: still wired via FamilyGemini.** No delete of `PrepareGemini` tests or emit/stream helpers. This tick records the keep decision and evidence above; no API-doc rewrite beyond this plan note.
+- [x] Edit `internal/translate/` to drop Gemini emit and stream paths unused by Anthropic to OpenAI-compat. **deleted on `strip/cut-gemini-proxy-translate` (head `0126241` (base `ae56f994`)).** Removed `FamilyGemini` / `FormatGemini` / `ParseGemini` / `PrepareGemini` / `WireFormatGemini` / `EndpointGeminiGenerate`, proxy `FamilyGemini` dispatch arms, Gemini-only tests, and translate AGENTS/CLAUDE scope to Anthropic ⇄ OpenAI. `ProviderGoogle` name constant kept for hmm/rl/force_model/otel (`FamilyUnknown`). Evidence: `go test ./internal/proxy/ ./internal/translate/ ./internal/api/... ./internal/server/... ./internal/providers/ -count=1` EXIT 0; `go build -o /tmp/router-gemini-cut ./cmd/router` EXIT 0.
+- [x] Edit related tests and API docs. **deleted with the translate/proxy cut above.** Gemini-only `Prepare*` / cross-format / strip-footer / middleware envelope tests removed or rewritten; Anthropic/OpenAI suites green under the same `go test` evidence.
 
 **Build.**
 
@@ -435,4 +435,4 @@ Actual path:
 
 Boxes that only name Graphite, cloud-VM swarm, or autopilot arming stay unchecked on purpose. Host Close ticks cover dependency order, file boundaries, incremental `gh` merges, and host live/perf evidence. Do not invent swarm screenshots or tick operator review-click boxes. Do not tick Close while review clicks stay open.
 
-Tip at this sync: `#28` (`efffe9b`). Residual File leftovers after provider-surface trim: Gemini translate (deferred; still proxy-wired), training/analytics package keeps (intentionally unchecked).
+Tip at this sync: `#28` (`efffe9b`). Residual File leftovers after provider-surface trim: Gemini translate **cut on `strip/cut-gemini-proxy-translate`** (head `0126241` (base `ae56f994`); `go test` packages above EXIT 0), training/analytics package keeps (intentionally unchecked).

@@ -20,12 +20,18 @@ func TestBase64SignatureBytes(t *testing.T) {
 // TestContextOverflowTokenEstimate_FullBody divides the full body bytes
 // (signatures included — the count a signature-keeping target receives) by the
 // dense-content ratio.
+// TestContextOverflowTokenEstimate_FullBody divides the full body bytes
+// (signatures included — the count a signature-keeping target receives) by the
+// dense-content ratio.
 func TestContextOverflowTokenEstimate_FullBody(t *testing.T) {
 	body := []byte(strings.Repeat("x", 400))
 	e := &RequestEnvelope{body: body, format: FormatAnthropic}
 	assert.Equal(t, 100, e.ContextOverflowTokenEstimate(), "400 bytes / 4 = 100 tokens")
 }
 
+// TestSignatureTokenSavings returns the token savings a signature-stripping
+// target gets from dropping the base64 payloads — but only for Anthropic-format
+// input; other formats carry no Anthropic thought-signatures to strip.
 // TestSignatureTokenSavings returns the token savings a signature-stripping
 // target gets from dropping the base64 payloads — but only for Anthropic-format
 // input; other formats carry no Anthropic thought-signatures to strip.
@@ -47,6 +53,11 @@ func TestSignatureTokenSavings(t *testing.T) {
 // ~263K-token prompt. The old ÷6 estimate (~175K) let it pass the pre-filter
 // onto a 256K OSS model, which then hard-400'd on context overflow. The
 // strip-aware ÷4 estimate must land above that window so the model is excluded.
+// TestContextOverflowTokenEstimate_TicketRegression is the regression for the
+// 262K-overflow ticket: a signature-light, content-dense ~1.05MB body is a real
+// ~263K-token prompt. The old ÷6 estimate (~175K) let it pass the pre-filter
+// onto a 256K OSS model, which then hard-400'd on context overflow. The
+// strip-aware ÷4 estimate must land above that window so the model is excluded.
 func TestContextOverflowTokenEstimate_TicketRegression(t *testing.T) {
 	const kimiWindow = 262_143
 	body := []byte(strings.Repeat("x", 1_050_000))
@@ -59,29 +70,6 @@ func TestContextOverflowTokenEstimate_TicketRegression(t *testing.T) {
 // TestBase64ImageStats sums inline base64 image payloads per inbound format,
 // covering top-level and tool_result-nested Anthropic images, OpenAI data URLs
 // (http URLs skipped), and Gemini inlineData (camelCase + snake_case).
-func TestBase64ImageStats(t *testing.T) {
-	anthropic := []byte(`{"messages":[{"role":"user","content":[` +
-		`{"type":"image","source":{"type":"base64","data":"AAAA"}},` +
-		`{"type":"tool_result","content":[{"type":"image","source":{"data":"BBBBBB"}}]}]}]}`)
-	b, c := (&RequestEnvelope{body: anthropic, format: FormatAnthropic}).base64ImageStats()
-	assert.Equal(t, 10, b, "top-level (4) + tool_result-nested (6) image bytes")
-	assert.Equal(t, 2, c, "counts both images")
-
-	openai := []byte(`{"messages":[{"role":"user","content":[` +
-		`{"type":"image_url","image_url":{"url":"data:image/png;base64,ABCDEFGH"}},` +
-		`{"type":"image_url","image_url":{"url":"https://example.com/y.png"}}]}]}`)
-	b, c = (&RequestEnvelope{body: openai, format: FormatOpenAI}).base64ImageStats()
-	assert.Equal(t, 8, b, "only the data-URL base64 payload counts")
-	assert.Equal(t, 1, c, "http image URL is not an in-body payload")
-
-	gemini := []byte(`{"contents":[{"parts":[` +
-		`{"inlineData":{"mimeType":"image/png","data":"AAAA"}},` +
-		`{"inline_data":{"data":"BB"}}]}]}`)
-	b, c = (&RequestEnvelope{body: gemini, format: FormatGemini}).base64ImageStats()
-	assert.Equal(t, 6, b, "camelCase (4) + snake_case (2) inlineData bytes")
-	assert.Equal(t, 2, c, "counts both inline parts")
-}
-
 // TestContextOverflowTokenEstimate_ImagesRepriced is the regression for
 // phantom token inflation on multi-page PDF reads: base64 transport size
 // must not be counted at the content byte ratio.

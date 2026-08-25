@@ -18,7 +18,7 @@ import (
 // Anthropic models recognize these as native sub-tools and dispatch them
 // correctly via the client; non-Anthropic models cannot. The filter applies
 // only on Anthropic→non-Anthropic emit paths (buildOpenAIFromAnthropic and
-// the Anthropic case of PrepareGemini). The Anthropic→Anthropic passthrough
+// cross-format emit). The Anthropic→Anthropic passthrough
 // preserves them.
 //
 // Scheduling / wake-up tools (ScheduleWakeup, CronCreate/Delete/List, Monitor)

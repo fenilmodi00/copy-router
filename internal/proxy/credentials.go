@@ -172,9 +172,9 @@ func ExtractClientCredentials(provider string, headers http.Header) *Credentials
 		}
 		return nil
 	}
-	// OpenAI-compat upstreams and Gemini/Google authenticate via
-	// Authorization: Bearer. FamilyUnknown providers fall through to nil.
-	if family != providers.FamilyOpenAICompat && family != providers.FamilyGemini {
+	// OpenAI-compat upstreams authenticate via Authorization: Bearer.
+	// FamilyUnknown providers fall through to nil.
+	if family != providers.FamilyOpenAICompat {
 		return nil
 	}
 	authHeader := headers.Get("Authorization")

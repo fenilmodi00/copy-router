@@ -745,22 +745,18 @@ func routingKnobsForRequest(ctx context.Context) *router.Overrides {
 }
 
 // safetyExcludedModels returns the hard request-time safety exclusion set
-// (context-overflow + gemini-unsigned-history). It re-runs both filters
-// against an EMPTY base — the routing-path filters skip models already in
-// excluded_models, so a policy-excluded overflow model would be absent from
-// those lists yet must still block bypass (it would 400 on the subscription).
-// Returns nil when neither filter fires.
+// (context-overflow). It re-runs the filter against an EMPTY base — the
+// routing-path filters skip models already in excluded_models, so a
+// policy-excluded overflow model would be absent from those lists yet must
+// still block bypass (it would 400 on the subscription).
+// Returns nil when the filter does not fire.
 func (s *Service) safetyExcludedModels(env *translate.RequestEnvelope, outputReserve int, enabledProviders map[string]struct{}) map[string]struct{} {
 	_, overflowed := excludeContextOverflowModels(env.ContextOverflowTokenEstimate(), env.SignatureTokenSavings(), outputReserve, enabledProviders, nil, s.availableModels)
-	_, geminiUnsigned := excludeGemini3xOnUnsignedHistory(env, nil, s.availableModels)
-	if len(overflowed) == 0 && len(geminiUnsigned) == 0 {
+	if len(overflowed) == 0 {
 		return nil
 	}
-	out := make(map[string]struct{}, len(overflowed)+len(geminiUnsigned))
+	out := make(map[string]struct{}, len(overflowed))
 	for _, m := range overflowed {
-		out[m] = struct{}{}
-	}
-	for _, m := range geminiUnsigned {
 		out[m] = struct{}{}
 	}
 	return out
@@ -989,47 +985,6 @@ func excludeContextOverflowModels(est, sigSavings, outputReserve int, enabledPro
 	return out, overflowed
 }
 
-// gemini3xRequiresSignedHistory reports whether model is a Gemini 3.x model,
-// which 400s (INVALID_ARGUMENT) when the request history carries function-call
-// parts lacking the thoughtSignature Gemini issued. Scoped by family name; if
-// the catalog later grows a per-model capability flag this should move there.
-func gemini3xRequiresSignedHistory(model string) bool {
-	return strings.HasPrefix(model, "gemini-3")
-}
-
-// excludeGemini3xOnUnsignedHistory augments excluded with every Gemini 3.x
-// model when the request history carries an assistant tool call lacking a
-// Gemini thoughtSignature (guaranteed 400 on foreign/cross-model history).
-// Native Gemini continuations round-trip their own signature and are
-// unaffected. Returns excluded unchanged (and nil) when nothing is added.
-func excludeGemini3xOnUnsignedHistory(env *translate.RequestEnvelope, excluded, available map[string]struct{}) (map[string]struct{}, []string) {
-	if env == nil || !env.HasUnsignedToolCallHistory() {
-		return excluded, nil
-	}
-	var out map[string]struct{}
-	var added []string
-	for model := range available {
-		if !gemini3xRequiresSignedHistory(model) {
-			continue
-		}
-		if _, already := excluded[model]; already {
-			continue
-		}
-		if out == nil {
-			out = make(map[string]struct{}, len(excluded)+1)
-			for k := range excluded {
-				out[k] = struct{}{}
-			}
-		}
-		out[model] = struct{}{}
-		added = append(added, model)
-	}
-	if len(added) == 0 {
-		return excluded, nil
-	}
-	sort.Strings(added)
-	return out, added
-}
 
 // restrictToTier returns a copy of excluded augmented with every routable
 // model whose tier differs from target. Counterpart to a dropped user-forced
@@ -2723,13 +2678,6 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 			"excluded_models", strings.Join(ctxOverflowed, ","),
 		)
 	}
-	excluded, geminiUnsigned := excludeGemini3xOnUnsignedHistory(env, excluded, s.availableModels)
-	if len(geminiUnsigned) > 0 {
-		log.Info("gemini pre-filter: excluded gemini-3.x for unsigned tool-call history",
-			"excluded_models", strings.Join(geminiUnsigned, ","),
-		)
-	}
-
 	routeStart := time.Now()
 	req := router.Request{
 		RequestedModel:               feats.Model,
@@ -3198,85 +3146,6 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 				finErr := finalizeAfterProxy(err, translator.Finalize)
 				respSummary = translator.Summary()
 				return finErr
-			}, nil
-		case providers.FamilyGemini:
-			prep, emitErr := env.PrepareGemini(r.Header, targetOpts)
-			reqStats = prep.Stats
-			if emitErr != nil {
-				log.Error("Failed to translate Anthropic request to Gemini format", "err", emitErr)
-				return nil, fmt.Errorf("translate anthropic request to gemini: %w", emitErr)
-			}
-			crossFormat = true
-			logUpstreamBody(log, routeRes.SessionKey, target, feats, prep.Body)
-			// geminiUsedValidated marks a request sent with
-			// functionCallingConfig.mode=VALIDATED (Gemini 3.x, tools, unforced
-			// choice): Gemini compiles each tool schema into a decode-time grammar,
-			// and one it can't compile 400s the whole request. Retried once below
-			// with mode=AUTO if nothing has reached the client yet.
-			geminiUsedValidated := prep.Stats.GeminiValidatedToolMode
-			// dispatchGemini does one call and returns the raw upstream error plus a
-			// finalize thunk, split so the attempt can inspect a pre-commit 400
-			// before finalize commits the prelude buffer and forecloses the retry.
-			// Translators are stateful, so a retry rebuilds the chain via a fresh call.
-			dispatchGemini := func(actx context.Context, d router.Decision, p providers.Client, pr providers.PreparedRequest) (error, func(error) error) {
-				respSummary = translate.ResponseSummary{}
-				var usage otel.UsageSink
-				if s.usageRequired() {
-					extractor = otel.NewUsageExtractor(nil, d.Provider)
-					usage = extractor
-				}
-				// SSE chain: Gemini → OpenAI → Anthropic.
-				anthropicTr := translate.NewAnthropicSSETranslator(sink, d.Model, usage).
-					WithRoutingMarker(targetMarker).
-					WithEstimatedInputTokens(feats.Tokens).
-					WithRequestHadTools(feats.HasTools).
-					WithEscapeNormalize(s.escapeNormalize).
-					WithToolValidator(toolValidator)
-				if err := anthropicTr.Prelude(env.Stream()); err != nil {
-					log.Error("Anthropic SSE prelude failed (Gemini upstream)", "err", err)
-				}
-				if preludeBuf != nil {
-					preludeBuf.Seal()
-				}
-				geminiTr := translate.NewGeminiToOpenAISSETranslator(anthropicTr, d.Model, nil)
-				rawErr := p.Proxy(actx, d, pr, geminiTr, r)
-				finalize := func(err error) error {
-					// Post-commit: see the OpenAI-compat case above.
-					if err != nil && env.Stream() && preludeBuf.Committed() {
-						err = emitAnthropicSSEErrorEvent(sink, err)
-					}
-					err = finalizeAfterProxy(err, geminiTr.Finalize)
-					finErr := finalizeAfterProxy(err, anthropicTr.Finalize)
-					respSummary = anthropicTr.Summary()
-					return finErr
-				}
-				return rawErr, finalize
-			}
-			return func(actx context.Context, d router.Decision, p providers.Client) error {
-				rawErr, finalize := dispatchGemini(actx, d, p, prep)
-				// VALIDATED-mode schema-grammar 400: retry once with mode=AUTO while
-				// pre-commit. AUTO only drops the grammar constraint, so it can't make
-				// things worse — a non-schema 400 just 400s again normally. The first
-				// attempt's translators are abandoned (Discard).
-				if rawErr != nil && geminiUsedValidated && !committed(preludeBuf) && upstreamStatus(rawErr) == http.StatusBadRequest {
-					autoOpts := targetOpts
-					autoOpts.DowngradeGeminiValidatedToAuto = true
-					autoPrep, autoErr := env.PrepareGemini(r.Header, autoOpts)
-					if autoErr != nil {
-						log.Error("Failed to re-translate Gemini request with tool mode AUTO", "err", autoErr)
-						return finalize(rawErr)
-					}
-					log.Warn("Retrying Gemini request with functionCallingConfig.mode=AUTO after VALIDATED-mode 400",
-						"model", d.Model,
-						"request_id", requestID)
-					if preludeBuf != nil {
-						preludeBuf.Discard()
-					}
-					reqStats = autoPrep.Stats
-					logUpstreamBody(log, routeRes.SessionKey, d, feats, autoPrep.Body)
-					rawErr, finalize = dispatchGemini(actx, d, p, autoPrep)
-				}
-				return finalize(rawErr)
 			}, nil
 		default:
 			return nil, fmt.Errorf("%w: %s (no translation path defined for inbound Anthropic Messages)", ErrProviderNotConfigured, target.Provider)
@@ -3870,7 +3739,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		)
 	}
 
-	log.Info("ProxyMessages complete", append([]any{"requested_model", feats.Model, "baseline_model", s.baselineFor(feats.Model), "decision_model", decision.Model, "decision_provider", decision.Provider, "primary_provider", primaryProvider, "fallback_attempts", winnerIdx, "failover_used", finalProvider != primaryProvider || subscriptionFailoverUsed || siblingFailoverUsed, "subscription_failover", subscriptionFailoverUsed, "decision_reason", decision.Reason, "requested_tier", routeRes.RequestedTier.String(), "decision_tier", catalog.TierFor(decision.Model).String(), "embedded_tokens", len(promptText) / 4, "total_input_tokens", feats.Tokens, "has_tools", feats.HasTools, "message_count", feats.MessageCount, "last_kind", feats.LastKind, "last_preview", feats.LastPreview, "embed_input", embedInput, "cross_format", crossFormat, "sticky_hit", stickyHit, "route_ms", routeMs, "proxy_ms", proxyMs, "proxy_err", proxyErr, "upstream_err_body", providers.UpstreamErrorBodyMessage(proxyErr), "upstream_status", upstreamStatus(proxyErr), "upstream_finish_reason", respSummary.UpstreamFinishReason, "resp_stop_reason", respSummary.StopReason, "stop_reason_promoted", respSummary.StopReasonPromoted, "tool_use_blocks", respSummary.ToolUseBlocks, "invalid_tool_args_blocks", respSummary.InvalidToolArgsBlocks, "text_only_turn_nudged", respSummary.TextOnlyTurnNudged, "stop_reason_demoted", respSummary.StopReasonDemoted, "suppressed_tool_calls", respSummary.SuppressedToolCalls, "tool_call_invalid_blocks", len(respSummary.ToolCallIssues), "cc_only_tools_stripped", reqStats.CCOnlyToolsStripped, "gemini_reminder_injected", reqStats.GeminiReminderInjected, "gemini_validated_tool_mode", reqStats.GeminiValidatedToolMode, "resp_output_tokens", respSummary.OutputTokens, "prelude_committed", preludeBuf.Committed(), "routing_marker", marker, "prior_served_model", routeRes.PriorServedModel, "hard_pinned", routeRes.HardPinned}, plannerLogFields(routeRes)...)...)
+	log.Info("ProxyMessages complete", append([]any{"requested_model", feats.Model, "baseline_model", s.baselineFor(feats.Model), "decision_model", decision.Model, "decision_provider", decision.Provider, "primary_provider", primaryProvider, "fallback_attempts", winnerIdx, "failover_used", finalProvider != primaryProvider || subscriptionFailoverUsed || siblingFailoverUsed, "subscription_failover", subscriptionFailoverUsed, "decision_reason", decision.Reason, "requested_tier", routeRes.RequestedTier.String(), "decision_tier", catalog.TierFor(decision.Model).String(), "embedded_tokens", len(promptText) / 4, "total_input_tokens", feats.Tokens, "has_tools", feats.HasTools, "message_count", feats.MessageCount, "last_kind", feats.LastKind, "last_preview", feats.LastPreview, "embed_input", embedInput, "cross_format", crossFormat, "sticky_hit", stickyHit, "route_ms", routeMs, "proxy_ms", proxyMs, "proxy_err", proxyErr, "upstream_err_body", providers.UpstreamErrorBodyMessage(proxyErr), "upstream_status", upstreamStatus(proxyErr), "upstream_finish_reason", respSummary.UpstreamFinishReason, "resp_stop_reason", respSummary.StopReason, "stop_reason_promoted", respSummary.StopReasonPromoted, "tool_use_blocks", respSummary.ToolUseBlocks, "invalid_tool_args_blocks", respSummary.InvalidToolArgsBlocks, "text_only_turn_nudged", respSummary.TextOnlyTurnNudged, "stop_reason_demoted", respSummary.StopReasonDemoted, "suppressed_tool_calls", respSummary.SuppressedToolCalls, "tool_call_invalid_blocks", len(respSummary.ToolCallIssues), "cc_only_tools_stripped", reqStats.CCOnlyToolsStripped, "resp_output_tokens", respSummary.OutputTokens, "prelude_committed", preludeBuf.Committed(), "routing_marker", marker, "prior_served_model", routeRes.PriorServedModel, "hard_pinned", routeRes.HardPinned}, plannerLogFields(routeRes)...)...)
 	policyRespBody, policyRespTrunc := capturedResponse(policyOutcomeCap)
 	var policyResp *policyOutcomeResponse
 	if policyOutcomeCap != nil {
@@ -5179,13 +5048,6 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 			"excluded_models", strings.Join(ctxOverflowedOAI, ","),
 		)
 	}
-	excludedOAI, geminiUnsignedOAI := excludeGemini3xOnUnsignedHistory(env, excludedOAI, s.availableModels)
-	if len(geminiUnsignedOAI) > 0 {
-		log.Info("gemini pre-filter: excluded gemini-3.x for unsigned tool-call history",
-			"excluded_models", strings.Join(geminiUnsignedOAI, ","),
-		)
-	}
-
 	routeRequest := router.Request{
 		RequestedModel:               feats.Model,
 		ForceModel:                   forceModel,
@@ -5507,58 +5369,6 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 				err = emitOpenAISSEErrorEvent(sink, err)
 			}
 			return err
-		}
-	case providers.FamilyGemini:
-		crossFormat = true
-		prep, emitErr := env.PrepareGemini(r.Header, opts)
-		if emitErr != nil {
-			log.Error("Failed to translate OpenAI request to Gemini format", "err", emitErr)
-			return fmt.Errorf("translate openai request to gemini: %w", emitErr)
-		}
-		// See ProxyMessages' Gemini case: a VALIDATED-mode request can 400 with a
-		// generic INVALID_ARGUMENT when Gemini can't compile a tool schema into
-		// its decode-time grammar. Retry once with mode=AUTO when pre-commit.
-		geminiUsedValidated := prep.Stats.GeminiValidatedToolMode
-		dispatchGemini := func(actx context.Context, d router.Decision, p providers.Client, pr providers.PreparedRequest) (error, func(error) error) {
-			var usage otel.UsageSink
-			if s.usageRequired() {
-				extractor = otel.NewUsageExtractor(nil, d.Provider)
-				usage = extractor
-			}
-			attemptSink := makeMarkerSink()
-			translator := translate.NewGeminiToOpenAISSETranslator(attemptSink, d.Model, usage)
-			if preludeBuf != nil {
-				preludeBuf.Seal()
-			}
-			rawErr := p.Proxy(actx, d, pr, translator, r)
-			finalize := func(err error) error {
-				// Post-commit streaming error: see same-format OpenAI case above.
-				if err != nil && env.Stream() && preludeBuf.Committed() {
-					err = emitOpenAISSEErrorEvent(sink, err)
-				}
-				return finalizeAfterProxy(err, translator.Finalize)
-			}
-			return rawErr, finalize
-		}
-		attempt = func(actx context.Context, d router.Decision, p providers.Client) error {
-			rawErr, finalize := dispatchGemini(actx, d, p, prep)
-			if rawErr != nil && geminiUsedValidated && !committed(preludeBuf) && upstreamStatus(rawErr) == http.StatusBadRequest {
-				autoOpts := opts
-				autoOpts.DowngradeGeminiValidatedToAuto = true
-				autoPrep, autoErr := env.PrepareGemini(r.Header, autoOpts)
-				if autoErr != nil {
-					log.Error("Failed to re-translate Gemini request with tool mode AUTO", "err", autoErr)
-					return finalize(rawErr)
-				}
-				log.Warn("Retrying Gemini request with functionCallingConfig.mode=AUTO after VALIDATED-mode 400",
-					"model", d.Model,
-					"request_id", requestID)
-				if preludeBuf != nil {
-					preludeBuf.Discard()
-				}
-				rawErr, finalize = dispatchGemini(actx, d, p, autoPrep)
-			}
-			return finalize(rawErr)
 		}
 	case providers.FamilyAnthropic:
 		crossFormat = true

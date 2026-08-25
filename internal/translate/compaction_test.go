@@ -145,20 +145,3 @@ func TestRewriteForCompaction_OpenAI_PreservesSystem(t *testing.T) {
 	assert.Contains(t, got, "SUM")
 }
 
-func TestRewriteForCompaction_Gemini_KeepsSummaryModelTurn(t *testing.T) {
-	body := `{"contents":[` +
-		`{"role":"user","parts":[{"text":"u1 old"}]},` +
-		`{"role":"model","parts":[{"text":"m1"}]},` +
-		`{"role":"user","parts":[{"text":"u2 latest"}]}` +
-		`]}`
-	e, err := ParseGemini([]byte(body))
-	require.NoError(t, err)
-
-	e.RewriteForCompaction("GSUM", 1)
-	contents := gjson.GetBytes(e.body, "contents").Array()
-	require.GreaterOrEqual(t, len(contents), 2)
-	assert.Equal(t, "model", contents[0].Get("role").String())
-	assert.Contains(t, contents[0].Get("parts").Array()[0].Get("text").String(), "GSUM")
-	assert.Equal(t, "user", contents[1].Get("role").String())
-	assert.Contains(t, string(e.body), "u2 latest")
-}

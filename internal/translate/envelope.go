@@ -25,7 +25,6 @@ type Format int
 const (
 	FormatOpenAI Format = iota
 	FormatAnthropic
-	FormatGemini
 )
 
 // EmitOptions parameterizes output-body construction.
@@ -66,12 +65,6 @@ type EmitOptions struct {
 	// tools are always stripped. Set from ROUTER_CC_ORCH_TOOLS_CROSSVENDOR;
 	// zero value false preserves historical strip-all behavior.
 	KeepCrossVendorOrchestrationTools bool
-	// DowngradeGeminiValidatedToAuto emits functionCallingConfig.mode=AUTO
-	// instead of VALIDATED for Gemini 3.x. VALIDATED compiles tool schemas into
-	// a decode-time grammar and 400s INVALID_ARGUMENT if one won't compile; the
-	// proxy sets this on a one-shot retry after such a 400 since AUTO skips
-	// compilation. No-op when VALIDATED wouldn't have been used.
-	DowngradeGeminiValidatedToAuto bool
 }
 
 // RequestEnvelope wraps a parsed request body regardless of wire format.
@@ -97,14 +90,6 @@ func ParseAnthropic(body []byte) (*RequestEnvelope, error) {
 	return &RequestEnvelope{body: body, format: FormatAnthropic}, nil
 }
 
-// ParseGemini validates body as a JSON object and wraps it in a RequestEnvelope
-// sourced from Gemini's native generateContent shape.
-func ParseGemini(body []byte) (*RequestEnvelope, error) {
-	if err := validateJSONObject(body); err != nil {
-		return nil, err
-	}
-	return &RequestEnvelope{body: body, format: FormatGemini}, nil
-}
 
 // validateJSONObject rejects arrays, scalars, and null.
 func validateJSONObject(body []byte) error {
@@ -120,7 +105,6 @@ func validateJSONObject(body []byte) error {
 func (e *RequestEnvelope) SourceFormat() Format { return e.format }
 
 // Stream reports whether the request has "stream": true. Rejects numeric coercion.
-// For Gemini ingress, the handler injects a synthetic "stream": true.
 func (e *RequestEnvelope) Stream() bool {
 	r := gjson.GetBytes(e.body, "stream")
 	if r.Type == gjson.Number {
@@ -156,13 +140,13 @@ const clientSessionIDMaxLen = 64
 // ClientSessionID returns the calling client's own session identifier for log
 // correlation — unlike the internal session_key (sha256 of apiKeyID+user_id),
 // this is the value visible to the client itself (e.g. via `/status`).
-// Extracted from metadata.user_id (Anthropic/Gemini) or user (OpenAI); a
+// Extracted from metadata.user_id (Anthropic) or user (OpenAI); a
 // UUID-shaped marker is pulled out bare, otherwise the raw value is truncated
 // to clientSessionIDMaxLen. Returns "" when nothing usable is set.
 func (e *RequestEnvelope) ClientSessionID() string {
 	var raw string
 	switch e.format {
-	case FormatAnthropic, FormatGemini:
+	case FormatAnthropic:
 		raw = gjson.GetBytes(e.body, "metadata.user_id").String()
 	case FormatOpenAI:
 		raw = gjson.GetBytes(e.body, "user").String()
@@ -215,8 +199,6 @@ func (e *RequestEnvelope) SystemText() string {
 		return systemTextGJSON(gjson.GetBytes(e.body, "system"))
 	case FormatOpenAI:
 		return openAISystemText(e.body)
-	case FormatGemini:
-		return geminiSystemText(e.body)
 	default:
 		return ""
 	}
@@ -241,8 +223,6 @@ func (e *RequestEnvelope) LastUserMessage() LastUserMessageInfo {
 		return anthropicLastUserMessage(e.body)
 	case FormatOpenAI:
 		return openAILastUserMessage(e.body)
-	case FormatGemini:
-		return geminiLastUserMessage(e.body)
 	default:
 		return LastUserMessageInfo{}
 	}
@@ -251,9 +231,6 @@ func (e *RequestEnvelope) LastUserMessage() LastUserMessageInfo {
 // FirstUserMessageText returns the text of the first user-authored message.
 // Returns "" if there is no first user message.
 func (e *RequestEnvelope) FirstUserMessageText() string {
-	if e.format == FormatGemini {
-		return geminiFirstUserMessageText(e.body)
-	}
 	first := gjson.GetBytes(e.body, "messages.0")
 	if !first.Exists() {
 		return ""
@@ -304,8 +281,6 @@ func (e *RequestEnvelope) HasImages() bool {
 		return anthropicHasImages(e.body)
 	case FormatOpenAI:
 		return openAIHasImages(e.body)
-	case FormatGemini:
-		return geminiHasImages(e.body)
 	default:
 		return false
 	}
@@ -850,86 +825,6 @@ func stripPatternFromMessages(body []byte, pattern *regexp.Regexp) ([]byte, erro
 	return sjson.SetRawBytes(body, "messages", []byte(newMessagesArray))
 }
 
-// StripFeedbackFooterFromGeminiContents removes the one-click thumbs footer from
-// every text part in contents[*].parts[*]. The Gemini footer is emitted as its
-// own model text part on egress (see GeminiRoutingFooterWriter), so clients echo
-// it back as a standalone part on the next turn; stripping it on ingress keeps
-// it out of upstream context. Parts whose text becomes empty are dropped.
-func StripFeedbackFooterFromGeminiContents(body []byte) ([]byte, error) {
-	contents := gjson.GetBytes(body, "contents")
-	if !contents.Exists() || !contents.IsArray() {
-		return body, nil
-	}
-
-	anyChanged := false
-	var contentRaws []string
-	var walkErr error
-
-	contents.ForEach(func(_, content gjson.Result) bool {
-		parts := content.Get("parts")
-		if !parts.Exists() || !parts.IsArray() {
-			contentRaws = append(contentRaws, content.Raw)
-			return true
-		}
-
-		var newParts []string
-		contentChanged := false
-		parts.ForEach(func(_, part gjson.Result) bool {
-			textNode := part.Get("text")
-			if !textNode.Exists() {
-				newParts = append(newParts, part.Raw)
-				return true
-			}
-			text := textNode.String()
-			if !feedbackFooterPattern.MatchString(text) {
-				newParts = append(newParts, part.Raw)
-				return true
-			}
-			stripped := feedbackFooterPattern.ReplaceAllString(text, "")
-			contentChanged = true
-			if strings.TrimSpace(stripped) == "" {
-				return true
-			}
-			encoded, err := encodeJSONStringNoHTMLEscape(stripped)
-			if err != nil {
-				walkErr = fmt.Errorf("marshal stripped gemini text: %w", err)
-				return false
-			}
-			newPart, err := sjson.SetRawBytes([]byte(part.Raw), "text", encoded)
-			if err != nil {
-				walkErr = fmt.Errorf("replace text in gemini part: %w", err)
-				return false
-			}
-			newParts = append(newParts, string(newPart))
-			return true
-		})
-		if walkErr != nil {
-			return false
-		}
-		if !contentChanged {
-			contentRaws = append(contentRaws, content.Raw)
-			return true
-		}
-
-		anyChanged = true
-		newPartsArray := "[" + strings.Join(newParts, ",") + "]"
-		newContent, err := sjson.SetRawBytes([]byte(content.Raw), "parts", []byte(newPartsArray))
-		if err != nil {
-			walkErr = fmt.Errorf("replace parts in gemini content: %w", err)
-			return false
-		}
-		contentRaws = append(contentRaws, string(newContent))
-		return true
-	})
-
-	if walkErr != nil {
-		return nil, walkErr
-	}
-	if !anyChanged {
-		return body, nil
-	}
-	return sjson.SetRawBytes(body, "contents", []byte("["+strings.Join(contentRaws, ",")+"]"))
-}
 
 func resolveOpenAIOverrides(body []byte, opts EmitOptions) EmitOverrides {
 	ov := EmitOverrides{
@@ -1239,4 +1134,17 @@ func defaultOutputTokens(model string) int64 {
 		return int64(tokenCap)
 	}
 	return defaultMaxOutputTokenCap
+}
+
+
+// clampToModelOutputCap caps v to the model's max output token limit.
+func clampToModelOutputCap(v int64, model string) int64 {
+	outputCap := modelMaxOutputTokens[model]
+	if outputCap == 0 {
+		outputCap = defaultMaxOutputTokenCap
+	}
+	if v > int64(outputCap) {
+		return int64(outputCap)
+	}
+	return v
 }

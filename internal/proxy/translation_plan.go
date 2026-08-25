@@ -102,8 +102,6 @@ func translationEndpointFor(env *translate.RequestEnvelope) router.TranslationEn
 		return router.EndpointAnthropicMessages
 	case translate.FormatOpenAI:
 		return router.EndpointOpenAIChat
-	case translate.FormatGemini:
-		return router.EndpointGeminiGenerate
 	default:
 		return ""
 	}
@@ -125,7 +123,7 @@ func (s *Service) planTranslation(req router.Request) TranslationPlan {
 	}
 
 	plan.Enforced = s.translationCompatibilityMode == TranslationCompatibilityEnforce ||
-		((requirements.NativeOnly || requirements.SourceFormat == router.WireFormatGemini) && s.translationCompatibilityMode != TranslationCompatibilityOff)
+		(requirements.NativeOnly && s.translationCompatibilityMode != TranslationCompatibilityOff)
 	constraints, valid := translationConstraints(requirements)
 	if !valid {
 		plan.Intrinsic = plan.Enforced
@@ -181,12 +179,6 @@ func translationConstraints(req router.TranslationRequirements) ([]translationCo
 	if req.NativeOnly && !addSourceNative("native_wire_family_required") {
 		return nil, false
 	}
-	// Native Gemini emission is the only implemented Gemini path; do not let a
-	// shadow rollout turn this into an accidental cross-format request.
-	if req.SourceFormat == router.WireFormatGemini && !req.NativeOnly && !addSourceNative("native_wire_family_required") {
-		return nil, false
-	}
-
 	for _, semantic := range []struct {
 		present bool
 		code    string
@@ -216,8 +208,6 @@ func sourceNativeConstraint(req router.TranslationRequirements, code string) (tr
 			constraint.ExactProviders = singletonProviderSet(providers.ProviderOpenAI)
 		}
 		return constraint, true
-	case router.WireFormatGemini:
-		return translationConstraint{Code: code, TargetFamily: providers.FamilyGemini, ExactProviders: singletonProviderSet(providers.ProviderGoogle)}, true
 	default:
 		return translationConstraint{}, false
 	}
@@ -350,8 +340,6 @@ func familyName(family providers.TranslationFamily) string {
 		return "anthropic"
 	case providers.FamilyOpenAICompat:
 		return "openai"
-	case providers.FamilyGemini:
-		return "gemini"
 	default:
 		return ""
 	}
