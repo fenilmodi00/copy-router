@@ -412,8 +412,8 @@ func main() {
 	policyDeadlineFallback := config.GetOr("ROUTER_POLICY_DEADLINE_FALLBACK", "false") == "true"
 	// policyDeadlineDefaultModel is the tier-3 static fallback on a deadline miss with no pin; empty = fail-closed.
 	policyDeadlineDefaultModel := config.GetOr("ROUTER_POLICY_DEADLINE_DEFAULT_MODEL", "")
-	handoverProviderName := config.GetOr("ROUTER_HANDOVER_PROVIDER", providers.ProviderAnthropic)
-	handoverModel := config.GetOr("ROUTER_HANDOVER_MODEL", proxy.DefaultHandoverModel)
+	handoverProviderName := config.GetOr("ROUTER_HANDOVER_PROVIDER", providers.ProviderAiand)
+	handoverModel := config.GetOr("ROUTER_HANDOVER_MODEL", "deepseek/deepseek-v4-flash")
 	handoverTimeout := parseEnvDurationMs("ROUTER_HANDOVER_TIMEOUT_MS", proxy.DefaultHandoverTimeout)
 	// Kept as the interface type: a typed-nil *ProviderSummarizer would defeat
 	// the orchestrator's `!= nil` check.

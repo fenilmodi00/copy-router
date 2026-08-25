@@ -85,9 +85,11 @@ func resolveModelForWindow(id string) (Model, bool) {
 }
 
 // ResolveBinding returns the first ProviderBinding whose Provider is in
-// `available`. Used at boot to pick each routable model's upstream.
+// `available`. Accepts catalog IDs or binding UpstreamIDs (via ByIDOrUpstream)
+// so v0.76 registry fields resolve without renaming rows. Used at boot to pick
+// each routable model's upstream.
 func ResolveBinding(id string, available map[string]struct{}) (ProviderBinding, bool) {
-	m, ok := ByID(id)
+	m, ok := ByIDOrUpstream(id)
 	if !ok {
 		return ProviderBinding{}, false
 	}
@@ -425,11 +427,12 @@ func AllPrimaryPricing() map[string]Pricing {
 }
 
 // ValidateDeployed returns an error naming any deployed model missing from
-// the catalog or lacking a tier.
+// the catalog or lacking a tier. Accepts catalog IDs or binding UpstreamIDs
+// (via ByIDOrUpstream) so registry upstream IDs validate without renaming.
 func ValidateDeployed(deployed []string) error {
 	var missing []string
 	for _, id := range deployed {
-		m, ok := ByID(id)
+		m, ok := ByIDOrUpstream(id)
 		if !ok {
 			missing = append(missing, id+" (not in catalog)")
 			continue

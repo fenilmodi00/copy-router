@@ -22,11 +22,11 @@ Single source of truth for per-model data: capability tier, ordered list of prov
 
 That's it. Nothing else needs editing — the planner, scorer, OTel emitter, install scripts, and provider modelIDMaps all flow from this file.
 
-## Multi-provider semantics
+## aiand-only bindings
 
-Today most models carry a single binding. The catalog's data shape is multi-binding so SOC 2 direct-provider rows can append an OpenRouter fallback without touching call sites: managed-prod deploys (no `OPENROUTER_API_KEY`) get the primary binding; self-hosters with only OpenRouter get the trailing one.
+This deploy's catalog keeps only models with an `ProviderAiand` binding. `ResolveBinding` / `ValidateDeployed` accept catalog IDs or binding `UpstreamID`s so v0.76 registry fields (`deepseek-ai/...`, `zai-org/...`) resolve without renaming rows. Provider adapter packages for other vendors may still exist until later strip PRs; they must not appear in `Models`.
 
-The cluster scorer resolves each routable model's binding at boot via `ResolveBinding(id, availableProviders)`. The chosen binding's `Provider` becomes the `router.Decision.Provider`; the planner then uses `catalog.PriceFor(provider, id)` so STAY-vs-SWITCH EV math is correct when a model is served by different providers at different prices.
+The cluster scorer resolves each routable model's binding at boot via `ResolveBinding(id, availableProviders)`. The chosen binding's `Provider` becomes the `router.Decision.Provider`; the planner then uses `catalog.PriceFor(provider, id)` so STAY-vs-SWITCH EV math is correct.
 
 ## Invariants
 
