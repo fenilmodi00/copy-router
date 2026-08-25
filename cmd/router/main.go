@@ -34,7 +34,6 @@ import (
 	openaiCompatProvider "workweave/router/internal/providers/openaicompat"
 	"workweave/router/internal/proxy"
 	"workweave/router/internal/proxy/usage"
-	routerpubsub "workweave/router/internal/pubsub"
 	"workweave/router/internal/router"
 	"workweave/router/internal/router/bandit"
 	"workweave/router/internal/router/banditexplore"
@@ -52,7 +51,6 @@ import (
 
 	_ "time/tzdata"
 
-	gcppubsub "cloud.google.com/go/pubsub/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -214,70 +212,11 @@ func main() {
 
 	cache := auth.NewLRUAPIKeyCache(10000, 50000, 5*time.Minute, 60*time.Second)
 	userCache := auth.NewLRUUserCache(50000, 10*time.Minute)
-	// 5-min TTL matches the API-key cache so both halves share one staleness bound under a Pub/Sub outage.
+	// 5-min TTL matches the API-key cache so both halves share one staleness bound.
 	userClusterCache := auth.NewLRUUserClusterListCache(50000, 5*time.Minute)
 
-	// Single-replica PaaS deploys (e.g. build.io demo) often have no GCP Pub/Sub.
-	// Skip when PUBSUB_DISABLED=true or when PUBSUB_PROJECT_ID is unset; cache TTL
-	// is the safety net for a lone replica.
 	notifier := auth.InstallationChangeNotifier(auth.NoOpInstallationChangeNotifier{})
-	pubsubDisabled := config.GetOr("PUBSUB_DISABLED", "false") == "true" ||
-		config.GetOr("PUBSUB_PROJECT_ID", "") == ""
-	if !pubsubDisabled {
-		pubsubProjectID := config.MustGet("PUBSUB_PROJECT_ID")
-		pubsubTopicID := config.MustGet("PUBSUB_TOPIC_ROUTER_INVALIDATION")
-		// Treated as a prefix: each replica derives its own subscription
-		// "<prefix>-<uuid>" so every replica receives every invalidation. A shared
-		// subscription would load-balance, defeating cross-fleet cache broadcast.
-		pubsubSubscriptionPrefix := config.MustGet("PUBSUB_SUBSCRIPTION_ROUTER_INVALIDATION")
-		pubsubClient, err := gcppubsub.NewClient(context.Background(), pubsubProjectID)
-		if err != nil {
-			logger.Error("Failed to create Pub/Sub client", "err", err)
-			panic(err)
-		}
-		defer pubsubClient.Close()
-
-		publisher := pubsubClient.Publisher(pubsubTopicID)
-		psNotifier := routerpubsub.NewInvalidationNotifier(publisher)
-		defer psNotifier.Stop()
-		notifier = psNotifier
-
-		// When configured, the billing debit hook publishes a signal once an org's
-		// balance crosses its recharge threshold; the Weave control plane charges
-		// the saved card. Unset topic just leaves autopay disabled.
-		if billingSvc != nil {
-			if autopayTopicID := config.GetOr("PUBSUB_TOPIC_ROUTER_AUTOPAY", ""); autopayTopicID != "" {
-				autopayNotifier := routerpubsub.NewAutopayNotifier(pubsubClient.Publisher(autopayTopicID))
-				defer autopayNotifier.Stop()
-				billingSvc = billingSvc.WithAutopayNotifier(autopayNotifier)
-				logger.Info("Autopay recharge signalling enabled", "topic", autopayTopicID)
-			}
-		}
-
-		// Fans out Pub/Sub invalidations to this replica's cache; the 5-min TTL
-		// is the safety net if the listener falls behind.
-		subCtx, subCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		subscriptionName, deleteSubscription, err := routerpubsub.CreateReplicaSubscription(
-			subCtx, pubsubClient, pubsubProjectID, pubsubTopicID, pubsubSubscriptionPrefix,
-		)
-		subCancel()
-		if err != nil {
-			logger.Error("Failed to create per-replica invalidation subscription", "err", err)
-			panic(err)
-		}
-		defer deleteSubscription()
-		logger.Info("Created per-replica invalidation subscription", "subscription", subscriptionName)
-
-		listener := routerpubsub.NewInvalidationListener(pubsubClient.Subscriber(subscriptionName), cache, userClusterCache)
-		listenerCtx, listenerCancel := context.WithCancel(context.Background())
-		defer func() {
-			listenerCancel()
-			listener.Wait()
-		}()
-		safeGo(logger, "invalidation-listener", func() { listener.Run(listenerCtx) })
-	} else {
-		logger.Warn("Pub/Sub invalidation disabled (PUBSUB_DISABLED=true or PUBSUB_PROJECT_ID unset); single-replica OK")
-	}
+	logger.Warn("Installation cache invalidation is NoOp; single-replica OK (5-min TTL)")
 
 	// Deployment-wide escape hatch: suppresses every per-organization flag
 	// override so an incident rollback via env var always wins. Off by default,
