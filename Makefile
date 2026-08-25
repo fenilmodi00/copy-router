@@ -6,8 +6,13 @@
 #
 # Database:
 #   Targets that touch the database read DATABASE_URL from .env.development
-#   (and .env.local if present). Start Postgres via `make db` or point
-#   DATABASE_URL at any Postgres you already have running.
+#   (and .env.local if present).
+#   Host / Build.io parity: point DATABASE_URL at Supabase session pooler
+#   (:5432), set PUBSUB_DISABLED=true, then `make setup` / `make dev`.
+#   Do not run `make db` or `make full-setup` on that path — see
+#   docs/HOST_WSL_SUPABASE.md.
+#   Local disposable Postgres: `make db` (Compose on 5433) or any other
+#   Postgres URL you already have running.
 
 .PHONY: generate generate-statusline build test test-verbose test-statusline test-install smoke initdb migrate-up migrate-down migrate-create seed setup full-setup db dev check fmt vet precommit install-hooks help install-cc uninstall-cc up up-hmm down down-hmm logs
 
