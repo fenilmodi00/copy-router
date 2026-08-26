@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -118,7 +117,7 @@ func buildPolicyDeadlineFallbackService(
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithPolicyDeadlineFallback(fallbackEnabled).
@@ -160,170 +159,4 @@ func runPolicyDeadlineFallbackTurnLoop(
 		ExcludedModels:       excluded,
 	}
 	return svc.runTurnLoop(ctx, env, features, "api-key", uuid.New(), "", http.Header{}, req)
-}
-
-// TestTurnLoop_DeadlineFallbackToPin covers T5: with a pin present and the
-// fallback enabled, a deadline error degrades to the pin instead of a 503.
-func TestTurnLoop_DeadlineFallbackToPin(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	strategy := router.Strategy("policy-deadline-fallback-pin-test")
-	const pinnedModel = "deepseek-ai/deepseek-v4-pro"
-	const pinnedProvider = providers.ProviderAnthropic
-
-	store := newStubPinStore()
-	store.getFound = true
-	store.getPin = sessionpin.Pin{
-		Provider:        pinnedProvider,
-		Model:           pinnedModel,
-		Reason:          "hmm_policy(classifier 'mid' (p=0.55))",
-		PolicyGroup:     "mid",
-		PinnedUntil:     time.Now().Add(time.Hour),
-		LastTurnEndedAt: time.Now().Add(-time.Minute),
-		LastServedModel: pinnedModel,
-	}
-
-	svc := buildPolicyDeadlineFallbackService(t, strategy, policyDeadlineTestErr, store, true, "")
-
-	result, err := runPolicyDeadlineFallbackTurnLoop(t, svc, strategy)
-
-	require.NoError(t, err, "a policy deadline miss with a pin present must serve, not error")
-	assert.Equal(t, pinnedModel, result.Decision.Model)
-	assert.Equal(t, pinnedProvider, result.Decision.Provider)
-	assert.Equal(t, policyDeadlineFallbackReason, result.Decision.Reason)
-	assert.True(t, result.StickyHit)
-	assert.True(t, result.PolicyFallback)
-	assert.Equal(t, policyDeadlineFallbackReason, result.PinTier)
-
-	// The pin must be refreshed, not silently left to expire.
-	store.mu.Lock()
-	upserts := append([]sessionpin.Pin(nil), store.upserts...)
-	store.mu.Unlock()
-	require.NotEmpty(t, upserts)
-	assert.Equal(t, pinnedModel, upserts[len(upserts)-1].Model)
-	assert.Equal(t, store.getPin.Reason, upserts[len(upserts)-1].Reason,
-		"the persisted pin must keep its hmm_policy reason so later turns still see an HMM pin")
-}
-
-// TestTurnLoop_DeadlineFallbackDefaultExcludedFailsClosed proves the tier-3
-// default honours this turn's exclusions instead of serving (and pinning) a
-// model the request forbids.
-func TestTurnLoop_DeadlineFallbackDefaultExcludedFailsClosed(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	strategy := router.Strategy("policy-deadline-fallback-default-excluded-test")
-	const defaultModel = "deepseek-ai/deepseek-v4-flash"
-
-	store := newStubPinStore()
-	store.getFound = false
-
-	svc := buildPolicyDeadlineFallbackService(t, strategy, policyDeadlineTestErr, store, true, defaultModel)
-
-	_, err := runPolicyDeadlineFallbackTurnLoop(t, svc, strategy, defaultModel)
-
-	require.Error(t, err, "an excluded tier-3 default must fail closed, not be served")
-	assert.ErrorIs(t, err, hmm.ErrHMMUnavailable)
-
-	store.mu.Lock()
-	upserts := append([]sessionpin.Pin(nil), store.upserts...)
-	store.mu.Unlock()
-	assert.Empty(t, upserts, "an excluded model must never be persisted as a pin")
-}
-
-// TestTurnLoop_DeadlineFallbackToTierThreeDefault covers the pinless branch:
-// no session pin yet, but a tier-3 static default model is configured.
-func TestTurnLoop_DeadlineFallbackToTierThreeDefault(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	strategy := router.Strategy("policy-deadline-fallback-default-test")
-	const defaultModel = "deepseek-ai/deepseek-v4-flash"
-
-	store := newStubPinStore()
-	store.getFound = false // no pin: session start
-
-	svc := buildPolicyDeadlineFallbackService(t, strategy, policyDeadlineTestErr, store, true, defaultModel)
-
-	result, err := runPolicyDeadlineFallbackTurnLoop(t, svc, strategy)
-
-	require.NoError(t, err, "a policy deadline miss with a configured tier-3 default must serve, not error")
-	assert.Equal(t, defaultModel, result.Decision.Model)
-	assert.Equal(t, providers.ProviderAnthropic, result.Decision.Provider)
-	assert.Equal(t, policyDeadlineDefaultReason, result.Decision.Reason)
-	assert.False(t, result.StickyHit, "the tier-3 default is a fresh pin, not a sticky reuse")
-	assert.True(t, result.PolicyFallback)
-	assert.Equal(t, policyDeadlineFallbackReason, result.PinTier)
-
-	store.mu.Lock()
-	upserts := append([]sessionpin.Pin(nil), store.upserts...)
-	store.mu.Unlock()
-	require.NotEmpty(t, upserts, "the tier-3 default decision must be written as a new pin")
-	assert.Equal(t, defaultModel, upserts[len(upserts)-1].Model)
-}
-
-// TestTurnLoop_DeadlineFallbackNoPinNoDefault covers the last rung: no pin,
-// no tier-3 default configured — must still fail closed with a 503-mapping error.
-func TestTurnLoop_DeadlineFallbackNoPinNoDefault(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	strategy := router.Strategy("policy-deadline-fallback-no-default-test")
-
-	store := newStubPinStore()
-	store.getFound = false
-
-	svc := buildPolicyDeadlineFallbackService(t, strategy, policyDeadlineTestErr, store, true, "")
-
-	_, err := runPolicyDeadlineFallbackTurnLoop(t, svc, strategy)
-
-	require.Error(t, err, "no pin and no tier-3 default must preserve the 503 (fail closed)")
-	assert.ErrorIs(t, err, hmm.ErrHMMUnavailable)
-}
-
-// TestTurnLoop_DeadlineFallbackKillSwitchOff proves ROUTER_POLICY_DEADLINE_FALLBACK=false
-// preserves the 503 even with a pin present.
-func TestTurnLoop_DeadlineFallbackKillSwitchOff(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	strategy := router.Strategy("policy-deadline-fallback-killswitch-test")
-	const pinnedModel = "deepseek-ai/deepseek-v4-pro"
-
-	store := newStubPinStore()
-	store.getFound = true
-	store.getPin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
-		Model:           pinnedModel,
-		Reason:          "hmm_policy(classifier 'mid' (p=0.55))",
-		PolicyGroup:     "mid",
-		PinnedUntil:     time.Now().Add(time.Hour),
-		LastTurnEndedAt: time.Now().Add(-time.Minute),
-		LastServedModel: pinnedModel,
-	}
-
-	svc := buildPolicyDeadlineFallbackService(t, strategy, policyDeadlineTestErr, store, false, "")
-
-	_, err := runPolicyDeadlineFallbackTurnLoop(t, svc, strategy)
-
-	require.Error(t, err, "kill switch off must preserve the 503 even with a pin present")
-	assert.ErrorIs(t, err, hmm.ErrHMMUnavailable)
-}
-
-// TestTurnLoop_DeadlineFallbackContractViolationStillFailsClosed: contract violations must never
-// degrade even with fallback enabled — serving one would write a wrong route ledger.
-func TestTurnLoop_DeadlineFallbackContractViolationStillFailsClosed(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	strategy := router.Strategy("policy-deadline-fallback-contract-violation-test")
-	const pinnedModel = "deepseek-ai/deepseek-v4-pro"
-
-	store := newStubPinStore()
-	store.getFound = true
-	store.getPin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
-		Model:           pinnedModel,
-		Reason:          "hmm_policy(classifier 'mid' (p=0.55))",
-		PolicyGroup:     "mid",
-		PinnedUntil:     time.Now().Add(time.Hour),
-		LastTurnEndedAt: time.Now().Add(-time.Minute),
-		LastServedModel: pinnedModel,
-	}
-
-	svc := buildPolicyDeadlineFallbackService(t, strategy, policyContractViolationTestErr, store, true, "deepseek-ai/deepseek-v4-flash")
-
-	_, err := runPolicyDeadlineFallbackTurnLoop(t, svc, strategy)
-
-	require.Error(t, err, "a contract violation must fail closed even with fallback enabled, a pin, and a tier-3 default")
-	assert.ErrorIs(t, err, hmm.ErrHMMUnavailable)
 }

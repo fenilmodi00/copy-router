@@ -294,7 +294,7 @@ func TestRunTurnLoop_PinTurnCountsCurrentTurnInclusively(t *testing.T) {
 		LastServedModel: "deepseek-ai/deepseek-v4-pro",
 	}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(fr.available).
 		WithPlannerEnabled(false)
 

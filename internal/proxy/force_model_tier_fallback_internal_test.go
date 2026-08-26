@@ -122,13 +122,6 @@ func (s *overwritingPinStore) Consume(context.Context, [sessionpin.SessionKeyLen
 }
 func (s *overwritingPinStore) SweepExpired(context.Context) error { return nil }
 
-// Regression: a force-pinned high-tier model evicted by the context-window
-// pre-filter used to collapse all the way to the low-tier default instead of
-// the next-best same-tier model.
-func TestRunTurnLoop_ForcedModelContextOverflow_StaysInTier(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-}
-
 func TestRunTurnLoop_ForcedModelOverridesHardPin(t *testing.T) {
 	store := &forcedPinStore{pin: sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
@@ -145,7 +138,7 @@ func TestRunTurnLoop_ForcedModelOverridesHardPin(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -191,7 +184,7 @@ func TestRunTurnLoop_ForcedModelServesDespiteDisabledProvider(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -233,7 +226,7 @@ func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -267,7 +260,7 @@ func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 // must return ok=false rather than hand the scorer an empty pool.
 func TestRestrictToTier_FallsBackWhenNoInTierCandidate(t *testing.T) {
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}})
 
 	excluded := map[string]struct{}{"deepseek-ai/deepseek-v4-pro": {}}
@@ -280,7 +273,7 @@ func TestRestrictToTier_FallsBackWhenNoInTierCandidate(t *testing.T) {
 // models stay eligible.
 func TestRestrictToTier_ExcludesOtherTiers(t *testing.T) {
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(map[string]struct{}{
 			"z-ai/glm-5.2":                  {}, // high
 			"deepseek-ai/deepseek-v4-flash": {}, // low

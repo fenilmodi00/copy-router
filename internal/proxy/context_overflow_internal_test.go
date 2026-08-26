@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"workweave/router/internal/providers"
 	"workweave/router/internal/translate"
 
 	"github.com/stretchr/testify/assert"
@@ -99,10 +98,4 @@ func TestShouldEnableExtendedContext(t *testing.T) {
 	assert.False(t, shouldEnableExtendedContext(extendedContextTriggerTokens-8_000, 8_000), "exactly at the trigger is not over it")
 	assert.True(t, shouldEnableExtendedContext(extendedContextTriggerTokens, 8_000), "estimate above the trigger turns the beta on")
 	assert.True(t, shouldEnableExtendedContext(180_000, 8_000), "near-200K request opts into 1M")
-}
-
-// Multi-binding Together/Fireworks windows no longer apply on aiand-only catalog.
-func TestExcludeContextOverflowModels_MultiBindingMinWindow(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog: models have a single aiand binding")
-	_ = providers.ProviderTogether
 }

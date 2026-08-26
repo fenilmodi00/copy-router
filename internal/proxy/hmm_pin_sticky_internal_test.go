@@ -26,13 +26,13 @@ const hmmPinStickyTestFallbackReason = "arm-selector unavailable for 'high': arm
 // TestStickPinOnArmSelectorUnavailable exercises the pure predicate against the full stick/no-stick matrix.
 func TestStickPinOnArmSelectorUnavailable(t *testing.T) {
 	const pinnedModel = "moonshotai/kimi-k3"                   // catalog.TierHigh
-	const sameTierFresh = "claude-opus-4-6"                    // catalog.TierHigh
+	const sameTierFresh = "z-ai/glm-5.2"                       // catalog.TierHigh
 	const differentTierFresh = "deepseek-ai/deepseek-v4-flash" // catalog.TierLow — different tier, but the legacy bandit draws within one cluster, not within one catalog tier, so tier is not what gates this case.
 	const pinnedGroup = "high"
 	const otherGroup = "low"
 
 	basePin := sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       pinnedModel,
 		Reason:      "hmm_policy(classifier 'high' (p=0.32))",
 		PolicyGroup: pinnedGroup,
@@ -88,7 +88,7 @@ func TestStickPinOnArmSelectorUnavailable(t *testing.T) {
 			name:  "no stick: pin predates group persistence",
 			fresh: fallbackDecision(sameTierFresh, pinnedGroup),
 			pin: sessionpin.Pin{
-				Provider: providers.ProviderAnthropic,
+				Provider: providers.ProviderAiand,
 				Model:    pinnedModel,
 				Reason:   "hmm_policy(classifier 'high' (p=0.32))",
 			},
@@ -120,7 +120,7 @@ func TestStickPinOnArmSelectorUnavailable(t *testing.T) {
 			name:  "no stick: pin reason is not HMM-written (stale cluster pin)",
 			fresh: fallbackDecision(sameTierFresh, pinnedGroup),
 			pin: sessionpin.Pin{
-				Provider:    providers.ProviderAnthropic,
+				Provider:    providers.ProviderAiand,
 				Model:       pinnedModel,
 				Reason:      "cluster:v0.2",
 				PolicyGroup: pinnedGroup,
@@ -168,7 +168,7 @@ func (r *hmmPinStickyTestRouter) Route(_ context.Context, _ router.Request) (rou
 func TestHMMPinStickyOnArmSelectorUnavailableWiredIntoTurnLoop(t *testing.T) {
 	strategy := router.Strategy("hmm-pin-sticky-wiring-test")
 	const pinnedModel = "moonshotai/kimi-k3"
-	const sameTierFresh = "claude-opus-4-6"
+	const sameTierFresh = "z-ai/glm-5.2"
 	const pinnedGroup = "high"
 	const otherGroup = "low"
 
@@ -211,7 +211,7 @@ func TestHMMPinStickyOnArmSelectorUnavailableWiredIntoTurnLoop(t *testing.T) {
 			store := newStubPinStore()
 			store.getFound = true
 			store.getPin = sessionpin.Pin{
-				Provider:        providers.ProviderAnthropic,
+				Provider:        providers.ProviderAiand,
 				Model:           pinnedModel,
 				Reason:          "hmm_policy(classifier 'high' (p=0.32))",
 				PolicyGroup:     pinnedGroup,
@@ -220,7 +220,7 @@ func TestHMMPinStickyOnArmSelectorUnavailableWiredIntoTurnLoop(t *testing.T) {
 				LastServedModel: pinnedModel,
 			}
 			policyRouter := &hmmPinStickyTestRouter{decision: router.Decision{
-				Provider: providers.ProviderAnthropic,
+				Provider: providers.ProviderAiand,
 				Model:    sameTierFresh,
 				Reason:   hmmPinStickyTestFallbackReason,
 				Metadata: &router.RoutingMetadata{PolicyGroup: test.freshGroup},
@@ -233,7 +233,7 @@ func TestHMMPinStickyOnArmSelectorUnavailableWiredIntoTurnLoop(t *testing.T) {
 				nil,
 				store,
 				false,
-				providers.ProviderAnthropic,
+				providers.ProviderAiand,
 				"deepseek-ai/deepseek-v4-flash",
 				nil,
 			).WithHMPinStickyOnArmSelectorUnavail(test.enabled).

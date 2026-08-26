@@ -68,7 +68,7 @@ func runConformanceCase(t *testing.T, c conformanceCase) {
 	svc := proxy.NewService(
 		&fakeRouter{decision: router.Decision{Provider: c.provider, Model: c.model}},
 		map[string]providers.Client{c.provider: c.newClient(srv.URL)},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
+		nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{c.provider: {}})
 
 	rec := httptest.NewRecorder()

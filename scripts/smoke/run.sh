@@ -21,8 +21,7 @@
 #                          running router is configured for (live aiand when
 #                          HTTPS_PROXY is unset).
 #   AIAND_API_KEY         required only when SMOKE_PROXY_MODE != replay-only
-#                          on the compose path (ANTHROPIC_API_KEY still accepted
-#                          as a legacy alias)
+#                          on the compose path
 #   SMOKE_KEEP_STACK=1    leave the compose stack running after the tests
 #   SMOKE_PIN_MODEL       model every Messages scenario pins
 #   SMOKE_OPENAI_PIN_MODEL  model for OpenAI-path scenarios
@@ -64,8 +63,8 @@ seed_router_key_host() {
 case "$PROXY_MODE" in
   replay-only) ;;
   record|replay-or-record)
-    if [[ -z "${AIAND_API_KEY:-${ANTHROPIC_API_KEY:-}}" ]]; then
-      err "SMOKE_PROXY_MODE=$PROXY_MODE needs AIAND_API_KEY or ANTHROPIC_API_KEY (only replay-only runs key-free on the compose MITM path)."
+    if [[ -z "${AIAND_API_KEY:-}" ]]; then
+      err "SMOKE_PROXY_MODE=$PROXY_MODE needs AIAND_API_KEY (only replay-only runs key-free on the compose MITM path)."
       exit 2
     fi
     ;;
@@ -121,9 +120,8 @@ if [[ "${SMOKE_CI_CACHE:-0}" == "1" ]]; then
 fi
 COMPOSE="docker compose ${COMPOSE_FILES[*]}"
 
-# Router registers only aiand (AIAND_API_KEY). Replay-only uses a placeholder
-# so the deployment has a keyed provider; MITM never calls upstream.
-SERVER_AIAND_KEY="${AIAND_API_KEY:-${ANTHROPIC_API_KEY:-sk-aiand-smoke-placeholder-unused-in-replay-only}}"
+SERVER_AIAND_KEY="${AIAND_API_KEY:-sk-aiand-smoke-placeholder-unused-in-replay-only}"
+SERVER_OPENAI_KEY="${OPENAI_API_KEY:-sk-smoke-placeholder-unused-in-replay-only}"
 
 cleanup() {
   local code=$?
@@ -147,6 +145,7 @@ services:
   server:
     environment:
       AIAND_API_KEY: "${SERVER_AIAND_KEY}"
+      OPENAI_API_KEY: "${SERVER_OPENAI_KEY}"
 EOF
 
 log "building and starting the router stack (proxy mode: $PROXY_MODE)"

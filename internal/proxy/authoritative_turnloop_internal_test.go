@@ -123,7 +123,7 @@ func TestAuthoritativePolicySelectsEveryEligibleTurn(t *testing.T) {
 				nil,
 				store,
 				false,
-				providers.ProviderAnthropic,
+				providers.ProviderAiand,
 				"deepseek-ai/deepseek-v4-flash",
 				nil,
 			).WithScoreToolResultTurns(false).
@@ -237,7 +237,7 @@ func TestAuthoritativePolicyPreservesExplicitForceModel(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithPolicyStrategy(policy.StrategySpec{
@@ -391,7 +391,7 @@ func TestAuthoritativeUpgradeConfidenceGate(t *testing.T) {
 				nil,
 				store,
 				false,
-				providers.ProviderAnthropic,
+				providers.ProviderAiand,
 				"deepseek-ai/deepseek-v4-flash",
 				nil,
 			).WithPolicyStrategy(policy.StrategySpec{

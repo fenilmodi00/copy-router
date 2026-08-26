@@ -13,7 +13,6 @@ import (
 	"workweave/router/internal/providers"
 	"workweave/router/internal/router"
 	"workweave/router/internal/router/catalog"
-	"workweave/router/internal/router/planner"
 	"workweave/router/internal/router/sessionpin"
 )
 
@@ -151,7 +150,7 @@ func TestRecordTurnUsage_WritesToStore(t *testing.T) {
 		nil,
 		store,
 		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -189,7 +188,7 @@ func TestRecordTurnUsage_ForwardsSwitchHistory(t *testing.T) {
 		nil,
 		store,
 		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -224,7 +223,7 @@ func TestRecordTurnUsage_HMMDecisionWritesHistoryOnly(t *testing.T) {
 		nil,
 		store,
 		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -280,7 +279,7 @@ func TestRecordTurnUsage_HMMModelChangeWritesCurrentUsageOnly(t *testing.T) {
 		nil,
 		store,
 		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -327,7 +326,7 @@ func TestRecordHMMTurnHistory_ZeroUsageRefreshesTTLButSkipsUsageWriteback(t *tes
 		nil,
 		store,
 		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -373,7 +372,7 @@ func TestRecordHMMTurnHistory_ZeroUsagePreservesPriorProvider(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -494,7 +493,7 @@ func TestRecordTurnUsage_HMMEVStayWritesHistoryOnly(t *testing.T) {
 		nil,
 		store,
 		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -552,700 +551,6 @@ func TestStickyStateRole_DefaultsToActivePinRole(t *testing.T) {
 	assert.Equal(t, sessionpin.DefaultRole, stickyStateRole(res))
 }
 
-func TestHMMCostGate_StaysOnWarmCacheWhenCheaperFreshDoesNotClearEV(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	)
-	history := sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
-		LastServedModel: "moonshotai/kimi-k2.7",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(classifier 'fast')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.70,
-		},
-	}
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		100,
-		false,
-	)
-
-	assert.True(t, sticky)
-	assert.Equal(t, "moonshotai/kimi-k2.7", decision.Model)
-	assert.Equal(t, providers.ProviderAnthropic, decision.Provider)
-	assert.Equal(t, "moonshotai/kimi-k2.7", stayModel)
-	assert.Equal(t, planner.OutcomeStay, plan.Outcome)
-	assert.Equal(t, planner.ReasonEVNegative, plan.Reason)
-}
-
-func TestHMMCostGate_SwitchesCheaperFreshWhenEVPositive(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	)
-	history := sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
-		LastServedModel: "moonshotai/kimi-k2.7",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(classifier 'fast')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.70,
-		},
-	}
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		10_000,
-		false,
-	)
-
-	assert.False(t, sticky)
-	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", decision.Model)
-	assert.Equal(t, "moonshotai/kimi-k2.7", stayModel)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, planner.ReasonEVPositive, plan.Reason)
-}
-
-func TestHMMCostGate_SameTierPinSuppressesLateralSwitchWhenEnabled(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderOpenAI: nil, providers.ProviderMakora: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	)
-	history := sessionpin.Pin{
-		Provider:        providers.ProviderOpenAI,
-		LastServedModel: "gpt-4.1-mini",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(classifier 'fast')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.70,
-		},
-	}
-	// Confirm both models share the same tier before exercising the guard.
-	require.Equal(t, catalog.TierFor(history.LastServedModel), catalog.TierFor(fresh.Model))
-	require.NotEqual(t, catalog.TierUnknown, catalog.TierFor(history.LastServedModel))
-
-	// Flag off (default): unaffected, same as any other EV-positive switch.
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		10_000,
-		false,
-	)
-	assert.False(t, sticky)
-	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", decision.Model)
-	assert.Equal(t, "gpt-4.1-mini", stayModel)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, planner.ReasonEVPositive, plan.Reason)
-
-	// Flag on: the lateral same-tier switch is suppressed; the pin sticks.
-	svc.WithHMMSameTierPin(true)
-	decision, plan, sticky, stayModel = svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		10_000,
-		false,
-	)
-	assert.True(t, sticky)
-	assert.Equal(t, "gpt-4.1-mini", decision.Model)
-	assert.Equal(t, providers.ProviderOpenAI, decision.Provider)
-	assert.Equal(t, "gpt-4.1-mini", stayModel)
-	assert.Equal(t, planner.OutcomeStay, plan.Outcome)
-	assert.Equal(t, planner.ReasonSameTierPinned, plan.Reason)
-}
-
-func TestHMMCostGate_SameTierPinDoesNotBlockCrossTierSwitch(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	).WithHMMSameTierPin(true)
-	history := sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
-		LastServedModel: "moonshotai/kimi-k2.7",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(classifier 'fast')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.70,
-		},
-	}
-	require.NotEqual(t, catalog.TierFor(history.LastServedModel), catalog.TierFor(fresh.Model))
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		10_000,
-		false,
-	)
-
-	assert.False(t, sticky)
-	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", decision.Model)
-	assert.Equal(t, "moonshotai/kimi-k2.7", stayModel)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, planner.ReasonEVPositive, plan.Reason)
-}
-
-func TestHMMCostGate_SameTierPinDoesNotBlockConfidentUpgrade(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderFireworks: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	).WithHMMSameTierPin(true)
-	history := sessionpin.Pin{
-		Provider:        providers.ProviderFireworks,
-		LastServedModel: "moonshotai/kimi-k2.7",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderAnthropic,
-		Model:    "moonshotai/kimi-k2.7",
-		Reason:   "hmm_policy(classifier 'high')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.85,
-		},
-	}
-	require.NotEqual(t, catalog.TierFor(history.LastServedModel), catalog.TierFor(fresh.Model))
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		10_000,
-		false,
-	)
-
-	assert.False(t, sticky)
-	assert.Equal(t, "moonshotai/kimi-k2.7", decision.Model)
-	assert.Equal(t, "moonshotai/kimi-k2.7", stayModel)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, hmmReasonConfidentUpgrade, plan.Reason)
-}
-
-func TestHMMCostGate_SameTierPinIgnoresUnknownTierModels(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	).WithHMMSameTierPin(true)
-	history := sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
-		LastServedModel: "claude-opus-4-5", // untiered (TierUnknown) in the catalog fixture
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(classifier 'fast')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.70,
-		},
-	}
-	require.Equal(t, catalog.TierUnknown, catalog.TierFor(history.LastServedModel))
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		10_000,
-		false,
-	)
-
-	assert.False(t, sticky)
-	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", decision.Model)
-	assert.Equal(t, "claude-opus-4-5", stayModel)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, planner.ReasonEVPositive, plan.Reason)
-}
-
-func TestHMMCostGate_PhaseChangeFollowsFreshDecision(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	)
-	activePin := sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
-		Model:           "moonshotai/kimi-k2.7",
-		LastServedModel: "moonshotai/kimi-k2.7",
-		Reason:          "hmm_policy:tool_execution(label=explore)",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-		PinnedUntil:     time.Now().Add(time.Hour),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(classifier 'balanced')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.70,
-		},
-	}
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		activePin,
-		sessionpin.Pin{},
-		fresh,
-		100,
-		false,
-	)
-
-	assert.False(t, sticky)
-	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", decision.Model)
-	assert.Equal(t, "moonshotai/kimi-k2.7", stayModel)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, hmmReasonPhaseChange, plan.Reason)
-}
-
-func TestHMMCostGate_HistoryPhaseChangeFollowsFreshDecision(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	)
-	history := sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
-		LastServedModel: "moonshotai/kimi-k2.7",
-		Reason:          "hmm_policy:tool_execution(label=explore)",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-		PinnedUntil:     time.Now().Add(time.Hour),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(classifier 'balanced')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.70,
-		},
-	}
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		100,
-		false,
-	)
-
-	assert.False(t, sticky)
-	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", decision.Model)
-	assert.Equal(t, "moonshotai/kimi-k2.7", stayModel)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, hmmReasonPhaseChange, plan.Reason)
-}
-
-func TestHMMCostGate_ExpensiveUpgradeRequiresHighConfidence(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderFireworks: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	)
-	history := sessionpin.Pin{
-		Provider:        providers.ProviderFireworks,
-		LastServedModel: "moonshotai/kimi-k2.7",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderAnthropic,
-		Model:    "moonshotai/kimi-k2.7",
-		Reason:   "hmm_policy(classifier 'high')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.84,
-		},
-	}
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		10_000,
-		false,
-	)
-
-	assert.True(t, sticky)
-	assert.Equal(t, "moonshotai/kimi-k2.7", decision.Model)
-	assert.Equal(t, "moonshotai/kimi-k2.7", stayModel)
-	assert.Equal(t, planner.OutcomeStay, plan.Outcome)
-	assert.Equal(t, hmmReasonUpgradeConfidenceLow, plan.Reason)
-
-	fresh.Metadata.ChosenScore = 0.85
-	decision, plan, sticky, stayModel = svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		10_000,
-		false,
-	)
-
-	assert.False(t, sticky)
-	assert.Equal(t, "moonshotai/kimi-k2.7", decision.Model)
-	assert.Equal(t, "moonshotai/kimi-k2.7", stayModel)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, hmmReasonConfidentUpgrade, plan.Reason)
-}
-
-func TestHMMCostGate_LowConfidenceUpgradeKeepsIndependentPlannerSwitch(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderFireworks: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	).WithPlanner(planner.EVConfig{
-		ThresholdUSD:           DefaultPlannerThresholdUSD,
-		ExpectedRemainingTurns: DefaultPlannerExpectedRemainingTurns,
-		TierUpgradeEnabled:     false,
-		ColdPinFollowFresh:     true,
-	})
-	history := sessionpin.Pin{
-		Provider:        providers.ProviderFireworks,
-		LastServedModel: "moonshotai/kimi-k2.7",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderAnthropic,
-		Model:    "moonshotai/kimi-k2.7",
-		Reason:   "hmm_policy(classifier 'high')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.84,
-		},
-	}
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		10_000,
-		true,
-	)
-
-	assert.False(t, sticky)
-	assert.Equal(t, "moonshotai/kimi-k2.7", decision.Model)
-	assert.Equal(t, "moonshotai/kimi-k2.7", stayModel)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, planner.ReasonColdPinFresh, plan.Reason)
-}
-
-func TestHMMCostGate_IgnoresExpiredActivePin(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	)
-	expired := sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
-		Model:           "moonshotai/kimi-k2.7",
-		LastServedModel: "moonshotai/kimi-k2.7",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-		PinnedUntil:     time.Now().Add(-time.Minute),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(classifier 'fast')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.70,
-		},
-	}
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		expired,
-		sessionpin.Pin{},
-		fresh,
-		100,
-		false,
-	)
-
-	assert.False(t, sticky)
-	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", decision.Model)
-	assert.Empty(t, stayModel)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, planner.ReasonNoPin, plan.Reason)
-}
-
-func TestHMMCostGate_IgnoresNonHMMActivePin(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	)
-	// A warm cluster/planner pin (non-HMM reason) must NOT steer an HMM turn's
-	// EV stay — otherwise HMM turns silently reuse ordinary session pins.
-	clusterPin := sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
-		Model:           "moonshotai/kimi-k2.7",
-		LastServedModel: "moonshotai/kimi-k2.7",
-		Reason:          "cluster:v0.2",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-		PinnedUntil:     time.Now().Add(time.Hour),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(classifier 'fast')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.70,
-		},
-	}
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		clusterPin,
-		sessionpin.Pin{},
-		fresh,
-		100,
-		false,
-	)
-
-	assert.False(t, sticky, "a non-HMM cluster pin must not win an HMM EV stay")
-	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", decision.Model)
-	assert.Empty(t, stayModel)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, planner.ReasonNoPin, plan.Reason)
-}
-
-func TestHMMCostGate_HonorsHMMReasonedActivePin(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	)
-	// The active pin IS HMM-reasoned, so it remains a valid stay candidate: a
-	// cheaper fresh pick that doesn't clear EV must stay on it.
-	hmmPin := sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
-		Model:           "moonshotai/kimi-k2.7",
-		LastServedModel: "moonshotai/kimi-k2.7",
-		Reason:          "hmm_policy(label=high)",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-		PinnedUntil:     time.Now().Add(time.Hour),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(classifier 'fast')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.70,
-		},
-	}
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		hmmPin,
-		sessionpin.Pin{},
-		fresh,
-		100,
-		false,
-	)
-
-	assert.True(t, sticky, "an HMM-reasoned active pin remains a valid stay candidate")
-	assert.Equal(t, "moonshotai/kimi-k2.7", decision.Model)
-	assert.Equal(t, "moonshotai/kimi-k2.7", stayModel)
-	assert.Equal(t, planner.OutcomeStay, plan.Outcome)
-	assert.Equal(t, planner.ReasonEVNegative, plan.Reason)
-}
-
-func TestHMMCostGate_IgnoresMaxedHistory(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	)
-	history := sessionpin.Pin{
-		Provider:         providers.ProviderAnthropic,
-		LastServedModel:  "moonshotai/kimi-k2.7",
-		LastOutputTokens: prevTurnMaxedOutThreshold,
-		LastTurnEndedAt:  time.Now().Add(-30 * time.Second),
-		PinnedUntil:      time.Now().Add(time.Hour),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(classifier 'fast')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.70,
-		},
-	}
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		100,
-		false,
-	)
-
-	assert.False(t, sticky)
-	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", decision.Model)
-	assert.Empty(t, stayModel)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, planner.ReasonNoPin, plan.Reason)
-}
-
 // TestLoadPin_DoesNotServeExpiredPostgresPinButKeepsEmitHistory: expired rows
 // are routing misses, but has_ever_switched/last_served_model must survive so
 // Anthropic emit still strips poisoned thinking blocks.
@@ -1259,7 +564,7 @@ func TestLoadPin_DoesNotServeExpiredPostgresPinButKeepsEmitHistory(t *testing.T)
 		nil,
 		store,
 		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 	require.NotNil(t, svc.pinStore)
@@ -1307,7 +612,7 @@ func TestLoadPin_ServesFreshPostgresPin(t *testing.T) {
 		nil,
 		store,
 		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -1414,7 +719,7 @@ func TestService_NewService_HMMUpgradeConfidenceDefaults(t *testing.T) {
 		nil,
 		nil,
 		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 	assert.Equal(t, defaultHMMUpgradeConfidenceThreshold, svc.hmmUpgradeConfidenceThreshold)
@@ -1429,7 +734,7 @@ func TestService_WithHMMUpgradeConfidenceThreshold(t *testing.T) {
 		nil,
 		nil,
 		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
@@ -1444,51 +749,4 @@ func TestService_WithHMMUpgradeConfidenceThreshold(t *testing.T) {
 
 	svc.WithHMMUpgradeConfidenceThreshold(0.0)
 	assert.Equal(t, 0.0, svc.hmmUpgradeConfidenceThreshold)
-}
-
-func TestHMMCostGate_UpgradeThresholdConfigurable(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	svc := NewService(
-		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderFireworks: nil},
-		nil,
-		false,
-		nil,
-		nil,
-		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
-		nil,
-	)
-	svc.WithHMMUpgradeConfidenceThreshold(0.20)
-
-	history := sessionpin.Pin{
-		Provider:        providers.ProviderFireworks,
-		LastServedModel: "moonshotai/kimi-k2.7",
-		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
-	}
-	fresh := router.Decision{
-		Provider: providers.ProviderAnthropic,
-		Model:    "moonshotai/kimi-k2.7",
-		Reason:   "hmm_policy(classifier 'high')",
-		Metadata: &router.RoutingMetadata{
-			Strategy:    string(router.StrategyHMM),
-			RouteID:     "route-1",
-			ChosenScore: 0.30,
-		},
-	}
-
-	decision, plan, sticky, stayModel := svc.hmmCostGatedDecision(
-		router.Request{},
-		sessionpin.Pin{},
-		history,
-		fresh,
-		10_000,
-		false,
-	)
-
-	assert.False(t, sticky)
-	assert.Equal(t, "moonshotai/kimi-k2.7", decision.Model)
-	assert.Equal(t, planner.OutcomeSwitch, plan.Outcome)
-	assert.Equal(t, hmmReasonConfidentUpgrade, plan.Reason)
-	assert.Equal(t, "moonshotai/kimi-k2.7", stayModel)
 }

@@ -11,61 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseCodexHeaders(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	h := http.Header{}
-	h.Set("x-codex-primary-used-percent", "40")
-	h.Set("x-codex-primary-window-minutes", "300")
-	h.Set("x-codex-secondary-used-percent", "12.5")
-	h.Set("x-codex-secondary-window-minutes", "10080")
-
-	snap, ok := usage.ParseCodexHeaders(h)
-	require.True(t, ok)
-	assert.InDelta(t, 0.40, snap.Primary.UsedPercent, 1e-9)
-	assert.Equal(t, 300, snap.Primary.WindowMinutes)
-	assert.InDelta(t, 0.125, snap.Secondary.UsedPercent, 1e-9)
-	assert.Equal(t, 10080, snap.Secondary.WindowMinutes)
-}
-
-func TestParseCodexHeaders_LowUsageNotMisread(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	// "1" means 1% used (max headroom), not 100% — must normalize to 0.01 so the
-	// subsidy isn't silently wiped out at the moment the window is freshest.
-	h := http.Header{}
-	h.Set("x-codex-primary-used-percent", "1")
-	h.Set("x-codex-primary-window-minutes", "300")
-	snap, ok := usage.ParseCodexHeaders(h)
-	require.True(t, ok)
-	assert.InDelta(t, 0.01, snap.Primary.UsedPercent, 1e-9)
-	// And that low usage yields a near-epsilon cost factor (covered model ~free).
-	assert.Less(t, snap.CostFactor(0.05, 2.0), 0.06)
-	// A value above 100 clamps to fully used.
-	h.Set("x-codex-primary-used-percent", "150")
-	snap, _ = usage.ParseCodexHeaders(h)
-	assert.InDelta(t, 1.0, snap.Primary.UsedPercent, 1e-9)
-}
-
-func TestParseCodexHeaders_NoneReportsFalse(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	_, ok := usage.ParseCodexHeaders(http.Header{})
-	assert.False(t, ok)
-}
-
-// When Codex reports used-percent but omits window-minutes, the parser must
-// still supply the known window length (primary ~5h, secondary weekly) so a
-// near-cap reading stays authoritative for the window's life instead of aging
-// out after the short ttl floor and re-subsidizing a still-capped credential.
-func TestParseCodexHeaders_DefaultsWindowWhenOmitted(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	h := http.Header{}
-	h.Set("x-codex-primary-used-percent", "80")
-	h.Set("x-codex-secondary-used-percent", "97")
-	snap, ok := usage.ParseCodexHeaders(h)
-	require.True(t, ok)
-	assert.Equal(t, 300, snap.Primary.WindowMinutes, "primary defaults to ~5h")
-	assert.Equal(t, 10080, snap.Secondary.WindowMinutes, "secondary defaults to weekly")
-}
-
 func TestParseAnthropicUnified_FromRemainingLimit(t *testing.T) {
 	h := http.Header{}
 	h.Set("anthropic-ratelimit-unified-5h-limit", "1000")

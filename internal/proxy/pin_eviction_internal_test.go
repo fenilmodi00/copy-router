@@ -100,7 +100,7 @@ func newEvictionTestService(store *evictionStubPinStore) *Service {
 		nil,
 		store,
 		false,
-		"anthropic", "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 }

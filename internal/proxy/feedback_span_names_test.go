@@ -122,7 +122,7 @@ func TestFeedbackSpans_UseDistinctNamesAndSchemas(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithRouterFeedbackStore(feedbackStore)
