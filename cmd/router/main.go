@@ -422,7 +422,7 @@ func main() {
 	// typed-nil concrete pointer would defeat it).
 	var compactionSz proxy.CompactionSummarizer
 	if client, ok := providerMap[handoverProviderName]; ok {
-		ps := proxy.NewProviderSummarizer(client, handoverModel, handoverTimeout)
+		ps := proxy.NewProviderSummarizer(client, handoverProviderName, handoverModel, handoverTimeout)
 		summarizer = ps
 		compactionSz = ps
 		logger.Info("Handover summarizer wired", "provider", handoverProviderName, "model", handoverModel, "timeout_ms", handoverTimeout.Milliseconds())

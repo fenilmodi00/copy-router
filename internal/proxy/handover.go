@@ -64,17 +64,24 @@ const compactionInstruction = "The conversation is being compacted to fit the mo
 	"Output only the summary text — no preamble, no closing remark."
 
 // ProviderSummarizer adapts a providers.Client to handover.Summarizer by
-// building a small Anthropic Messages request from the prior conversation.
+// building a small OpenAI Chat Completions request from the prior conversation.
+// The default handover provider (aiand) is OpenAI-compatible; openaicompat.Client
+// always posts to /chat/completions, so Messages-shaped bodies fail upstream.
 type ProviderSummarizer struct {
 	client    providers.Client
+	provider  string
 	model     string
 	timeout   time.Duration
 	maxTokens int
 }
 
 // NewProviderSummarizer constructs a summarizer adapter. Empty/zero args
-// fall back to defaults.
-func NewProviderSummarizer(client providers.Client, model string, timeout time.Duration) *ProviderSummarizer {
+// fall back to defaults. provider labels BYOK/usage attribution; empty
+// defaults to providers.ProviderAiand (the composition-root default).
+func NewProviderSummarizer(client providers.Client, provider, model string, timeout time.Duration) *ProviderSummarizer {
+	if provider == "" {
+		provider = providers.ProviderAiand
+	}
 	if model == "" {
 		model = DefaultHandoverModel
 	}
@@ -83,6 +90,7 @@ func NewProviderSummarizer(client providers.Client, model string, timeout time.D
 	}
 	return &ProviderSummarizer{
 		client:    client,
+		provider:  provider,
 		model:     model,
 		timeout:   timeout,
 		maxTokens: DefaultHandoverMaxTokens,
@@ -100,7 +108,7 @@ func (s *ProviderSummarizer) WithMaxTokens(n int) *ProviderSummarizer {
 
 // Provider returns the upstream provider this summarizer dispatches to.
 func (s *ProviderSummarizer) Provider() string {
-	return providers.ProviderAnthropic
+	return s.provider
 }
 
 // ErrEmptySummary is returned when the upstream call succeeded but no
@@ -108,8 +116,8 @@ func (s *ProviderSummarizer) Provider() string {
 var ErrEmptySummary = errors.New("handover: upstream returned no summary text")
 
 // Summarize implements handover.Summarizer: builds and dispatches an
-// Anthropic Messages call under a hard timeout, returning summary text plus
-// usage for a separate ledger row. On failure returns ("", zero Usage, err)
+// OpenAI Chat Completions call under a hard timeout, returning summary text
+// plus usage for a separate ledger row. On failure returns ("", zero Usage, err)
 // so the caller falls back to the full prior history.
 func (s *ProviderSummarizer) Summarize(ctx context.Context, env *translate.RequestEnvelope) (string, handover.Usage, error) {
 	return s.summarize(ctx, env, s.model, handoverInstruction, s.maxTokens, "handover")
@@ -130,7 +138,7 @@ func (s *ProviderSummarizer) SummarizeForCompaction(ctx context.Context, env *tr
 	return s.summarize(ctx, env, model, compactionInstruction, maxTokens, "compaction")
 }
 
-// summarize builds an Anthropic Messages call from env with the given
+// summarize builds an OpenAI Chat Completions call from env with the given
 // instruction/model/cap and dispatches it under a hard timeout. kind is a log
 // label ("handover" or "compaction"). On any failure returns ("", zero, err)
 // so callers fall back to the full history.
@@ -143,7 +151,7 @@ func (s *ProviderSummarizer) summarize(ctx context.Context, env *translate.Reque
 		return "", handover.Usage{}, errors.New("handover: nil provider client")
 	}
 
-	body, err := buildSummaryRequestBody(env, model, instruction, maxTokens)
+	body, err := buildSummaryRequestBody(env, s.provider, model, instruction, maxTokens)
 	if err != nil {
 		return "", handover.Usage{}, fmt.Errorf("build %s request: %w", kind, err)
 	}
@@ -152,17 +160,16 @@ func (s *ProviderSummarizer) summarize(ctx context.Context, env *translate.Reque
 	defer cancel()
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
 	req.Header.Set("content-type", "application/json")
 
 	prep := providers.PreparedRequest{
 		Body:    body,
 		Headers: make(http.Header),
 	}
-	prep.Headers.Set("anthropic-version", "2023-06-01")
 
 	decision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: s.provider,
 		Model:    model,
 		Reason:   kind + "_summary",
 	}
@@ -186,20 +193,20 @@ func (s *ProviderSummarizer) summarize(ctx context.Context, env *translate.Reque
 	if err != nil {
 		return "", handover.Usage{}, fmt.Errorf("read %s response: %w", kind, err)
 	}
-	text := extractAnthropicAssistantText(respBody)
+	text := extractOpenAIAssistantText(respBody)
 	if text == "" {
 		log.Warn("Summarizer extracted no text", "kind", kind, "model", model, "body_bytes", len(respBody))
 		return "", handover.Usage{}, ErrEmptySummary
 	}
-	usage := extractAnthropicUsage(respBody)
+	usage := extractOpenAIUsage(respBody)
 	usage.Model = model
-	usage.Provider = providers.ProviderAnthropic
+	usage.Provider = s.provider
 	return text, usage, nil
 }
 
-// extractAnthropicUsage pulls the usage block from an Anthropic non-streaming
-// Messages response. Missing fields are zero; we don't distinguish "absent".
-func extractAnthropicUsage(body []byte) handover.Usage {
+// extractOpenAIUsage pulls the usage block from an OpenAI Chat Completions
+// response. Missing fields are zero; we don't distinguish "absent".
+func extractOpenAIUsage(body []byte) handover.Usage {
 	if !gjson.ValidBytes(body) {
 		return handover.Usage{}
 	}
@@ -208,20 +215,22 @@ func extractAnthropicUsage(body []byte) handover.Usage {
 		return handover.Usage{}
 	}
 	return handover.Usage{
-		InputTokens:   int(usage.Get("input_tokens").Int()),
-		OutputTokens:  int(usage.Get("output_tokens").Int()),
-		CacheCreation: int(usage.Get("cache_creation_input_tokens").Int()),
-		CacheRead:     int(usage.Get("cache_read_input_tokens").Int()),
+		InputTokens:  int(usage.Get("prompt_tokens").Int()),
+		OutputTokens: int(usage.Get("completion_tokens").Int()),
+		CacheRead:    int(usage.Get("prompt_tokens_details.cached_tokens").Int()),
 	}
 }
 
-// buildSummaryRequestBody builds a non-streaming Anthropic Messages request
-// from the envelope's prior conversation, injecting the given summary
+// buildSummaryRequestBody builds a non-streaming OpenAI Chat Completions
+// request from the envelope's prior conversation, injecting the given summary
 // instruction and overriding model/max_tokens/stream.
-func buildSummaryRequestBody(env *translate.RequestEnvelope, model, instruction string, maxTokens int) ([]byte, error) {
-	prep, err := env.PrepareAnthropic(nil, translate.EmitOptions{TargetModel: model})
+func buildSummaryRequestBody(env *translate.RequestEnvelope, provider, model, instruction string, maxTokens int) ([]byte, error) {
+	prep, err := env.PrepareOpenAI(nil, translate.EmitOptions{
+		TargetModel:    model,
+		TargetProvider: provider,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("prepare anthropic body: %w", err)
+		return nil, fmt.Errorf("prepare openai body: %w", err)
 	}
 	body := prep.Body
 
@@ -243,20 +252,19 @@ func buildSummaryRequestBody(env *translate.RequestEnvelope, model, instruction 
 		return nil, fmt.Errorf("append instruction: %w", err)
 	}
 
-	for _, key := range []string{"tools", "tool_choice", "thinking", "context_management", "effort", "output_config", "metadata"} {
+	for _, key := range []string{"tools", "tool_choice", "functions", "function_call", "response_format", "reasoning", "thinking", "parallel_tool_calls", "metadata"} {
 		body, _ = sjson.DeleteBytes(body, key)
 	}
 
 	return body, nil
 }
 
-// appendUserInstruction appends a role=user text message to the messages array.
+// appendUserInstruction appends a role=user text message to the messages array
+// using OpenAI Chat Completions string content.
 func appendUserInstruction(body []byte, text string) ([]byte, error) {
 	msg := map[string]any{
-		"role": "user",
-		"content": []any{
-			map[string]any{"type": "text", "text": text},
-		},
+		"role":    "user",
+		"content": text,
 	}
 	raw, err := json.Marshal(msg)
 	if err != nil {
@@ -265,22 +273,39 @@ func appendUserInstruction(body []byte, text string) ([]byte, error) {
 	return sjson.SetRawBytes(body, "messages.-1", raw)
 }
 
-// extractAnthropicAssistantText pulls concatenated text from an Anthropic
-// Messages non-streaming response. All text blocks are joined with newlines.
-func extractAnthropicAssistantText(body []byte) string {
+// extractOpenAIAssistantText pulls assistant text from an OpenAI Chat
+// Completions non-streaming response (choices[0].message.content).
+func extractOpenAIAssistantText(body []byte) string {
 	if !gjson.ValidBytes(body) {
 		return ""
 	}
-	content := gjson.GetBytes(body, "content")
+	content := gjson.GetBytes(body, "choices.0.message.content")
+	if !content.Exists() || content.Type == gjson.Null {
+		return ""
+	}
+	// String content is the common case; multimodal arrays join text parts.
+	if content.Type == gjson.String {
+		return content.String()
+	}
 	if !content.IsArray() {
 		return ""
 	}
 	var out bytes.Buffer
-	content.ForEach(func(_, block gjson.Result) bool {
-		if block.Get("type").String() != "text" {
+	content.ForEach(func(_, part gjson.Result) bool {
+		if part.Type == gjson.String {
+			if out.Len() > 0 {
+				out.WriteByte('\n')
+			}
+			out.WriteString(part.String())
 			return true
 		}
-		text := block.Get("text").String()
+		if part.Get("type").String() != "" && part.Get("type").String() != "text" {
+			return true
+		}
+		text := part.Get("text").String()
+		if text == "" && part.Type == gjson.String {
+			text = part.String()
+		}
 		if text == "" {
 			return true
 		}
