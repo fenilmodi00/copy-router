@@ -37,8 +37,7 @@ router's HTTP transport already honors `http.ProxyFromEnvironment`
 `HTTPS_PROXY` — and trusting its ephemeral CA via `SSL_CERT_DIR` — intercepts
 every outbound call with **zero router code changes**. It mints a TLS leaf cert
 per CONNECT-target hostname. With the aiand-only catalog, replay targets the
-aiand OpenAI-compat upstream; no `ANTHROPIC_API_KEY` is required for
-`replay-only` CI.
+aiand OpenAI-compat upstream; replay CI needs no upstream API key.
 
 Three modes (`SMOKE_PROXY_MODE`):
 
@@ -57,9 +56,9 @@ and request-id noise never get persisted), so it's safe for these files to be
 committed and reviewed in a normal PR diff.
 
 This means the CI job needs **no provider API keys at all** for its normal
-path-gated run — it replays what's already checked in. **Replay does not need
-`ANTHROPIC_API_KEY`.** Keys are only needed to *record*, which happens locally
-or in a scheduled nightly refresh (`AIAND_API_KEY`).
+path-gated run — it replays what's already checked in. Keys are only needed to
+*record*, which happens locally or in a scheduled nightly refresh
+(`AIAND_API_KEY`).
 
 ## When it runs
 
