@@ -942,8 +942,6 @@ func TestService_SessionPin_OpenAI_FreshRouteCreatesPin(t *testing.T) {
 	assert.Equal(t, "gpt-4o", store.upserts[0].Model)
 }
 
-<<<<<<< HEAD
-=======
 func TestService_SessionPin_AgentForceModelCommandContinuesOnForcedModel(t *testing.T) {
 	const body = `{
 		"model":"claude-opus-4-7",
@@ -1052,7 +1050,6 @@ func TestService_SessionPin_OpenAI_ForceModelCommandSetsPin(t *testing.T) {
 	assert.Contains(t, content, "force-model applied: gpt-5")
 }
 
->>>>>>> e5cc0920 (Fix handling /force-model invocations by agent (#1032))
 func TestService_SessionPin_OpenAI_UnforceModelCommandClearsPin(t *testing.T) {
 	const unforceBody = `{
 		"model":"gpt-4o",

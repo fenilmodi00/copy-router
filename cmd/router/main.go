@@ -1363,22 +1363,14 @@ func runSessionPinSweep(ctx context.Context, store sessionpin.Store) {
 // defaultHardPinProvider and defaultHardPinModel are the fallback (provider,
 // model) used by resolveHardPinModel when the cluster bundle can't be loaded.
 const (
-<<<<<<< HEAD
 	defaultHardPinProvider = providers.ProviderAiand
 	defaultHardPinModel    = "deepseek-ai/deepseek-v4-flash"
-	// flagRegistryPublishTimeout bounds the boot-time registry publish so a slow
-	// or unreachable database delays startup by seconds, not indefinitely.
-	flagRegistryPublishTimeout = 10 * time.Second
 	// aiandCatalogBudget bounds the dashboard's live ai& catalog fetch. It
 	// mirrors AiandCatalogRequestBudget (the per-request upstream timeout the
 	// handler enforces internally); keeping them in sync means a slow catalog
 	// never strands the dashboard's request-handler goroutine waiting on the
 	// client long after the request context has been cancelled.
 	aiandCatalogBudget = 5 * time.Second
-=======
-	defaultHardPinProvider = providers.ProviderAnthropic
-	defaultHardPinModel    = "claude-haiku-4-5"
->>>>>>> b55fc345 (fix(boot): retry flag registry publish through Cloud SQL cold start (#1026))
 )
 
 // resolveDefaultBaselineModel returns the cost-comparison baseline used when
