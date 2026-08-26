@@ -138,6 +138,8 @@ type TelemetrySummary struct {
 	TotalRequestedCostUSD float64
 	TotalActualCostUSD    float64
 	TotalSavingsUSD       float64
+	CacheWriteTokens      int64
+	CacheReadTokens       int64
 }
 
 // TelemetryBucket is one time-bucket entry for the cost savings chart.
@@ -145,16 +147,20 @@ type TelemetryBucket struct {
 	Bucket           time.Time
 	RequestedCostUSD float64
 	ActualCostUSD    float64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
 // TelemetryModelBucket is one time-bucket entry for a single decision model,
 // powering the per-model usage and spend charts.
 type TelemetryModelBucket struct {
-	Bucket        time.Time
-	DecisionModel string
-	RequestCount  int64
-	TotalTokens   int64
-	ActualCostUSD float64
+	Bucket           time.Time
+	DecisionModel    string
+	RequestCount     int64
+	TotalTokens      int64
+	ActualCostUSD    float64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
 // TelemetryRow is one upstream span returned by the drill-down endpoint.

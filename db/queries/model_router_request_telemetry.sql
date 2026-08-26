@@ -193,7 +193,9 @@ SELECT
     COALESCE(SUM(
         (requested_input_cost_usd + requested_output_cost_usd) -
         (actual_input_cost_usd + actual_output_cost_usd)
-    ), 0)::bigint                                             AS total_savings_usd
+    ), 0)::bigint                                             AS total_savings_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint           AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= @from_time::timestamptz
@@ -204,7 +206,9 @@ WHERE span_type = 'router.upstream'
 SELECT
     date_trunc('hour', timestamp)::timestamptz                                       AS bucket,
     COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= @from_time::timestamptz
@@ -217,7 +221,9 @@ ORDER BY bucket ASC;
 SELECT
     date_trunc('day', timestamp)::timestamptz                                        AS bucket,
     COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= @from_time::timestamptz
@@ -230,7 +236,9 @@ ORDER BY bucket ASC;
 SELECT
     date_trunc('week', timestamp)::timestamptz                                       AS bucket,
     COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= @from_time::timestamptz
@@ -248,7 +256,9 @@ SELECT
     COALESCE(SUM(
         (requested_input_cost_usd + requested_output_cost_usd) -
         (actual_input_cost_usd + actual_output_cost_usd)
-    ), 0)::bigint                                             AS total_savings_usd
+    ), 0)::bigint                                             AS total_savings_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint           AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = @installation_id::uuid
   AND span_type = 'router.upstream'
@@ -260,7 +270,9 @@ WHERE installation_id = @installation_id::uuid
 SELECT
     date_trunc('hour', timestamp)::timestamptz                                       AS bucket,
     COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = @installation_id::uuid
   AND span_type = 'router.upstream'
@@ -274,7 +286,9 @@ ORDER BY bucket ASC;
 SELECT
     date_trunc('day', timestamp)::timestamptz                                        AS bucket,
     COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = @installation_id::uuid
   AND span_type = 'router.upstream'
@@ -288,7 +302,9 @@ ORDER BY bucket ASC;
 SELECT
     date_trunc('week', timestamp)::timestamptz                                       AS bucket,
     COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = @installation_id::uuid
   AND span_type = 'router.upstream'
@@ -306,7 +322,9 @@ SELECT
     COALESCE(decision_model, '')::varchar                                    AS decision_model,
     COUNT(*)::bigint                                                          AS request_count,
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= @from_time::timestamptz
@@ -322,7 +340,9 @@ SELECT
     COALESCE(decision_model, '')::varchar                                    AS decision_model,
     COUNT(*)::bigint                                                          AS request_count,
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= @from_time::timestamptz
@@ -338,7 +358,9 @@ SELECT
     COALESCE(decision_model, '')::varchar                                    AS decision_model,
     COUNT(*)::bigint                                                          AS request_count,
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= @from_time::timestamptz
@@ -354,7 +376,9 @@ SELECT
     COALESCE(decision_model, '')::varchar                                    AS decision_model,
     COUNT(*)::bigint                                                          AS request_count,
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = @installation_id::uuid
   AND span_type = 'router.upstream'
@@ -371,7 +395,9 @@ SELECT
     COALESCE(decision_model, '')::varchar                                    AS decision_model,
     COUNT(*)::bigint                                                          AS request_count,
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = @installation_id::uuid
   AND span_type = 'router.upstream'
@@ -388,7 +414,9 @@ SELECT
     COALESCE(decision_model, '')::varchar                                    AS decision_model,
     COUNT(*)::bigint                                                          AS request_count,
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = @installation_id::uuid
   AND span_type = 'router.upstream'
