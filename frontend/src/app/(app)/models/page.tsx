@@ -11,6 +11,7 @@ import { api, type AiandModel, type ModelBreakdownBucket } from "@/lib/api";
 import { toNumber, formatContext, formatUSD } from "@/lib/format";
 import { tierForContextWindow, type ModelTier } from "@/lib/tier";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type SortKey = "popular" | "price_asc" | "price_desc" | "context_desc" | "newest";
 
@@ -197,13 +198,13 @@ export default function ModelsPage() {
                     return (
                       <tr key={m.id} className="border-t border-border/50 hover:bg-foreground/5">
                         <td className="px-4 py-2">
-                          <a
+                          <Link
                             href={`/models/${m.id.replace(/\//g, "~")}`}
                             className="font-medium hover:text-primary"
                             title={m.id}
                           >
                             {m.id}
-                          </a>
+                          </Link>
                           <Badge.Tier tier={tier} />
                         </td>
                         <td className="px-4 py-2 text-muted-foreground">{m.provider}</td>
