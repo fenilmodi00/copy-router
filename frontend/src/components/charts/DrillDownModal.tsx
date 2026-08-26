@@ -42,15 +42,20 @@ function formatTimestamp(iso: string): string {
 }
 
 /** Provider name → display label + Tailwind classes for the badge. Mirrors
- *  `internal/providers` constants on the Go side: anthropic, openai, google,
- *  openrouter. Unknown providers fall back to a neutral gray. */
+ *  `internal/providers` constants on the Go side: aiand (deploy primary),
+ *  plus anthropic/openai/google/openrouter for BYOK/gateway and historical
+ *  rows. Unknown providers fall back to a neutral gray. */
 const PROVIDER_BADGE: Record<
   string,
   { label: string; className: string }
 > = {
+  aiand: {
+    label: "aiand",
+    className: "bg-brand/10 text-brand ring-brand/20",
+  },
   anthropic: {
     label: "Anthropic",
-    className: "bg-brand/10 text-brand ring-brand/20",
+    className: "bg-muted text-muted-foreground ring-border",
   },
   openai: {
     label: "OpenAI",

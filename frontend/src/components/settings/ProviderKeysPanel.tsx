@@ -557,7 +557,7 @@ export function ProviderKeysPanel() {
                 data-1p-ignore
                 data-lpignore="true"
                 data-form-type="other"
-                placeholder="My Anthropic key"
+                placeholder="My aiand key"
                 value={name}
                 onChange={e => setName(e.target.value)}
               />
