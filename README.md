@@ -116,9 +116,10 @@ curl -sS http://localhost:8080/v1/messages \
 curl -sS http://localhost:8080/v1/route -H "Authorization: Bearer rk_..." -d '...'
 ```
 
-Clients that still send Claude-era aliases (`claude-sonnet-5`, `opus`, …) are
-remapped to catalog IDs — see
+Clients that still send Claude-era aliases on force-model paths
+(`/force-model`, `x-weave-force-model`, …) are remapped to catalog IDs — see
 [docs/CONFIGURATION.md](docs/CONFIGURATION.md#client-claude-aliases--catalog-ids).
+A plain inbound `model` field is not rewritten before routing.
 
 ### What that stack looks like
 

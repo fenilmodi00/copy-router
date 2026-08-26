@@ -41,9 +41,11 @@ See [BYOK encryption](#byok-encryption).
 
 ### Client Claude aliases → catalog IDs
 
-Clients may still send Claude-era model names (`claude-sonnet-5`, `/force-model
-opus`, …). Those strings are **remap inputs only** — they are not catalog rows.
-Force-model and related resolution maps them onto existing aiand catalog IDs:
+Clients may still send Claude-era model names on **force-model** paths
+(`claude-sonnet-5`, `/force-model opus`, `x-weave-force-model`, …). Those
+strings are **remap inputs only** — they are not catalog rows. Force-model
+resolution maps them onto existing aiand catalog IDs (a plain inbound `model`
+field is not rewritten before routing):
 
 | Client alias | Catalog ID |
 | --- | --- |
