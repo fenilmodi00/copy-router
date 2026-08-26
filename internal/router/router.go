@@ -75,7 +75,7 @@ type Overrides struct {
 	PerModelVerbosity    *bool
 	// ForceEffort, when non-empty, is the user-requested effort level
 	// (x-weave-effort header / :level suffix). Wins over effortEscalation;
-	// per-model caps (xhigh→max on non-CapXhighEffort) still apply.
+	// legacy aliases (xhigh/ultra) canonicalize to max at emit.
 	ForceEffort string
 }
 
@@ -236,7 +236,8 @@ type Decision struct {
 	Provider string
 	Model    string
 	// Effort is the canonical reasoning-effort level selected for this turn
-	// ("low".."xhigh"), empty when the policy expressed no preference. Model
+	// ("none"/"low"/"medium"/"high"/"max"), empty when the policy expressed no
+	// preference. Model
 	// stays a bare catalog ID so catalog.ByID lookups keep working; effort is
 	// applied by the emit path via EmitOptions.ForceEffort. An effort-only
 	// change registers as a model switch via ServedIdentity() because it
@@ -373,4 +374,15 @@ func WithRoutingKnobs(ctx context.Context, o *Overrides) context.Context {
 func RoutingKnobsFromContext(ctx context.Context) *Overrides {
 	o, _ := ctx.Value(routingKnobsContextKey{}).(*Overrides)
 	return o
+}
+
+// NormalizeLegacyEffort maps retired policy-arm effort suffixes to live API
+// levels. Call after translate.CanonicalizeEffort on a parsed arm suffix.
+func NormalizeLegacyEffort(effort string) string {
+	switch effort {
+	case "xhigh":
+		return "max"
+	default:
+		return effort
+	}
 }

@@ -1495,6 +1495,16 @@ func forcedReasoningEffort(model string, escalate bool) string {
 	}
 }
 
+// applyPolicyEffortToEmit wires HMM policy-selected effort into emit options.
+// Capabilities must already be set on opts.
+func applyPolicyEffortToEmit(opts *translate.EmitOptions, effort string) {
+	if effort == "" {
+		return
+	}
+	opts.ForceEffort = translate.ResolveForceEffort(opts.Capabilities, effort)
+	opts.ForceReasoningEffort = opts.ForceEffort
+}
+
 // WithSummarizer installs the cheap-model summarizer for handover on switch
 // turns. nil disables the summary step; the full prior history is passed
 // through unchanged.
@@ -2960,6 +2970,8 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	if knobs := routingKnobsForRequest(ctx); knobs != nil && knobs.ForceEffort != "" {
 		opts.ForceEffort = knobs.ForceEffort
 		opts.ForceReasoningEffort = translate.ResolveForceEffort(opts.Capabilities, opts.ForceEffort)
+	} else if decision.Effort != "" {
+		applyPolicyEffortToEmit(&opts, decision.Effort)
 	} else if effort := forcedReasoningEffort(decision.Model, routeRes.EscalateEffort); effort != "" && (s.ResolveEffortEscalation(ctx) || strings.HasPrefix(decision.Model, "grok-")) {
 		opts.ForceReasoningEffort = effort
 	}
@@ -3286,6 +3298,8 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		if knobs := routingKnobsForRequest(ctx); knobs != nil && knobs.ForceEffort != "" {
 			baselineOpts.ForceEffort = knobs.ForceEffort
 			baselineOpts.ForceReasoningEffort = translate.ResolveForceEffort(baselineOpts.Capabilities, knobs.ForceEffort)
+		} else if decision.Effort != "" {
+			applyPolicyEffortToEmit(&baselineOpts, decision.Effort)
 		} else if effort := forcedReasoningEffort(baselineModel, routeRes.EscalateEffort); effort != "" && (s.ResolveEffortEscalation(ctx) || strings.HasPrefix(baselineModel, "grok-")) {
 			baselineOpts.ForceReasoningEffort = effort
 		}
@@ -3423,6 +3437,8 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		if knobs := routingKnobsForRequest(ctx); knobs != nil && knobs.ForceEffort != "" {
 			siblingOpts.ForceEffort = knobs.ForceEffort
 			siblingOpts.ForceReasoningEffort = translate.ResolveForceEffort(siblingOpts.Capabilities, knobs.ForceEffort)
+		} else if siblingDecision.Effort != "" {
+			applyPolicyEffortToEmit(&siblingOpts, siblingDecision.Effort)
 		} else if effort := forcedReasoningEffort(siblingDecision.Model, routeRes.EscalateEffort); effort != "" && (s.ResolveEffortEscalation(ctx) || strings.HasPrefix(siblingDecision.Model, "grok-")) {
 			siblingOpts.ForceReasoningEffort = effort
 		}
@@ -5179,6 +5195,8 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	if knobs := routingKnobsForRequest(ctx); knobs != nil && knobs.ForceEffort != "" {
 		opts.ForceEffort = knobs.ForceEffort
 		opts.ForceReasoningEffort = translate.ResolveForceEffort(opts.Capabilities, opts.ForceEffort)
+	} else if decision.Effort != "" {
+		applyPolicyEffortToEmit(&opts, decision.Effort)
 	} else if effort := forcedReasoningEffort(decision.Model, routeRes.EscalateEffort); effort != "" && (s.ResolveEffortEscalation(ctx) || strings.HasPrefix(decision.Model, "grok-")) {
 		opts.ForceReasoningEffort = effort
 	}

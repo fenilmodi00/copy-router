@@ -1,7 +1,7 @@
 # ai& (aiand.com) — Live model catalog
 
 > Snapshot pulled from the live `GET /v1/models` endpoint
-> (`https://api.aiand.com/v1/models`) on **2026-08-24 09:28 +05:30**, using the
+> (`https://api.aiand.com/v1/models`) on **2026-08-26**, using the
 > `AIAND_API_KEY` from `.env`. This is the authoritative per-org model list —
 > it supersedes the static catalog table in
 > `docs/aiand-provider-research.md`. Raw payload preserved verbatim in

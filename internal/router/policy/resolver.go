@@ -114,7 +114,7 @@ type Binding struct {
 	ReasoningConfigurationSHA256 string
 	ToolConfigurationSHA256      string
 	// Effort is the canonical reasoning-effort level, split from the arm ID
-	// when the roster carries effort-qualified arms (e.g. "model:xhigh").
+	// when the roster carries effort-qualified arms (e.g. "model:max").
 	Effort string
 }
 
@@ -432,10 +432,10 @@ func splitEffort(armID string) (string, string) {
 	for i := len(armID) - 1; i > 0; i-- {
 		if armID[i] == ':' {
 			suffix := armID[i+1:]
-			if translate.CanonicalizeEffort(suffix) == suffix && translate.IsValidEffort(suffix) {
-				return armID[:i], suffix
+			if !translate.IsValidEffort(suffix) {
+				return armID, ""
 			}
-			return armID, ""
+			return armID[:i], router.NormalizeLegacyEffort(translate.CanonicalizeEffort(suffix))
 		}
 	}
 	return armID, ""
@@ -501,3 +501,4 @@ func softFilter(in []eligibleCandidate, active bool, drop map[string]struct{}, r
 	}
 	return kept, diagnostics
 }
+

@@ -13,9 +13,6 @@ const (
 	CapExtendedThinking ModelCapability = "extended_thinking"
 	CapReasoning        ModelCapability = "reasoning"
 	CapExtendedContext  ModelCapability = "extended_context"
-	// CapXhighEffort marks models supporting effort "xhigh" (opus-4-7+ only;
-	// sonnet-4-6 400s on it). Emit clamps to "max" when unsupported.
-	CapXhighEffort ModelCapability = "xhigh_effort"
 )
 
 // ModelSpec describes what a model supports. Zero value is safe: provider
@@ -114,17 +111,13 @@ var (
 	// since output_config.effort rollout) and support 1M context via the
 	// context-1m-2025-08-07 beta; Haiku 4.5 and Sonnet 4.5 top out at 200K.
 	anthropicAdaptive = NewSpecWithReasoning(ReasoningCapabilities{Levels: []string{"low", "medium", "high", "max"}, AlwaysOn: true}, CapAdaptiveThinking, CapExtendedContext)
-	// Opus 4.7+ (and fable) additionally accept effort level "xhigh"; the
-	// older adaptive models (opus-4-6, sonnet-4-6) top out at "max".
-	anthropicAdaptiveXhigh = NewSpecWithReasoning(ReasoningCapabilities{Levels: []string{"low", "medium", "high", "max", "xhigh"}, AlwaysOn: true}, CapAdaptiveThinking, CapExtendedContext, CapXhighEffort)
-	anthropicExtended      = NewSpecWithReasoning(ReasoningCapabilities{Levels: []string{"low", "medium", "high"}, SupportsBudget: true}, CapExtendedThinking)
+	anthropicExtended = NewSpecWithReasoning(ReasoningCapabilities{Levels: []string{"low", "medium", "high"}, SupportsBudget: true}, CapExtendedThinking)
 )
 
 var (
 	openaiReasoning = NewSpecWithReasoning(ReasoningCapabilities{Levels: []string{"low", "medium", "high"}, SupportsBudget: true}, CapReasoning)
 	openaiBase      = NewSpec()
-	// grok-4.6: openaiReasoning + the extra "xhigh" level.
-	grok46 = NewSpecWithReasoning(ReasoningCapabilities{Levels: []string{"low", "medium", "high", "xhigh"}, SupportsBudget: true}, CapReasoning, CapXhighEffort)
+	grok46 = NewSpecWithReasoning(ReasoningCapabilities{Levels: []string{"low", "medium", "high"}, SupportsBudget: true}, CapReasoning)
 )
 
 // Gemini's OpenAI-compatible endpoint does not honor reasoning_effort or
@@ -137,12 +130,10 @@ var openAICompatBase = NewSpec()
 var registry = map[string]ModelSpec{
 	// claude-fable-5 has adaptive thinking always on (disabled is rejected);
 	// 1M context is native, so CapExtendedContext's beta header is a no-op.
-	"claude-fable-5":  anthropicAdaptiveXhigh,
-	"claude-opus-5":   anthropicAdaptiveXhigh,
-	"claude-opus-4-8": anthropicAdaptiveXhigh,
-	"claude-opus-4-7": anthropicAdaptiveXhigh,
-	// claude-sonnet-5 mirrors sonnet-4-6: no xhigh, since Sonnet tops out at
-	// effort "max" and marking xhigh unsupported clamps rather than 400s.
+	"claude-fable-5":  anthropicAdaptive,
+	"claude-opus-5":   anthropicAdaptive,
+	"claude-opus-4-8": anthropicAdaptive,
+	"claude-opus-4-7": anthropicAdaptive,
 	"claude-sonnet-5":   anthropicAdaptive,
 	"claude-sonnet-4-6": anthropicAdaptive,
 	"claude-opus-4-6":   anthropicAdaptive,
@@ -172,8 +163,6 @@ var registry = map[string]ModelSpec{
 	// rejects stop / presence / frequency penalties (CapReasoning strips stop).
 	"grok-4.5": openaiReasoning,
 
-	// grok-4.6: grok-4.5 added an "xhigh" effort that xAI didn't document for 4.5;
-	// xAI's 4.6 docs keep the low/medium/high/xhigh menu. CapReasoning + CapXhighEffort.
 	"grok-4.6": grok46,
 
 	"gpt-5.4":      openaiReasoning,

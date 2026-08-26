@@ -13,32 +13,31 @@ import (
 )
 
 // TestForceEffort_AnthropicOverrides verifies ForceEffort overrides inbound
-// output_config.effort on adaptive targets, with per-model xhigh cap applied.
+// output_config.effort on adaptive targets, with legacy xhigh/ultra → max.
 func TestForceEffort_AnthropicOverrides(t *testing.T) {
 	cases := []struct {
 		name    string
 		level   string
 		target  string
 		wantEff string
-		noLower bool // true when target accepts xhigh and shouldn't clamp
 	}{
 		{
-			name:    "low_overrides_high_on_opus_xhigh",
+			name:    "low_overrides_high_on_opus",
 			level:   "low",
 			target:  "claude-opus-4-8",
 			wantEff: "low",
 		},
 		{
-			name:    "max_overrides_high_on_opus_xhigh",
+			name:    "max_overrides_high_on_opus",
 			level:   "max",
 			target:  "claude-opus-4-8",
 			wantEff: "max",
 		},
 		{
-			name:    "xhigh_passes_on_capable",
+			name:    "xhigh_alias_maps_to_max_on_capable",
 			level:   "xhigh",
 			target:  "claude-opus-4-8",
-			wantEff: "xhigh",
+			wantEff: "max",
 		},
 		{
 			name:    "xhigh_clamps_on_sonnet",
@@ -47,10 +46,10 @@ func TestForceEffort_AnthropicOverrides(t *testing.T) {
 			wantEff: "max",
 		},
 		{
-			name:    "ultra_alias_resolves_to_xhigh_pass",
+			name:    "ultra_alias_resolves_to_max",
 			level:   "ultra",
 			target:  "claude-opus-4-8",
-			wantEff: "xhigh",
+			wantEff: "max",
 		},
 	}
 	for _, tc := range cases {
@@ -82,14 +81,14 @@ func TestForceEffort_AnthropicPassesThroughAlias(t *testing.T) {
 	prep, err := env.PrepareAnthropic(http.Header{}, translate.EmitOptions{
 		TargetModel:  "claude-opus-4-7",
 		Capabilities: router.Lookup("claude-opus-4-7"),
-		ForceEffort:  "ultra", // aliases via CanonicalizeEffort to xhigh
+		ForceEffort:  "ultra", // aliases via CanonicalizeEffort to max
 	})
 	require.NoError(t, err)
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(prep.Body, &out))
 	oc, ok := out["output_config"].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, "xhigh", oc["effort"])
+	assert.Equal(t, "max", oc["effort"])
 }
 
 // TestForceEffort_NonAdaptiveTargetNoOp verifies ForceEffort is a no-op on
