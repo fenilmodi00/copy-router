@@ -7,6 +7,8 @@ This page is the exhaustive reference; the [README](../README.md) has the
 ## Table of contents
 
 - [Provider API keys](#provider-api-keys)
+  - [Client Claude aliases → catalog IDs](#client-claude-aliases--catalog-ids)
+  - [Peripheral gateway / BYOK env](#peripheral-gateway--byok-env)
   - [Key-pair auth](#key-pair-auth)
   - [Workload identity federation](#workload-identity-federation)
 - [Postgres](#postgres)
@@ -20,55 +22,85 @@ This page is the exhaustive reference; the [README](../README.md) has the
 
 ## Provider API keys
 
-The router registers each upstream provider only when its API key is present
-in the environment. Anthropic is special: when `ANTHROPIC_API_KEY` is unset,
-the router still registers the provider but forwards Anthropic auth headers
-(`Authorization` / `x-api-key`) to `api.anthropic.com` directly. This lets
-Claude Code keep using the user's logged-in plan.
+This deploy registers **ai& (aiand) only** at boot. The product lead is
+OpenAI-compatible `POST /v1/chat/completions` against the open-weight catalog
+(`moonshotai/…`, `z-ai/…`, `deepseek-ai/…`). Set `AIAND_API_KEY` — that is the
+deploy baseline. A secondary `POST /v1/messages` ingress accepts Anthropic wire
+and translates to OpenAI-compat before dispatch; do not treat it as a second
+upstream.
+
+| Variable        | Default                    | Effect |
+| --------------- | -------------------------- | ------ |
+| `AIAND_API_KEY` | *(none)*                   | **Deploy baseline.** Enables ai& (aiand.com) OpenAI-compatible inference for the open-weight catalog. |
+| `AIAND_API_URL` | `https://api.aiand.com/v1` | Base URL for ai&; `/chat/completions` is appended to it. |
+
+**BYOK (per-installation keys).** Instead of (or in addition to) the env vars
+above, each installation can supply its own provider keys via the dashboard.
+Those are stored in Postgres and used only for that installation's traffic.
+See [BYOK encryption](#byok-encryption).
+
+### Client Claude aliases → catalog IDs
+
+Clients may still send Claude-era model names on **force-model** paths
+(`claude-sonnet-5`, `/force-model opus`, `x-weave-force-model`, …). Those
+strings are **remap inputs only** — they are not catalog rows. Force-model
+resolution maps them onto existing aiand catalog IDs (a plain inbound `model`
+field is not rewritten before routing):
+
+| Client alias | Catalog ID |
+| --- | --- |
+| `claude-fable-5` (+ fable shorts) | `moonshotai/kimi-k3` |
+| `claude-opus-4-8` (+ `opus-4-8` / `claude-4-8`) | `z-ai/glm-5.2` |
+| `claude-opus-5` / `opus` / `claude-5` | `z-ai/glm-5.2` |
+| `claude-sonnet-5` / `sonnet` | `moonshotai/kimi-k2.7` |
+| `claude-sonnet-4-6` | `deepseek-ai/deepseek-v4-pro` |
+| `claude-haiku-4-5` / `haiku` | `deepseek-ai/deepseek-v4-flash` |
+
+### Peripheral gateway / BYOK env
+
+OpenRouter, Anthropic, OpenAI, Google, and gateway vars are **not** the deploy
+baseline. Composition root does not register those providers for the aiand-only
+deploy. Keep them only when wiring enterprise gateways or BYOK that still speak
+those surfaces. Host WSL / Build.io paths stay aiand-only — do not add Anthropic
+or OpenAI provider keys there.
 
 | Variable              | Default                                                   | Effect |
 | --------------------- | --------------------------------------------------------- | ------ |
-| `OPENROUTER_API_KEY`  | *(none)*                                                  | **Recommended baseline.** Enables OpenRouter and the full OSS-model pool the cluster scorer is trained against. |
+| `OPENROUTER_API_KEY`  | *(none)*                                                  | Peripheral. Enables OpenRouter / any OpenAI-compatible pool when registered (not aiand-only boot). |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1`                            | Override for OpenRouter or any OpenAI-compatible endpoint (vLLM, Together, Fireworks, self-hosted). |
-| `AIAND_API_KEY`       | *(none)*                                                  | Enables the ai& (aiand.com) OpenAI-compatible provider serving open-weight models from Japan-resident infra. |
-| `AIAND_API_URL`       | `https://api.aiand.com/v1`                                | Base URL for ai&; `/chat/completions` is appended to it. |
-| `ANTHROPIC_API_KEY`   | *(none — passthrough)*                                    | Router's own Anthropic key. When unset, client `Authorization` headers pass through. |
-| `OPENAI_API_KEY`      | *(none)*                                                  | Enables the OpenAI provider (Chat Completions API). |
+| `ANTHROPIC_API_KEY`   | *(none — passthrough)*                                    | Peripheral. Router's own Anthropic key for BYOK / gateway paths. When unset, client `Authorization` headers may pass through on Anthropic-family bindings. |
+| `OPENAI_API_KEY`      | *(none)*                                                  | Peripheral. Enables an OpenAI provider binding when registered. |
 | `OPENAI_BASE_URL`     | `https://api.openai.com`                                  | Override for OpenAI (e.g. Azure OpenAI). |
-| `GOOGLE_API_KEY`      | *(none)*                                                  | Enables Gemini via its OpenAI-compatible endpoint. |
-| `GOOGLE_BASE_URL`     | `https://generativelanguage.googleapis.com/v1beta/openai` | Override for Gemini. |
+| `GOOGLE_API_KEY`      | *(none)*                                                  | Peripheral. Used by optional HMM sidecar embeddings; not an aiand deploy upstream. |
+| `GOOGLE_BASE_URL`     | `https://generativelanguage.googleapis.com/v1beta/openai` | Override for Gemini-shaped OpenAI-compat endpoints. |
 | `ANTHROPIC_GATEWAY_BASE_URL` | *(none)*                                           | Base URL of an Anthropic-compatible gateway; `/v1/messages` is appended to it. |
 | `ANTHROPIC_GATEWAY_TOKEN`    | *(none)*                                           | Token for that gateway, sent as `Authorization: Bearer`. Only used when `ANTHROPIC_GATEWAY_BASE_URL` is also set. |
 | `OPENAI_GATEWAY_BASE_URL`    | *(none)*                                           | Base URL of an OpenAI-compatible gateway; `/chat/completions` is appended to it. |
 | `OPENAI_GATEWAY_TOKEN`       | *(none)*                                           | Token for that gateway, sent as `Authorization: Bearer`. Only used when `OPENAI_GATEWAY_BASE_URL` is also set. |
 
-**Anthropic-compatible gateway.** Some enterprises front Claude with their own
-gateway that speaks the Anthropic Messages spec but authenticates with a bearer
-token instead of `x-api-key`. The router serves the Claude family through it on
-the same translation path as direct Anthropic. There is no default endpoint: an
-unconfigured gateway does *not* fall back to `api.anthropic.com`. The provider
-is always registered so BYOK installations can point at their own gateway
-without deployment-level credentials; the env vars above are only for a
-deployment that has a gateway of its own.
+**Anthropic-compatible gateway.** Some enterprises front an Anthropic Messages
+gateway that authenticates with a bearer token instead of `x-api-key`. There is
+no default endpoint: an unconfigured gateway does *not* fall back to
+`api.anthropic.com`. The provider name stays available so BYOK installations can
+point at their own gateway without deployment-level credentials.
 
-**OpenAI-compatible gateway.** `openai_gateway` is the same arrangement one
-wire family over: a customer endpoint speaking OpenAI Chat Completions, bearer
-auth, no default endpoint. Use it for gateways that serve models the Anthropic
-spec can't carry.
+**OpenAI-compatible gateway.** `openai_gateway` is the same arrangement one wire
+family over: a customer endpoint speaking OpenAI Chat Completions, bearer auth,
+no default endpoint.
 
 An endpoint that publishes both surfaces is configured as two keys pointing at
-the same base URL. Snowflake Cortex, for example, serves Claude at
-`/api/v2/cortex/v1/messages` and everything else (GPT, Llama, Mistral,
-DeepSeek, Arctic) at `/api/v2/cortex/v1/chat/completions`:
+the same base URL. Snowflake Cortex, for example, serves an Anthropic surface at
+`/api/v2/cortex/v1/messages` and Chat Completions at
+`/api/v2/cortex/v1/chat/completions`:
 
 ```bash
-# Claude family over the Anthropic surface.
+# Anthropic Messages surface (BYOK / gateway).
 curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
   -H 'content-type: application/json' \
   -d '{"provider":"anthropic_gateway","key":"<snowflake PAT>",
        "base_url":"https://<account>.snowflakecomputing.com/api/v2/cortex/v1"}'
 
-# Everything else over the Chat Completions surface, under Cortex's own IDs.
+# Chat Completions surface, under Cortex's own IDs.
 curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
   -H 'content-type: application/json' \
   -d '{"provider":"openai_gateway","key":"<snowflake PAT>",
@@ -77,16 +109,10 @@ curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
 ```
 
 Both keys carry the same PAT; per model, the catalog's binding order decides
-which surface serves it, so Claude prefers the Anthropic one (it carries
-thinking blocks and `cache_control` natively) and falls back to the other. A
-tenant that can't issue a long-lived PAT configures each key with an RSA
-private key instead — see [Key-pair auth](#key-pair-auth) — or with no secret
-at all, see [Workload identity federation](#workload-identity-federation).
-
-**BYOK (per-installation keys).** Instead of (or in addition to) the env vars
-above, each installation can supply its own provider keys via the dashboard.
-Those are stored in Postgres and used only for that installation's traffic.
-See [BYOK encryption](#byok-encryption).
+which surface serves it. A tenant that can't issue a long-lived PAT configures
+each key with an RSA private key instead — see [Key-pair auth](#key-pair-auth)
+— or with no secret at all, see
+[Workload identity federation](#workload-identity-federation).
 
 Each key may also carry its own endpoint, which overrides the deployment's base
 URL for that provider on that installation's requests. Set it in **Settings →
@@ -99,7 +125,7 @@ curl -sS -c jar -X POST https://<router>/admin/v1/auth/login \
 
 curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
   -H 'content-type: application/json' \
-  -d '{"provider":"anthropic_gateway","key":"<token>","base_url":"https://gateway.example.com/api"}'
+  -d '{"provider":"openai_gateway","key":"<token>","base_url":"https://gateway.example.com/api"}'
 ```
 
 The value must be an absolute `http(s)` URL; anything else is rejected with
@@ -115,8 +141,8 @@ models under their own names:
 ```bash
 curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
   -H 'content-type: application/json' \
-  -d '{"provider":"anthropic_gateway","key":"<token>","base_url":"https://gateway.example.com/api",
-       "model_aliases":{"claude-fable-5":"internal.claude-fable-5"}}'
+  -d '{"provider":"openai_gateway","key":"<token>","base_url":"https://gateway.example.com/api",
+       "model_aliases":{"moonshotai/kimi-k3":"internal.kimi-k3"}}'
 ```
 
 Keys are catalog model IDs (an ID outside the deployed catalog is rejected with
@@ -131,7 +157,7 @@ alone — so retargeting model names doesn't need the credential re-entered:
 ```bash
 curl -sS -b jar -X PUT https://<router>/admin/v1/provider-keys/<key id>/model-aliases \
   -H 'content-type: application/json' \
-  -d '{"model_aliases":{"claude-fable-5":"internal.claude-fable-5"}}'
+  -d '{"model_aliases":{"moonshotai/kimi-k3":"internal.kimi-k3"}}'
 ```
 
 ### Key-pair auth
@@ -305,7 +331,7 @@ Step-by-step: [HOST_WSL_SUPABASE.md](HOST_WSL_SUPABASE.md).
 | `ROUTER_HARD_PIN_MODEL`           | *(none)*                     | Force every request to a specific model, bypassing the cluster scorer. Debugging only. |
 | `ROUTER_HARD_PIN_PROVIDER`        | *(none)*                     | Pair with `ROUTER_HARD_PIN_MODEL`. |
 | `ROUTER_HARD_PIN_EXPLORE`         | `true`                       | Pin Claude Code Task-tool sub-agent turns to `ROUTER_HARD_PIN_MODEL`/`ROUTER_HARD_PIN_PROVIDER` (or the cheapest deployed model, if those are unset). Set `false` to route sub-agents through the scorer like any other turn. |
-| `ROUTER_SUBAGENT_MODEL`           | *(none)*                     | Route Claude Code Task-tool sub-agent turns to a distinct model, independent of `ROUTER_HARD_PIN_MODEL` — e.g. a local/self-hosted OpenAI-compatible model (point `OPENROUTER_BASE_URL` at your local server) while the main loop keeps using Anthropic/whatever the scorer picks. Requires `ROUTER_SUBAGENT_PROVIDER`; either alone is ignored. Takes effect regardless of `ROUTER_HARD_PIN_EXPLORE`, but the HMM strategy keeps its own sub-agent handling and isn't affected. |
+| `ROUTER_SUBAGENT_MODEL`           | *(none)*                     | Route Task-tool sub-agent turns to a distinct catalog model, independent of `ROUTER_HARD_PIN_MODEL` — e.g. a local OpenAI-compatible endpoint while the main loop keeps using whatever the scorer picks. Requires `ROUTER_SUBAGENT_PROVIDER`; either alone is ignored. Takes effect regardless of `ROUTER_HARD_PIN_EXPLORE`, but the HMM strategy keeps its own sub-agent handling and isn't affected. |
 | `ROUTER_SUBAGENT_PROVIDER`        | *(none)*                     | Pair with `ROUTER_SUBAGENT_MODEL`. |
 | `ROUTER_TRANSLATION_COMPATIBILITY_MODE` | `shadow` | Translation representability rollout: `off` disables broad filtering, `shadow` records candidate exclusions without changing routes, and `enforce` makes declared semantic requirements hard routing constraints. Native-only safety paths (such as unsupported Responses tool unions and native Gemini ingress) remain protected unless mode is `off`. |
 | `ROUTER_COMPACTION_PCT`           | `0.85`                       | Fraction of the largest eligible model's context window at which the proactive compaction cascade engages (clear old tool results → structured summary → trim). Range `(0,1]`; `0` disables compaction (over-window requests then 413). Mirrors Claude Code's ~0.85 auto-compact trigger. |
