@@ -11,6 +11,7 @@ import { tierForContextWindow } from "@/lib/tier";
 import { useCompareBasket, CAP, dedupeAndCap } from "@/lib/compare-basket-store";
 import { cachedVerdict, plainVerdict } from "@/lib/compare-verdict";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 export default function ComparePage() {
   const basket = useCompareBasket();
@@ -87,9 +88,9 @@ export default function ComparePage() {
                   <th className="px-3 py-2 font-medium">Attribute</th>
                   {models.map(m => (
                     <th key={m.id} className="px-3 py-2 font-medium">
-                      <a href={`/models/${m.id.replace(/\//g, "~")}`} className="hover:text-primary">
+                      <Link href={`/models/${m.id.replace(/\//g, "~")}`} className="hover:text-primary">
                         {m.id}
-                      </a>
+                      </Link>
                       <button
                         type="button"
                         onClick={() => basket.remove(m.id)}

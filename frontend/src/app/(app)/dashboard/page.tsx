@@ -23,6 +23,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { formatNumber, formatUSD } from "@/lib/format";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -280,9 +281,9 @@ export default function DashboardPage() {
                   .map(r => (
                     <tr key={r.id} className="border-t border-border/50">
                       <td className="py-1.5 pr-2">
-                        <a href={`/models/${r.id.replace(/\//g, "~")}`} className="hover:text-primary">
+                        <Link href={`/models/${r.id.replace(/\//g, "~")}`} className="hover:text-primary">
                           {r.label}
-                        </a>
+                        </Link>
                       </td>
                       <td className="py-1.5 pr-2 text-right tabular-nums">{formatNumber(r.tokens)}</td>
                       <td className="py-1.5 text-right tabular-nums">{formatUSD(r.costUsd)}</td>

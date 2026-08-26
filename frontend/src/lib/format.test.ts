@@ -43,6 +43,18 @@ describe("formatContext", () => {
   });
 });
 
+describe("formatContext large windows", () => {
+  it("compresses 1M+", () => {
+    expect(formatContext(2_000_000)).toBe("2.0M");
+  });
+});
+
+describe("toNumber tiny strings", () => {
+  it("drops irrelevant trailing precision without losing the magnitude", () => {
+    expect(toNumber("0.0001")).toBe(0.0001);
+  });
+});
+
 describe("toNumber", () => {
   it("parses string prices", () => {
     expect(toNumber("0.15")).toBe(0.15);
