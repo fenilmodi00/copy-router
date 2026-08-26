@@ -982,7 +982,6 @@ func excludeContextOverflowModels(est, sigSavings, outputReserve int, enabledPro
 	return out, overflowed
 }
 
-
 // restrictToTier returns a copy of excluded augmented with every routable
 // model whose tier differs from target. Counterpart to a dropped user-forced
 // pin: when the forced model can no longer serve (e.g. the pre-filter evicted
@@ -1190,7 +1189,7 @@ func NewService(r router.Router, providerMap map[string]providers.Client, emitte
 		loopEscalationEnabled:         true,
 		cyberRefusalRepin:             false,
 		siblingFailover:               true,
-		cyberRefusalFallbackModel:     "claude-sonnet-5",
+		cyberRefusalFallbackModel:     "moonshotai/kimi-k2.7",
 	}
 }
 

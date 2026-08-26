@@ -243,6 +243,7 @@ func loopTestKey(seed byte) [sessionpin.SessionKeyLen]byte {
 var loopTestSig = translate.ToolCallSig{Name: "Read", InputHash: "abc123"}
 
 func TestHandleLoopEscalation_RecordsEventAndPins(t *testing.T) {
+	assert.Equal(t, "z-ai/glm-5.2", escalateModel)
 	pins := newStubPinStore()
 	events := &recordingLoopStore{}
 	svc := newLoopEscalationSvc(pins, events)
@@ -257,7 +258,7 @@ func TestHandleLoopEscalation_RecordsEventAndPins(t *testing.T) {
 	assert.Equal(t, "Read", ev.LoopTool)
 	assert.Equal(t, int32(12), ev.RepeatCount)
 
-	require.Len(t, pins.upserts, 1, "escalation must write the opus pin")
+	require.Len(t, pins.upserts, 1, "escalation must write the strong-model pin")
 	assert.Equal(t, escalateModel, pins.upserts[0].Model)
 	assert.Equal(t, translate.ReasonLoopEscalation, pins.upserts[0].Reason)
 }
