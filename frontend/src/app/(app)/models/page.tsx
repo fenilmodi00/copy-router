@@ -215,9 +215,9 @@ export default function ModelsPage() {
                             ))}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-right tabular-nums">{formatUSD(toNumber(m.input_per_1m) / 1e6 * 1)}</td>
-                        <td className="px-4 py-2 text-right tabular-nums">{formatUSD(toNumber(m.output_per_1m) / 1e6 * 1)}</td>
-                        <td className="px-4 py-2 text-right tabular-nums">{formatUSD(toNumber(m.cached_input_per_1m) / 1e6 * 1)}</td>
+                        <td className="px-4 py-2 text-right tabular-nums">{formatUSD(toNumber(m.input_per_1m))}</td>
+                        <td className="px-4 py-2 text-right tabular-nums">{formatUSD(toNumber(m.output_per_1m))}</td>
+                        <td className="px-4 py-2 text-right tabular-nums">{formatUSD(toNumber(m.cached_input_per_1m))}</td>
                         <td className="px-4 py-2 text-right uppercase">{m.currency}</td>
                       </tr>
                     );

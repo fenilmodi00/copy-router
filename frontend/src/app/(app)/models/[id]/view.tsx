@@ -16,6 +16,7 @@ import { formatContext, formatNumber, formatUSD, toNumber } from "@/lib/format";
 import { tierForContextWindow } from "@/lib/tier";
 import { useCompareBasket } from "@/lib/compare-basket-store";
 import { usePathname, useParams } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 // The catalog ids are URL-unfriendly (`deepseek-ai/deepseek-v4-flash`), so the
@@ -123,9 +124,9 @@ function ModelDetailPage({ id }: { id: string }) {
 
         <ResponsiveGrid>
           <MiniCard label="Context" value={formatContext(model.context_window)} />
-          <MiniCard label="Input/1M" value={formatUSD(toNumber(model.input_per_1m) / 1e6 * 1)} />
-          <MiniCard label="Output/1M" value={formatUSD(toNumber(model.output_per_1m) / 1e6 * 1)} />
-          <MiniCard label="Cached/1M" value={formatUSD(toNumber(model.cached_input_per_1m) / 1e6 * 1)} />
+          <MiniCard label="Input/1M" value={formatUSD(toNumber(model.input_per_1m))} />
+          <MiniCard label="Output/1M" value={formatUSD(toNumber(model.output_per_1m))} />
+          <MiniCard label="Cached/1M" value={formatUSD(toNumber(model.cached_input_per_1m))} />
           <MiniCard label="Effort default" value={model.reasoning_effort_default} />
         </ResponsiveGrid>
 
@@ -251,9 +252,9 @@ function renderError(message: string) {
       <Page.Section>
         <div className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           {message}
-          <a href="/models" className="ml-2 underline">
+          <Link href="/models" className="ml-2 underline">
             Back to Models
-          </a>
+          </Link>
         </div>
       </Page.Section>
     </Page>
