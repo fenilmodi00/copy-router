@@ -12,8 +12,6 @@ import { useCompareBasket, CAP, dedupeAndCap } from "@/lib/compare-basket-store"
 import { cachedVerdict, plainVerdict } from "@/lib/compare-verdict";
 import { useEffect, useMemo, useState } from "react";
 
-const emptyIds: string[] = [];
-
 export default function ComparePage() {
   const basket = useCompareBasket();
   const [catalog, setCatalog] = useState<AiandModel[] | null>(null);
