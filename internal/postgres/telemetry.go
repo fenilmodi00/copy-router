@@ -590,6 +590,8 @@ func telemetryBucketFromWeeklyRow(row sqlc.GetTelemetryTimeseriesWeeklyRow) prox
 		Bucket:           row.Bucket.Time,
 		RequestedCostUSD: microsToUSD(row.RequestedCostUsd),
 		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		TotalTokens:      row.TotalTokens,
+		RequestCount:     row.RequestCount,
 		CacheWriteTokens: row.CacheWriteTokens,
 		CacheReadTokens:  row.CacheReadTokens,
 	}
@@ -600,6 +602,8 @@ func telemetryBucketFromDailyRow(row sqlc.GetTelemetryTimeseriesDailyRow) proxy.
 		Bucket:           row.Bucket.Time,
 		RequestedCostUSD: microsToUSD(row.RequestedCostUsd),
 		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		TotalTokens:      row.TotalTokens,
+		RequestCount:     row.RequestCount,
 		CacheWriteTokens: row.CacheWriteTokens,
 		CacheReadTokens:  row.CacheReadTokens,
 	}
@@ -610,6 +614,8 @@ func telemetryBucketFromHourlyRow(row sqlc.GetTelemetryTimeseriesHourlyRow) prox
 		Bucket:           row.Bucket.Time,
 		RequestedCostUSD: microsToUSD(row.RequestedCostUsd),
 		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		TotalTokens:      row.TotalTokens,
+		RequestCount:     row.RequestCount,
 		CacheWriteTokens: row.CacheWriteTokens,
 		CacheReadTokens:  row.CacheReadTokens,
 	}
@@ -620,6 +626,8 @@ func telemetryBucketFromWeeklyAllRow(row sqlc.GetTelemetryTimeseriesWeeklyAllRow
 		Bucket:           row.Bucket.Time,
 		RequestedCostUSD: microsToUSD(row.RequestedCostUsd),
 		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		TotalTokens:      row.TotalTokens,
+		RequestCount:     row.RequestCount,
 		CacheWriteTokens: row.CacheWriteTokens,
 		CacheReadTokens:  row.CacheReadTokens,
 	}
@@ -630,6 +638,8 @@ func telemetryBucketFromDailyAllRow(row sqlc.GetTelemetryTimeseriesDailyAllRow) 
 		Bucket:           row.Bucket.Time,
 		RequestedCostUSD: microsToUSD(row.RequestedCostUsd),
 		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		TotalTokens:      row.TotalTokens,
+		RequestCount:     row.RequestCount,
 		CacheWriteTokens: row.CacheWriteTokens,
 		CacheReadTokens:  row.CacheReadTokens,
 	}
@@ -640,6 +650,8 @@ func telemetryBucketFromHourlyAllRow(row sqlc.GetTelemetryTimeseriesHourlyAllRow
 		Bucket:           row.Bucket.Time,
 		RequestedCostUSD: microsToUSD(row.RequestedCostUsd),
 		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		TotalTokens:      row.TotalTokens,
+		RequestCount:     row.RequestCount,
 		CacheWriteTokens: row.CacheWriteTokens,
 		CacheReadTokens:  row.CacheReadTokens,
 	}

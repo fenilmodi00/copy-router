@@ -50,6 +50,11 @@ export interface TimeseriesBucket {
   bucket: string;
   requested_cost_usd: number;
   actual_cost_usd: number;
+  // Present once the backend emits per-bucket token/request sums (additive
+  // change); absent on older routers, so consumers guard with `?? 0`. These
+  // feed the dashboard's Tokens / Requests sparklines.
+  request_count?: number;
+  total_tokens?: number;
 }
 
 export interface MetricsTimeseries {

@@ -25,6 +25,8 @@ type timeseriesBucket struct {
 	Bucket           string  `json:"bucket"`
 	RequestedCostUSD float64 `json:"requested_cost_usd"`
 	ActualCostUSD    float64 `json:"actual_cost_usd"`
+	TotalTokens      int64   `json:"total_tokens"`
+	RequestCount     int64   `json:"request_count"`
 }
 
 type metricsTimeseriesResponse struct {
@@ -114,6 +116,8 @@ func MetricsTimeseriesHandler(proxySvc *proxy.Service) gin.HandlerFunc {
 				Bucket:           b.Bucket.UTC().Format(time.RFC3339),
 				RequestedCostUSD: b.RequestedCostUSD,
 				ActualCostUSD:    b.ActualCostUSD,
+				TotalTokens:      b.TotalTokens,
+				RequestCount:     b.RequestCount,
 			})
 		}
 		c.JSON(http.StatusOK, metricsTimeseriesResponse{Buckets: out})

@@ -219,14 +219,14 @@ export default function DashboardPage() {
             label="Tokens"
             value={summary == null ? "—" : formatNumber(summary.total_tokens)}
             sub={summary == null ? undefined : `${formatNumber(avgTokensPerReq)} avg / req`}
-            sparkline={buckets.length ? buckets.map(b => b.actual_cost_usd) : []}
+            sparkline={buckets.length ? buckets.map(b => b.total_tokens ?? 0) : []}
           />
           <MetricCard
             className={ResponsiveGrid.Small}
             label="Requests"
             value={summary == null ? "—" : formatNumber(summary.request_count)}
             sub={summary == null ? undefined : `actual ${formatUSD(summary.total_actual_cost_usd)}`}
-            sparkline={buckets.map(b => b.requested_cost_usd)}
+            sparkline={buckets.length ? buckets.map(b => b.request_count ?? 0) : []}
           />
           <MetricCard
             className={ResponsiveGrid.Small}
