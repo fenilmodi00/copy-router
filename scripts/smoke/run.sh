@@ -64,7 +64,7 @@ seed_router_key_host() {
 case "$PROXY_MODE" in
   replay-only) ;;
   record|replay-or-record)
-    if [[ -z "${ANTHROPIC_API_KEY:-${AIAND_API_KEY:-}}" ]]; then
+    if [[ -z "${AIAND_API_KEY:-${ANTHROPIC_API_KEY:-}}" ]]; then
       err "SMOKE_PROXY_MODE=$PROXY_MODE needs AIAND_API_KEY or ANTHROPIC_API_KEY (only replay-only runs key-free on the compose MITM path)."
       exit 2
     fi
