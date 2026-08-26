@@ -180,6 +180,22 @@ export interface RoutingPreferencesResponse {
   is_default: boolean;
 }
 
+// A live catalog row from ai&'s GET /v1/models, mirrored 1:1 from the
+// backend's AiandModelRow (internal/api/admin/aiand_catalog.go). Monetary
+// fields are strings in ai&'s wire format (per-1M USD, e.g. "0.15").
+export interface AiandModel {
+  id: string;
+  provider: string;
+  context_window: number;
+  capabilities: string[];
+  reasoning_efforts: string[];
+  reasoning_effort_default: string;
+  input_per_1m: string;
+  output_per_1m: string;
+  cached_input_per_1m: string;
+  currency: string;
+}
+
 export const api = {
   auth: {
     me: () => request<MeResponse>("/auth/me"),
@@ -214,6 +230,9 @@ export const api = {
       if (to) params.set("to", to);
       return request<MetricsModelBreakdown>(`/metrics/model-breakdown?${params.toString()}`);
     },
+  },
+  aiandModels: {
+    list: () => request<{ data: AiandModel[] }>("/aiand/models"),
   },
   keys: {
     list: () => request<{ keys: APIKey[] }>("/keys"),
