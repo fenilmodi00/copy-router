@@ -131,7 +131,10 @@ func newPinSvcCapturing(fr *fakeRouter, store *fakePinStore) (*proxy.Service, *f
 	p := &fakeProvider{}
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: p},
+		map[string]providers.Client{
+			providers.ProviderAiand:     aiandOKProvider(),
+			providers.ProviderAnthropic: p,
+		},
 		nil,
 		false,
 		nil,
@@ -449,6 +452,7 @@ func TestTurnLoop_ToolResultPinOnExcludedProviderFallsThroughToScorer(t *testing
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
+			providers.ProviderAiand:     aiandOKProvider(),
 			providers.ProviderAnthropic: &fakeProvider{},
 			providers.ProviderOpenAI:    &fakeProvider{},
 		},
@@ -674,7 +678,10 @@ func TestTurnLoop_UsageWritebackPersistsCacheStats(t *testing.T) {
 	// usage extraction in the proxy.
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: provider},
+		map[string]providers.Client{
+			providers.ProviderAiand:     aiandOKProvider(),
+			providers.ProviderAnthropic: provider,
+		},
 		nil,
 		false,
 		nil,

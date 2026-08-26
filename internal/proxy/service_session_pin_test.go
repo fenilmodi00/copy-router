@@ -205,10 +205,24 @@ func assertOnlyHMMHistoryUpserts(t *testing.T, store *fakePinStore) {
 	}
 }
 
+func aiandOKProvider() *fakeProvider {
+	return &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
+	}}
+}
+
+// newPinSvc registers aiand (deploy hard-pin + catalog bindings) and keeps an
+// anthropic client so legacy decision/pin fixtures that still name anthropic
+// can dispatch. Hard-pin eligibility requires aiand in the provider map.
 func newPinSvc(fr *fakeRouter, store *fakePinStore) *proxy.Service {
 	return proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{
+			providers.ProviderAiand:     aiandOKProvider(),
+			providers.ProviderAnthropic: &fakeProvider{},
+		},
 		nil,
 		false,
 		nil,
@@ -223,7 +237,10 @@ func newPinSvc(fr *fakeRouter, store *fakePinStore) *proxy.Service {
 func newPinSvcWithTelemetry(fr *fakeRouter, store *fakePinStore, telemetry proxy.TelemetryRepository) *proxy.Service {
 	return proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{
+			providers.ProviderAiand:     aiandOKProvider(),
+			providers.ProviderAnthropic: &fakeProvider{},
+		},
 		nil,
 		false,
 		nil,
@@ -557,7 +574,7 @@ func TestService_HardPin_ExploreRoutesToHaikuWhenFlagOn(t *testing.T) {
 	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: aiandOKProvider()},
 		nil,
 		false,
 		nil,
@@ -737,7 +754,7 @@ func TestService_HardPin_NoSubAgentOverrideUsesSharedHardPin(t *testing.T) {
 	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: aiandOKProvider()},
 		nil,
 		false,
 		nil,
@@ -767,7 +784,10 @@ func TestService_HardPin_PartialSubAgentOverrideFallsThroughToScorer(t *testing.
 	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{
+			providers.ProviderAiand:     aiandOKProvider(),
+			providers.ProviderAnthropic: &fakeProvider{},
+		},
 		nil,
 		false,
 		nil,
@@ -1074,10 +1094,10 @@ func TestService_HardPin_BypassesTierCeiling(t *testing.T) {
 	store := newFakePinStore()
 	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.37"}}
 
-	// Hard-pin is opus; inbound model is haiku — hard pin wins regardless.
+	// Hard-pin is kimi-k3; inbound model is flash — hard pin wins regardless.
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: aiandOKProvider()},
 		nil,
 		false,
 		nil,
@@ -1268,7 +1288,8 @@ func TestService_UserForcedPin_IneligibleProviderFallsThrough(t *testing.T) {
 		PinnedUntil: time.Now().Add(30 * time.Minute),
 	}
 	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster"}}
-	// newPinSvc only registers Anthropic, so EnabledProviders == {anthropic}.
+	// newPinSvc registers aiand + anthropic; EnabledProviders includes both.
+	// Forced OpenAI pin is still ineligible.
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())

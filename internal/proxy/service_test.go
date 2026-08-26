@@ -665,11 +665,13 @@ func TestService_ProxyOpenAIChatCompletion_AnthropicCrossFormat(t *testing.T) {
 		},
 	}
 	svc := makeProxyService(
-		router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "test"},
-		map[string]providers.Client{"anthropic": provider},
+		router.Decision{Provider: providers.ProviderAnthropic, Model: "moonshotai/kimi-k3", Reason: "test"},
+		map[string]providers.Client{providers.ProviderAnthropic: provider},
 	)
 
-	openAIReq := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":100}`
+	// max_tokens above classifier threshold so the Anthropic scorer decision is
+	// used (classifier turns hard-pin to aiand deploy flash).
+	openAIReq := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":1024}`
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(openAIReq))
 
@@ -679,7 +681,7 @@ func TestService_ProxyOpenAIChatCompletion_AnthropicCrossFormat(t *testing.T) {
 	require.Len(t, provider.proxyBodies, 1)
 	var translated map[string]any
 	require.NoError(t, json.Unmarshal(provider.proxyBodies[0], &translated))
-	assert.Equal(t, float64(100), translated["max_tokens"], "max_tokens preserved on translated body")
+	assert.Equal(t, float64(1024), translated["max_tokens"], "max_tokens preserved on translated body")
 	msgs, _ := translated["messages"].([]any)
 	require.Len(t, msgs, 1)
 

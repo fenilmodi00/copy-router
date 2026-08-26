@@ -35,6 +35,14 @@ type captureTelemetry struct {
 	seqCalls  []int
 }
 
+func aiandChatOKProvider() *fakeProvider {
+	return &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`))
+	}}
+}
+
 func newCaptureTelemetry() *captureTelemetry {
 	return &captureTelemetry{
 		notify:       make(chan struct{}, 4),
@@ -168,7 +176,7 @@ func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) 
 	shadowStrategy := router.Strategy("future-policy")
 	svc := proxy.NewService(
 		&fakeRouter{decision: scorerDecision},
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: aiandChatOKProvider()},
 		nil, false, nil, nil, false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", telem,
 	).WithPolicyStrategy(policy.StrategySpec{Strategy: shadowStrategy, Router: shadowRouter})
@@ -439,7 +447,7 @@ func TestProxyMessages_NoMetadataOmitsClusterFields(t *testing.T) {
 func TestProxyMessages_PersistsTurnType(t *testing.T) {
 	const installID = "55555555-5555-5555-5555-555555555555"
 	decision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "pin",
 	}
@@ -465,7 +473,7 @@ func TestProxyMessages_PersistsTurnType(t *testing.T) {
 			telem := newCaptureTelemetry()
 			svc := proxy.NewService(
 				&fakeRouter{decision: decision},
-				map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+				map[string]providers.Client{providers.ProviderAiand: aiandChatOKProvider()},
 				nil, false, nil, nil, false,
 				providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 				telem,
