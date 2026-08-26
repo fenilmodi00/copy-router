@@ -183,7 +183,6 @@ func (e *RequestEnvelope) clearOldToolResultsOpenAI(keepRecent int) int {
 	return e.setMessages(rebuilt, cleared)
 }
 
-
 // setMessages writes rebuilt back to the "messages" array and returns ret on
 // success, 0 on marshal failure. Shared by the Anthropic/OpenAI message-array
 // rewriters.
@@ -246,4 +245,3 @@ func (e *RequestEnvelope) rewriteOpenAIForCompaction(summary string, keepRecent 
 	elided := max(len(others)-len(cleaned), 0)
 	return e.setMessages(rebuilt, elided)
 }
-

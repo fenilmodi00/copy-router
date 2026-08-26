@@ -89,13 +89,3 @@ func TestPrepareOpenAIResponses_NonStrictifiableFallsBack(t *testing.T) {
 	choice := params["properties"].(map[string]any)["choice"].(map[string]any)
 	assert.Contains(t, choice, "oneOf")
 }
-
-
-
-
-
-
-
-
-
-

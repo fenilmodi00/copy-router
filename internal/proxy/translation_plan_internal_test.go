@@ -42,7 +42,6 @@ func TestTranslationPlan_NativeResponsesFiltersToOpenAIFamilyInShadow(t *testing
 	requireExclusion(t, plan, "native_wire_family_required", providers.ProviderAnthropic, true)
 }
 
-
 func TestTranslationPlan_ImageConstraintShadowsBeforeEnforcement(t *testing.T) {
 	req := router.Request{TranslationRequirements: router.TranslationRequirements{Images: true}}
 	shadow := compatibilityService(TranslationCompatibilityShadow).planTranslation(req)

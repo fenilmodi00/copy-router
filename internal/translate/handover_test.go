@@ -216,4 +216,3 @@ func TestSanitizeOrphanedToolCalls_Anthropic_OrphanedToolResultBesideOtherConten
 	assert.Equal(t, "text", blocks[0].Get("type").String())
 	assert.Equal(t, "keep me", blocks[0].Get("text").String())
 }
-

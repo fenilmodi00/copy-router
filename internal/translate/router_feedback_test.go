@@ -355,4 +355,3 @@ func TestExtractRouterFeedbackCommand_ArrayContentMultipleTextBlocks(t *testing.
 	second, _ := blocks[1].(map[string]any)
 	assert.Equal(t, "", second["text"], "the directive-bearing text block must be stripped")
 }
-

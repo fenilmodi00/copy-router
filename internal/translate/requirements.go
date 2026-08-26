@@ -103,4 +103,3 @@ func visitOpenAIMedia(value gjson.Result, audio, files *bool) {
 		})
 	}
 }
-

@@ -282,9 +282,9 @@ func TestRestrictToTier_ExcludesOtherTiers(t *testing.T) {
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
 		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(map[string]struct{}{
-			"z-ai/glm-5.2":     {}, // high
-			"deepseek-ai/deepseek-v4-flash":  {}, // low
-			"deepseek-ai/deepseek-v4-pro": {}, // mid
+			"z-ai/glm-5.2":                  {}, // high
+			"deepseek-ai/deepseek-v4-flash": {}, // low
+			"deepseek-ai/deepseek-v4-pro":   {}, // mid
 		})
 
 	out, ok := svc.restrictToTier(nil, catalog.TierHigh)

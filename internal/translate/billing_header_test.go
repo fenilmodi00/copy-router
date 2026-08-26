@@ -83,4 +83,3 @@ func TestPrepareOpenAIStripsBillingHeaderFromSystemArray(t *testing.T) {
 	require.NotContains(t, body, "x-anthropic-billing-header", "billing header must be stripped; body=%s", body)
 	require.True(t, strings.Contains(body, "You are Claude Code."), "real system prompt must survive")
 }
-

@@ -86,4 +86,3 @@ func openAIImageBytes(body []byte) (total, count int) {
 	})
 	return total, count
 }
-

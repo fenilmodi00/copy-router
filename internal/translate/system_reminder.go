@@ -23,9 +23,7 @@ func openRouterSystemReminder(model string) string {
 	return ""
 }
 
-
 const deepseekToolUseReminder = "When using file-edit tools, copy `old_string` byte-for-byte from the most recent file read — preserve tabs, leading and trailing whitespace, and unicode characters (em-dash —, smart quotes, non-breaking spaces) exactly. If an Edit call fails, re-read the file before retrying. Never fall back to shell commands (sed, awk, python) to modify files."
-
 
 // applySystemReminderToBody injects the reminder into a serialized OpenAI body's
 // `messages` array. Best-effort: returns the input unchanged on parse failure

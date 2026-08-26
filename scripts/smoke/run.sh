@@ -21,8 +21,8 @@
 #                          running router is configured for (live aiand when
 #                          HTTPS_PROXY is unset).
 #   AIAND_API_KEY         required only when SMOKE_PROXY_MODE != replay-only
-#                          on the compose path (checked via ANTHROPIC_API_KEY
-#                          alias below for older callers)
+#                          on the compose path (ANTHROPIC_API_KEY still accepted
+#                          as a legacy alias)
 #   SMOKE_KEEP_STACK=1    leave the compose stack running after the tests
 #   SMOKE_PIN_MODEL       model every Messages scenario pins
 #   SMOKE_OPENAI_PIN_MODEL  model for OpenAI-path scenarios
@@ -121,8 +121,9 @@ if [[ "${SMOKE_CI_CACHE:-0}" == "1" ]]; then
 fi
 COMPOSE="docker compose ${COMPOSE_FILES[*]}"
 
-SERVER_ANTHROPIC_KEY="${ANTHROPIC_API_KEY:-${AIAND_API_KEY:-sk-ant-smoke-placeholder-unused-in-replay-only}}"
-SERVER_OPENAI_KEY="${OPENAI_API_KEY:-sk-smoke-placeholder-unused-in-replay-only}"
+# Router registers only aiand (AIAND_API_KEY). Replay-only uses a placeholder
+# so the deployment has a keyed provider; MITM never calls upstream.
+SERVER_AIAND_KEY="${AIAND_API_KEY:-${ANTHROPIC_API_KEY:-sk-aiand-smoke-placeholder-unused-in-replay-only}}"
 
 cleanup() {
   local code=$?
@@ -145,8 +146,7 @@ cat > "$OVERRIDE_FILE" <<EOF
 services:
   server:
     environment:
-      ANTHROPIC_API_KEY: "${SERVER_ANTHROPIC_KEY}"
-      OPENAI_API_KEY: "${SERVER_OPENAI_KEY}"
+      AIAND_API_KEY: "${SERVER_AIAND_KEY}"
 EOF
 
 log "building and starting the router stack (proxy mode: $PROXY_MODE)"

@@ -12,10 +12,9 @@ name: Smoke
 # deterministic. It's still path-gated to the regression-prone surfaces only;
 # docs, artifacts, the HMM sidecar, and the frontend never trigger it.
 #
-# A separate nightly job (needs ANTHROPIC_API_KEY; OPENAI_API_KEY optional) re-
-# records the cassettes against the real APIs to catch upstream drift (a
-# provider changing a response shape) independent of any code change here. It
-# never runs on a fork.
+# A separate nightly job (needs AIAND_API_KEY) re-records the cassettes against
+# the real APIs to catch upstream drift (a provider changing a response shape)
+# independent of any code change here. It never runs on a fork.
 on:
   pull_request:
     paths:
@@ -78,8 +77,7 @@ jobs:
           SMOKE_PROXY_MODE: ${{ github.event.inputs.proxy_mode || 'replay-only' }}
           # Only present for a manual record/replay-or-record dispatch; unused
           # (and unnecessary) for the default replay-only path.
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AIAND_API_KEY: ${{ secrets.AIAND_API_KEY }}
           # Layers the server/mitmproxy Docker builds against the GitHub
           # Actions cache (type=gha) via smoke/mitmproxy/docker-compose.ci-cache.yml
           # — the ONNX/tokenizer downloads, npm build, and Go compile are what
@@ -113,19 +111,18 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
-      - name: Require Anthropic key
+      - name: Require aiand key
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AIAND_API_KEY: ${{ secrets.AIAND_API_KEY }}
         run: |
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "::error::ANTHROPIC_API_KEY secret is not set; the nightly cassette refresh needs it."
+          if [ -z "$AIAND_API_KEY" ]; then
+            echo "::error::AIAND_API_KEY secret is not set; the nightly cassette refresh needs it."
             exit 1
           fi
 
       - name: Record fresh cassettes against the real API
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AIAND_API_KEY: ${{ secrets.AIAND_API_KEY }}
           SMOKE_PROXY_MODE: record
           SMOKE_CI_CACHE: "1"
         run: ./scripts/smoke/run.sh

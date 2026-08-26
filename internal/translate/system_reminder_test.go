@@ -174,8 +174,3 @@ func TestSystemReminder_OpenAISource_SkipsWithoutTools(t *testing.T) {
 }
 
 const geminiReminderSnippet = "prefer calling the Edit or Write tool"
-
-
-
-
-

@@ -83,7 +83,6 @@ func TestMessageTailPreview_OpenAI(t *testing.T) {
 	assert.Equal(t, "file contents", msgs[1].Blocks[0].Preview)
 }
 
-
 func TestSystemTextTail(t *testing.T) {
 	body := []byte(`{
 		"model": "claude-opus-4-7",

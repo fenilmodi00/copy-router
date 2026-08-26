@@ -120,9 +120,9 @@ func twoClusterArtifacts(t *testing.T) (centroidsBlob, rankingsBlob, registryBlo
 
 func allProviders() map[string]struct{} {
 	return map[string]struct{}{
-		"anthropic": {},
-		"openai":    {},
-		"google":    {},
+		"anthropic":             {},
+		"openai":                {},
+		"google":                {},
 		providers.ProviderAiand: {},
 	}
 }
