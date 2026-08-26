@@ -40,6 +40,10 @@ export interface MetricsSummary {
   total_requested_cost_usd: number;
   total_actual_cost_usd: number;
   total_savings_usd: number;
+  // Present once internal/api/admin/metrics.go emits them (additive backend
+  // change); absent on older routers, so consumers guard with `?? 0`.
+  cache_write_tokens?: number;
+  cache_read_tokens?: number;
 }
 
 export interface TimeseriesBucket {
