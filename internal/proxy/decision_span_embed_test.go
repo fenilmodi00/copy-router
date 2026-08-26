@@ -84,7 +84,7 @@ func newEmbedTestService(t *testing.T, collector *bypassSpanCollector, rt router
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = emitter.Shutdown(context.Background()) })
 	return NewService(rt, map[string]providers.Client{providers.ProviderAnthropic: embedTestProvider{}}, emitter, false, nil, pins, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil)
 }
 
 // decisionSpanEmbed drives one Anthropic turn and returns the exported

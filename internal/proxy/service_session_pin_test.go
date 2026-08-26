@@ -2,7 +2,6 @@ package proxy_test
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -215,7 +214,7 @@ func newPinSvc(fr *fakeRouter, store *fakePinStore) *proxy.Service {
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -230,7 +229,7 @@ func newPinSvcWithTelemetry(fr *fakeRouter, store *fakePinStore, telemetry proxy
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		telemetry,
 	)
@@ -564,7 +563,7 @@ func TestService_HardPin_ExploreRoutesToHaikuWhenFlagOn(t *testing.T) {
 		nil,
 		store,
 		true,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -600,7 +599,7 @@ func TestService_HardPin_HMMExploreBypassesBootHardPin(t *testing.T) {
 		nil,
 		store,
 		true,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithHMMRouter(fr)
@@ -644,98 +643,6 @@ func TestService_HMMSubAgentUsesFreshDecision(t *testing.T) {
 	store.mu.Unlock()
 }
 
-func TestService_HMMFeedbackKeyUsesClientSessionBeforeCompaction(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	body := []byte(`{
-		"model":"deepseek-ai/deepseek-v4-flash",
-		"max_tokens":195000,
-		"messages":[
-			{"role":"user","content":"` + strings.Repeat("x", 30_000) + `"},
-			{"role":"assistant","content":"working"},
-			{"role":"user","content":"latest request"}
-		]
-	}`)
-
-	before, err := translate.ParseAnthropic(body)
-	require.NoError(t, err)
-	after, err := translate.ParseAnthropic(body)
-	require.NoError(t, err)
-	require.Positive(t, after.TrimLastNMessages(1))
-	beforeSessionKey := proxy.DeriveSessionKey(before, "key-1")
-	afterSessionKey := proxy.DeriveSessionKey(after, "key-1")
-	beforeKey := hex.EncodeToString(beforeSessionKey[:])
-	afterKey := hex.EncodeToString(afterSessionKey[:])
-	require.NotEqual(t, beforeKey, afterKey)
-
-	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(label=balanced)",
-		Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMM)},
-	}}
-	svc := newPinSvc(fr, store).
-		WithHMMRouter(fr).
-		WithAvailableModels(map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}).
-		WithCompaction(nil, proxy.DefaultCompactionTriggerPct)
-
-	ctx := router.WithStrategy(authedCtx(uuid.NewString()), router.StrategyHMM)
-	rec := httptest.NewRecorder()
-	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
-
-	require.NotNil(t, fr.capturedReq)
-	assert.Equal(t, beforeKey, fr.capturedReq.FeedbackKey)
-	assert.NotEqual(t, afterKey, fr.capturedReq.FeedbackKey)
-	assert.Equal(t, "latest request", fr.capturedReq.ConversationMessages[0].Text)
-}
-
-func TestService_HMMFeedbackKeyOpenAIUsesClientSessionBeforeCompaction(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	body := []byte(`{
-		"model":"gpt-4o",
-		"max_tokens":123000,
-		"messages":[
-			{"role":"user","content":"` + strings.Repeat("x", 30_000) + `"},
-			{"role":"assistant","content":"working"},
-			{"role":"user","content":"latest request"}
-		]
-	}`)
-
-	before, err := translate.ParseOpenAI(body)
-	require.NoError(t, err)
-	after, err := translate.ParseOpenAI(body)
-	require.NoError(t, err)
-	require.Positive(t, after.TrimLastNMessages(1))
-	beforeSessionKey := proxy.DeriveSessionKey(before, "key-1")
-	afterSessionKey := proxy.DeriveSessionKey(after, "key-1")
-	beforeKey := hex.EncodeToString(beforeSessionKey[:])
-	afterKey := hex.EncodeToString(afterSessionKey[:])
-	require.NotEqual(t, beforeKey, afterKey)
-
-	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderOpenAI,
-		Model:    "gpt-4o",
-		Reason:   "hmm_policy(label=balanced)",
-		Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMM)},
-	}}
-	svc := newOpenAIPinSvc(fr, store).
-		WithHMMRouter(fr).
-		WithAvailableModels(map[string]struct{}{"gpt-4o": {}}).
-		WithCompaction(nil, proxy.DefaultCompactionTriggerPct)
-
-	ctx := router.WithStrategy(authedCtx(uuid.NewString()), router.StrategyHMM)
-	rec := httptest.NewRecorder()
-	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
-	require.NoError(t, svc.ProxyOpenAIChatCompletion(ctx, body, rec, httpReq))
-
-	require.NotNil(t, fr.capturedReq)
-	assert.Equal(t, beforeKey, fr.capturedReq.FeedbackKey)
-	assert.NotEqual(t, afterKey, fr.capturedReq.FeedbackKey)
-	assert.Equal(t, "latest request", fr.capturedReq.ConversationMessages[0].Text)
-}
-
 func TestService_HardPin_ExploreFallsThroughWhenFlagOff(t *testing.T) {
 	store := newFakePinStore()
 	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
@@ -776,7 +683,7 @@ func TestService_HardPin_SubAgentOverrideRoutesIndependentlyOfHardPin(t *testing
 		nil,
 		store,
 		false, // hardPinExplore=false: override alone must still hard-pin
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder")
@@ -809,7 +716,7 @@ func TestService_HardPin_SubAgentOverrideLeavesMainLoopUnaffected(t *testing.T) 
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder")
@@ -836,7 +743,7 @@ func TestService_HardPin_NoSubAgentOverrideUsesSharedHardPin(t *testing.T) {
 		nil,
 		store,
 		true, // hardPinExplore=true, no override configured
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -866,7 +773,7 @@ func TestService_HardPin_PartialSubAgentOverrideFallsThroughToScorer(t *testing.
 		nil,
 		store,
 		false, // hardPinExplore=false
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithSubAgentOverride("", "nonempty-model") // provider empty: incomplete override
@@ -901,7 +808,7 @@ func TestService_HardPin_SubAgentOverrideYieldsToHMMStrategy(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder").WithHMMRouter(fr)
@@ -931,7 +838,7 @@ func TestService_HardPin_SubAgentOverrideIneligibleProviderErrors(t *testing.T) 
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder")
@@ -964,7 +871,7 @@ func newOpenAIPinSvc(fr *fakeRouter, store *fakePinStore) *proxy.Service {
 		},
 		nil, false, nil,
 		store,
-		false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+		false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 }
@@ -1009,43 +916,6 @@ func TestService_SessionPin_OpenAI_FreshRouteCreatesPin(t *testing.T) {
 	require.Len(t, store.upserts, 1)
 	assert.Equal(t, providers.ProviderOpenAI, store.upserts[0].Provider)
 	assert.Equal(t, "gpt-4o", store.upserts[0].Model)
-}
-
-func TestService_SessionPin_OpenAI_ForceModelCommandSetsPin(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	const forceBody = `{
-		"model":"gpt-4o",
-		"messages":[
-			{"role":"system","content":"You are helpful."},
-			{"role":"user","content":"/force-model gpt-5\nuse this model for now"}
-		]
-	}`
-	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster"}}
-	svc := newOpenAIPinSvc(fr, store)
-
-	ctx := authedCtx(uuid.New().String())
-	rec := httptest.NewRecorder()
-	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
-	require.NoError(t, svc.ProxyOpenAIChatCompletion(ctx, []byte(forceBody), rec, httpReq))
-
-	assert.Equal(t, 0, fr.routeCalls, "force-model command must short-circuit routing")
-	require.Len(t, store.upserts, 1)
-	assert.Equal(t, "gpt-5", store.upserts[0].Model)
-	assert.Equal(t, providers.ProviderOpenAI, store.upserts[0].Provider)
-	assert.Equal(t, translate.ReasonUserForceModel, store.upserts[0].Reason)
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, "chat.completion", resp["object"])
-	choices, ok := resp["choices"].([]any)
-	require.True(t, ok)
-	require.NotEmpty(t, choices)
-	first, ok := choices[0].(map[string]any)
-	require.True(t, ok)
-	msg, ok := first["message"].(map[string]any)
-	require.True(t, ok)
-	content, _ := msg["content"].(string)
-	assert.Contains(t, content, "force-model applied: gpt-5")
 }
 
 func TestService_SessionPin_OpenAI_UnforceModelCommandClearsPin(t *testing.T) {
@@ -1213,7 +1083,7 @@ func TestService_HardPin_BypassesTierCeiling(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"moonshotai/kimi-k3",
 		nil,
 	)

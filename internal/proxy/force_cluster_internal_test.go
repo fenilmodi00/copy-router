@@ -69,7 +69,7 @@ func TestProxyMessages_ForceClusterOnNonSidecarStrategyRejects(t *testing.T) {
 	fr := &stripFailureRouter{}
 	fp := &stripFailureProvider{}
 	svc := NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: fp}, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil)
 
 	body := `{"model":"moonshotai/kimi-k3","max_tokens":64,"messages":[{"role":"user","content":"hi"}]}`
 	rec := httptest.NewRecorder()
@@ -104,7 +104,7 @@ func TestProxyMessages_ForceClusterReachesRouterRequest(t *testing.T) {
 	}}
 	fp := &stripFailureProvider{}
 	svc := NewService(nil, map[string]providers.Client{providers.ProviderAnthropic: fp}, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithPolicyStrategy(policy.StrategySpec{Strategy: strategy, Router: fr})
 
 	// Tools + a real max_tokens keep the turn off the classifier/probe hard-pin

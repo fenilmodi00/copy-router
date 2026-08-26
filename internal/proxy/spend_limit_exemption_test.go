@@ -78,7 +78,7 @@ func TestProxyMessages_OverEngineerCap_CoveringSubscription_ServesFreeNo402(t *t
 	obs.Record(obs.Key([]byte(subToken)), usage.Snapshot{
 		Primary: usage.Window{UsedPercent: 0.20, WindowMinutes: 300},
 	})
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: p}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: p}, nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithUsageObserver(obs).
 		WithBillingService(billing.NewService(repo))
 
@@ -118,7 +118,7 @@ func TestProxyMessages_OverEngineerCap_NoSubscription_402s(t *testing.T) {
 
 	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-pro"}}
 	p := &fakeProvider{proxyResponse: bypassStreamResponse}
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: p}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: p}, nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithBillingService(billing.NewService(repo))
 
 	// Usage-bypass enabled but no subscription credential on the request.
@@ -160,7 +160,7 @@ func TestProxyMessages_OverEngineerCap_ExhaustedSubscription_Refuses402(t *testi
 	obs.Record(obs.Key([]byte(subToken)), usage.Snapshot{
 		Secondary: usage.Window{UsedPercent: 1.0, WindowMinutes: 10080},
 	})
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: p}, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: p}, nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithUsageObserver(obs).
 		WithBillingService(billing.NewService(repo))
 

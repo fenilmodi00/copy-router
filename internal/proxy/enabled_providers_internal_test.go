@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"testing"
 
-	"workweave/router/internal/auth"
-	"workweave/router/internal/billing"
 	"workweave/router/internal/providers"
 
 	"github.com/stretchr/testify/assert"
@@ -158,127 +156,6 @@ func TestEnabledProvidersForRequest_SubscriptionEnrollsAnthropic(t *testing.T) {
 		got := makeService().enabledProvidersForRequest(ctx, providers.ProviderAnthropic, http.Header{})
 		assert.NotContains(t, got, providers.ProviderAnthropic,
 			"a provider exclusion must subtract Anthropic even when a subscription token is present")
-	})
-}
-
-// TestEnabledProvidersForRequest_CodexSubscriptionEnrollsOpenAI mirrors the
-// Anthropic subscription test for Codex: enrolling OpenAI requires BOTH the
-// JWT and account-id.
-func TestEnabledProvidersForRequest_CodexSubscriptionEnrollsOpenAI(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	const codexJWT = "eyJhbGciOiJSUzI1NiJ9.codex.sig"
-	makeService := func() *Service {
-		return &Service{
-			byokOnly: true,
-			providers: map[string]providers.Client{
-				providers.ProviderAnthropic: nil,
-				providers.ProviderOpenAI:    nil,
-			},
-			deploymentKeyedProviders:     map[string]struct{}{},
-			passthroughEligibleProviders: map[string]struct{}{},
-		}
-	}
-	routerKeyed := func() context.Context {
-		return context.WithValue(context.Background(), InstallationIDContextKey{}, testInstallationID)
-	}
-
-	t.Run("dedicated Codex headers enroll openai only", func(t *testing.T) {
-		ctx := context.WithValue(routerKeyed(), OpenAISubscriptionContextKey{}, codexJWT)
-		ctx = context.WithValue(ctx, OpenAIAccountIDContextKey{}, "acct-123")
-		got := makeService().enabledProvidersForRequest(ctx, providers.ProviderOpenAI, http.Header{})
-		assert.Contains(t, got, providers.ProviderOpenAI,
-			"a Codex subscription must make OpenAI eligible so the scorer can route a Codex turn")
-		assert.NotContains(t, got, providers.ProviderAnthropic,
-			"the Codex token is OpenAI-only and must never enroll another upstream")
-	})
-
-	t.Run("inbound Authorization Codex bearer enrolls openai on a router-keyed request", func(t *testing.T) {
-		// Managed Codex CLI path: router key in X-Weave-Router-Key, JWT+account-id
-		// in Authorization — OpenAI must enroll off the inbound bearer.
-		headers := http.Header{
-			"Authorization":      []string{"Bearer " + codexJWT},
-			"Chatgpt-Account-Id": []string{"acct-123"},
-		}
-		got := makeService().enabledProvidersForRequest(routerKeyed(), providers.ProviderOpenAI, headers)
-		assert.Contains(t, got, providers.ProviderOpenAI,
-			"the inbound Codex subscription bearer (Codex-through-router) must enroll OpenAI even when router-keyed")
-		assert.NotContains(t, got, providers.ProviderAnthropic,
-			"the Codex token is OpenAI-only and must never enroll another upstream")
-	})
-
-	t.Run("inbound OpenAI API-key bearer does NOT enroll openai on a router-keyed request", func(t *testing.T) {
-		// Only the Codex OAuth subset (JWT + account-id) enrolls off the inbound
-		// bearer; a plain client API key with no account-id must not.
-		headers := http.Header{"Authorization": []string{"Bearer sk-proj-real-client-key"}}
-		got := makeService().enabledProvidersForRequest(routerKeyed(), providers.ProviderOpenAI, headers)
-		assert.NotContains(t, got, providers.ProviderOpenAI,
-			"a general inbound OpenAI API key must not enroll OpenAI on the router-key path")
-	})
-
-	t.Run("token without account-id enrolls nothing (load-bearing)", func(t *testing.T) {
-		ctx := context.WithValue(routerKeyed(), OpenAISubscriptionContextKey{}, codexJWT)
-		got := makeService().enabledProvidersForRequest(ctx, providers.ProviderOpenAI, http.Header{})
-		assert.NotContains(t, got, providers.ProviderOpenAI,
-			"without the ChatGPT-Account-ID the subscription is unusable, so OpenAI must not be enrolled")
-		assert.Empty(t, got)
-	})
-
-	t.Run("an excluded OpenAI trumps the Codex enrollment", func(t *testing.T) {
-		ctx := context.WithValue(routerKeyed(), OpenAISubscriptionContextKey{}, codexJWT)
-		ctx = context.WithValue(ctx, OpenAIAccountIDContextKey{}, "acct-123")
-		ctx = context.WithValue(ctx, InstallationExcludedProvidersContextKey{}, []string{providers.ProviderOpenAI})
-		got := makeService().enabledProvidersForRequest(ctx, providers.ProviderOpenAI, http.Header{})
-		assert.NotContains(t, got, providers.ProviderOpenAI,
-			"a provider exclusion must subtract OpenAI even when a Codex subscription is present")
-	})
-}
-
-func TestExcludeCodexOAuthOnlyModels(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	const codexJWT = "eyJhbGciOiJSUzI1NiJ9.codex.sig"
-	ctx := context.WithValue(routerKeyedCtx(), OpenAISubscriptionContextKey{}, codexJWT)
-	ctx = context.WithValue(ctx, OpenAIAccountIDContextKey{}, "acct-123")
-	enabled := map[string]struct{}{providers.ProviderOpenAI: {}}
-
-	t.Run("OAuth-only excludes infrastructure OpenAI models", func(t *testing.T) {
-		s := &Service{
-			byokOnly:                     true,
-			providers:                    map[string]providers.Client{providers.ProviderOpenAI: nil},
-			deploymentKeyedProviders:     map[string]struct{}{},
-			passthroughEligibleProviders: map[string]struct{}{},
-		}
-		got := s.excludeCodexOAuthOnlyModels(ctx, http.Header{}, enabled, nil)
-		assert.Contains(t, got, "openai/gpt-oss-120b")
-		assert.NotContains(t, got, "openai/gpt-oss-120b")
-		assert.NotContains(t, got, "openai/gpt-oss-120b")
-		assert.NotContains(t, got, "openai/gpt-oss-120b")
-	})
-
-	t.Run("OpenAI BYOK keeps infrastructure models eligible", func(t *testing.T) {
-		s := &Service{
-			byokOnly:                     true,
-			providers:                    map[string]providers.Client{providers.ProviderOpenAI: nil},
-			deploymentKeyedProviders:     map[string]struct{}{},
-			passthroughEligibleProviders: map[string]struct{}{},
-		}
-		byokCtx := context.WithValue(ctx, ExternalAPIKeysContextKey{}, []*auth.ExternalAPIKey{
-			{Provider: providers.ProviderOpenAI, Plaintext: []byte("sk-oai-byok")},
-		})
-		got := s.excludeCodexOAuthOnlyModels(byokCtx, http.Header{}, enabled, nil)
-		assert.NotContains(t, got, "openai/gpt-oss-120b")
-	})
-
-	t.Run("subscription-only ignores infrastructure credentials", func(t *testing.T) {
-		s := &Service{
-			providers: map[string]providers.Client{providers.ProviderOpenAI: nil},
-			deploymentKeyedProviders: map[string]struct{}{
-				providers.ProviderOpenAI: {},
-			},
-			passthroughEligibleProviders: map[string]struct{}{},
-		}
-		got := s.excludeCodexOAuthOnlyModels(billing.WithSubscriptionOnly(ctx), http.Header{}, enabled, nil)
-		assert.Contains(t, got, "openai/gpt-oss-120b")
-		assert.NotContains(t, got, "openai/gpt-oss-120b")
 	})
 }
 

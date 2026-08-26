@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"workweave/router/internal/providers"
 	"workweave/router/internal/router/sessionpin"
 	"workweave/router/internal/translate"
 
@@ -226,7 +227,7 @@ func (r *recordingLoopStore) CountLoopEscalationEvents(context.Context, []byte, 
 // newLoopEscalationSvc wires a Service with just the pieces
 // handleLoopEscalation touches.
 func newLoopEscalationSvc(pins *stubPinStore, events *recordingLoopStore) *Service {
-	svc := NewService(nil, nil, nil, false, nil, pins, false, "anthropic", "deepseek-ai/deepseek-v4-flash", nil)
+	svc := NewService(nil, nil, nil, false, nil, pins, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil)
 	if events != nil {
 		svc = svc.WithLoopEscalationStore(events)
 	}

@@ -12,7 +12,6 @@ import (
 
 	"workweave/router/internal/providers"
 	"workweave/router/internal/proxy"
-	"workweave/router/internal/proxy/usage"
 	"workweave/router/internal/router"
 	"workweave/router/internal/router/policy"
 
@@ -171,7 +170,7 @@ func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) 
 		&fakeRouter{decision: scorerDecision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", telem,
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", telem,
 	).WithPolicyStrategy(policy.StrategySpec{Strategy: shadowStrategy, Router: shadowRouter})
 
 	ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, installID)
@@ -214,46 +213,6 @@ func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) 
 	assert.False(t, row.ModelsAgree)
 }
 
-func TestPolicyShadowComparisonCollectsUsageBypassRoute(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	const installID = "77777777-7777-7777-7777-777777777777"
-	shadowStrategy := router.Strategy("future-policy")
-	shadowRouter := &shadowRequestRouter{
-		decision: router.Decision{
-			Provider: providers.ProviderOpenAI,
-			Model:    "openai/gpt-oss-120b",
-		},
-		requests: make(chan router.Request, 1),
-	}
-	telem := newCaptureTelemetry()
-	observer := usage.NewObserver([]byte("salt"), 10*time.Minute, time.Now)
-	observer.Record(observer.Key([]byte(bypassSubToken)), usage.Snapshot{
-		Primary: usage.Window{UsedPercent: 0.20, WindowMinutes: 300},
-	})
-	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: bypassScorerPickMdl}},
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
-		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, bypassScorerPickMdl, telem,
-	).WithSubscriptionAwareRouting(observer, 0.05, 2.0).
-		WithPolicyStrategy(policy.StrategySpec{Strategy: shadowStrategy, Router: shadowRouter})
-
-	ctx := bypassCtx(0.80)
-	ctx = context.WithValue(ctx, proxy.InstallationIDContextKey{}, installID)
-	ctx = context.WithValue(ctx, proxy.ExternalIDContextKey{}, "org-bypass")
-	ctx = context.WithValue(ctx, proxy.PolicyTrainingAllowedContextKey{}, true)
-	ctx = context.WithValue(ctx, proxy.PolicyShadowStrategyContextKey{}, shadowStrategy)
-	recorder, request, body := bypassRequest(t)
-
-	require.NoError(t, svc.ProxyMessages(ctx, body, recorder, request))
-
-	row := telem.firstShadowRow(t)
-	assert.Equal(t, installID, row.InstallationID)
-	assert.Equal(t, bypassRequestedMdl, row.ServingModel)
-	assert.Equal(t, "openai/gpt-oss-120b", row.ShadowModel)
-	assert.False(t, row.ModelsAgree)
-}
-
 // TestProxyMessages_RecordsClusterObservation asserts cluster-routed decisions
 // surface every routing-brain field into the telemetry row (W-1339/W-1335).
 func TestProxyMessages_RecordsClusterObservation(t *testing.T) {
@@ -280,7 +239,7 @@ func TestProxyMessages_RecordsClusterObservation(t *testing.T) {
 		nil,
 		nil,
 		false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 
@@ -336,7 +295,7 @@ func TestProxyMessages_RecordsPolicyObservation(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	).WithContentCapture(proxy.CaptureHashed, 0, nil)
 
@@ -381,7 +340,7 @@ func TestProxyMessages_PersistsCacheTokens(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: provider},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 
@@ -418,7 +377,7 @@ func TestProxyMessages_ChosenScoreZeroIsPersisted(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 
@@ -454,7 +413,7 @@ func TestProxyMessages_NoMetadataOmitsClusterFields(t *testing.T) {
 		nil,
 		nil,
 		false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 
@@ -508,7 +467,7 @@ func TestProxyMessages_PersistsTurnType(t *testing.T) {
 				&fakeRouter{decision: decision},
 				map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 				nil, false, nil, nil, false,
-				providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+				providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 				telem,
 			)
 
@@ -538,7 +497,7 @@ func TestProxyMessages_PersistsRolloutID(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 
@@ -567,7 +526,7 @@ func TestProxyMessages_PersistedPolicyRolloutIDOverridesClientIdentity(t *testin
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 
@@ -599,7 +558,7 @@ func TestProxyMessages_PersistsSessionKeyAndRole(t *testing.T) {
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
 	)
 

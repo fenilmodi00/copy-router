@@ -76,7 +76,7 @@ func TestPinExpiry_UserForcedNeverExpires(t *testing.T) {
 func TestSetForceModelPin_WritesNeverExpiresSentinel(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil)
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil)
 
 	var key [sessionpin.SessionKeyLen]byte
 	require.NoError(t, svc.setForceModelPin(

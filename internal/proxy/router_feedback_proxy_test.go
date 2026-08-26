@@ -3,7 +3,6 @@ package proxy_test
 import (
 	"context"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -18,7 +17,6 @@ import (
 	"workweave/router/internal/router"
 	"workweave/router/internal/router/policy"
 	"workweave/router/internal/router/sessionpin"
-	"workweave/router/internal/translate"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -487,102 +485,6 @@ func TestService_RouterFeedbackCommand_OmitsTrainingTranscriptWithoutPermission(
 	assert.NotContains(t, payload, "training_conversation_delta")
 }
 
-func TestService_RouterFeedbackCommand_CorrelatesCompactedHMMEmbeddingRoute(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	routeBody := []byte(`{
-		"model":"deepseek-ai/deepseek-v4-flash",
-		"max_tokens":195000,
-		"messages":[
-			{"role":"user","content":"` + strings.Repeat("x", 30_000) + `"},
-			{"role":"assistant","content":"working"},
-			{"role":"user","content":"latest request"}
-		]
-	}`)
-	routeEnv, err := translate.ParseAnthropic(routeBody)
-	require.NoError(t, err)
-	rawSessionKey := proxy.DeriveSessionKey(routeEnv, "key-1")
-	rawFeedbackKey := hex.EncodeToString(rawSessionKey[:])
-
-	store := newFakePinStore()
-	policyFeedback := &fakePolicyFeedbackRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "hmm_policy(label=balanced)",
-		Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMMEmbedding)},
-	}}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster"}}
-	svc := newPinSvc(fr, store).
-		WithPolicyStrategy(policy.StrategySpec{
-			Strategy:    router.StrategyHMMEmbedding,
-			Router:      policyFeedback,
-			Unavailable: router.ErrStrategyUnavailable,
-		}).
-		WithAvailableModels(map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}).
-		WithCompaction(nil, proxy.DefaultCompactionTriggerPct)
-	installationID := uuid.NewString()
-	ctx := router.WithStrategy(authedCtx(installationID), router.StrategyHMMEmbedding)
-	ctx = context.WithValue(ctx, proxy.ExternalIDContextKey{}, "org-test")
-	ctx = context.WithValue(ctx, proxy.PolicyTrainingAllowedContextKey{}, true)
-	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	require.NoError(t, svc.ProxyMessages(ctx, routeBody, httptest.NewRecorder(), httpReq))
-
-	requests := policyFeedback.Requests()
-	require.Len(t, requests, 1)
-	assert.Equal(t, rawFeedbackKey, requests[0].FeedbackKey)
-	assert.Equal(t, "org-test", requests[0].OrganizationID)
-	assert.Equal(t, installationID, requests[0].InstallationID)
-
-	feedbackBody := []byte(`{
-		"model":"deepseek-ai/deepseek-v4-flash",
-		"max_tokens":1024,
-		"messages":[
-			{"role":"user","content":"` + strings.Repeat("x", 30_000) + `"},
-			{"role":"assistant","content":"working"},
-			{"role":"user","content":"latest request"},
-			{"role":"assistant","content":"done"},
-			{"role":"user","content":"/rf+"}
-		]
-	}`)
-	require.NoError(t, svc.ProxyMessages(ctx, feedbackBody, httptest.NewRecorder(), httpReq))
-	require.Eventually(t, func() bool {
-		return len(policyFeedback.Payloads()) == 1
-	}, time.Second, 10*time.Millisecond)
-	payloads := policyFeedback.Payloads()
-	require.Len(t, payloads, 1)
-	assert.Equal(t, requests[0].FeedbackKey, payloads[0]["feedback_key"])
-	assert.Equal(t, requests[0].FeedbackRole, payloads[0]["feedback_role"])
-	assert.Equal(t, "org-test", payloads[0]["organization_id"])
-	assert.Equal(t, true, payloads[0]["training_allowed"])
-	delta, ok := payloads[0]["training_conversation_delta"].([]router.ConversationMessage)
-	require.True(t, ok)
-	require.Len(t, delta, 2)
-	assert.Equal(t, "user", delta[0].Role)
-	assert.Equal(t, "latest request", delta[0].Text)
-	assert.Equal(t, "assistant", delta[1].Role)
-	assert.Equal(t, "done", delta[1].Text)
-}
-
-func TestService_RouterFeedbackCommand_DoesNotForwardPolicyFeedbackOutsideHMM(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	const body = `{
-		"model":"deepseek-ai/deepseek-v4-pro",
-		"max_tokens":1024,
-		"messages":[
-			{"role":"user","content":"/rf+"}
-		]
-	}`
-	store := newFakePinStore()
-	policyFeedback := &fakePolicyFeedbackRouter{}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-pro", Reason: "cluster"}}
-	svc := newPinSvc(fr, store).WithHMMRouter(policyFeedback)
-
-	rec := httptest.NewRecorder()
-	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	require.NoError(t, svc.ProxyMessages(authedCtx(uuid.NewString()), []byte(body), rec, httpReq))
-
-	assert.Empty(t, policyFeedback.Payloads())
-}
-
 func TestService_RouterFeedbackCommand_OpenAIIngress(t *testing.T) {
 	const body = `{
 		"model":"gpt-4o",
@@ -937,47 +839,6 @@ func TestService_RouterFeedbackCommand_SequenceResolvesStrategyRoutesToItsReport
 	assert.Equal(t, "req-resolved-on-RL", payload["request_id"])
 	assert.Equal(t, "moonshotai/kimi-k3", payload["served_model"])
 	assert.NotContains(t, payload, "training_conversation_delta", "training delta is suppressed for sequence-rated feedback (latest-turn slice is wrong for older turns)")
-}
-
-func TestService_RouterFeedbackCommand_SequenceRejectsHMMDeltaWithResolvedStrategy(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	// When an HMM-rated historical turn is being rated, the sidecar should
-	// receive the rating + resolved-turn identifiers but no mis-paired delta.
-	const body = `{
-		"model":"deepseek-ai/deepseek-v4-pro",
-		"max_tokens":1024,
-		"messages":[
-			{"role":"user","content":"/rf -2 - too slow"}
-		]
-	}`
-	store := newFakePinStore()
-	feedback := &fakeFeedbackStore{}
-	telem := newCaptureTelemetry()
-	telem.seqResult = proxy.TelemetryTurnResult{
-		RequestID:     "req-resolved-hmm",
-		DecisionModel: "moonshotai/kimi-k3",
-		Strategy:      "hmm_embedding",
-	}
-	hmmReporter := &fakePolicyFeedbackRouter{}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-pro", Reason: "cluster"}}
-	ctx := router.WithStrategy(authedCtx(uuid.New().String()), router.StrategyHMMEmbedding)
-	svc := newPinSvcWithTelemetry(fr, store, telem).
-		WithRouterFeedbackStore(feedback).
-		WithPolicyStrategy(policy.StrategySpec{
-			Strategy:    router.StrategyHMMEmbedding,
-			Router:      hmmReporter,
-			Unavailable: router.ErrStrategyUnavailable,
-		}).
-		WithAvailableModels(map[string]struct{}{"moonshotai/kimi-k3": {}}).
-		WithCompaction(nil, proxy.DefaultCompactionTriggerPct)
-	ctx = context.WithValue(ctx, proxy.PolicyTrainingAllowedContextKey{}, true)
-	require.NoError(t, svc.ProxyMessages(ctx, []byte(body), httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))))
-
-	require.Eventually(t, func() bool { return len(hmmReporter.Payloads()) == 1 }, time.Second, 10*time.Millisecond)
-	payload := hmmReporter.Payloads()[0]
-	assert.Equal(t, "hmm_embedding", payload["strategy"])
-	assert.Equal(t, "req-resolved-hmm", payload["request_id"])
-	assert.NotContains(t, payload, "training_conversation_delta", "training delta would pair the resolved turn with the wrong conversation")
 }
 
 func TestService_RouterFeedbackCommand_NegativeOnePreservesTrainingDelta(t *testing.T) {

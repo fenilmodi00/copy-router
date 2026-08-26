@@ -224,22 +224,6 @@ func TestExtractClientCredentials_RejectsSubscriptionForNonAnthropic(t *testing.
 
 const codexJWT = "eyJhbGciOiJSUzI1NiJ9.codex-access-token.signature"
 
-func TestExtractClientCredentials_CodexSubscription(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	// A Codex subscription is an OAuth JWT bearer paired with a
-	// ChatGPT-Account-Id header, distinguishing it from a plain API key.
-	headers := http.Header{
-		"Authorization":      []string{"Bearer " + codexJWT},
-		"Chatgpt-Account-Id": []string{"acct-12345"},
-	}
-	creds := proxy.ExtractClientCredentials("openai", headers)
-	require.NotNil(t, creds, "a Codex subscription JWT + account-id must be accepted for OpenAI")
-	assert.True(t, creds.OAuth, "a Codex subscription bearer must be flagged OAuth")
-	assert.Equal(t, "codex_subscription", creds.Source)
-	assert.Equal(t, []byte(codexJWT), creds.APIKey)
-	assert.Equal(t, []byte("acct-12345"), creds.AccountID)
-}
-
 func TestExtractClientCredentials_CodexJWTWithoutAccountIDIsNotSubscription(t *testing.T) {
 	// Without the account-id the Codex backend would 401, so the pair is not a
 	// usable subscription. The bearer falls through to the plain client-key path.
@@ -262,23 +246,6 @@ func TestExtractClientCredentials_OpenAIKeyWithAccountIDIsNotSubscription(t *tes
 	require.NotNil(t, creds)
 	assert.False(t, creds.OAuth, "an sk- API key must never be classified as a Codex subscription")
 	assert.Equal(t, "client", creds.Source)
-}
-
-func TestExtractClientCredentials_CodexSubscriptionIsOpenAIOnly(t *testing.T) {
-	t.Skip("obsolete on aiand-only catalog")
-	// The Codex JWT is OpenAI-only; an account-id header on another vendor's
-	// surface must not produce an OAuth credential there.
-	headers := http.Header{
-		"Authorization":      []string{"Bearer " + codexJWT},
-		"Chatgpt-Account-Id": []string{"acct-12345"},
-	}
-	for _, provider := range []string{"google", "openrouter", "fireworks"} {
-		creds := proxy.ExtractClientCredentials(provider, headers)
-		if creds != nil {
-			assert.Falsef(t, creds.OAuth, "a Codex subscription must never be resolved for %s", provider)
-			assert.Emptyf(t, creds.AccountID, "no Codex account-id must attach to %s creds", provider)
-		}
-	}
 }
 
 func TestExtractClientCredentials_RejectsRouterBearerEvenWithAccountID(t *testing.T) {

@@ -44,7 +44,7 @@ func TestProxyMessages_KeepaliveDuringUpstreamSilence(t *testing.T) {
 	svc := proxy.NewService(
 		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek-ai/deepseek-v4-pro"}},
 		map[string]providers.Client{"fireworks": openaicompat.NewClient("test-fw-key", upstream.URL)},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
+		nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{"fireworks": {}}).
 		WithSSEKeepalive(40 * time.Millisecond)
 
@@ -91,7 +91,7 @@ func TestProxyMessages_KeepaliveDisabledLeavesStreamUnpadded(t *testing.T) {
 	svc := proxy.NewService(
 		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek-ai/deepseek-v4-pro"}},
 		map[string]providers.Client{"fireworks": openaicompat.NewClient("test-fw-key", upstream.URL)},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
+		nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{"fireworks": {}}).
 		WithSSEKeepalive(0)
 
