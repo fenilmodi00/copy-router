@@ -1,29 +1,33 @@
-# Router (Build.io deploy context)
+# Router (provider glossary)
 
-Terms for the Build.io + Supabase deployment path of this router fork.
+Shared language for providers, wire families, catalog IDs, client aliases, harnesses, and ingress surfaces on the aiand-only deploy.
 
 ## Language
 
-**Router app**:
-The Build.io application named `router` on the fenil team (dockerfile stack, ap-northeast-1). The deploy target for this effort.
-_Avoid_: aiand-relay (legacy app), dyno name alone
+**Provider**:
+Named upstream credential and dispatch identity (`aiand`, `anthropic`, `openai`, gateways, and other BYOK/fixture names). Deploy baseline registers **aiand** only. Other provider names remain for wire-family / BYOK / gateway / test fixtures.
+_Avoid_: Collapsing `ProviderAnthropic` into `ProviderAiand`; treating Anthropic as the deploy upstream
 
-**Supabase DATABASE_URL**:
-The manually set Build.io config var pointing at Supabase Postgres (session pooler for runtime). Not an Addons.io provisioned URL.
-_Avoid_: Schema To Go, Ave To Go, dedicated Build.io database addon
+**TranslationFamily**:
+Wire-format family a provider speaks (OpenAI-compat vs Anthropic Messages, and kin). Cross-format translation and dispatch key off family, not an enumerated provider-name list.
+_Avoid_: Equating family with provider name; assuming Anthropic wire implies an Anthropic upstream
 
-**Host WSL path**:
-Local `make setup` / `make dev` against the same Supabase session pooler (`:5432`), with `PUBSUB_DISABLED=true` and no Compose Postgres. Documented in `docs/HOST_WSL_SUPABASE.md`. Skip `make db` and `make full-setup`.
-_Avoid_: Treating Compose `make db` as required for every local loop
+**CatalogModelID**:
+Canonical model identity in the deploy catalog (open-weight rows such as `moonshotai/…`, `z-ai/…`, `deepseek-ai/…`). Routing, pricing, and pins speak catalog IDs. Claude-era strings are not catalog rows.
+_Avoid_: Keeping Claude catalog rows so a harness can keep sending Claude names
 
-**Pub/Sub disable**:
-Single-replica boot with `PUBSUB_DISABLED=true` (or empty `PUBSUB_PROJECT_ID`) so GCP Pub/Sub is skipped. Cross-replica cache invalidation is off; 5-minute cache TTL is the safety net.
-_Avoid_: "no Pub/Sub features", emulator-only disable
+**UpstreamID**:
+Model ID the chosen provider binding sends on the wire to that upstream. May match the catalog ID or differ when the upstream’s published name diverges (example shape: catalog `z-ai/glm-5.2` vs upstream `zai-org/glm-5.2`).
+_Avoid_: Treating every client-facing string as an upstream ID; inventing Claude upstream IDs for aiand
 
-**Pub/Sub re-enable**:
-Turning Pub/Sub back on only when project ID, topic, subscription prefix, and GCP credentials are all present together, with `PUBSUB_DISABLED` unset/false.
-_Avoid_: Setting `PUBSUB_PROJECT_ID` alone
+**ClientModelAlias**:
+Client-supplied Claude-era (and short) model strings remapped onto existing aiand **CatalogModelID**s (Appendix F style). Examples only: `claude-fable-5` → `moonshotai/kimi-k3`; `claude-opus-5` / `claude-opus-4-8` → `z-ai/glm-5.2`; `claude-sonnet-5` → `moonshotai/kimi-k2.7`; `claude-sonnet-4-6` → `deepseek-ai/deepseek-v4-pro`; `claude-haiku-4-5` → `deepseek-ai/deepseek-v4-flash`. Aliases are remap inputs, not catalog rows.
+_Avoid_: Calling aliases “models in the catalog”; using aliases as a reason to retain Claude catalog entries
 
-**Deploy dump**:
-Extra or conflicting Build.io deploy artifacts that confuse the operator (duplicate guides, wrong addon in `app.json`, compose/emulator leftovers treated as production).
-_Avoid_: Legitimate local compose for development
+**ClientHarness**:
+Optional client tool that speaks a peripheral wire (notably Claude Code on Anthropic Messages). A harness is not a provider and not a reason to keep Claude catalog rows; it reaches aiand through translation and aliases.
+_Avoid_: Treating Claude Code as deploy baseline; equating harness presence with Anthropic-as-upstream
+
+**IngressSurface**:
+HTTP product surface clients call. Primary: OpenAI-compatible `/v1/chat/completions`. Peripheral: `/v1/messages` (Anthropic wire in, translated before aiand OpenAI-compat dispatch). Ingress is not the same as Provider or TranslationFamily.
+_Avoid_: Treating `/v1/messages` as a second upstream; leading with Anthropic ingress as the product story
