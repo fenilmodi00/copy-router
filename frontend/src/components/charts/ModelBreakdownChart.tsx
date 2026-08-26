@@ -17,7 +17,7 @@ const TIME_KEY = "time" as const;
 
 type RouterGranularity = "hour" | "day" | "week";
 
-export type ModelBreakdownMetric = "requests" | "spend";
+export type ModelBreakdownMetric = "requests" | "spend" | "cost_per_1k";
 
 interface Props {
   buckets: ModelBreakdownBucket[];
@@ -54,7 +54,16 @@ function formatUSDCompact(v: number): string {
 function formatCount(v: number): string {
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+  if (Number.isFinite(v) && v < 10 && v !== 0) return v.toFixed(2);
   return String(Math.round(v));
+}
+
+function formatCostPer1K(v: number): string {
+  return `$${v.toFixed(2)}`;
+}
+
+function costPer1K(row: { actual_cost_usd: number; total_tokens: number }): number {
+  return (row.actual_cost_usd / Math.max(1, row.total_tokens)) * 1_000;
 }
 
 function toTimeGranularity(g: RouterGranularity): TimeGranularity {
@@ -63,15 +72,16 @@ function toTimeGranularity(g: RouterGranularity): TimeGranularity {
 
 /**
  * Stacked bar chart of per-bucket totals broken down by the model the router
- * selected. `metric` picks the summed value: request volume (usage) or actual
- * retail cost (spend) — mirroring the managed WorkWeave dashboard's Model
- * Usage / Model Spend charts.
+ * selected. `metric` picks the summed value: request volume (usage), actual
+ * retail cost (spend), or cost-per-1K-tokens — mirroring the managed WorkWeave
+ * dashboard's Model Usage / Model Spend charts.
  */
 export function ModelBreakdownChart({ buckets, granularity, metric }: Props) {
   const wwGranularity = toTimeGranularity(granularity);
 
-  const formatValue = metric === "spend" ? formatUSD : formatCount;
-  const formatAxisValue = metric === "spend" ? formatUSDCompact : formatCount;
+  const formatValue = metric === "spend" ? formatUSD : metric === "cost_per_1k" ? formatCostPer1K : formatCount;
+  const formatAxisValue =
+    metric === "spend" ? formatUSDCompact : metric === "cost_per_1k" ? formatCostPer1K : formatCount;
 
   const { chartData, models, config } = useMemo(() => {
     const modelNames = [...new Set(buckets.map(b => b.decision_model))].sort();
@@ -80,9 +90,8 @@ export function ModelBreakdownChart({ buckets, granularity, metric }: Props) {
     for (const b of buckets) {
       const t = new Date(b.bucket).getTime();
       const row = byTime.get(t) ?? {};
-      row[b.decision_model] =
-        (row[b.decision_model] ?? 0) +
-        (metric === "spend" ? b.actual_cost_usd : b.request_count);
+      const raw = metric === "spend" ? b.actual_cost_usd : metric === "cost_per_1k" ? costPer1K(b) : b.request_count;
+      row[b.decision_model] = (row[b.decision_model] ?? 0) + raw;
       byTime.set(t, row);
     }
 

@@ -198,6 +198,10 @@ export interface AiandModel {
   output_per_1m: string;
   cached_input_per_1m: string;
   currency: string;
+  // Upstream publication time (unix seconds). Part of ai&'s model object and
+  // forwarded verbatim by AiandCatalogHandler even though the Go row struct
+  // doesn't declare it; optional so older cached payloads still type-check.
+  created?: number;
 }
 
 export const api = {

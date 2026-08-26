@@ -255,7 +255,7 @@ export default function DashboardPage() {
             <PopularityLeaderboard
               rows={modelTotals.map(t => ({ id: t.id, label: t.label, tokens: t.tokens, costUsd: t.costUsd }))}
               limit={5}
-              onSelect={id => router.push(`/models/${encodeURIComponent(id)}`)}
+              onSelect={id => router.push(`/models/${id.replace(/\//g, "~")}`)}
             />
           </ChartCard>
 
@@ -280,7 +280,7 @@ export default function DashboardPage() {
                   .map(r => (
                     <tr key={r.id} className="border-t border-border/50">
                       <td className="py-1.5 pr-2">
-                        <a href={`/models/${encodeURIComponent(r.id)}`} className="hover:text-primary">
+                        <a href={`/models/${r.id.replace(/\//g, "~")}`} className="hover:text-primary">
                           {r.label}
                         </a>
                       </td>
