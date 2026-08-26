@@ -4,7 +4,10 @@ bin/
 *.exe~
 *.dll
 *.so
+.audit/
 *.dylib
+.firecrawl/
+.router/
 
 # Go build/test artifacts
 *.test

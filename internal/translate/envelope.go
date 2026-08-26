@@ -1111,13 +1111,23 @@ var modelMaxOutputTokens = map[string]int{
 	// Keyed by full catalog ID, since decision.Model keeps the vendor prefix.
 	// OSS models accept far more than the 8192 fallback; leaving them unlisted
 	// clamped Claude Code's 64K output request, truncating every long turn.
-	"moonshotai/kimi-k3":               131072,
+	// Values reflect the ai& upstream's actual acceptance (verified by probe,
+	// 2026-08-26): every catalog model accepts max_tokens up to its declared
+	// context_window, so the cap is the context window itself, not a separate
+	// smaller output ceiling.
+	"moonshotai/kimi-k3":               1048576, // 1M context; ai& accepts full window as output
+	"moonshotai/kimi-k2.7-code":        262144,  // 256K context window
 	"qwen/qwen3.8-max":                 64000, // Fireworks reports a 64000 output token ceiling
 	"qwen/qwen3-coder-next":            16384, // Bedrock (primary) caps Qwen models at 16K output
 	"qwen/qwen3-235b-a22b-2507":        16384,
 	"qwen/qwen3-next-80b-a3b-instruct": 16384,
-	"deepseek-ai/deepseek-v4-flash":       131072, // DeepSeek V4 documents 384K max output
-	"deepseek-ai/deepseek-v4-pro":         131072,
+	"qwen/qwen3.6-27b":                 262144, // 256K context window via ai&
+	"deepseek-ai/deepseek-v4-flash":    1048576, // 1M context; ai& accepts full window as output
+	"deepseek-ai/deepseek-v4-pro":      1048576, // 1M context; ai& accepts full window as output
+	"motif-technologies/motif-3":       262144,  // 256K context window via ai&
+	"zai-org/glm-5.2":                  1048576, // 1M context; ai& accepts full window as output
+	"openai/gpt-oss-120b":              131072,  // 128K context window via ai&
+	"google/gemma-4-31b-it":            262144,  // 256K context window via ai&
 	"minimax/minimax-m3":               131072, // 512K context, output up to the window
 	"minimax/minimax-m2.7":             65536,
 	"z-ai/glm-5":                       65536,

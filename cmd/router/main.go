@@ -1366,12 +1366,12 @@ const (
 
 // resolveDefaultBaselineModel returns the cost-comparison baseline used when
 // RequestedModel has no pricing entry. Uses os.LookupEnv directly (not
-// config.GetOr) to distinguish unset (-> deepseek-ai/deepseek-v4-pro) from
-// explicit "" (-> no substitution), per the contract in .env.example.
+// config.GetOr) to distinguish unset (-> moonshotai/kimi-k3) from explicit ""
+// (-> no substitution), per the contract in .env.example.
 func resolveDefaultBaselineModel() string {
 	v, ok := os.LookupEnv("ROUTER_DEFAULT_BASELINE_MODEL")
 	if !ok {
-		return "deepseek-ai/deepseek-v4-pro"
+		return "moonshotai/kimi-k3"
 	}
 	return strings.TrimSpace(v)
 }

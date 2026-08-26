@@ -128,10 +128,20 @@ func TestDetectFromEnvelope_Anthropic(t *testing.T) {
 			want: turntype.Probe,
 		},
 		{
-			// Above the Probe threshold (max_tokens=1); no tools + short
-			// messages falls into the Classifier shape (see security-monitor case below).
-			name: "max_tokens=5 with no tools is classifier (above probe threshold)",
+			// Above the Probe threshold (max_tokens=1). Without a classifier
+			// system-prompt fingerprint this is a terse main-loop turn, NOT a
+			// classifier — a bare user prompt with small max_tokens must route
+			// through the scorer (regression: OpenAI clients sending max_tokens=16
+			// were hard-pinned to flash here).
+			name: "max_tokens=5 with no tools and no classifier system prompt is main_loop",
 			body: `{"model":"claude-haiku-4-5","max_tokens":5,"messages":[{"role":"user","content":"hello"}]}`,
+			want: turntype.MainLoop,
+		},
+		{
+			// Canonical classifier shape: small max_tokens, no tools, short
+			// messages, AND the security-monitor system-prompt fingerprint.
+			name: "max_tokens=5 with no tools and security-monitor system is classifier",
+			body: `{"model":"claude-haiku-4-5","max_tokens":5,"messages":[{"role":"user","content":"hello"}],"system":"You are a security monitor for autonomous AI coding agents."}`,
 			want: turntype.Classifier,
 		},
 		{
@@ -208,11 +218,13 @@ func TestDetectFromEnvelope_Anthropic(t *testing.T) {
 			want: turntype.Classifier,
 		},
 		{
+			// A classifier call still classifies with a two-message transcript
+			// when the security-monitor system-prompt fingerprint is present.
 			name: "classifier with two messages still classifier",
 			body: `{"model":"claude-opus-4-7","max_tokens":64,"messages":[
 				{"role":"user","content":"transcript"},
 				{"role":"assistant","content":"verdict?"}
-			]}`,
+			],"system":"You are a security monitor for autonomous AI coding agents."}`,
 			want: turntype.Classifier,
 		},
 		{
@@ -345,6 +357,32 @@ func TestDetectFromEnvelope_OpenAI(t *testing.T) {
 			name: "max_tokens=1 is probe (legacy OpenAI SDK)",
 			body: `{"model":"gpt-4o","max_tokens":1,"messages":[{"role":"user","content":"quota"}]}`,
 			want: turntype.Probe,
+		},
+		{
+			// Regression guard for the all-flash routing bug: a terse OpenAI
+			// main-loop turn (small max_tokens, no tools, single message, no
+			// classifier system prompt) must route through the scorer, not
+			// hard-pin to the cheap model as a false-positive Classifier.
+			// 16 is the exact max_tokens the stress test used when every prompt
+			// misrouted to deepseek-v4-flash.
+			name: "max_tokens=16 single user message no tools is main_loop",
+			body: `{"model":"gpt-4o","max_tokens":16,"messages":[{"role":"user","content":"Implement burst balloons DP in Python."}]}`,
+			want: turntype.MainLoop,
+		},
+		{
+			// Same guard at the upper edge of the (now system-prompt-gated)
+			// classifier token threshold: 256 with no classifier system prompt
+			// is still a main-loop turn.
+			name: "max_tokens=256 single user message no tools is main_loop",
+			body: `{"model":"gpt-4o","max_tokens":256,"messages":[{"role":"user","content":"solve this"}]}`,
+			want: turntype.MainLoop,
+		},
+		{
+			// A genuine classifier call on the OpenAI surface still hard-pins
+			// when the security-monitor system-prompt fingerprint is present.
+			name: "max_tokens=64 with security-monitor system is classifier",
+			body: `{"model":"gpt-4o","max_tokens":64,"messages":[{"role":"system","content":"You are a security monitor for autonomous AI coding agents."},{"role":"user","content":"is this safe?"}]}`,
+			want: turntype.Classifier,
 		},
 	}
 

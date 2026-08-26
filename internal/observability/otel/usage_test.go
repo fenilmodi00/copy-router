@@ -257,6 +257,70 @@ func TestUsageExtractor_GoogleNativeCacheTokens_NonStreaming(t *testing.T) {
 	assert.Equal(t, 1024, cacheRead)
 }
 
+// TestUsageExtractor_OpenAICompatProvider_Streaming is the regression for the
+// zero-tokens/zero-cost telemetry bug: extractFromSSEEvent dispatched on the
+// literal provider name, so any FamilyOpenAICompat provider not listed in the
+// switch (aiand, openrouter, fireworks, ...) never had its usage parsed. The
+// dashboard recorded request_count but zero tokens and zero actual cost.
+func TestUsageExtractor_OpenAICompatProvider_Streaming(t *testing.T) {
+	for _, provider := range []string{"aiand", "openrouter", "fireworks", "together"} {
+		t.Run(provider, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			ext := otel.NewUsageExtractor(rec, provider)
+
+			events := []string{
+				"data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\n",
+				"data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"usage\":{\"prompt_tokens\":15,\"completion_tokens\":16,\"total_tokens\":31}}\n\n",
+				"data: [DONE]\n\n",
+			}
+			for _, e := range events {
+				_, err := ext.Write([]byte(e))
+				require.NoError(t, err)
+			}
+
+			in, out := ext.Tokens()
+			assert.Equal(t, 15, in, "input tokens must be parsed for %s via family dispatch", provider)
+			assert.Equal(t, 16, out, "output tokens must be parsed for %s via family dispatch", provider)
+		})
+	}
+}
+
+// TestUsageExtractor_OpenAICompatProvider_NonStreaming is the non-streaming
+// counterpart of the regression above.
+func TestUsageExtractor_OpenAICompatProvider_NonStreaming(t *testing.T) {
+	rec := httptest.NewRecorder()
+	ext := otel.NewUsageExtractor(rec, "aiand")
+
+	body := `{"id":"chatcmpl-1","object":"chat.completion","choices":[{"message":{"role":"assistant","content":"Hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":15,"completion_tokens":8,"total_tokens":23}}`
+	_, err := ext.Write([]byte(body))
+	require.NoError(t, err)
+
+	in, out := ext.Tokens()
+	assert.Equal(t, 15, in)
+	assert.Equal(t, 8, out)
+}
+
+// TestUsageExtractor_AnthropicGateway_Streaming verifies the Anthropic-spec
+// gateway provider is parsed via family dispatch (not just the literal
+// "anthropic" name).
+func TestUsageExtractor_AnthropicGateway_Streaming(t *testing.T) {
+	rec := httptest.NewRecorder()
+	ext := otel.NewUsageExtractor(rec, "anthropic_gateway")
+
+	events := []string{
+		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":42,\"output_tokens\":0}}}\n\n",
+		"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":7}}\n\n",
+	}
+	for _, e := range events {
+		_, err := ext.Write([]byte(e))
+		require.NoError(t, err)
+	}
+
+	in, out := ext.Tokens()
+	assert.Equal(t, 42, in)
+	assert.Equal(t, 7, out)
+}
+
 func TestUsageExtractor_RecordCacheUsage_NilReceiver(t *testing.T) {
 	var ext *otel.UsageExtractor
 	creation, read := ext.CacheTokens()

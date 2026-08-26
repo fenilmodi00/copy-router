@@ -105,8 +105,8 @@ func (u *UsageExtractor) RecordUsage(inputTokens, outputTokens int) {
 	}
 }
 
-// RecordCacheUsage sets cache token counts directly. OpenAI has no cache-creation
-// concept, so callers pass 0 for cacheCreationTokens.
+// RecordCacheUsage sets cache token counts directly. Pass 0 for a field the
+// provider does not emit.
 func (u *UsageExtractor) RecordCacheUsage(cacheCreationTokens, cacheReadTokens int) {
 	if cacheCreationTokens > 0 {
 		u.cacheCreation = cacheCreationTokens
@@ -159,12 +159,23 @@ func (u *UsageExtractor) scanBuffer() {
 	u.tryExtractFromJSON()
 }
 
+// Dispatch is family-based so every OpenAI-compat provider (aiand, openrouter,
+// fireworks, ...) and every Anthropic-spec gateway (anthropic_gateway) is
+// parsed correctly. A literal-name switch silently dropped usage for any
+// provider constant not listed in the cases, recording zero tokens/cost.
 func (u *UsageExtractor) extractFromSSEEvent(eventType []byte, data []byte) {
-	switch u.provider {
-	case providers.ProviderAnthropic:
+	switch providers.FamilyFor(u.provider) {
+	case providers.FamilyAnthropic:
 		u.extractAnthropicSSE(eventType, data)
-	case providers.ProviderOpenAI, providers.ProviderGoogle:
+	case providers.FamilyOpenAICompat:
 		u.extractOpenAISSE(data)
+	case providers.FamilyUnknown:
+		// Google's native Gemini wire format is not an OpenAI-compat family in
+		// this deploy, but the literal "google" provider still needs parsing
+		// for the usage_test.go native-shape coverage.
+		if u.provider == providers.ProviderGoogle {
+			u.extractOpenAISSE(data)
+		}
 	}
 }
 
@@ -207,8 +218,12 @@ func (u *UsageExtractor) extractOpenAISSE(data []byte) {
 		return
 	}
 
-	u.input = input
-	u.output = output
+	if input > 0 {
+		u.input = input
+	}
+	if output > 0 {
+		u.output = output
+	}
 	if cacheCreation > 0 {
 		u.cacheCreation = cacheCreation
 	}
@@ -245,7 +260,20 @@ func (u *UsageExtractor) tryExtractFromJSON() {
 // OpenAI has no cache-creation field; cacheRead maps from cached_tokens.
 // Google's native :generateContent uses usageMetadata; its OpenAI-compat surface
 // uses the OpenAI shape instead.
+//
+// Family-based dispatch is load-bearing: a literal-name switch silently dropped
+// usage for any OpenAI-compat provider not listed (aiand, openrouter, ...),
+// which zeroed the dashboard's token and cost metrics end-to-end.
 func extractUsageGJSON(data []byte, provider string) (input, output, cacheCreation, cacheRead int, found bool) {
+	family := providers.FamilyFor(provider)
+	// Google is not in ProviderFamilies in this aiand-only deploy (FamilyUnknown),
+	// but both its native usageMetadata shape and its OpenAI-compat surface must
+	// still parse — the latter shares the OpenAI prompt_tokens/completion_tokens
+	// shape, so it routes through the OpenAI-compat branch below.
+	openAICompatShape := family == providers.FamilyOpenAICompat || provider == providers.ProviderGoogle
+
+	// Google's native Gemini :generateContent body carries usageMetadata, not
+	// usage. Only the native shape has it; the OpenAI-compat surface does not.
 	if provider == providers.ProviderGoogle {
 		if meta := gjson.GetBytes(data, "usageMetadata"); meta.Exists() {
 			input = int(meta.Get("promptTokenCount").Int())
@@ -256,25 +284,25 @@ func extractUsageGJSON(data []byte, provider string) (input, output, cacheCreati
 	}
 
 	usage := gjson.GetBytes(data, "usage")
-	if !usage.Exists() && provider == providers.ProviderAnthropic {
+	if !usage.Exists() && family == providers.FamilyAnthropic {
 		usage = gjson.GetBytes(data, "message.usage")
 	}
 	// OpenAI Responses streaming nests usage under the terminal response event
 	// (response.completed); the non-streaming body carries it at the top level.
-	if !usage.Exists() && provider == providers.ProviderOpenAI {
+	if !usage.Exists() && openAICompatShape {
 		usage = gjson.GetBytes(data, "response.usage")
 	}
 	if !usage.Exists() {
 		return 0, 0, 0, 0, false
 	}
 
-	switch provider {
-	case providers.ProviderAnthropic:
+	switch {
+	case family == providers.FamilyAnthropic:
 		input = int(usage.Get("input_tokens").Int())
 		output = int(usage.Get("output_tokens").Int())
 		cacheCreation = int(usage.Get("cache_creation_input_tokens").Int())
 		cacheRead = int(usage.Get("cache_read_input_tokens").Int())
-	case providers.ProviderOpenAI, providers.ProviderGoogle:
+	case openAICompatShape:
 		// Chat Completions uses prompt_tokens/completion_tokens; Responses API
 		// (Codex passthrough) uses input_tokens/output_tokens. Probe both.
 		if pt := usage.Get("prompt_tokens"); pt.Exists() {
@@ -287,6 +315,8 @@ func extractUsageGJSON(data []byte, provider string) (input, output, cacheCreati
 			cacheRead = int(usage.Get("input_tokens_details.cached_tokens").Int())
 		}
 	default:
+		// FamilyUnknown (and not ProviderGoogle, which is handled above): no
+		// usage shape to parse.
 		return 0, 0, 0, 0, false
 	}
 

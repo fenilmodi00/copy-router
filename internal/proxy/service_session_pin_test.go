@@ -480,9 +480,12 @@ func TestService_HardPin_Compaction_ByokOnly_NoEligibleProviderErrors(t *testing
 		"error must be ErrClusterUnavailable so handlers map it to HTTP 503")
 }
 
-// classifierBody: small max_tokens, no tools — DetectFromEnvelope hard-pins
-// this, bypassing the scorer that normally applies excluded_models.
-const classifierBody = `{"model":"deepseek-ai/deepseek-v4-flash","max_tokens":5,"messages":[{"role":"user","content":"hello"}]}`
+// classifierBody: small max_tokens, no tools, and the security-monitor
+// system-prompt fingerprint — DetectFromEnvelope hard-pins this, bypassing
+// the scorer that normally applies excluded_models. The system prompt is
+// load-bearing: without it a bare terse request is a main-loop turn, not a
+// classifier (see turntype.isClassifier).
+const classifierBody = `{"model":"deepseek-ai/deepseek-v4-flash","max_tokens":64,"messages":[{"role":"user","content":"is this safe?"}],"system":"You are a security monitor for autonomous AI coding agents."}`
 
 // Regression guard: excluded_models must be honored on the hard-pin tier too.
 // Prod symptom: an excluded gemini model still got all utility traffic

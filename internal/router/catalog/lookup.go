@@ -256,9 +256,12 @@ func UpstreamIDFor(catalogID, bindingID string) string {
 	return catalogID
 }
 
-// PriceFor returns the per-(provider, model) pricing.
+// PriceFor returns the per-(provider, model) pricing. Accepts catalog IDs or
+// binding UpstreamIDs so a decision.Model set to the upstream wire name by the
+// cluster scorer (e.g. "zai-org/glm-5.2" for catalog "z-ai/glm-5.2") still
+// resolves. Catalog IDs win first via ByIDOrUpstream.
 func PriceFor(provider, id string) (Pricing, bool) {
-	m, ok := ByID(id)
+	m, ok := ByIDOrUpstream(id)
 	if !ok {
 		return Pricing{}, false
 	}
@@ -271,9 +274,10 @@ func PriceFor(provider, id string) (Pricing, bool) {
 }
 
 // PrimaryPriceFor returns the pricing of the model's first (primary) binding,
-// for call sites that don't thread a specific provider through.
+// for call sites that don't thread a specific provider through. Accepts catalog
+// IDs or binding UpstreamIDs (see PriceFor).
 func PrimaryPriceFor(id string) (Pricing, bool) {
-	m, ok := ByID(id)
+	m, ok := ByIDOrUpstream(id)
 	if !ok {
 		return Pricing{}, false
 	}

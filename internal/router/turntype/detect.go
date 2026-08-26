@@ -63,7 +63,7 @@ func DetectFromEnvelope(env *translate.RequestEnvelope, feats translate.RoutingF
 	if isSubAgentDispatch(env.MetadataUserID(), env.FirstUserMessageText(), subAgentHint) {
 		return SubAgentDispatch
 	}
-	if isClassifier(feats) {
+	if isClassifier(feats, systemText) {
 		return Classifier
 	}
 	if feats.LastKind == "tool_result" {
@@ -78,9 +78,13 @@ func isProbe(feats translate.RoutingFeatures) bool {
 
 // isClassifier reports whether a request is a short-form classifier call:
 // no tools (real Claude Code turns always carry the tool registry), plus
-// max_tokens/message_count within their thresholds. Checked after Probe.
-// Tight on purpose — a false positive would hard-pin a real conversation.
-func isClassifier(feats translate.RoutingFeatures) bool {
+// max_tokens/message_count within their thresholds, AND a system-prompt
+// fingerprint identifying the call as a classifier/monitor. The system-prompt
+// gate is load-bearing: without it, any terse OpenAI main-loop request
+// (small max_tokens, no tools, short transcript) would hard-pin to the cheap
+// model and bypass the scorer. A bare user prompt with max_tokens=16 is a
+// legitimate main-loop turn, not a classifier. Checked after Probe.
+func isClassifier(feats translate.RoutingFeatures, systemText string) bool {
 	if feats.HasTools {
 		return false
 	}
@@ -90,7 +94,35 @@ func isClassifier(feats translate.RoutingFeatures) bool {
 	if feats.MessageCount <= 0 || feats.MessageCount > classifierMaxMessageCount {
 		return false
 	}
-	return true
+	return hasClassifierSystemPrompt(systemText)
+}
+
+// hasClassifierSystemPrompt reports whether the system prompt carries a
+// fingerprint identifying the call as a synthetic classifier/monitor rather
+// than a real conversation. Claude Code's security monitor is the canonical
+// case; its system prompt opens with "You are a security monitor". A missing
+// or generic system prompt means a real user turn, which must route through
+// the scorer regardless of max_tokens.
+func hasClassifierSystemPrompt(systemText string) bool {
+	if strings.TrimSpace(systemText) == "" {
+		return false
+	}
+	lower := strings.ToLower(systemText)
+	// Anchored to the start of the system prompt so a passing mention of
+	// "security" in a long main-loop system prompt can't trigger.
+	for _, marker := range classifierSystemPromptMarkers {
+		if strings.HasPrefix(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// classifierSystemPromptMarkers are the anchored opening phrases that
+// identify a synthetic classifier/monitor system prompt. The canonical
+// Claude Code security monitor opens with "You are a security monitor".
+var classifierSystemPromptMarkers = []string{
+	"you are a security monitor",
 }
 
 // isTitleGen reports whether a request is Claude Code's sidebar-title call:

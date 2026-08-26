@@ -245,3 +245,47 @@ func TestCrossFormat_AnthropicToOpenAI_Qwen38MaxExplicitMaxTokensPassedThrough(t
 	require.NoError(t, json.Unmarshal(prep.Body, &out))
 	assert.Equal(t, float64(64000), out["max_tokens"])
 }
+
+// Regression (2026-08-26): six ai& catalog models were absent from
+// modelMaxOutputTokens (motif-3, glm-5.2, kimi-k2.7-code, qwen3.6-27b,
+// gemma-4-31b-it, gpt-oss-120b), so Claude Code's 64000 max_tokens was
+// silently clamped to the 8192 global fallback on every turn routed to them.
+// Each now carries its ai&-verified output ceiling, so 64000 passes through.
+func TestOpenAISameFormat_AiandCatalogModelsNotClampedTo8192Fallback(t *testing.T) {
+	for _, model := range []string{
+		"motif-technologies/motif-3",
+		"zai-org/glm-5.2",
+		"moonshotai/kimi-k2.7-code",
+		"qwen/qwen3.6-27b",
+		"google/gemma-4-31b-it",
+		"openai/gpt-oss-120b",
+	} {
+		body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":64000}`)
+		opts := translate.EmitOptions{
+			TargetModel:  model,
+			Capabilities: router.Lookup(model),
+		}
+		out := parseAndEmit(t, body, "openai", opts)
+		assert.Equal(t, float64(64000), out["max_tokens"], model)
+	}
+}
+
+// Regression (2026-08-26): deepseek-v4-{flash,pro}, kimi-k3, and glm-5.2 were
+// capped at 131072 (or absent) when ai& actually accepts max_tokens up to the
+// full 1M context window. A request at 200000 must no longer clamp to 131072.
+func TestOpenAISameFormat_LargeContextAiandModelsAcceptFullWindow(t *testing.T) {
+	for _, model := range []string{
+		"deepseek-ai/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-pro",
+		"moonshotai/kimi-k3",
+		"zai-org/glm-5.2",
+	} {
+		body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":200000}`)
+		opts := translate.EmitOptions{
+			TargetModel:  model,
+			Capabilities: router.Lookup(model),
+		}
+		out := parseAndEmit(t, body, "openai", opts)
+		assert.Equal(t, float64(200000), out["max_tokens"], model)
+	}
+}

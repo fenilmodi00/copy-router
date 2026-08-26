@@ -64,6 +64,37 @@ func TestPriceFor_KnownAiandPair(t *testing.T) {
 	assert.InDelta(t, 0.08/0.150, p.CacheReadMultiplier, 1e-9)
 }
 
+// TestPriceFor_ResolvesUpstreamID reproduces the bug where a decision.Model
+// carrying a binding's upstream wire name (e.g. "zai-org/glm-5.2" for the
+// catalog row "z-ai/glm-5.2") returned (Pricing{}, false), zeroing the
+// telemetry's actual_input_cost_usd / actual_output_cost_usd.
+func TestPriceFor_ResolvesUpstreamID(t *testing.T) {
+	p, ok := PriceFor(providers.ProviderAiand, "zai-org/glm-5.2")
+	require.True(t, ok, "upstream ID zai-org/glm-5.2 must resolve to its catalog binding")
+	assert.Equal(t, 1.000, p.InputUSDPer1M)
+	assert.Equal(t, 4.000, p.OutputUSDPer1M)
+	assert.InDelta(t, 0.30/1.000, p.CacheReadMultiplier, 1e-9)
+
+	// Catalog ID still resolves (catalog IDs win first inside ByIDOrUpstream).
+	pCatalog, ok := PriceFor(providers.ProviderAiand, "z-ai/glm-5.2")
+	require.True(t, ok, "catalog ID z-ai/glm-5.2 must still resolve")
+	assert.Equal(t, p, pCatalog, "upstream ID and catalog ID must price identically")
+}
+
+// TestPrimaryPriceFor_ResolvesUpstreamID mirrors TestPriceFor_ResolvesUpstreamID
+// for the provider-less primary path used by the OTel emitter and auxiliary
+// inference billing.
+func TestPrimaryPriceFor_ResolvesUpstreamID(t *testing.T) {
+	p, ok := PrimaryPriceFor("zai-org/glm-5.2")
+	require.True(t, ok, "upstream ID zai-org/glm-5.2 must resolve via PrimaryPriceFor")
+	assert.Equal(t, 1.000, p.InputUSDPer1M)
+	assert.Equal(t, 4.000, p.OutputUSDPer1M)
+
+	pCatalog, ok := PrimaryPriceFor("z-ai/glm-5.2")
+	require.True(t, ok)
+	assert.Equal(t, p, pCatalog)
+}
+
 func TestResolveBinding_PicksAiand(t *testing.T) {
 	avail := map[string]struct{}{providers.ProviderAiand: {}}
 	b, ok := ResolveBinding("deepseek-ai/deepseek-v4-flash", avail)
