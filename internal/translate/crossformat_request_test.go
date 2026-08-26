@@ -557,12 +557,6 @@ func TestCrossFormat_OpenAIToAnthropic_NullToolResult(t *testing.T) {
 	assert.Equal(t, "", block["content"], "null tool content must become empty string")
 }
 
-
-
-
-
-
-
 func TestCrossFormat_AnthropicToOpenAI_SimpleText(t *testing.T) {
 	env, err := translate.ParseAnthropic(anthropicSimpleConversation)
 	require.NoError(t, err)
@@ -854,10 +848,6 @@ func TestCrossFormat_AnthropicToOpenAI_EmptyToolInputBecomesEmptyArgsString(t *t
 	assert.Equal(t, "{}", argsStr)
 }
 
-
-
-
-
 func TestCrossFormat_OpenAIToAnthropic_ScalarFieldsCarriedThrough(t *testing.T) {
 	body := []byte(`{
 		"model": "gpt-4",
@@ -934,7 +924,6 @@ func TestCrossFormat_AnthropicToOpenAI_ReasoningModelOmitsStop(t *testing.T) {
 	_, hasStop := doc["stop"]
 	assert.False(t, hasStop, "gpt-5.x rejects stop on chat/completions")
 }
-
 
 func TestCrossFormat_OpenAIToAnthropic_ToolParametersBecomesInputSchema(t *testing.T) {
 	body := []byte(`{
@@ -1204,7 +1193,6 @@ func TestCrossFormat_OpenAIToAnthropic_ToolChoiceNoneSuppressesTools(t *testing.
 	assert.False(t, hasToolChoice, "tool_choice should not appear when none")
 }
 
-
 func TestCrossFormat_AnthropicToOpenAI_EmptyToolsArrayOmitted(t *testing.T) {
 	body := []byte(`{
 		"model": "claude-sonnet-4-20250514",
@@ -1227,7 +1215,6 @@ func TestCrossFormat_AnthropicToOpenAI_EmptyToolsArrayOmitted(t *testing.T) {
 	_, hasTools := doc["tools"]
 	assert.False(t, hasTools, "empty tools array must be omitted, not emitted as empty array")
 }
-
 
 func TestCrossFormat_AnthropicToOpenAI_EmptyToolsNoTemperatureOverride(t *testing.T) {
 	body := []byte(`{
@@ -1343,8 +1330,6 @@ func TestCrossFormat_AnthropicToOpenAI_ToolResultMissingToolUseID(t *testing.T) 
 	assert.Equal(t, "", toolMsg["tool_call_id"], "a missing tool_use_id must pass through as empty, not a fabricated id")
 	assert.Equal(t, "done", toolMsg["content"])
 }
-
-
 
 func TestCrossFormat_OpenAIToAnthropic_ToolMissingFunctionName(t *testing.T) {
 	// OpenAI tool with function.name absent — must produce valid JSON

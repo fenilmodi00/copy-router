@@ -17,8 +17,8 @@ func TestForcedReasoningEffort(t *testing.T) {
 		{"gpt-5.6-sol", true, "high"},
 		{"gemini-3-pro-preview", false, "low"},
 		{"gemini-3.5-flash", true, "low"}, // effort-immune: escalation ignored
-		{"grok-4.6", false, "low"},              // unconditional: bare pin must not fall to xAI's non-disableable high default
-		{"grok-4.5", true, "low"},               // floor ignores escalation
+		{"grok-4.6", false, "low"},        // unconditional: bare pin must not fall to xAI's non-disableable high default
+		{"grok-4.5", true, "low"},         // floor ignores escalation
 		{"grok-4", false, "low"},
 		{"claude-opus-5", false, ""}, // adaptive path untouched
 		{"claude-sonnet-5", true, ""},

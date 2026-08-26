@@ -96,4 +96,3 @@ func TestHasImages_Anthropic(t *testing.T) {
 		})
 	}
 }
-

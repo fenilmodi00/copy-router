@@ -209,3 +209,12 @@ func TestMaybeRepinOnRefusal_NoOpCases(t *testing.T) {
 		}
 	})
 }
+
+// TestCyberRefusalFallbackModel_NewServiceDefault locks the unconfigured
+// constructor default to the same catalog ID as ROUTER_CYBER_REFUSAL_FALLBACK_MODEL.
+func TestCyberRefusalFallbackModel_NewServiceDefault(t *testing.T) {
+	svc := NewService(nil, nil, nil, false, nil, nil, false, "", "", nil)
+	if got := svc.cyberRefusalFallbackModel; got != "moonshotai/kimi-k2.7" {
+		t.Fatalf("cyberRefusalFallbackModel default = %q, want moonshotai/kimi-k2.7", got)
+	}
+}

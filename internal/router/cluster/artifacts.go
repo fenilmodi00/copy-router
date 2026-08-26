@@ -106,22 +106,22 @@ func (r *ModelRegistry) Models() []string {
 // ArtifactMetadata is the parsed metadata.yaml. Informational at runtime;
 // routing decisions depend only on centroids + rankings + registry.
 type ArtifactMetadata struct {
-	FormatVersion     int                `yaml:"format_version,omitempty"`
-	Version           string             `yaml:"version"`
-	Parent            string             `yaml:"parent,omitempty"`
-	Status            string             `yaml:"status,omitempty"`
-	PromotedDate      string             `yaml:"promoted_date,omitempty"`
-	FrozenDate        string             `yaml:"frozen_date,omitempty"`
-	Embedder          ArtifactEmbedder   `yaml:"embedder"`
-	Training          ArtifactTraining   `yaml:"training"`
-	DeployedProviders []string           `yaml:"deployed_providers,omitempty"`
-	DeployedModels    []string           `yaml:"deployed_models,omitempty"`
+	FormatVersion     int              `yaml:"format_version,omitempty"`
+	Version           string           `yaml:"version"`
+	Parent            string           `yaml:"parent,omitempty"`
+	Status            string           `yaml:"status,omitempty"`
+	PromotedDate      string           `yaml:"promoted_date,omitempty"`
+	FrozenDate        string           `yaml:"frozen_date,omitempty"`
+	Embedder          ArtifactEmbedder `yaml:"embedder"`
+	Training          ArtifactTraining `yaml:"training"`
+	DeployedProviders []string         `yaml:"deployed_providers,omitempty"`
+	DeployedModels    []string         `yaml:"deployed_models,omitempty"`
 	// KeepSupersededModels lists deployed model IDs intentionally retained
 	// even though a newer same-family member is also deployed. The latest
 	// family-uniqueness test skips exactly these; any other superseded model
 	// still fails the check.
-	KeepSupersededModels []string            `yaml:"keep_superseded_models,omitempty"`
-	CostPer1KInputUSD    map[string]float64  `yaml:"cost_per_1k_input_usd,omitempty"`
+	KeepSupersededModels []string           `yaml:"keep_superseded_models,omitempty"`
+	CostPer1KInputUSD    map[string]float64 `yaml:"cost_per_1k_input_usd,omitempty"`
 	// TokPerS holds measured median tok/s keyed by provider then model (same
 	// model varies sharply by provider). Read only by FastestModel/clamp
 	// selectors; missing/partial data degrades to CheapestModel.

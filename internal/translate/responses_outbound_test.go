@@ -398,8 +398,6 @@ func TestResponsesToAnthropicResponse_StopReasons(t *testing.T) {
 	require.Error(t, err)
 }
 
-
-
 func TestUseOpenAIResponsesAPI(t *testing.T) {
 	caps := router.Lookup("gpt-5.4-mini")
 	assert.True(t, translate.UseOpenAIResponsesAPI(providers.ProviderOpenAI, caps, true))

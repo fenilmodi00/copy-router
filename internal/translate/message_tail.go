@@ -177,8 +177,6 @@ func openAIMessageTailPreview(body []byte, n, maxLen int) []MessagePreview {
 	return out
 }
 
-
-
 // SystemTextTail returns the system-prompt length plus head and tail
 // excerpts of up to maxLen bytes each. Tail is empty when the system text
 // fits inside maxLen. Lets log readers spot transient <system-reminder>

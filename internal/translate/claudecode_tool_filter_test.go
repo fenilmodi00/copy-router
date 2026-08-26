@@ -39,7 +39,6 @@ func emittedToolNames(t *testing.T, body []byte) []string {
 	return out
 }
 
-
 // claudeCodeMixedToolBody is a representative Anthropic request body carrying
 // coding + scheduling tools interleaved with CC-only control-plane tools.
 const claudeCodeMixedToolBody = `{
@@ -97,7 +96,6 @@ func TestStripCCTools_AnthropicSourceOpenAITarget_DropsCCOnlyKeepsReal(t *testin
 	assert.NotContains(t, names, "SendMessage")
 	assert.NotContains(t, names, "ToolSearch")
 }
-
 
 func TestStripCCTools_AnthropicSourceAnthropicTarget_KeepsCCOnly(t *testing.T) {
 	// Anthropic models DO know how to dispatch Task/Skill/etc. via the
@@ -184,7 +182,6 @@ func TestKeepOrchestrationTools_OpenAITarget_NormalizesTypelessAnyOf(t *testing.
 	assert.Equal(t, []any{"string", "number", "boolean", "object", "array", "null"}, branch["type"],
 		"OpenAI requires every anyOf branch to declare a type")
 }
-
 
 func TestKeepOrchestrationTools_EmitOptionsZeroValue_StripsAll(t *testing.T) {
 	// Zero-value EmitOptions strips CC-only control-plane tools (incl.

@@ -91,4 +91,3 @@ func TestStripFeedbackFooter_NonTextBlocksUntouched(t *testing.T) {
 	assert.Equal(t, "answer", content.Get("0.text").String())
 	assert.Equal(t, "tool_use", content.Get("1.type").String())
 }
-

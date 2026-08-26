@@ -121,11 +121,6 @@ var openAICacheUsageResponse = []byte(`{
 	}
 }`)
 
-
-
-
-
-
 func unmarshal(t *testing.T, b []byte) map[string]any {
 	t.Helper()
 	var doc map[string]any
@@ -480,13 +475,6 @@ func TestAnthropicToOpenAIResponse_ReportsRoutedModelNotUpstreamAlias(t *testing
 	assert.Equal(t, "claude-sonnet-4-5", unmarshal(t, out)["model"])
 }
 
-
-
-
-
-
-
-
 func TestAnthropicToOpenAIError_WrapsError(t *testing.T) {
 	body := []byte(`{"type":"error","error":{"type":"invalid_request_error","message":"max_tokens must be positive"}}`)
 	out := translate.AnthropicToOpenAIError(body)
@@ -537,9 +525,6 @@ func TestOpenAIToAnthropicError_PassthroughOnEmptyFields(t *testing.T) {
 	assert.Equal(t, body, out, "empty type and message must pass through unchanged")
 }
 
-
-
-
 func TestAnthropicToOpenAIResponse_InvalidJSON_ReturnsError(t *testing.T) {
 	_, err := translate.AnthropicToOpenAIResponse([]byte(`not json`), "m")
 	assert.Error(t, err)
@@ -549,5 +534,3 @@ func TestOpenAIToAnthropicResponse_InvalidJSON_ReturnsError(t *testing.T) {
 	_, err := translate.OpenAIToAnthropicResponse([]byte(`not json`), "m")
 	assert.Error(t, err)
 }
-
-

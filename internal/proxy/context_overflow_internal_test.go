@@ -24,8 +24,8 @@ func TestContextWindowForRequest_CatalogWindows(t *testing.T) {
 // overflows gpt-oss (131K) but fits flash (1M).
 func TestExcludeContextOverflowModels_KeepsLargeWindowModel(t *testing.T) {
 	available := map[string]struct{}{
-		"moonshotai/kimi-k3":     {},
-		"openai/gpt-oss-120b":    {},
+		"moonshotai/kimi-k3":            {},
+		"openai/gpt-oss-120b":           {},
 		"deepseek-ai/deepseek-v4-flash": {},
 	}
 
@@ -42,7 +42,7 @@ func TestExcludeContextOverflowModels_KeepsLargeWindowModel(t *testing.T) {
 // untouched when every model fits.
 func TestExcludeContextOverflowModels_NoOverflowUnderWindow(t *testing.T) {
 	available := map[string]struct{}{
-		"moonshotai/kimi-k3":         {},
+		"moonshotai/kimi-k3":            {},
 		"deepseek-ai/deepseek-v4-flash": {},
 	}
 

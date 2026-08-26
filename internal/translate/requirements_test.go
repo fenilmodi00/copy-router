@@ -50,4 +50,3 @@ func TestTranslationRequirements_DetectsOpenAIMediaAndSearch(t *testing.T) {
 	assert.True(t, req.CitationsOrSearch)
 	assert.True(t, req.StructuredOutput)
 }
-

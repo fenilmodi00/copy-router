@@ -144,4 +144,3 @@ func TestRewriteForCompaction_OpenAI_PreservesSystem(t *testing.T) {
 	assert.NotContains(t, got, "u1 old")
 	assert.Contains(t, got, "SUM")
 }
-

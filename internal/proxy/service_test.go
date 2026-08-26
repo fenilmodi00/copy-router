@@ -243,8 +243,8 @@ func TestService_AgentShadowEvaluationNeverSubstitutesRequestedBaseline(t *testi
 			providers.ProviderOpenAI:    {},
 		}).
 		WithAvailableModels(map[string]struct{}{
-			"moonshotai/kimi-k3": {},
-			"openai/gpt-oss-120b":         {},
+			"moonshotai/kimi-k3":  {},
+			"openai/gpt-oss-120b": {},
 		})
 
 	ctx := context.WithValue(context.Background(), proxy.AgentShadowEvalContextKey{}, proxy.AgentShadowEvaluation{

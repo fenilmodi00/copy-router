@@ -88,7 +88,6 @@ func (e *RequestEnvelope) openAIConversationMessages() []ConversationMessage {
 	return compactConversationMessages(out)
 }
 
-
 func textForRole(role string, content gjson.Result) string {
 	if role == "user" {
 		return strings.TrimSpace(userPromptTextGJSON(content))
@@ -170,9 +169,6 @@ func openAIToolResults(msg gjson.Result) []ConversationToolResult {
 	}
 	return []ConversationToolResult{result}
 }
-
-
-
 
 func objectKeys(value gjson.Result) []string {
 	if !value.IsObject() {

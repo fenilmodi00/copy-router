@@ -349,8 +349,3 @@ func TestRewriteEnvelope_StripsToolResultsFromLatestUser(t *testing.T) {
 	require.Len(t, msgs, 1, "only summary when latest user was purely tool_results")
 	assert.Equal(t, "assistant", msgs[0].Get("role").String())
 }
-
-
-
-
-

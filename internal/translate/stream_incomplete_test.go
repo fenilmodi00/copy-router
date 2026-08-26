@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 func TestSSETranslator_IncompleteEOFEmitsFailureNotDone(t *testing.T) {
 	rec := httptest.NewRecorder()
 	w := translate.NewSSETranslator(rec, "gpt-x", nil)

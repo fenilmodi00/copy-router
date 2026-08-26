@@ -104,8 +104,6 @@ func TestAnthropicSSETranslator_MessageStartCarriesEstimatedInputTokens(t *testi
 	assert.Contains(t, startSegment, `"usage":{"input_tokens":1234,"output_tokens":0}`)
 }
 
-
-
 // Anthropic splits token counts across two events: message_start carries
 // input_tokens, message_delta carries only output_tokens. Without persisting
 // input_tokens from message_start, the final chunk's prompt_tokens is always 0.

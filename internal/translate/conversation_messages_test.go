@@ -29,7 +29,6 @@ func TestConversationMessagesStripsClaudeInjectedBlocks(t *testing.T) {
 	assert.Equal(t, "can you help me brainstorm a bit", messages[0].Text)
 }
 
-
 func TestConversationMessagesPreservesAnthropicToolResultMarker(t *testing.T) {
 	env, err := translate.ParseAnthropic([]byte(`{
 		"model":"claude-opus-4-7",
@@ -78,7 +77,6 @@ func TestConversationMessagesPreservesOpenAIToolResultMarker(t *testing.T) {
 	assert.Equal(t, "large raw tool output", messages[1].ToolResults[0].Text)
 }
 
-
 func TestConversationMessagesDropsNamelessOpenAIToolCalls(t *testing.T) {
 	env, err := translate.ParseOpenAI([]byte(`{
 		"model":"gpt-4o",
@@ -98,7 +96,6 @@ func TestConversationMessagesDropsNamelessOpenAIToolCalls(t *testing.T) {
 	require.Len(t, messages[0].ToolCalls, 1)
 	assert.Equal(t, "Read", messages[0].ToolCalls[0].Name)
 }
-
 
 func TestAvailableToolNamesProviderNeutral(t *testing.T) {
 	anthropicEnv, err := translate.ParseAnthropic([]byte(`{

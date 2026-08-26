@@ -36,7 +36,7 @@ func TestSiblingFailoverDecision(t *testing.T) {
 		got, ok := s.siblingFailoverDecision(ctx, overloadedDecision(&router.RoutingMetadata{
 			CandidateModels: []string{"z-ai/glm-5.2", "moonshotai/kimi-k2.7", "deepseek-ai/deepseek-v4-pro"},
 			CandidateProviders: map[string]string{
-				"moonshotai/kimi-k2.7":          providers.ProviderAnthropic,
+				"moonshotai/kimi-k2.7":        providers.ProviderAnthropic,
 				"deepseek-ai/deepseek-v4-pro": providers.ProviderFireworks,
 			},
 		}), 1_000, 0, 0)
@@ -51,7 +51,7 @@ func TestSiblingFailoverDecision(t *testing.T) {
 		got, ok := s.siblingFailoverDecision(ctx, overloadedDecision(&router.RoutingMetadata{
 			CandidateModels: []string{"moonshotai/kimi-k2.7", "deepseek-ai/deepseek-v4-pro"},
 			CandidateProviders: map[string]string{
-				"moonshotai/kimi-k2.7":          providers.ProviderAnthropic,
+				"moonshotai/kimi-k2.7":        providers.ProviderAnthropic,
 				"deepseek-ai/deepseek-v4-pro": providers.ProviderFireworks,
 			},
 		}), 1_000, 0, 0)

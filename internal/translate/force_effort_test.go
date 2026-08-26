@@ -54,8 +54,6 @@ func TestForceReasoningEffort_ResponsesOverride(t *testing.T) {
 	}
 }
 
-
-
 func TestForceEffort_CrossFormatOpenAI(t *testing.T) {
 	body := []byte(`{"model":"claude-opus-4-8","max_tokens":1024,"messages":[{"role":"user","content":"hi"}]}`)
 	env, err := translate.ParseAnthropic(body)
@@ -70,7 +68,6 @@ func TestForceEffort_CrossFormatOpenAI(t *testing.T) {
 	require.NoError(t, json.Unmarshal(prep.Body, &out))
 	assert.Equal(t, "high", out["reasoning_effort"])
 }
-
 
 func itoaLocal(n int) string {
 	if n == 0 {
