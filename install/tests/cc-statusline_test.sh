@@ -117,7 +117,7 @@ cp "$statusline" "$upstream"
 
 # Strip a model's price entries to simulate a copy written before that model
 # shipped. PRICED_MODEL stays in the table; STALE_MODEL is removed.
-STALE_MODEL="claude-opus-5"
+STALE_MODEL="moonshotai/kimi-k3"
 
 make_installed() { # make_installed <dest> [stale]
   local dest="$1"
