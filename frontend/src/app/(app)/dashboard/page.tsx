@@ -119,6 +119,42 @@ export default function DashboardPage() {
     };
   }, [fromISO, toISO, granularity, onboarding]);
 
+  // All hooks (both effects above, this memo) run before any early return so
+  // React never sees a hook-ordering shift between renders (e.g. a mount that
+  // errors must not drop the memo below). Derived values are plain
+  // recomputation on every render — cheap, and safe before the guards below.
+  const savingsRate =
+    summary == null || summary.total_requested_cost_usd === 0
+      ? 0
+      : (summary.total_savings_usd / summary.total_requested_cost_usd) * 100;
+  const avgTokensPerReq =
+    summary == null || summary.request_count === 0
+      ? 0
+      : summary.total_tokens / summary.request_count;
+  const cacheReadTokens = summary?.cache_read_tokens ?? 0;
+  const cacheWriteTokens = summary?.cache_write_tokens ?? 0;
+  const totalInputTokens = detailRows.reduce((acc, r) => acc + r.input_tokens, 0);
+  const cacheHitRate =
+    totalInputTokens > 0 ? (cacheReadTokens / totalInputTokens) * 100 : null;
+
+  // Per-model totals in the selected range (grouped from detail rows — the
+  // telemetry details API is the cheapest server-side per-row source we already
+  // have; the model-breakdown buckets give per-bucket, not totals).
+  const modelTotals = useMemo(() => {
+    const byModel = new Map<string, { tokens: number; costUsd: number; requests: number }>();
+    for (const r of detailRows) {
+      const key = r.decision_model || "(unknown)";
+      const cur = byModel.get(key) ?? { tokens: 0, costUsd: 0, requests: 0 };
+      cur.tokens += r.input_tokens + r.output_tokens;
+      cur.costUsd += r.actual_cost_usd;
+      cur.requests += 1;
+      byModel.set(key, cur);
+    }
+    return [...byModel.entries()]
+      .map(([id, v]) => ({ id, label: id, ...v }))
+      .sort((a, b) => b.tokens - a.tokens);
+  }, [detailRows]);
+
   if (onboarding === "checking") return null;
   if (onboarding === "needed") {
     return (
@@ -157,38 +193,6 @@ export default function DashboardPage() {
       </Page>
     );
   }
-
-  const savingsRate =
-    summary == null || summary.total_requested_cost_usd === 0
-      ? 0
-      : (summary.total_savings_usd / summary.total_requested_cost_usd) * 100;
-  const avgTokensPerReq =
-    summary == null || summary.request_count === 0
-      ? 0
-      : summary.total_tokens / summary.request_count;
-  const cacheReadTokens = summary?.cache_read_tokens ?? 0;
-  const cacheWriteTokens = summary?.cache_write_tokens ?? 0;
-  const totalInputTokens = detailRows.reduce((acc, r) => acc + r.input_tokens, 0);
-  const cacheHitRate =
-    totalInputTokens > 0 ? (cacheReadTokens / totalInputTokens) * 100 : null;
-
-  // Per-model totals in the selected range (grouped from detail rows — the
-  // telemetry details API is the cheapest server-side per-row source we already
-  // have; the model-breakdown buckets give per-bucket, not totals).
-  const modelTotals = useMemo(() => {
-    const byModel = new Map<string, { tokens: number; costUsd: number; requests: number }>();
-    for (const r of detailRows) {
-      const key = r.decision_model || "(unknown)";
-      const cur = byModel.get(key) ?? { tokens: 0, costUsd: 0, requests: 0 };
-      cur.tokens += r.input_tokens + r.output_tokens;
-      cur.costUsd += r.actual_cost_usd;
-      cur.requests += 1;
-      byModel.set(key, cur);
-    }
-    return [...byModel.entries()]
-      .map(([id, v]) => ({ id, label: id, ...v }))
-      .sort((a, b) => b.tokens - a.tokens);
-  }, [detailRows]);
 
   return (
     <Page
