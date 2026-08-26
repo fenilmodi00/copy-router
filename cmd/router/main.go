@@ -171,18 +171,25 @@ func main() {
 
 	// ai& is the sole upstream provider of this deployment.
 
+	// ai& (aiand.com) OpenAI-compatible inference surface for open-weight
+	// models (GLM, DeepSeek, Kimi, Qwen, Gemma, gpt-oss). Registration and the
+	// dashboard's live-catalog endpoint share the deployment's key/URL.
+	var aiandCatalogHandler gin.HandlerFunc
 	{
 
-		// ai& (aiand.com) OpenAI-compatible inference surface for open-weight
-		// models (GLM, DeepSeek, Kimi, Qwen, Gemma, gpt-oss). Uses ai&'s
-		// namespaced "<lab>/<model>" IDs; modelIDMap comes from the catalog's
-		// per-binding UpstreamID.
 		aiandBaseURL := config.GetOr("AIAND_API_URL", openaiCompatProvider.AiandBaseURL)
 		registerDeploymentKeyedProvider(providerMap, envKeyedProviders, logger,
 			providers.ProviderAiand, "ai&", "AIAND_API_KEY", aiandBaseURL, byokOnly,
 			func(key, baseURL string) providers.Client {
 				return openaiCompatProvider.NewClientWithModelIDMap(key, baseURL, upstreamIDsForProvider(providers.ProviderAiand))
 			})
+		if key := config.GetOr("AIAND_API_KEY", ""); key != "" {
+			aiandCatalogHandler = admin.AiandCatalogHandler(key, aiandBaseURL,
+				&http.Client{Timeout: aiandCatalogBudget}, time.Now)
+			logger.Info("ai& catalog endpoint enabled", "base_url", aiandBaseURL)
+		} else {
+			logger.Info("ai& catalog endpoint disabled (AIAND_API_KEY not set)")
+		}
 	}
 
 	availableProviders := make(map[string]struct{}, len(providerMap))
@@ -782,7 +789,7 @@ func main() {
 		})
 	}
 	analyticsSvc := analytics.NewService(repo.Analytics, time.Now)
-	server.Register(engine, authSvc, proxySvc, deployedModels, hmmRosterModels, deploymentMode, billingSvc, hmmReadinessChecker, hmmRosterSource, analyticsSvc)
+	server.Register(engine, authSvc, proxySvc, deployedModels, hmmRosterModels, deploymentMode, billingSvc, hmmReadinessChecker, hmmRosterSource, analyticsSvc, aiandCatalogHandler)
 
 	srv := &http.Server{
 		Addr:    ":" + config.GetOr("PORT", "8080"),
@@ -1362,6 +1369,12 @@ const (
 	// flagRegistryPublishTimeout bounds the boot-time registry publish so a slow
 	// or unreachable database delays startup by seconds, not indefinitely.
 	flagRegistryPublishTimeout = 10 * time.Second
+	// aiandCatalogBudget bounds the dashboard's live ai& catalog fetch. It
+	// mirrors AiandCatalogRequestBudget (the per-request upstream timeout the
+	// handler enforces internally); keeping them in sync means a slow catalog
+	// never strands the dashboard's request-handler goroutine waiting on the
+	// client long after the request context has been cancelled.
+	aiandCatalogBudget = 5 * time.Second
 )
 
 // resolveDefaultBaselineModel returns the cost-comparison baseline used when
