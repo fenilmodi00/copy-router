@@ -111,9 +111,9 @@ func TestCanonicalizeEffort(t *testing.T) {
 		{"med", "medium"},
 		{"high", "high"},
 		{"max", "max"},
-		{"xhigh", "xhigh"},
-		{"ultra", "xhigh"},
-		{"ULTRA", "xhigh"},
+		{"xhigh", "max"},
+		{"ultra", "max"},
+		{"ULTRA", "max"},
 		{"garbage", "garbage"},
 	}
 	for _, tc := range cases {
@@ -127,8 +127,8 @@ func TestCanonicalizeEffort(t *testing.T) {
 func TestIsValidEffort(t *testing.T) {
 	valid := []string{
 		"none", "off", "disabled",
-		"low", "medium", "high", "max", "xhigh",
-		"fast", "minimal", "ultra", "min", "med",
+		"low", "medium", "high", "max",
+		"fast", "minimal", "ultra", "xhigh", "min", "med",
 	}
 	for _, v := range valid {
 		t.Run(v, func(t *testing.T) {
@@ -143,8 +143,7 @@ func TestIsValidEffort(t *testing.T) {
 	}
 }
 
-// TestResolveForceEffort applies per-model xhigh cap (xhigh→max on
-// non-CapXhighEffort targets) and clamps to declared Reasoning levels.
+// TestResolveForceEffort canonicalizes aliases and clamps to declared Reasoning levels.
 func TestResolveForceEffort(t *testing.T) {
 	aiandFlash := router.NewSpecWithReasoning(
 		router.ReasoningCapabilities{Levels: []string{"none", "high", "max"}},
@@ -156,10 +155,10 @@ func TestResolveForceEffort(t *testing.T) {
 		spec  router.ModelSpec
 		want  string
 	}{
-		{"xhigh_capable_passes", "xhigh", router.NewSpec(router.CapAdaptiveThinking, router.CapXhighEffort), "xhigh"},
-		{"xhigh_incapable_clamps_to_max", "xhigh", router.NewSpec(router.CapAdaptiveThinking), "max"},
+		{"xhigh_alias_maps_to_max", "xhigh", router.NewSpec(router.CapAdaptiveThinking), "max"},
+		{"xhigh_incapable_stays_max", "xhigh", router.NewSpec(router.CapAdaptiveThinking), "max"},
 		{"low_no_cap", "low", router.NewSpec(), "low"},
-		{"ultra_alias_resolved", "ultra", router.NewSpec(router.CapAdaptiveThinking, router.CapXhighEffort), "xhigh"},
+		{"ultra_alias_resolved", "ultra", router.NewSpec(router.CapAdaptiveThinking), "max"},
 		{"fast_alias_resolved", "fast", router.NewSpec(), "low"},
 		{"none_passes_when_listed", "none", aiandFlash, "none"},
 		{"low_clamps_to_none_on_flash", "low", aiandFlash, "none"},

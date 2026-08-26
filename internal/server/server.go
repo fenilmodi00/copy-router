@@ -75,7 +75,32 @@ const (
 //
 // analyticsSvc, when non-nil, mounts the /v1/analytics/* export surface;
 // nil leaves it unmounted (tests, deployments without telemetry storage).
-func Register(engine *gin.Engine, authSvc *auth.Service, proxySvc *proxy.Service, deployedModels admin.DeployedModelsSource, hmmModels admin.HMMRosterSource, mode DeploymentMode, billingSvc *billing.Service, readinessChecker admin.HealthChecker, hmmRosterSource policy.RosterSource, analyticsSvc *analytics.Service) {
+// Register wires routes onto the engine. In managed mode the dashboard +
+// /admin/v1/* routes are not registered at all.
+//
+// deployedModels may be nil in tests; required in selfhosted prod so the
+// dashboard can render the universe of routable models.
+//
+// hmmModels is optional; nil when no HMM sidecar is wired — falls back to the
+// cluster registry.
+//
+// billingSvc is set only in managed mode when credit-billing is enabled; it
+// gates every inference route on prepaid balance via WithBalanceCheck. nil
+// leaves inference routes open (BYOK/platform key still controls upstream auth).
+//
+// readinessChecker gates /readyz only; /health remains process liveness.
+//
+// hmmRosterSource, when non-nil, mounts GET /v1/router/hmm-roster for the
+// control plane's cluster allowlist UI.
+//
+// analyticsSvc, when non-nil, mounts the /v1/analytics/* export surface;
+// nil leaves it unmounted (tests, deployments without telemetry storage).
+//
+// aiandCatalogHandler, when non-nil, mounts the live ai& model catalog
+// (GET /admin/v1/aiand/models) inside the selfhosted metrics group. nil means
+// AIAND_API_KEY was absent at boot — fail-closed: no route is registered so the
+// dashboard hides the Models section instead of erroring per request.
+func Register(engine *gin.Engine, authSvc *auth.Service, proxySvc *proxy.Service, deployedModels admin.DeployedModelsSource, hmmModels admin.HMMRosterSource, mode DeploymentMode, billingSvc *billing.Service, readinessChecker admin.HealthChecker, hmmRosterSource policy.RosterSource, analyticsSvc *analytics.Service, aiandCatalogHandler gin.HandlerFunc) {
 	// Managed mode: BYOK is opt-in per installation (see WithAuth).
 	byokRequiresOptIn := mode == DeploymentModeManaged
 
@@ -142,6 +167,12 @@ func Register(engine *gin.Engine, authSvc *auth.Service, proxySvc *proxy.Service
 		metrics.GET("/metrics/timeseries", admin.MetricsTimeseriesHandler(proxySvc))
 		metrics.GET("/metrics/details", admin.MetricsDetailsHandler(proxySvc))
 		metrics.GET("/metrics/model-breakdown", admin.MetricsModelBreakdownHandler(proxySvc))
+		// Live ai& catalog for the Models section; display source-of-truth only
+		// (the routing catalog is untouched). Registered only when the boot-time
+		// AIAND_API_KEY is set — fail-closed: absent key means no route.
+		if aiandCatalogHandler != nil {
+			metrics.GET("/aiand/models", aiandCatalogHandler)
+		}
 
 		// Mutations: admin cookie REQUIRED. rk_ tokens are rejected so a leaked data-plane key can't mint fresh router keys or rotate provider credentials.
 		mgmt := engine.Group("/admin/v1", middleware.WithTimeout(adminTimeout), middleware.WithAdminOnly(authSvc))

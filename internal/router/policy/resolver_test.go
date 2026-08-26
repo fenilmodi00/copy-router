@@ -356,8 +356,9 @@ func TestBindingForSelectionResolvesEffortQualifiedArmID(t *testing.T) {
 		wantFound  bool
 		wantEffort string
 	}{
-		{name: "effort-qualified arm id", armID: "aiand/moonshotai/kimi-k3:xhigh", wantFound: true, wantEffort: "xhigh"},
-		{name: "effort-qualified roster id", rosterID: "aiand/moonshotai/kimi-k3:xhigh", wantFound: true, wantEffort: "xhigh"},
+		{name: "effort-qualified arm id", armID: "aiand/moonshotai/kimi-k3:xhigh", wantFound: true, wantEffort: "max"},
+		{name: "effort-qualified roster id", rosterID: "aiand/moonshotai/kimi-k3:xhigh", wantFound: true, wantEffort: "max"},
+		{name: "legacy ultra alias arm id", armID: "aiand/moonshotai/kimi-k3:ultra", wantFound: true, wantEffort: "max"},
 		{name: "bare arm id", armID: "aiand/moonshotai/kimi-k3", wantFound: true, wantEffort: ""},
 		{name: "unknown arm id", armID: "unknown/model", wantFound: false, wantEffort: ""},
 	} {

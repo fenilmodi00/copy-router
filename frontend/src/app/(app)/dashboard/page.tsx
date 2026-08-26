@@ -2,42 +2,30 @@
 
 import { Text } from "@/components/atoms/Text";
 import { ChartCard } from "@/components/ChartCard";
-import { CostBreakdownChart } from "@/components/charts/CostBreakdownChart";
-import { CumulativeSavingsChart } from "@/components/charts/CumulativeSavingsChart";
-import { ModelBreakdownChart } from "@/components/charts/ModelBreakdownChart";
-import { RouterCostSavingsChart } from "@/components/charts/RouterCostSavingsChart";
-import { SavingsRateChart } from "@/components/charts/SavingsRateChart";
+import { PopularityLeaderboard } from "@/components/charts/PopularityLeaderboard";
 import {
   DashboardPageFilters,
   useDashboardFilters,
 } from "@/components/DashboardPageFilters";
 import { Card } from "@/components/molecules/Card";
+import { Sparkline } from "@/components/molecules/Sparkline";
 import { Page } from "@/components/Page";
 import { PageHeader } from "@/components/PageHeader";
 import { ResponsiveGrid } from "@/components/ResponsiveGrid";
 import { RouterOnboarding } from "@/components/RouterOnboarding";
-import { Statistic } from "@/components/Statistic";
 import {
   api,
+  type AiandModel,
+  type MetricsDetailRow,
   type MetricsSummary,
   type ModelBreakdownBucket,
   type TimeseriesBucket,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { LoadState } from "@/tools/LoadState";
-import { useEffect, useState } from "react";
-
-function formatUSD(v: number): string {
-  if (v === 0) return "$0.00";
-  if (Math.abs(v) < 0.001) return `$${v.toFixed(4)}`;
-  return `$${v.toFixed(2)}`;
-}
-
-function formatNumber(v: number): string {
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
-  return String(v);
-}
+import { formatNumber, formatUSD } from "@/lib/format";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 // "checking" suppresses a flash of either surface until the onboarding probe
 // lands.
@@ -70,10 +58,13 @@ function rememberOnboardingSkipped() {
 export default function DashboardPage() {
   const dashboardFilters = useDashboardFilters("30d");
   const { fromISO, toISO, granularity, range } = dashboardFilters.filters;
+  const router = useRouter();
 
   const [summary, setSummary] = useState<MetricsSummary | null>(null);
   const [buckets, setBuckets] = useState<TimeseriesBucket[]>([]);
   const [modelBuckets, setModelBuckets] = useState<ModelBreakdownBucket[]>([]);
+  const [detailRows, setDetailRows] = useState<MetricsDetailRow[]>([]);
+  const [catalog, setCatalog] = useState<AiandModel[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [onboarding, setOnboarding] = useState<OnboardingState>("checking");
 
@@ -109,12 +100,16 @@ export default function DashboardPage() {
       api.metrics.summary(fromISO, toISO),
       api.metrics.timeseries(granularity, fromISO, toISO),
       api.metrics.modelBreakdown(granularity, fromISO, toISO),
+      api.metrics.details(fromISO, toISO, 1000),
+      api.aiandModels.list(),
     ])
-      .then(([s, ts, mb]) => {
+      .then(([s, ts, mb, det, catalog]) => {
         if (cancelled) return;
         setSummary(s);
         setBuckets(ts.buckets ?? []);
         setModelBuckets(mb.buckets ?? []);
+        setDetailRows(det.rows ?? []);
+        setCatalog(catalog.data ?? []);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -124,6 +119,42 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [fromISO, toISO, granularity, onboarding]);
+
+  // All hooks (both effects above, this memo) run before any early return so
+  // React never sees a hook-ordering shift between renders (e.g. a mount that
+  // errors must not drop the memo below). Derived values are plain
+  // recomputation on every render — cheap, and safe before the guards below.
+  const savingsRate =
+    summary == null || summary.total_requested_cost_usd === 0
+      ? 0
+      : (summary.total_savings_usd / summary.total_requested_cost_usd) * 100;
+  const avgTokensPerReq =
+    summary == null || summary.request_count === 0
+      ? 0
+      : summary.total_tokens / summary.request_count;
+  const cacheReadTokens = summary?.cache_read_tokens ?? 0;
+  const cacheWriteTokens = summary?.cache_write_tokens ?? 0;
+  const totalInputTokens = detailRows.reduce((acc, r) => acc + r.input_tokens, 0);
+  const cacheHitRate =
+    totalInputTokens > 0 ? (cacheReadTokens / totalInputTokens) * 100 : null;
+
+  // Per-model totals in the selected range (grouped from detail rows — the
+  // telemetry details API is the cheapest server-side per-row source we already
+  // have; the model-breakdown buckets give per-bucket, not totals).
+  const modelTotals = useMemo(() => {
+    const byModel = new Map<string, { tokens: number; costUsd: number; requests: number }>();
+    for (const r of detailRows) {
+      const key = r.decision_model || "(unknown)";
+      const cur = byModel.get(key) ?? { tokens: 0, costUsd: 0, requests: 0 };
+      cur.tokens += r.input_tokens + r.output_tokens;
+      cur.costUsd += r.actual_cost_usd;
+      cur.requests += 1;
+      byModel.set(key, cur);
+    }
+    return [...byModel.entries()]
+      .map(([id, v]) => ({ id, label: id, ...v }))
+      .sort((a, b) => b.tokens - a.tokens);
+  }, [detailRows]);
 
   if (onboarding === "checking") return null;
   if (onboarding === "needed") {
@@ -149,7 +180,7 @@ export default function DashboardPage() {
                 as="h2"
                 className="flex flex-row items-center gap-1 whitespace-nowrap"
               >
-                Dashboard
+                Overview
               </Text>
             }
           />
@@ -164,17 +195,6 @@ export default function DashboardPage() {
     );
   }
 
-  const savingsRate =
-    summary == null || summary.total_requested_cost_usd === 0
-      ? 0
-      : (summary.total_savings_usd / summary.total_requested_cost_usd) * 100;
-  const avgTokensPerReq =
-    summary == null || summary.request_count === 0
-      ? 0
-      : summary.total_tokens / summary.request_count;
-  const empty = buckets.length === 0;
-  const modelEmpty = modelBuckets.length === 0;
-
   return (
     <Page
       header={
@@ -185,7 +205,7 @@ export default function DashboardPage() {
               as="h2"
               className="flex flex-row items-center gap-1 whitespace-nowrap"
             >
-              Router cost &amp; savings
+              Overview
             </Text>
           }
         />
@@ -196,130 +216,81 @@ export default function DashboardPage() {
         <ResponsiveGrid>
           <MetricCard
             className={ResponsiveGrid.Small}
-            label="Cost saved"
-            value={summary == null ? "—" : formatUSD(Math.abs(summary.total_savings_usd))}
-            sub={
-              summary == null
-                ? undefined
-                : summary.total_savings_usd >= 0
-                  ? `${savingsRate.toFixed(1)}% of requested`
-                  : "Over requested cost"
-            }
-            accent={
-              summary == null
-                ? "default"
-                : summary.total_savings_usd >= 0
-                  ? "success"
-                  : "danger"
-            }
+            label="Tokens"
+            value={summary == null ? "—" : formatNumber(summary.total_tokens)}
+            sub={summary == null ? undefined : `${formatNumber(avgTokensPerReq)} avg / req`}
+            sparkline={buckets.length ? buckets.map(b => b.total_tokens ?? 0) : []}
           />
           <MetricCard
             className={ResponsiveGrid.Small}
             label="Requests"
             value={summary == null ? "—" : formatNumber(summary.request_count)}
-            sub={
-              summary == null ? undefined : `actual ${formatUSD(summary.total_actual_cost_usd)}`
-            }
+            sub={summary == null ? undefined : `actual ${formatUSD(summary.total_actual_cost_usd)}`}
+            sparkline={buckets.length ? buckets.map(b => b.request_count ?? 0) : []}
           />
           <MetricCard
             className={ResponsiveGrid.Small}
-            label="Tokens"
-            value={summary == null ? "—" : formatNumber(summary.total_tokens)}
-            sub={summary == null ? undefined : `${formatNumber(avgTokensPerReq)} avg / req`}
-          />
-
-          <ChartCard
-            className={ResponsiveGrid.Full}
-            title="Router cost savings"
-            subtitle="Actual cost vs. what would have been charged for the requested model."
-            topRight={
-              <Statistic
-                statistic={
-                  summary == null
-                    ? LoadState.loading()
-                    : LoadState.loaded({
-                        total:
-                          summary.total_savings_usd >= 0
-                            ? `${formatUSD(summary.total_savings_usd)} saved`
-                            : `${formatUSD(Math.abs(summary.total_savings_usd))} extra`,
-                      })
-                }
-              />
+            label="Actual cost"
+            value={summary == null ? "—" : formatUSD(summary.total_actual_cost_usd)}
+            sub={
+              summary == null
+                ? undefined
+                : `${formatUSD(Math.abs(summary.total_savings_usd))} saved vs requested`
             }
+            sparkline={buckets.map(b => b.actual_cost_usd)}
+          />
+          <MetricCard
+            className={ResponsiveGrid.Small}
+            label="Cache hit rate"
+            value={cacheHitRate == null ? "—%" : `${cacheHitRate.toFixed(1)}%`}
+            sub={cacheWriteTokens + cacheReadTokens === 0 ? "no cached usage yet" : "write+read tokens"}
+          />
+        </ResponsiveGrid>
+
+        <ResponsiveGrid>
+          <ChartCard
+            className={ResponsiveGrid.Medium}
+            title="Popularity"
+            subtitle="Top models by tokens processed on this install."
           >
-            {empty ? (
-              <EmptyChart />
-            ) : (
-              <RouterCostSavingsChart buckets={buckets} granularity={granularity} />
-            )}
+            <PopularityLeaderboard
+              rows={modelTotals.map(t => ({ id: t.id, label: t.label, tokens: t.tokens, costUsd: t.costUsd }))}
+              limit={5}
+              onSelect={id => router.push(`/models/${id.replace(/\//g, "~")}`)}
+            />
           </ChartCard>
 
           <ChartCard
             className={ResponsiveGrid.Medium}
-            title="Cumulative savings"
-            subtitle={`Running total of dollars saved across the ${range.label.toLowerCase()}.`}
+            title="Top models by spend"
+            subtitle="Who's eating the actual-cost budget in the selected range."
           >
-            {empty ? (
-              <EmptyChart height={220} />
-            ) : (
-              <CumulativeSavingsChart buckets={buckets} granularity={granularity} />
-            )}
-          </ChartCard>
-
-          <ChartCard
-            className={ResponsiveGrid.Medium}
-            title="Savings rate"
-            subtitle="Percent of requested cost avoided per bucket."
-          >
-            {empty ? (
-              <EmptyChart height={200} />
-            ) : (
-              <SavingsRateChart buckets={buckets} granularity={granularity} />
-            )}
-          </ChartCard>
-
-          <ChartCard
-            className={ResponsiveGrid.Full}
-            title="Cost breakdown per bucket"
-            subtitle="Actual cost stacked with realized savings."
-          >
-            {empty ? (
-              <EmptyChart height={220} />
-            ) : (
-              <CostBreakdownChart buckets={buckets} granularity={granularity} />
-            )}
-          </ChartCard>
-
-          <ChartCard
-            className={ResponsiveGrid.Medium}
-            title="Model usage"
-            subtitle="Requests per bucket broken down by the model the router selected."
-          >
-            {modelEmpty ? (
-              <EmptyChart height={220} />
-            ) : (
-              <ModelBreakdownChart
-                buckets={modelBuckets}
-                granularity={granularity}
-                metric="requests"
-              />
-            )}
-          </ChartCard>
-
-          <ChartCard
-            className={ResponsiveGrid.Medium}
-            title="Model spend"
-            subtitle="Actual cost per bucket broken down by the model the router selected."
-          >
-            {modelEmpty ? (
-              <EmptyChart height={220} />
-            ) : (
-              <ModelBreakdownChart
-                buckets={modelBuckets}
-                granularity={granularity}
-                metric="spend"
-              />
-            )}
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-2xs uppercase tracking-wider text-muted-foreground">
+                  <th className="py-1 pr-2 font-medium">Model</th>
+                  <th className="py-1 pr-2 text-right font-medium">Tokens</th>
+                  <th className="py-1 text-right font-medium">Spend</th>
+                </tr>
+              </thead>
+              <tbody>
+                {modelTotals
+                  .slice()
+                  .sort((a, b) => b.costUsd - a.costUsd)
+                  .slice(0, 8)
+                  .map(r => (
+                    <tr key={r.id} className="border-t border-border/50">
+                      <td className="py-1.5 pr-2">
+                        <Link href={`/models/${r.id.replace(/\//g, "~")}`} className="hover:text-primary">
+                          {r.label}
+                        </Link>
+                      </td>
+                      <td className="py-1.5 pr-2 text-right tabular-nums">{formatNumber(r.tokens)}</td>
+                      <td className="py-1.5 text-right tabular-nums">{formatUSD(r.costUsd)}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
           </ChartCard>
         </ResponsiveGrid>
       </Page.Section>
@@ -333,9 +304,10 @@ interface MetricCardProps {
   value: string;
   sub?: string;
   accent?: "default" | "success" | "danger" | "info";
+  sparkline?: number[];
 }
 
-function MetricCard({ className, label, value, sub, accent = "default" }: MetricCardProps) {
+function MetricCard({ className, label, value, sub, accent = "default", sparkline }: MetricCardProps) {
   const accentClass =
     accent === "success"
       ? "text-success"
@@ -353,29 +325,19 @@ function MetricCard({ className, label, value, sub, accent = "default" }: Metric
         </Text>
       </Card.Header>
       <Card.Content>
-        <Text
-          className={cn(
-            "font-display text-2xl font-semibold tabular-nums tracking-tight",
-            accentClass,
-          )}
-        >
-          {value}
-        </Text>
-        {sub != null && (
-          <Text className="mt-1 text-2xs text-muted-foreground">{sub}</Text>
-        )}
+        <div className="flex items-end justify-between gap-2">
+          <Text
+            className={cn(
+              "font-display text-2xl font-semibold tabular-nums tracking-tight",
+              accentClass,
+            )}
+          >
+            {value}
+          </Text>
+          {sparkline != null && sparkline.length > 0 && <Sparkline data={sparkline} />}
+        </div>
+        {sub != null && <Text className="mt-1 text-2xs text-muted-foreground">{sub}</Text>}
       </Card.Content>
     </Card>
-  );
-}
-
-function EmptyChart({ height = 240 }: { height?: number }) {
-  return (
-    <div
-      className="flex items-center justify-center text-2xs text-muted-foreground"
-      style={{ height }}
-    >
-      No data for this period
-    </div>
   );
 }

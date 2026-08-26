@@ -144,7 +144,7 @@ func containsReasoningLevel(levels []string, level string) bool {
 }
 
 func nearestReasoningLevel(levels []string, wanted string) string {
-	order := map[string]int{"none": 0, "low": 1, "medium": 2, "high": 3, "max": 4, "xhigh": 5}
+	order := map[string]int{"none": 0, "low": 1, "medium": 2, "high": 3, "max": 4}
 	wantedRank, known := order[wanted]
 	if !known {
 		return levels[len(levels)-1]

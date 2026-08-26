@@ -14,17 +14,17 @@ import (
 func TestModelSwitched_EffortChangeOnSameModelCountsAsSwitch(t *testing.T) {
 	res := turnLoopResult{
 		PriorServedModel: "z-ai/glm-5.2:low",
-		Decision:         router.Decision{Model: "z-ai/glm-5.2", Effort: "xhigh"},
+		Decision:         router.Decision{Model: "z-ai/glm-5.2", Effort: "max"},
 	}
 
 	assert.True(t, res.modelSwitched(),
-		"low -> xhigh on the same model must count as a switch")
+		"low -> max on the same model must count as a switch")
 }
 
 func TestModelSwitched_SameModelAndEffortIsNotASwitch(t *testing.T) {
 	res := turnLoopResult{
-		PriorServedModel: "z-ai/glm-5.2:xhigh",
-		Decision:         router.Decision{Model: "z-ai/glm-5.2", Effort: "xhigh"},
+		PriorServedModel: "z-ai/glm-5.2:max",
+		Decision:         router.Decision{Model: "z-ai/glm-5.2", Effort: "max"},
 	}
 
 	assert.False(t, res.modelSwitched(),
@@ -58,10 +58,13 @@ func TestModelSwitched_NoEffortEitherSideBehavesAsBefore(t *testing.T) {
 }
 
 func TestServedIdentity_FoldsEffortAndOmitsWhenAbsent(t *testing.T) {
-	assert.Equal(t, "z-ai/glm-5.2:xhigh",
-		router.Decision{Model: "z-ai/glm-5.2", Effort: "xhigh"}.ServedIdentity())
+	assert.Equal(t, "z-ai/glm-5.2:max",
+		router.Decision{Model: "z-ai/glm-5.2", Effort: "max"}.ServedIdentity())
 	assert.Equal(t, "z-ai/glm-5.2",
 		router.Decision{Model: "z-ai/glm-5.2"}.ServedIdentity())
+	assert.NotContains(t,
+		router.Decision{Model: "z-ai/glm-5.2", Effort: "max"}.ServedIdentity(),
+		"xhigh", "canonical effort must never appear as xhigh in served identity")
 }
 
 // ExcludedModels / SafetyExcludedModels are keyed on bare catalog IDs;

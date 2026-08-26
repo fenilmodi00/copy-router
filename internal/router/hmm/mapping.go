@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"workweave/router/internal/providers"
+	"workweave/router/internal/router"
 	"workweave/router/internal/router/catalog"
 	"workweave/router/internal/translate"
 )
@@ -45,12 +46,10 @@ func rosterIDFor(m catalog.Model) string {
 func SplitEffort(armID string) (baseID string, effort string) {
 	if idx := strings.LastIndex(armID, ":"); idx > 0 {
 		suffix := armID[idx+1:]
-		if translate.CanonicalizeEffort(suffix) != suffix {
+		if !translate.IsValidEffort(suffix) {
 			return armID, ""
 		}
-		if translate.IsValidEffort(suffix) {
-			return armID[:idx], suffix
-		}
+		return armID[:idx], router.NormalizeLegacyEffort(translate.CanonicalizeEffort(suffix))
 	}
 	return armID, ""
 }

@@ -17,12 +17,16 @@ type metricsSummaryResponse struct {
 	TotalRequestedCostUSD float64 `json:"total_requested_cost_usd"`
 	TotalActualCostUSD    float64 `json:"total_actual_cost_usd"`
 	TotalSavingsUSD       float64 `json:"total_savings_usd"`
+	CacheWriteTokens      int64   `json:"cache_write_tokens"`
+	CacheReadTokens       int64   `json:"cache_read_tokens"`
 }
 
 type timeseriesBucket struct {
 	Bucket           string  `json:"bucket"`
 	RequestedCostUSD float64 `json:"requested_cost_usd"`
 	ActualCostUSD    float64 `json:"actual_cost_usd"`
+	TotalTokens      int64   `json:"total_tokens"`
+	RequestCount     int64   `json:"request_count"`
 }
 
 type metricsTimeseriesResponse struct {
@@ -73,6 +77,8 @@ func MetricsSummaryHandler(proxySvc *proxy.Service) gin.HandlerFunc {
 			TotalRequestedCostUSD: summary.TotalRequestedCostUSD,
 			TotalActualCostUSD:    summary.TotalActualCostUSD,
 			TotalSavingsUSD:       summary.TotalSavingsUSD,
+			CacheWriteTokens:      summary.CacheWriteTokens,
+			CacheReadTokens:       summary.CacheReadTokens,
 		})
 	}
 }
@@ -110,6 +116,8 @@ func MetricsTimeseriesHandler(proxySvc *proxy.Service) gin.HandlerFunc {
 				Bucket:           b.Bucket.UTC().Format(time.RFC3339),
 				RequestedCostUSD: b.RequestedCostUSD,
 				ActualCostUSD:    b.ActualCostUSD,
+				TotalTokens:      b.TotalTokens,
+				RequestCount:     b.RequestCount,
 			})
 		}
 		c.JSON(http.StatusOK, metricsTimeseriesResponse{Buckets: out})

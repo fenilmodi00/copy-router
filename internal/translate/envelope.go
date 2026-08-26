@@ -342,13 +342,11 @@ type EmitOverrides struct {
 	OutputConfigEffort      string
 	// ForceOutputConfigEffort, when set, overrides any inbound output_config.effort
 	// and the heuristic OutputConfigEffort — user knob beats request-derived default.
-	// Value is already cap-applied (xhigh→max) by resolveForceEffort upstream.
+	// Value is already resolved by resolveForceEffort upstream.
 	ForceOutputConfigEffort string
-	// ClampEffortXhighTo downgrades a caller-supplied "xhigh" effort (`effort`
-	// and `output_config.effort`) to this value. Set when the target lacks
-	// xhigh (router.CapXhighEffort) so a mid-session re-route doesn't forward
-	// an effort level Anthropic rejects with a session-killing 400.
-	ClampEffortXhighTo string
+	// CanonicalizeInboundEffort rewrites legacy effort aliases on inbound wire
+	// fields (`effort`, `output_config.effort`) to canonical levels on emit.
+	CanonicalizeInboundEffort bool
 }
 
 func (e *RequestEnvelope) emitSameFormat(ov EmitOverrides) ([]byte, error) {
@@ -447,14 +445,19 @@ func applyOverrides(body []byte, ov EmitOverrides) ([]byte, error) {
 		}
 	}
 
-	if ov.ClampEffortXhighTo != "" {
+	if ov.CanonicalizeInboundEffort {
 		for _, key := range []string{"effort", "output_config.effort"} {
-			if gjson.GetBytes(out, key).String() != effortXhigh {
+			raw := gjson.GetBytes(out, key).String()
+			if raw == "" {
 				continue
 			}
-			out, err = sjson.SetBytes(out, key, ov.ClampEffortXhighTo)
+			canonical := CanonicalizeEffort(raw)
+			if canonical == raw {
+				continue
+			}
+			out, err = sjson.SetBytes(out, key, canonical)
 			if err != nil {
-				return nil, fmt.Errorf("clamp %s: %w", key, err)
+				return nil, fmt.Errorf("canonicalize %s: %w", key, err)
 			}
 		}
 	}
@@ -885,22 +888,21 @@ func resolveOpenAIOverrides(body []byte, opts EmitOptions) EmitOverrides {
 	return ov
 }
 
-// Anthropic adaptive effort levels referenced by emit logic. Every adaptive
-// model accepts low/medium/high/max; xhigh requires router.CapXhighEffort.
-// "none" is the ai& disable tier — a first-class wire level, not only a
-// parse-time alias for ReasoningDisabled.
+// Anthropic adaptive effort levels referenced by emit logic. Canonical wire
+// levels are none/low/medium/high/max. "none" is the ai& disable tier — a
+// first-class wire level, not only a parse-time alias for ReasoningDisabled.
+// Legacy aliases ultra/xhigh canonicalize to max at the boundary.
 const (
 	effortNone   = "none"
 	effortLow    = "low"
 	effortMedium = "medium"
 	effortHigh   = "high"
 	effortMax    = "max"
-	effortXhigh  = "xhigh"
 )
 
-// CanonicalizeEffort maps user-facing aliases (fast/minimal/ultra) to canonical
-// wire strings (none/low/medium/high/max/xhigh). Unknown values pass through so
-// IsValidEffort can reject typos at the boundary.
+// CanonicalizeEffort maps user-facing aliases (fast/minimal/ultra/xhigh) to
+// canonical wire strings (none/low/medium/high/max). Unknown values pass
+// through so IsValidEffort can reject typos at the boundary.
 func CanonicalizeEffort(level string) string {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "none", "disabled", "off":
@@ -911,10 +913,8 @@ func CanonicalizeEffort(level string) string {
 		return effortMedium
 	case "high":
 		return effortHigh
-	case "max":
+	case "max", "ultra", "xhigh":
 		return effortMax
-	case "ultra", "xhigh":
-		return effortXhigh
 	default:
 		return level
 	}
@@ -925,23 +925,20 @@ func CanonicalizeEffort(level string) string {
 // rather than forward garbage to a provider.
 func IsValidEffort(level string) bool {
 	switch CanonicalizeEffort(level) {
-	case effortNone, effortLow, effortMedium, effortHigh, effortMax, effortXhigh:
+	case effortNone, effortLow, effortMedium, effortHigh, effortMax:
 		return true
 	default:
 		return false
 	}
 }
 
-// ResolveForceEffort canonicalizes level, applies the per-model xhigh cap, and
-// clamps to the model's declared Reasoning().Levels when present. Empty → "".
+// ResolveForceEffort canonicalizes level and clamps to the model's declared
+// Reasoning().Levels when present. Empty → "".
 func ResolveForceEffort(caps router.ModelSpec, level string) string {
 	if level == "" {
 		return ""
 	}
 	canonical := CanonicalizeEffort(level)
-	if canonical == effortXhigh && !caps.Supports(router.CapXhighEffort) {
-		canonical = effortMax
-	}
 	levels := caps.Reasoning().Levels
 	if len(levels) == 0 {
 		return canonical
@@ -1035,10 +1032,10 @@ func resolveAnthropicOverrides(body []byte, opts EmitOptions) EmitOverrides {
 		}
 	}
 
-	// "xhigh" is opus-4-7+ only; clamp to the max every adaptive model accepts
-	// so a re-route can't turn a valid request into an invalid one.
-	if opts.Capabilities.Supports(router.CapAdaptiveThinking) && !opts.Capabilities.Supports(router.CapXhighEffort) {
-		ov.ClampEffortXhighTo = effortMax
+	// Legacy aliases (xhigh/ultra/fast/…) canonicalize on emit so mid-session
+	// re-routes never forward non-canonical wire levels.
+	if opts.Capabilities.Supports(router.CapAdaptiveThinking) {
+		ov.CanonicalizeInboundEffort = true
 	}
 
 	if !opts.Capabilities.Supports(router.CapAdaptiveThinking) && !opts.Capabilities.Supports(router.CapExtendedThinking) {

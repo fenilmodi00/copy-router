@@ -62,8 +62,8 @@ func TestForceEffortOverride_AliasCanonicalizes(t *testing.T) {
 	}{
 		{"fast", "low"},
 		{"minimal", "low"},
-		{"ultra", "xhigh"},
-		{"ULTRA", "xhigh"}, // case-insensitive
+		{"ultra", "max"},
+		{"ULTRA", "max"}, // case-insensitive
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {

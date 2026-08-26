@@ -992,7 +992,7 @@ func TestAnthropicSameFormat_BodyIsImmutable(t *testing.T) {
 // Prod repro (2026-06-09): a session using effort="xhigh" was re-routed
 // mid-session to claude-sonnet-4-6 (tops out at "max"), and Anthropic
 // 400'd on the unsupported level, killing the session. Emit must clamp
-// xhigh to max for adaptive targets without CapXhighEffort.
+// inbound xhigh to max for all adaptive targets.
 func TestAnthropicSameFormat_XhighEffortClampedOnReroute(t *testing.T) {
 	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hi"}],"max_tokens":1024,"thinking":{"type":"adaptive"},"output_config":{"effort":"xhigh"}}`)
 	opts := translate.EmitOptions{
@@ -1002,7 +1002,7 @@ func TestAnthropicSameFormat_XhighEffortClampedOnReroute(t *testing.T) {
 	out := parseAndEmit(t, body, "anthropic", opts)
 	outputConfig, _ := out["output_config"].(map[string]any)
 	require.NotNil(t, outputConfig)
-	assert.Equal(t, "max", outputConfig["effort"], "xhigh must clamp to max for models without CapXhighEffort")
+	assert.Equal(t, "max", outputConfig["effort"], "inbound xhigh must clamp to max on emit")
 }
 
 // Top-level `effort` follows the same menu as output_config.effort.
@@ -1013,10 +1013,11 @@ func TestAnthropicSameFormat_XhighTopLevelEffortClampedOnReroute(t *testing.T) {
 		Capabilities: router.Lookup("claude-sonnet-4-6"),
 	}
 	out := parseAndEmit(t, body, "anthropic", opts)
-	assert.Equal(t, "max", out["effort"], "top-level xhigh must clamp to max for models without CapXhighEffort")
+	assert.Equal(t, "max", out["effort"], "top-level inbound xhigh must clamp to max on emit")
 }
 
-// xhigh stays untouched when the target supports it (opus-4-7+).
+// Inbound wire xhigh always canonicalizes to max on emit, even on models
+// whose menu includes max.
 func TestAnthropicSameFormat_XhighEffortPreservedForCapableModel(t *testing.T) {
 	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hi"}],"max_tokens":1024,"thinking":{"type":"adaptive"},"output_config":{"effort":"xhigh"}}`)
 	opts := translate.EmitOptions{
@@ -1026,44 +1027,28 @@ func TestAnthropicSameFormat_XhighEffortPreservedForCapableModel(t *testing.T) {
 	out := parseAndEmit(t, body, "anthropic", opts)
 	outputConfig, _ := out["output_config"].(map[string]any)
 	require.NotNil(t, outputConfig)
-	assert.Equal(t, "xhigh", outputConfig["effort"], "xhigh must pass through to models with CapXhighEffort")
+	assert.Equal(t, "max", outputConfig["effort"], "inbound xhigh must clamp to max on emit")
 }
 
-// CapXhighEffort gate: xhigh must survive emit only when advertised.
+// Legacy inbound xhigh always canonicalizes to max on emit.
 func TestAnthropicSameFormat_XhighEffortNeverReachesIncapableModel(t *testing.T) {
 	body := []byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"hi"}],"max_tokens":1024,"thinking":{"type":"adaptive"},"effort":"xhigh","output_config":{"effort":"xhigh"}}`)
 
-	t.Run("without CapXhighEffort", func(t *testing.T) {
-		out := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
-			TargetModel:  "adaptive-only",
-			Capabilities: router.NewSpec(router.CapAdaptiveThinking),
-		})
-		topLevel, _ := out["effort"].(string)
-		var nested string
-		if oc, ok := out["output_config"].(map[string]any); ok {
-			nested, _ = oc["effort"].(string)
-		}
-		assert.NotEqual(t, "xhigh", topLevel, "top-level effort xhigh must never reach a model without CapXhighEffort")
-		assert.NotEqual(t, "xhigh", nested, "output_config.effort xhigh must never reach a model without CapXhighEffort")
+	out := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
+		TargetModel:  "adaptive-only",
+		Capabilities: router.NewSpec(router.CapAdaptiveThinking),
 	})
-
-	t.Run("with CapXhighEffort", func(t *testing.T) {
-		out := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
-			TargetModel:  "adaptive-xhigh",
-			Capabilities: router.NewSpec(router.CapAdaptiveThinking, router.CapXhighEffort),
-		})
-		topLevel, _ := out["effort"].(string)
-		var nested string
-		if oc, ok := out["output_config"].(map[string]any); ok {
-			nested, _ = oc["effort"].(string)
-		}
-		assert.Equal(t, "xhigh", topLevel, "top-level effort xhigh must pass through to a CapXhighEffort model")
-		assert.Equal(t, "xhigh", nested, "output_config.effort xhigh must pass through to a CapXhighEffort model")
-	})
+	topLevel, _ := out["effort"].(string)
+	var nested string
+	if oc, ok := out["output_config"].(map[string]any); ok {
+		nested, _ = oc["effort"].(string)
+	}
+	assert.Equal(t, "max", topLevel, "top-level inbound xhigh must clamp to max")
+	assert.Equal(t, "max", nested, "output_config.effort xhigh must clamp to max")
 }
 
-// Levels below xhigh are on every adaptive model's menu; the clamp must not
-// touch them even when the target lacks CapXhighEffort.
+// Levels below max are on every adaptive model's menu; the clamp must not
+// touch them on adaptive targets.
 func TestAnthropicSameFormat_NonXhighEffortUntouchedByClamp(t *testing.T) {
 	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hi"}],"max_tokens":1024,"thinking":{"type":"adaptive"},"output_config":{"effort":"high"}}`)
 	opts := translate.EmitOptions{

@@ -469,7 +469,9 @@ SELECT
     COALESCE(decision_model, '')::varchar                                    AS decision_model,
     COUNT(*)::bigint                                                          AS request_count,
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = $1::uuid
   AND span_type = 'router.upstream'
@@ -486,11 +488,13 @@ type GetTelemetryModelBreakdownDailyParams struct {
 }
 
 type GetTelemetryModelBreakdownDailyRow struct {
-	Bucket        pgtype.Timestamptz
-	DecisionModel string
-	RequestCount  int64
-	TotalTokens   int64
-	ActualCostUsd int64
+	Bucket           pgtype.Timestamptz
+	DecisionModel    string
+	RequestCount     int64
+	TotalTokens      int64
+	ActualCostUsd    int64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
 // Per-day request/token/cost buckets grouped by decision model for one
@@ -501,7 +505,9 @@ type GetTelemetryModelBreakdownDailyRow struct {
 //	    COALESCE(decision_model, '')::varchar                                    AS decision_model,
 //	    COUNT(*)::bigint                                                          AS request_count,
 //	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE installation_id = $1::uuid
 //	  AND span_type = 'router.upstream'
@@ -524,6 +530,8 @@ func (q *Queries) GetTelemetryModelBreakdownDaily(ctx context.Context, arg GetTe
 			&i.RequestCount,
 			&i.TotalTokens,
 			&i.ActualCostUsd,
+			&i.CacheWriteTokens,
+			&i.CacheReadTokens,
 		); err != nil {
 			return nil, err
 		}
@@ -541,7 +549,9 @@ SELECT
     COALESCE(decision_model, '')::varchar                                    AS decision_model,
     COUNT(*)::bigint                                                          AS request_count,
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= $1::timestamptz
@@ -556,11 +566,13 @@ type GetTelemetryModelBreakdownDailyAllParams struct {
 }
 
 type GetTelemetryModelBreakdownDailyAllRow struct {
-	Bucket        pgtype.Timestamptz
-	DecisionModel string
-	RequestCount  int64
-	TotalTokens   int64
-	ActualCostUsd int64
+	Bucket           pgtype.Timestamptz
+	DecisionModel    string
+	RequestCount     int64
+	TotalTokens      int64
+	ActualCostUsd    int64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
 // Per-day request/token/cost buckets grouped by decision model, across
@@ -571,7 +583,9 @@ type GetTelemetryModelBreakdownDailyAllRow struct {
 //	    COALESCE(decision_model, '')::varchar                                    AS decision_model,
 //	    COUNT(*)::bigint                                                          AS request_count,
 //	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE span_type = 'router.upstream'
 //	  AND timestamp >= $1::timestamptz
@@ -593,6 +607,8 @@ func (q *Queries) GetTelemetryModelBreakdownDailyAll(ctx context.Context, arg Ge
 			&i.RequestCount,
 			&i.TotalTokens,
 			&i.ActualCostUsd,
+			&i.CacheWriteTokens,
+			&i.CacheReadTokens,
 		); err != nil {
 			return nil, err
 		}
@@ -610,7 +626,9 @@ SELECT
     COALESCE(decision_model, '')::varchar                                    AS decision_model,
     COUNT(*)::bigint                                                          AS request_count,
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = $1::uuid
   AND span_type = 'router.upstream'
@@ -627,11 +645,13 @@ type GetTelemetryModelBreakdownHourlyParams struct {
 }
 
 type GetTelemetryModelBreakdownHourlyRow struct {
-	Bucket        pgtype.Timestamptz
-	DecisionModel string
-	RequestCount  int64
-	TotalTokens   int64
-	ActualCostUsd int64
+	Bucket           pgtype.Timestamptz
+	DecisionModel    string
+	RequestCount     int64
+	TotalTokens      int64
+	ActualCostUsd    int64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
 // Per-hour request/token/cost buckets grouped by decision model for one
@@ -642,7 +662,9 @@ type GetTelemetryModelBreakdownHourlyRow struct {
 //	    COALESCE(decision_model, '')::varchar                                    AS decision_model,
 //	    COUNT(*)::bigint                                                          AS request_count,
 //	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE installation_id = $1::uuid
 //	  AND span_type = 'router.upstream'
@@ -665,6 +687,8 @@ func (q *Queries) GetTelemetryModelBreakdownHourly(ctx context.Context, arg GetT
 			&i.RequestCount,
 			&i.TotalTokens,
 			&i.ActualCostUsd,
+			&i.CacheWriteTokens,
+			&i.CacheReadTokens,
 		); err != nil {
 			return nil, err
 		}
@@ -682,7 +706,9 @@ SELECT
     COALESCE(decision_model, '')::varchar                                    AS decision_model,
     COUNT(*)::bigint                                                          AS request_count,
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= $1::timestamptz
@@ -697,11 +723,13 @@ type GetTelemetryModelBreakdownHourlyAllParams struct {
 }
 
 type GetTelemetryModelBreakdownHourlyAllRow struct {
-	Bucket        pgtype.Timestamptz
-	DecisionModel string
-	RequestCount  int64
-	TotalTokens   int64
-	ActualCostUsd int64
+	Bucket           pgtype.Timestamptz
+	DecisionModel    string
+	RequestCount     int64
+	TotalTokens      int64
+	ActualCostUsd    int64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
 // Per-hour request/token/cost buckets grouped by the model the router
@@ -713,7 +741,9 @@ type GetTelemetryModelBreakdownHourlyAllRow struct {
 //	    COALESCE(decision_model, '')::varchar                                    AS decision_model,
 //	    COUNT(*)::bigint                                                          AS request_count,
 //	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE span_type = 'router.upstream'
 //	  AND timestamp >= $1::timestamptz
@@ -735,6 +765,8 @@ func (q *Queries) GetTelemetryModelBreakdownHourlyAll(ctx context.Context, arg G
 			&i.RequestCount,
 			&i.TotalTokens,
 			&i.ActualCostUsd,
+			&i.CacheWriteTokens,
+			&i.CacheReadTokens,
 		); err != nil {
 			return nil, err
 		}
@@ -752,7 +784,9 @@ SELECT
     COALESCE(decision_model, '')::varchar                                    AS decision_model,
     COUNT(*)::bigint                                                          AS request_count,
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = $1::uuid
   AND span_type = 'router.upstream'
@@ -769,11 +803,13 @@ type GetTelemetryModelBreakdownWeeklyParams struct {
 }
 
 type GetTelemetryModelBreakdownWeeklyRow struct {
-	Bucket        pgtype.Timestamptz
-	DecisionModel string
-	RequestCount  int64
-	TotalTokens   int64
-	ActualCostUsd int64
+	Bucket           pgtype.Timestamptz
+	DecisionModel    string
+	RequestCount     int64
+	TotalTokens      int64
+	ActualCostUsd    int64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
 // Per-ISO-week request/token/cost buckets grouped by decision model for
@@ -784,7 +820,9 @@ type GetTelemetryModelBreakdownWeeklyRow struct {
 //	    COALESCE(decision_model, '')::varchar                                    AS decision_model,
 //	    COUNT(*)::bigint                                                          AS request_count,
 //	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE installation_id = $1::uuid
 //	  AND span_type = 'router.upstream'
@@ -807,6 +845,8 @@ func (q *Queries) GetTelemetryModelBreakdownWeekly(ctx context.Context, arg GetT
 			&i.RequestCount,
 			&i.TotalTokens,
 			&i.ActualCostUsd,
+			&i.CacheWriteTokens,
+			&i.CacheReadTokens,
 		); err != nil {
 			return nil, err
 		}
@@ -824,7 +864,9 @@ SELECT
     COALESCE(decision_model, '')::varchar                                    AS decision_model,
     COUNT(*)::bigint                                                          AS request_count,
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= $1::timestamptz
@@ -839,11 +881,13 @@ type GetTelemetryModelBreakdownWeeklyAllParams struct {
 }
 
 type GetTelemetryModelBreakdownWeeklyAllRow struct {
-	Bucket        pgtype.Timestamptz
-	DecisionModel string
-	RequestCount  int64
-	TotalTokens   int64
-	ActualCostUsd int64
+	Bucket           pgtype.Timestamptz
+	DecisionModel    string
+	RequestCount     int64
+	TotalTokens      int64
+	ActualCostUsd    int64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
 // Per-ISO-week request/token/cost buckets grouped by decision model,
@@ -854,7 +898,9 @@ type GetTelemetryModelBreakdownWeeklyAllRow struct {
 //	    COALESCE(decision_model, '')::varchar                                    AS decision_model,
 //	    COUNT(*)::bigint                                                          AS request_count,
 //	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                   AS total_tokens,
-//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd
+//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint AS actual_cost_usd,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                          AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                              AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE span_type = 'router.upstream'
 //	  AND timestamp >= $1::timestamptz
@@ -876,6 +922,8 @@ func (q *Queries) GetTelemetryModelBreakdownWeeklyAll(ctx context.Context, arg G
 			&i.RequestCount,
 			&i.TotalTokens,
 			&i.ActualCostUsd,
+			&i.CacheWriteTokens,
+			&i.CacheReadTokens,
 		); err != nil {
 			return nil, err
 		}
@@ -1168,7 +1216,9 @@ SELECT
     COALESCE(SUM(
         (requested_input_cost_usd + requested_output_cost_usd) -
         (actual_input_cost_usd + actual_output_cost_usd)
-    ), 0)::bigint                                             AS total_savings_usd
+    ), 0)::bigint                                             AS total_savings_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint           AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = $1::uuid
   AND span_type = 'router.upstream'
@@ -1188,6 +1238,8 @@ type GetTelemetrySummaryRow struct {
 	TotalRequestedCostUsd int64
 	TotalActualCostUsd    int64
 	TotalSavingsUsd       int64
+	CacheWriteTokens      int64
+	CacheReadTokens       int64
 }
 
 // Returns aggregated cost and token totals for the dashboard cards.
@@ -1200,7 +1252,9 @@ type GetTelemetrySummaryRow struct {
 //	    COALESCE(SUM(
 //	        (requested_input_cost_usd + requested_output_cost_usd) -
 //	        (actual_input_cost_usd + actual_output_cost_usd)
-//	    ), 0)::bigint                                             AS total_savings_usd
+//	    ), 0)::bigint                                             AS total_savings_usd,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint           AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE installation_id = $1::uuid
 //	  AND span_type = 'router.upstream'
@@ -1215,6 +1269,8 @@ func (q *Queries) GetTelemetrySummary(ctx context.Context, arg GetTelemetrySumma
 		&i.TotalRequestedCostUsd,
 		&i.TotalActualCostUsd,
 		&i.TotalSavingsUsd,
+		&i.CacheWriteTokens,
+		&i.CacheReadTokens,
 	)
 	return i, err
 }
@@ -1228,7 +1284,9 @@ SELECT
     COALESCE(SUM(
         (requested_input_cost_usd + requested_output_cost_usd) -
         (actual_input_cost_usd + actual_output_cost_usd)
-    ), 0)::bigint                                             AS total_savings_usd
+    ), 0)::bigint                                             AS total_savings_usd,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint           AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= $1::timestamptz
@@ -1246,6 +1304,8 @@ type GetTelemetrySummaryAllRow struct {
 	TotalRequestedCostUsd int64
 	TotalActualCostUsd    int64
 	TotalSavingsUsd       int64
+	CacheWriteTokens      int64
+	CacheReadTokens       int64
 }
 
 // Returns aggregated cost and token totals across every installation.
@@ -1260,7 +1320,9 @@ type GetTelemetrySummaryAllRow struct {
 //	    COALESCE(SUM(
 //	        (requested_input_cost_usd + requested_output_cost_usd) -
 //	        (actual_input_cost_usd + actual_output_cost_usd)
-//	    ), 0)::bigint                                             AS total_savings_usd
+//	    ), 0)::bigint                                             AS total_savings_usd,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint           AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE span_type = 'router.upstream'
 //	  AND timestamp >= $1::timestamptz
@@ -1274,6 +1336,8 @@ func (q *Queries) GetTelemetrySummaryAll(ctx context.Context, arg GetTelemetrySu
 		&i.TotalRequestedCostUsd,
 		&i.TotalActualCostUsd,
 		&i.TotalSavingsUsd,
+		&i.CacheWriteTokens,
+		&i.CacheReadTokens,
 	)
 	return i, err
 }
@@ -1282,7 +1346,11 @@ const getTelemetryTimeseriesDaily = `-- name: GetTelemetryTimeseriesDaily :many
 SELECT
     date_trunc('day', timestamp)::timestamptz                                        AS bucket,
     COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
+    COUNT(*)::bigint                                                               AS request_count,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = $1::uuid
   AND span_type = 'router.upstream'
@@ -1302,14 +1370,22 @@ type GetTelemetryTimeseriesDailyRow struct {
 	Bucket           pgtype.Timestamptz
 	RequestedCostUsd int64
 	ActualCostUsd    int64
+	TotalTokens      int64
+	RequestCount     int64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
-// Returns per-day cost buckets for the cost savings chart.
+// Returns per-day token/cost buckets for the cost savings chart.
 //
 //	SELECT
 //	    date_trunc('day', timestamp)::timestamptz                                        AS bucket,
 //	    COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+//	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
+//	    COUNT(*)::bigint                                                               AS request_count,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE installation_id = $1::uuid
 //	  AND span_type = 'router.upstream'
@@ -1326,7 +1402,15 @@ func (q *Queries) GetTelemetryTimeseriesDaily(ctx context.Context, arg GetTeleme
 	var items []GetTelemetryTimeseriesDailyRow
 	for rows.Next() {
 		var i GetTelemetryTimeseriesDailyRow
-		if err := rows.Scan(&i.Bucket, &i.RequestedCostUsd, &i.ActualCostUsd); err != nil {
+		if err := rows.Scan(
+			&i.Bucket,
+			&i.RequestedCostUsd,
+			&i.ActualCostUsd,
+			&i.TotalTokens,
+			&i.RequestCount,
+			&i.CacheWriteTokens,
+			&i.CacheReadTokens,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1341,7 +1425,11 @@ const getTelemetryTimeseriesDailyAll = `-- name: GetTelemetryTimeseriesDailyAll 
 SELECT
     date_trunc('day', timestamp)::timestamptz                                        AS bucket,
     COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
+    COUNT(*)::bigint                                                               AS request_count,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= $1::timestamptz
@@ -1359,14 +1447,22 @@ type GetTelemetryTimeseriesDailyAllRow struct {
 	Bucket           pgtype.Timestamptz
 	RequestedCostUsd int64
 	ActualCostUsd    int64
+	TotalTokens      int64
+	RequestCount     int64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
-// Per-day cost buckets across every installation. Admin-only.
+// Per-day token/cost buckets across every installation. Admin-only.
 //
 //	SELECT
 //	    date_trunc('day', timestamp)::timestamptz                                        AS bucket,
 //	    COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+//	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
+//	    COUNT(*)::bigint                                                               AS request_count,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE span_type = 'router.upstream'
 //	  AND timestamp >= $1::timestamptz
@@ -1382,7 +1478,15 @@ func (q *Queries) GetTelemetryTimeseriesDailyAll(ctx context.Context, arg GetTel
 	var items []GetTelemetryTimeseriesDailyAllRow
 	for rows.Next() {
 		var i GetTelemetryTimeseriesDailyAllRow
-		if err := rows.Scan(&i.Bucket, &i.RequestedCostUsd, &i.ActualCostUsd); err != nil {
+		if err := rows.Scan(
+			&i.Bucket,
+			&i.RequestedCostUsd,
+			&i.ActualCostUsd,
+			&i.TotalTokens,
+			&i.RequestCount,
+			&i.CacheWriteTokens,
+			&i.CacheReadTokens,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1397,7 +1501,11 @@ const getTelemetryTimeseriesHourly = `-- name: GetTelemetryTimeseriesHourly :man
 SELECT
     date_trunc('hour', timestamp)::timestamptz                                       AS bucket,
     COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
+    COUNT(*)::bigint                                                               AS request_count,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = $1::uuid
   AND span_type = 'router.upstream'
@@ -1417,14 +1525,22 @@ type GetTelemetryTimeseriesHourlyRow struct {
 	Bucket           pgtype.Timestamptz
 	RequestedCostUsd int64
 	ActualCostUsd    int64
+	TotalTokens      int64
+	RequestCount     int64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
-// Returns per-hour cost buckets for the cost savings chart.
+// Returns per-hour token/cost buckets for the cost savings chart.
 //
 //	SELECT
 //	    date_trunc('hour', timestamp)::timestamptz                                       AS bucket,
 //	    COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+//	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
+//	    COUNT(*)::bigint                                                               AS request_count,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE installation_id = $1::uuid
 //	  AND span_type = 'router.upstream'
@@ -1441,7 +1557,15 @@ func (q *Queries) GetTelemetryTimeseriesHourly(ctx context.Context, arg GetTelem
 	var items []GetTelemetryTimeseriesHourlyRow
 	for rows.Next() {
 		var i GetTelemetryTimeseriesHourlyRow
-		if err := rows.Scan(&i.Bucket, &i.RequestedCostUsd, &i.ActualCostUsd); err != nil {
+		if err := rows.Scan(
+			&i.Bucket,
+			&i.RequestedCostUsd,
+			&i.ActualCostUsd,
+			&i.TotalTokens,
+			&i.RequestCount,
+			&i.CacheWriteTokens,
+			&i.CacheReadTokens,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1456,7 +1580,11 @@ const getTelemetryTimeseriesHourlyAll = `-- name: GetTelemetryTimeseriesHourlyAl
 SELECT
     date_trunc('hour', timestamp)::timestamptz                                       AS bucket,
     COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
+    COUNT(*)::bigint                                                               AS request_count,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= $1::timestamptz
@@ -1474,14 +1602,22 @@ type GetTelemetryTimeseriesHourlyAllRow struct {
 	Bucket           pgtype.Timestamptz
 	RequestedCostUsd int64
 	ActualCostUsd    int64
+	TotalTokens      int64
+	RequestCount     int64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
-// Per-hour cost buckets across every installation. Admin-only.
+// Per-hour token/cost buckets across every installation. Admin-only.
 //
 //	SELECT
 //	    date_trunc('hour', timestamp)::timestamptz                                       AS bucket,
 //	    COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+//	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
+//	    COUNT(*)::bigint                                                               AS request_count,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE span_type = 'router.upstream'
 //	  AND timestamp >= $1::timestamptz
@@ -1497,7 +1633,15 @@ func (q *Queries) GetTelemetryTimeseriesHourlyAll(ctx context.Context, arg GetTe
 	var items []GetTelemetryTimeseriesHourlyAllRow
 	for rows.Next() {
 		var i GetTelemetryTimeseriesHourlyAllRow
-		if err := rows.Scan(&i.Bucket, &i.RequestedCostUsd, &i.ActualCostUsd); err != nil {
+		if err := rows.Scan(
+			&i.Bucket,
+			&i.RequestedCostUsd,
+			&i.ActualCostUsd,
+			&i.TotalTokens,
+			&i.RequestCount,
+			&i.CacheWriteTokens,
+			&i.CacheReadTokens,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1512,7 +1656,11 @@ const getTelemetryTimeseriesWeekly = `-- name: GetTelemetryTimeseriesWeekly :man
 SELECT
     date_trunc('week', timestamp)::timestamptz                                       AS bucket,
     COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
+    COUNT(*)::bigint                                                               AS request_count,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE installation_id = $1::uuid
   AND span_type = 'router.upstream'
@@ -1532,14 +1680,22 @@ type GetTelemetryTimeseriesWeeklyRow struct {
 	Bucket           pgtype.Timestamptz
 	RequestedCostUsd int64
 	ActualCostUsd    int64
+	TotalTokens      int64
+	RequestCount     int64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
-// Returns per-ISO-week cost buckets for the cost savings chart.
+// Returns per-ISO-week token/cost buckets for the cost savings chart.
 //
 //	SELECT
 //	    date_trunc('week', timestamp)::timestamptz                                       AS bucket,
 //	    COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+//	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
+//	    COUNT(*)::bigint                                                               AS request_count,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE installation_id = $1::uuid
 //	  AND span_type = 'router.upstream'
@@ -1556,7 +1712,15 @@ func (q *Queries) GetTelemetryTimeseriesWeekly(ctx context.Context, arg GetTelem
 	var items []GetTelemetryTimeseriesWeeklyRow
 	for rows.Next() {
 		var i GetTelemetryTimeseriesWeeklyRow
-		if err := rows.Scan(&i.Bucket, &i.RequestedCostUsd, &i.ActualCostUsd); err != nil {
+		if err := rows.Scan(
+			&i.Bucket,
+			&i.RequestedCostUsd,
+			&i.ActualCostUsd,
+			&i.TotalTokens,
+			&i.RequestCount,
+			&i.CacheWriteTokens,
+			&i.CacheReadTokens,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1571,7 +1735,11 @@ const getTelemetryTimeseriesWeeklyAll = `-- name: GetTelemetryTimeseriesWeeklyAl
 SELECT
     date_trunc('week', timestamp)::timestamptz                                       AS bucket,
     COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
+    COUNT(*)::bigint                                                               AS request_count,
+    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= $1::timestamptz
@@ -1589,14 +1757,22 @@ type GetTelemetryTimeseriesWeeklyAllRow struct {
 	Bucket           pgtype.Timestamptz
 	RequestedCostUsd int64
 	ActualCostUsd    int64
+	TotalTokens      int64
+	RequestCount     int64
+	CacheWriteTokens int64
+	CacheReadTokens  int64
 }
 
-// Per-ISO-week cost buckets across every installation. Admin-only.
+// Per-ISO-week token/cost buckets across every installation. Admin-only.
 //
 //	SELECT
 //	    date_trunc('week', timestamp)::timestamptz                                       AS bucket,
 //	    COALESCE(SUM(requested_input_cost_usd + requested_output_cost_usd), 0)::bigint AS requested_cost_usd,
-//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd
+//	    COALESCE(SUM(actual_input_cost_usd + actual_output_cost_usd), 0)::bigint       AS actual_cost_usd,
+//	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
+//	    COUNT(*)::bigint                                                               AS request_count,
+//	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
 //	FROM router.model_router_request_telemetry
 //	WHERE span_type = 'router.upstream'
 //	  AND timestamp >= $1::timestamptz
@@ -1612,7 +1788,15 @@ func (q *Queries) GetTelemetryTimeseriesWeeklyAll(ctx context.Context, arg GetTe
 	var items []GetTelemetryTimeseriesWeeklyAllRow
 	for rows.Next() {
 		var i GetTelemetryTimeseriesWeeklyAllRow
-		if err := rows.Scan(&i.Bucket, &i.RequestedCostUsd, &i.ActualCostUsd); err != nil {
+		if err := rows.Scan(
+			&i.Bucket,
+			&i.RequestedCostUsd,
+			&i.ActualCostUsd,
+			&i.TotalTokens,
+			&i.RequestCount,
+			&i.CacheWriteTokens,
+			&i.CacheReadTokens,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

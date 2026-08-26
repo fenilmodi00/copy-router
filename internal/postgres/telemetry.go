@@ -311,13 +311,7 @@ func (r *TelemetryRepo) GetTelemetrySummary(ctx context.Context, installationID 
 	if err != nil {
 		return proxy.TelemetrySummary{}, err
 	}
-	return proxy.TelemetrySummary{
-		RequestCount:          row.RequestCount,
-		TotalTokens:           row.TotalTokens,
-		TotalRequestedCostUSD: microsToUSD(row.TotalRequestedCostUsd),
-		TotalActualCostUSD:    microsToUSD(row.TotalActualCostUsd),
-		TotalSavingsUSD:       microsToUSD(row.TotalSavingsUsd),
-	}, nil
+	return summaryFromRow(row), nil
 }
 
 func (r *TelemetryRepo) GetTelemetryTimeseries(ctx context.Context, installationID string, from, to time.Time, granularity string) ([]proxy.TelemetryBucket, error) {
@@ -376,13 +370,47 @@ func (r *TelemetryRepo) GetTelemetrySummaryAll(ctx context.Context, from, to tim
 	if err != nil {
 		return proxy.TelemetrySummary{}, err
 	}
+	return summaryFromAllRow(row), nil
+}
+
+// summaryFromRow converts the SQLC summary row to the proxy domain value.
+func summaryFromRow(row sqlc.GetTelemetrySummaryRow) proxy.TelemetrySummary {
+	return summaryFromValues(
+		row.RequestCount,
+		row.TotalTokens,
+		row.TotalRequestedCostUsd,
+		row.TotalActualCostUsd,
+		row.TotalSavingsUsd,
+		row.CacheWriteTokens,
+		row.CacheReadTokens,
+	)
+}
+
+// summaryFromAllRow converts the SQLC cross-installation summary row to the
+// proxy domain value. The {all, per-installation} queries emit isomorphic but
+// distinctly named row types, so both delegate to summaryFromValues.
+func summaryFromAllRow(row sqlc.GetTelemetrySummaryAllRow) proxy.TelemetrySummary {
+	return summaryFromValues(
+		row.RequestCount,
+		row.TotalTokens,
+		row.TotalRequestedCostUsd,
+		row.TotalActualCostUsd,
+		row.TotalSavingsUsd,
+		row.CacheWriteTokens,
+		row.CacheReadTokens,
+	)
+}
+
+func summaryFromValues(requestCount, totalTokens, totalRequestedCostUsd, totalActualCostUsd, totalSavingsUsd, cacheWriteTokens, cacheReadTokens int64) proxy.TelemetrySummary {
 	return proxy.TelemetrySummary{
-		RequestCount:          row.RequestCount,
-		TotalTokens:           row.TotalTokens,
-		TotalRequestedCostUSD: microsToUSD(row.TotalRequestedCostUsd),
-		TotalActualCostUSD:    microsToUSD(row.TotalActualCostUsd),
-		TotalSavingsUSD:       microsToUSD(row.TotalSavingsUsd),
-	}, nil
+		RequestCount:          requestCount,
+		TotalTokens:           totalTokens,
+		TotalRequestedCostUSD: microsToUSD(totalRequestedCostUsd),
+		TotalActualCostUSD:    microsToUSD(totalActualCostUsd),
+		TotalSavingsUSD:       microsToUSD(totalSavingsUsd),
+		CacheWriteTokens:      cacheWriteTokens,
+		CacheReadTokens:       cacheReadTokens,
+	}
 }
 
 // GetTelemetryTimeseriesAll is the admin-only counterpart to GetTelemetryTimeseries.
@@ -562,6 +590,10 @@ func telemetryBucketFromWeeklyRow(row sqlc.GetTelemetryTimeseriesWeeklyRow) prox
 		Bucket:           row.Bucket.Time,
 		RequestedCostUSD: microsToUSD(row.RequestedCostUsd),
 		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		TotalTokens:      row.TotalTokens,
+		RequestCount:     row.RequestCount,
+		CacheWriteTokens: row.CacheWriteTokens,
+		CacheReadTokens:  row.CacheReadTokens,
 	}
 }
 
@@ -570,6 +602,10 @@ func telemetryBucketFromDailyRow(row sqlc.GetTelemetryTimeseriesDailyRow) proxy.
 		Bucket:           row.Bucket.Time,
 		RequestedCostUSD: microsToUSD(row.RequestedCostUsd),
 		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		TotalTokens:      row.TotalTokens,
+		RequestCount:     row.RequestCount,
+		CacheWriteTokens: row.CacheWriteTokens,
+		CacheReadTokens:  row.CacheReadTokens,
 	}
 }
 
@@ -578,6 +614,10 @@ func telemetryBucketFromHourlyRow(row sqlc.GetTelemetryTimeseriesHourlyRow) prox
 		Bucket:           row.Bucket.Time,
 		RequestedCostUSD: microsToUSD(row.RequestedCostUsd),
 		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		TotalTokens:      row.TotalTokens,
+		RequestCount:     row.RequestCount,
+		CacheWriteTokens: row.CacheWriteTokens,
+		CacheReadTokens:  row.CacheReadTokens,
 	}
 }
 
@@ -586,6 +626,10 @@ func telemetryBucketFromWeeklyAllRow(row sqlc.GetTelemetryTimeseriesWeeklyAllRow
 		Bucket:           row.Bucket.Time,
 		RequestedCostUSD: microsToUSD(row.RequestedCostUsd),
 		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		TotalTokens:      row.TotalTokens,
+		RequestCount:     row.RequestCount,
+		CacheWriteTokens: row.CacheWriteTokens,
+		CacheReadTokens:  row.CacheReadTokens,
 	}
 }
 
@@ -594,6 +638,10 @@ func telemetryBucketFromDailyAllRow(row sqlc.GetTelemetryTimeseriesDailyAllRow) 
 		Bucket:           row.Bucket.Time,
 		RequestedCostUSD: microsToUSD(row.RequestedCostUsd),
 		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		TotalTokens:      row.TotalTokens,
+		RequestCount:     row.RequestCount,
+		CacheWriteTokens: row.CacheWriteTokens,
+		CacheReadTokens:  row.CacheReadTokens,
 	}
 }
 
@@ -602,6 +650,10 @@ func telemetryBucketFromHourlyAllRow(row sqlc.GetTelemetryTimeseriesHourlyAllRow
 		Bucket:           row.Bucket.Time,
 		RequestedCostUSD: microsToUSD(row.RequestedCostUsd),
 		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		TotalTokens:      row.TotalTokens,
+		RequestCount:     row.RequestCount,
+		CacheWriteTokens: row.CacheWriteTokens,
+		CacheReadTokens:  row.CacheReadTokens,
 	}
 }
 
@@ -755,61 +807,73 @@ func telemetryRowFromRowsAllRow(row sqlc.GetTelemetryRowsAllRow) proxy.Telemetry
 
 func modelBucketFromWeeklyRow(row sqlc.GetTelemetryModelBreakdownWeeklyRow) proxy.TelemetryModelBucket {
 	return proxy.TelemetryModelBucket{
-		Bucket:        row.Bucket.Time,
-		DecisionModel: row.DecisionModel,
-		RequestCount:  row.RequestCount,
-		TotalTokens:   row.TotalTokens,
-		ActualCostUSD: microsToUSD(row.ActualCostUsd),
+		Bucket:           row.Bucket.Time,
+		DecisionModel:    row.DecisionModel,
+		RequestCount:     row.RequestCount,
+		TotalTokens:      row.TotalTokens,
+		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		CacheWriteTokens: row.CacheWriteTokens,
+		CacheReadTokens:  row.CacheReadTokens,
 	}
 }
 
 func modelBucketFromDailyRow(row sqlc.GetTelemetryModelBreakdownDailyRow) proxy.TelemetryModelBucket {
 	return proxy.TelemetryModelBucket{
-		Bucket:        row.Bucket.Time,
-		DecisionModel: row.DecisionModel,
-		RequestCount:  row.RequestCount,
-		TotalTokens:   row.TotalTokens,
-		ActualCostUSD: microsToUSD(row.ActualCostUsd),
+		Bucket:           row.Bucket.Time,
+		DecisionModel:    row.DecisionModel,
+		RequestCount:     row.RequestCount,
+		TotalTokens:      row.TotalTokens,
+		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		CacheWriteTokens: row.CacheWriteTokens,
+		CacheReadTokens:  row.CacheReadTokens,
 	}
 }
 
 func modelBucketFromHourlyRow(row sqlc.GetTelemetryModelBreakdownHourlyRow) proxy.TelemetryModelBucket {
 	return proxy.TelemetryModelBucket{
-		Bucket:        row.Bucket.Time,
-		DecisionModel: row.DecisionModel,
-		RequestCount:  row.RequestCount,
-		TotalTokens:   row.TotalTokens,
-		ActualCostUSD: microsToUSD(row.ActualCostUsd),
+		Bucket:           row.Bucket.Time,
+		DecisionModel:    row.DecisionModel,
+		RequestCount:     row.RequestCount,
+		TotalTokens:      row.TotalTokens,
+		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		CacheWriteTokens: row.CacheWriteTokens,
+		CacheReadTokens:  row.CacheReadTokens,
 	}
 }
 
 func modelBucketFromWeeklyAllRow(row sqlc.GetTelemetryModelBreakdownWeeklyAllRow) proxy.TelemetryModelBucket {
 	return proxy.TelemetryModelBucket{
-		Bucket:        row.Bucket.Time,
-		DecisionModel: row.DecisionModel,
-		RequestCount:  row.RequestCount,
-		TotalTokens:   row.TotalTokens,
-		ActualCostUSD: microsToUSD(row.ActualCostUsd),
+		Bucket:           row.Bucket.Time,
+		DecisionModel:    row.DecisionModel,
+		RequestCount:     row.RequestCount,
+		TotalTokens:      row.TotalTokens,
+		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		CacheWriteTokens: row.CacheWriteTokens,
+		CacheReadTokens:  row.CacheReadTokens,
 	}
 }
 
 func modelBucketFromDailyAllRow(row sqlc.GetTelemetryModelBreakdownDailyAllRow) proxy.TelemetryModelBucket {
 	return proxy.TelemetryModelBucket{
-		Bucket:        row.Bucket.Time,
-		DecisionModel: row.DecisionModel,
-		RequestCount:  row.RequestCount,
-		TotalTokens:   row.TotalTokens,
-		ActualCostUSD: microsToUSD(row.ActualCostUsd),
+		Bucket:           row.Bucket.Time,
+		DecisionModel:    row.DecisionModel,
+		RequestCount:     row.RequestCount,
+		TotalTokens:      row.TotalTokens,
+		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		CacheWriteTokens: row.CacheWriteTokens,
+		CacheReadTokens:  row.CacheReadTokens,
 	}
 }
 
 func modelBucketFromHourlyAllRow(row sqlc.GetTelemetryModelBreakdownHourlyAllRow) proxy.TelemetryModelBucket {
 	return proxy.TelemetryModelBucket{
-		Bucket:        row.Bucket.Time,
-		DecisionModel: row.DecisionModel,
-		RequestCount:  row.RequestCount,
-		TotalTokens:   row.TotalTokens,
-		ActualCostUSD: microsToUSD(row.ActualCostUsd),
+		Bucket:           row.Bucket.Time,
+		DecisionModel:    row.DecisionModel,
+		RequestCount:     row.RequestCount,
+		TotalTokens:      row.TotalTokens,
+		ActualCostUSD:    microsToUSD(row.ActualCostUsd),
+		CacheWriteTokens: row.CacheWriteTokens,
+		CacheReadTokens:  row.CacheReadTokens,
 	}
 }
 
