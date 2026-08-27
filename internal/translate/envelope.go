@@ -65,6 +65,9 @@ type EmitOptions struct {
 	// tools are always stripped. Set from ROUTER_CC_ORCH_TOOLS_CROSSVENDOR;
 	// zero value false preserves historical strip-all behavior.
 	KeepCrossVendorOrchestrationTools bool
+	// StripOutputConfigFormat drops output_config.format. Set only on a one-shot
+	// retry after an upstream 400 rejects the knob as an unknown field.
+	StripOutputConfigFormat bool
 }
 
 // RequestEnvelope wraps a parsed request body regardless of wire format.
@@ -324,6 +327,10 @@ type EmitOverrides struct {
 	// `signature`. Set unconditionally for Anthropic targets: unsigned blocks are
 	// cross-format artifacts; Anthropic 400s on them regardless of switch state.
 	StripUnsignedThinkingBlocks bool
+	// StripForeignSignedThinkingBlocks removes `thinking` blocks whose signature
+	// is a router-minted cross-format envelope (`encodeOpenAIReasoningSignature`),
+	// not a real Anthropic signature. Set unconditionally for Anthropic targets.
+	StripForeignSignedThinkingBlocks bool
 	// SanitizeToolUseIDs rewrites tool_use.id / tool_use_id values outside
 	// ^[a-zA-Z0-9_-]+$. Always set for Anthropic targets: upstreams like
 	// Kimi-k2.6 emit IDs (e.g. "functions.Read:0") Anthropic rejects on replay.
@@ -333,7 +340,8 @@ type EmitOverrides struct {
 	// on unknown block fields.
 	StripThoughtSignature bool
 	// SanitizeAnthropicToolSchemas removes schema constraints Anthropic rejects
-	// from tools[].input_schema on same-format Anthropic requests.
+	// from tools[].input_schema on same-format Anthropic requests; also omits
+	// empty allowed_domains/blocked_domains on native web_search/web_fetch tools (Anthropic 400s them).
 	SanitizeAnthropicToolSchemas bool
 	// RewriteThinkingAdaptive replaces the inbound thinking block with
 	// {"type":"adaptive"} and sets output_config.effort. Used when the target
@@ -347,6 +355,9 @@ type EmitOverrides struct {
 	// CanonicalizeInboundEffort rewrites legacy effort aliases on inbound wire
 	// fields (`effort`, `output_config.effort`) to canonical levels on emit.
 	CanonicalizeInboundEffort bool
+	// StripOutputConfigFormat drops output_config.format, pruning output_config
+	// when nothing else remains. Mirrors EmitOptions.StripOutputConfigFormat.
+	StripOutputConfigFormat bool
 }
 
 func (e *RequestEnvelope) emitSameFormat(ov EmitOverrides) ([]byte, error) {
@@ -363,10 +374,18 @@ func applyOverrides(body []byte, ov EmitOverrides) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("strip thinking blocks: %w", err)
 		}
-	} else if ov.StripUnsignedThinkingBlocks {
-		out, err = stripUnsignedThinkingBlocksBytes(out)
-		if err != nil {
-			return nil, fmt.Errorf("strip unsigned thinking blocks: %w", err)
+	} else {
+		if ov.StripUnsignedThinkingBlocks {
+			out, err = stripUnsignedThinkingBlocksBytes(out)
+			if err != nil {
+				return nil, fmt.Errorf("strip unsigned thinking blocks: %w", err)
+			}
+		}
+		if ov.StripForeignSignedThinkingBlocks {
+			out, err = stripForeignSignedThinkingBlocksBytes(out)
+			if err != nil {
+				return nil, fmt.Errorf("strip foreign-signed thinking blocks: %w", err)
+			}
 		}
 	}
 
@@ -475,6 +494,13 @@ func applyOverrides(body []byte, ov EmitOverrides) ([]byte, error) {
 		}
 	}
 
+	if ov.StripOutputConfigFormat {
+		out, err = stripOutputConfigFormatBytes(out)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	for _, key := range ov.DeleteKeys {
 		out, err = sjson.DeleteBytes(out, key)
 		if err != nil {
@@ -482,6 +508,26 @@ func applyOverrides(body []byte, ov EmitOverrides) ([]byte, error) {
 		}
 	}
 
+	return out, nil
+}
+
+// stripOutputConfigFormatBytes drops output_config.format and, when that
+// leaves output_config empty, the container too.
+func stripOutputConfigFormatBytes(body []byte) ([]byte, error) {
+	if !gjson.GetBytes(body, "output_config.format").Exists() {
+		return body, nil
+	}
+	out, err := sjson.DeleteBytes(body, "output_config.format")
+	if err != nil {
+		return nil, fmt.Errorf("delete output_config.format: %w", err)
+	}
+	if len(gjson.GetBytes(out, "output_config").Map()) > 0 {
+		return out, nil
+	}
+	out, err = sjson.DeleteBytes(out, "output_config")
+	if err != nil {
+		return nil, fmt.Errorf("delete empty output_config: %w", err)
+	}
 	return out, nil
 }
 
@@ -611,6 +657,21 @@ func stripUnsignedThinkingBlocksBytes(body []byte) ([]byte, error) {
 
 func isUnsignedThinkingBlock(block gjson.Result) bool {
 	return block.Get("type").String() == "thinking" && block.Get("signature").String() == ""
+}
+
+// stripForeignSignedThinkingBlocksBytes removes `thinking` blocks carrying a
+// router-minted cross-format signature (`encodeOpenAIReasoningSignature`);
+// ModelSwitched misses these when client-side compaction re-keys the session.
+func stripForeignSignedThinkingBlocksBytes(body []byte) ([]byte, error) {
+	return rewriteMessageBlocks(body, isForeignSignedThinkingBlock, dropMatchedBlock)
+}
+
+func isForeignSignedThinkingBlock(block gjson.Result) bool {
+	if block.Get("type").String() != "thinking" {
+		return false
+	}
+	_, _, ok := decodeOpenAIReasoningSignature(block.Get("signature").String())
+	return ok
 }
 
 // dropMatchedBlock drops any block that matched needsRewrite by returning "".
@@ -834,7 +895,10 @@ func resolveOpenAIOverrides(body []byte, opts EmitOptions) EmitOverrides {
 
 	ov.DeleteKeys = append(ov.DeleteKeys, "thinking")
 
-	if gjson.GetBytes(body, "reasoning_effort").Exists() && !opts.Capabilities.Supports(router.CapReasoning) {
+	// gpt-5.x chat/completions rejects reasoning_effort when tools are present;
+	// effort belongs on the Responses API for those models.
+	if gjson.GetBytes(body, "reasoning_effort").Exists() &&
+		(!opts.Capabilities.Supports(router.CapReasoning) || !reasoningEffortAcceptedOnChatCompletions(opts)) {
 		ov.DeleteKeys = append(ov.DeleteKeys, "reasoning_effort")
 	}
 
@@ -842,6 +906,14 @@ func resolveOpenAIOverrides(body []byte, opts EmitOptions) EmitOverrides {
 	// CapReasoning models reject stop / presence_penalty / frequency_penalty.
 	if supportsReasoning {
 		for _, key := range []string{"stop", "presence_penalty", "frequency_penalty"} {
+			if gjson.GetBytes(body, key).Exists() {
+				ov.DeleteKeys = append(ov.DeleteKeys, key)
+			}
+		}
+	}
+
+	if !samplersAcceptedOnChatCompletions(opts) {
+		for _, key := range []string{"temperature", "top_p"} {
 			if gjson.GetBytes(body, key).Exists() {
 				ov.DeleteKeys = append(ov.DeleteKeys, key)
 			}
@@ -1049,13 +1121,18 @@ func resolveAnthropicOverrides(body []byte, opts EmitOptions) EmitOverrides {
 	}
 
 	// Floor under the switch-history guard: Anthropic rejects unsigned blocks
-	// regardless of pin TTL, so strip them unconditionally (#860).
+	// regardless of pin TTL, so strip them unconditionally (#860). Foreign-signed
+	// blocks fail the same way and are missed by ModelSwitched when client-side
+	// compaction re-keys the session.
 	ov.StripUnsignedThinkingBlocks = true
+	ov.StripForeignSignedThinkingBlocks = true
 
 	if !gjson.GetBytes(body, "max_tokens").Exists() {
 		ov.DefaultMaxTokensKey = "max_tokens"
 		ov.DefaultMaxTokensValue = defaultOutputTokens(opts.TargetModel)
 	}
+
+	ov.StripOutputConfigFormat = opts.StripOutputConfigFormat
 
 	return ov
 }

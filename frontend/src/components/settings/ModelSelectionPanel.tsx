@@ -5,10 +5,11 @@ import { Button } from "@/components/molecules/Button";
 import { Card } from "@/components/molecules/Card";
 import { Appearance, Intent } from "@/components/types";
 import { api, type DeployedModel } from "@/lib/api";
+import { invalidateExcludedModels, useExcludedModels } from "@/lib/data-cache";
 import { useEffect, useState } from "react";
 
 export function ModelSelectionPanel() {
-  const [available, setAvailable] = useState<DeployedModel[] | null>(null);
+  const { data, error: loadError, isLoading } = useExcludedModels();
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [savedExcluded, setSavedExcluded] = useState<Set<string>>(new Set());
   const [envOverrideActive, setEnvOverrideActive] = useState(false);
@@ -16,19 +17,20 @@ export function ModelSelectionPanel() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.excludedModels
-      .get()
-      .then(res => {
-        setAvailable(res.available);
-        const ex = new Set(res.excluded);
-        setExcluded(ex);
-        setSavedExcluded(ex);
-        setEnvOverrideActive(res.env_override_active);
-      })
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : "Failed to load models."),
-      );
-  }, []);
+    if (data == null) return;
+    const ex = new Set(data.excluded);
+    setExcluded(ex);
+    setSavedExcluded(ex);
+    setEnvOverrideActive(data.env_override_active);
+  }, [data]);
+
+  useEffect(() => {
+    if (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Failed to load models.");
+    }
+  }, [loadError]);
+
+  const available = data?.available ?? null;
 
   const dirty =
     excluded.size !== savedExcluded.size ||
@@ -52,6 +54,7 @@ export function ModelSelectionPanel() {
       const ex = new Set(res.excluded);
       setExcluded(ex);
       setSavedExcluded(ex);
+      await invalidateExcludedModels();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save excluded models.");
     } finally {
@@ -63,9 +66,13 @@ export function ModelSelectionPanel() {
     return (
       <Card className="p-0">
         <Card.Content>
-          <div className="px-5 py-8 text-center text-2xs text-muted-foreground">
-            {error != null ? "Failed to load" : "Loading…"}
-          </div>
+          {error != null ? (
+            <div className="px-5 py-8 text-center text-2xs text-muted-foreground">Failed to load</div>
+          ) : (
+            <div className="space-y-3 px-5 py-6">
+              <Card.Loading className="border-0 shadow-none" />
+            </div>
+          )}
         </Card.Content>
       </Card>
     );
@@ -90,7 +97,9 @@ export function ModelSelectionPanel() {
       <Card className="p-0">
         <Card.Content>
           {available.length === 0 ? (
-            <EmptyHint>No deployed models. Check ROUTER_CLUSTER_VERSION and provider keys.</EmptyHint>
+            <EmptyHint>
+              No deployed models. Check ROUTER_CLUSTER_VERSION and provider keys.
+            </EmptyHint>
           ) : (
             <div className="divide-y divide-border">
               {Array.from(grouped.entries()).map(([provider, models]) => (
@@ -129,7 +138,7 @@ export function ModelSelectionPanel() {
         <Card.Footer className="border-t border-border px-5 py-3">
           <Button
             onClick={save}
-            disabled={!dirty || saving || envOverrideActive}
+            disabled={!dirty || saving || envOverrideActive || isLoading}
             intent={Intent.Primary}
             appearance={Appearance.Filled}
           >

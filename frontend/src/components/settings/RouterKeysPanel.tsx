@@ -8,8 +8,9 @@ import { Button } from "@/components/molecules/Button";
 import { Card } from "@/components/molecules/Card";
 import { Appearance, Intent } from "@/components/types";
 import { api, type APIKey, type APIKeyScope, type IssueAPIKeyResponse } from "@/lib/api";
+import { invalidateKeys, useKeys } from "@/lib/data-cache";
 import { Copy, RotateCw, Search, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 // Show the search box only once the list is long enough that scanning it by eye
 // gets tedious; for a couple of keys a search bar is just noise.
@@ -54,9 +55,9 @@ function keyMatchesQuery(k: APIKey, query: string): boolean {
 }
 
 export function RouterKeysPanel() {
-  const [keys, setKeys] = useState<APIKey[]>([]);
+  const { data: keysData, error: loadError, isLoading } = useKeys();
+  const keys = keysData ?? [];
   const [query, setQuery] = useState("");
-  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [scope, setScope] = useState<APIKeyScope>("routing");
@@ -68,6 +69,15 @@ export function RouterKeysPanel() {
   // rotated key's scope rather than whatever the create form currently shows.
   const [issued, setIssued] = useState<IssueAPIKeyResponse | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const loaded = keysData != null || loadError != null;
+  const displayError =
+    error ??
+    (loadError instanceof Error
+      ? loadError.message
+      : loadError
+        ? "Failed to load keys."
+        : null);
 
   const hasKey = keys.length > 0;
   const showSearch = keys.length >= KEY_SEARCH_THRESHOLD;
@@ -81,20 +91,9 @@ export function RouterKeysPanel() {
     .sort(compareKeysByName)
     .filter(k => keyMatchesQuery(k, activeQuery));
 
-  function load() {
-    api.keys
-      .list()
-      .then(r => {
-        setKeys(r.keys ?? []);
-        setLoaded(true);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Failed to load keys.");
-        setLoaded(true);
-      });
+  async function refresh() {
+    await invalidateKeys();
   }
-
-  useEffect(load, []);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -103,7 +102,7 @@ export function RouterKeysPanel() {
       const res = await api.keys.issue(name.trim() || undefined, scope);
       setIssued(res);
       setName("");
-      load();
+      await refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to create key.");
     } finally {
@@ -120,7 +119,7 @@ export function RouterKeysPanel() {
     try {
       const res = await api.keys.rotate(id);
       setIssued(res);
-      load();
+      await refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to rotate key.");
     } finally {
@@ -136,7 +135,7 @@ export function RouterKeysPanel() {
     setDeleting(id);
     try {
       await api.keys.delete(id);
-      load();
+      await refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to delete key.");
     } finally {
@@ -154,7 +153,7 @@ export function RouterKeysPanel() {
 
   return (
     <>
-      {error && <ErrorBanner>{error}</ErrorBanner>}
+      {displayError && <ErrorBanner>{displayError}</ErrorBanner>}
 
       {issued != null && (
         <div className="flex flex-col gap-3 rounded-lg border border-success/30 bg-success/5 p-4">
@@ -330,7 +329,9 @@ export function RouterKeysPanel() {
         </Card>
       ) : loaded ? (
         <EmptyHint>No router keys yet.</EmptyHint>
-      ) : null}
+      ) : (
+        <Card.Loading />
+      )}
     </>
   );
 }

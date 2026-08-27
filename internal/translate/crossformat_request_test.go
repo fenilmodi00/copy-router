@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"workweave/router/internal/providers"
 	"workweave/router/internal/router"
 	"workweave/router/internal/translate"
 
@@ -468,6 +469,29 @@ func TestCrossFormat_OpenAIToAnthropic_MultipleSystemMessages(t *testing.T) {
 	assert.Equal(t, "user", msgAt(t, msgs, 0)["role"])
 }
 
+func TestCrossFormat_OpenAIToAnthropic_MidConversationSystemMessageDemotedInPlace(t *testing.T) {
+	// Mid-conversation system messages are demoted in place; hoisting would shift the cached prefix.
+	body := []byte(`{"model":"gpt-4","messages":[{"role":"system","content":"rules"},{"role":"user","content":"hi"},{"role":"assistant","content":"ok"},{"role":"system","content":"be terse"}]}`)
+	env, err := translate.ParseOpenAI(body)
+	require.NoError(t, err)
+
+	prep, err := env.PrepareAnthropic(http.Header{}, translate.EmitOptions{TargetModel: "claude-sonnet-4-20250514"})
+	require.NoError(t, err)
+
+	doc := unmarshalBody(t, prep.Body)
+	sys := getArray(t, doc, "system")
+	require.Len(t, sys, 1, "only the leading system message is hoisted")
+	assert.Equal(t, "rules", sys[0].(map[string]any)["text"])
+
+	msgs := getArray(t, doc, "messages")
+	require.Len(t, msgs, 3)
+	last := msgAt(t, msgs, 2)
+	assert.Equal(t, "user", last["role"])
+	blocks, _ := last["content"].([]any)
+	require.Len(t, blocks, 1)
+	assert.Equal(t, "be terse", blocks[0].(map[string]any)["text"])
+}
+
 func TestCrossFormat_OpenAIToAnthropic_AssistantTextAndToolCalls(t *testing.T) {
 	env, err := translate.ParseOpenAI(openAIAssistantTextAndToolCalls)
 	require.NoError(t, err)
@@ -563,7 +587,7 @@ func TestCrossFormat_AnthropicToOpenAI_SimpleText(t *testing.T) {
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: "openai",
+		TargetProvider: providers.ProviderOpenAI,
 	})
 	require.NoError(t, err)
 
@@ -600,7 +624,7 @@ func TestCrossFormat_AnthropicToOpenAI_ToolConversation(t *testing.T) {
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: "openai",
+		TargetProvider: providers.ProviderOpenAI,
 	})
 	require.NoError(t, err)
 
@@ -665,7 +689,7 @@ func TestCrossFormat_AnthropicToOpenAI_OverlongToolUseIDClampedAndPaired(t *test
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: "openai",
+		TargetProvider: providers.ProviderOpenAI,
 	})
 	require.NoError(t, err)
 
@@ -687,7 +711,7 @@ func TestCrossFormat_AnthropicToOpenAI_Image(t *testing.T) {
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: "openai",
+		TargetProvider: providers.ProviderOpenAI,
 	})
 	require.NoError(t, err)
 
@@ -735,7 +759,7 @@ func TestCrossFormat_AnthropicToOpenAI_ToolResultImageHoisted(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: "openai",
+		TargetProvider: providers.ProviderOpenAI,
 	})
 	require.NoError(t, err)
 
@@ -784,7 +808,7 @@ func TestCrossFormat_AnthropicToOpenAI_ToolResultTextAndImageSplit(t *testing.T)
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: "openai",
+		TargetProvider: providers.ProviderOpenAI,
 	})
 	require.NoError(t, err)
 
@@ -810,7 +834,7 @@ func TestCrossFormat_AnthropicToOpenAI_ArraySystemFlattened(t *testing.T) {
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: "openai",
+		TargetProvider: providers.ProviderOpenAI,
 	})
 	require.NoError(t, err)
 
@@ -831,7 +855,7 @@ func TestCrossFormat_AnthropicToOpenAI_EmptyToolInputBecomesEmptyArgsString(t *t
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: "openai",
+		TargetProvider: providers.ProviderOpenAI,
 	})
 	require.NoError(t, err)
 
@@ -889,7 +913,7 @@ func TestCrossFormat_AnthropicToOpenAI_ScalarFieldsCarriedThrough(t *testing.T) 
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: "openai",
+		TargetProvider: providers.ProviderOpenAI,
 	})
 	require.NoError(t, err)
 
@@ -915,7 +939,7 @@ func TestCrossFormat_AnthropicToOpenAI_ReasoningModelOmitsStop(t *testing.T) {
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-5.4-mini",
-		TargetProvider: "openai",
+		TargetProvider: providers.ProviderOpenAI,
 		Capabilities:   router.Lookup("gpt-5.4-mini"),
 	})
 	require.NoError(t, err)
@@ -971,7 +995,7 @@ func TestCrossFormat_AnthropicToOpenAI_InputSchemaBecomesParameters(t *testing.T
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: "openai",
+		TargetProvider: providers.ProviderOpenAI,
 	})
 	require.NoError(t, err)
 
@@ -1014,7 +1038,7 @@ func TestCrossFormat_AnthropicToOpenAI_StripsUnsupportedToolSchemaPattern(t *tes
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "moonshotai/kimi-k2.7",
-		TargetProvider: "fireworks",
+		TargetProvider: providers.ProviderFireworks,
 	})
 	require.NoError(t, err)
 
@@ -1102,7 +1126,7 @@ func TestCrossFormat_AnthropicToOpenAI_ToolResultSplitIntoSeparateMessages(t *te
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: "openai",
+		TargetProvider: providers.ProviderOpenAI,
 	})
 	require.NoError(t, err)
 
@@ -1507,7 +1531,7 @@ func TestCrossFormat_AnthropicToOpenAI_ToolChoiceVariants(t *testing.T) {
 			require.NoError(t, err)
 			prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 				TargetModel:    "gpt-4",
-				TargetProvider: "openai",
+				TargetProvider: providers.ProviderOpenAI,
 			})
 			require.NoError(t, err)
 

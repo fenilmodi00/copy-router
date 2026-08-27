@@ -24,6 +24,10 @@ When a new inbound format needs to talk to an existing upstream provider with a 
 
 Anthropic-only fields (`thinking`, `cache_control`, `metadata`, Anthropic beta headers) are stripped at translation time **and again defensively in the OpenAI / openaicompat adapters**. Keep both checks — belt-and-suspenders is intentional because the field set drifts as Anthropic adds beta features.
 
+## Prefix-stable system handling (load-bearing)
+
+Anthropic 400s on `role:"system"` inside `messages`, so `hoistAnthropicSystemMessages` clears them — but only the **leading** run is hoisted into `system`. A mid-conversation system message is demoted to `user` **in place**. Hoisting it instead would move its text in front of the whole history, so a client that emits a system reminder per turn (Claude Code) shifts the cached prefix on every turn and re-writes the entire prompt; prod traffic showed ~890k cache-creation tokens per turn against a flat 17.5k read.
+
 ## `<think>` content-channel extraction (gated)
 
 Some OpenAI-compat upstreams (today `xiaomi/mimo-v2.5-pro`) stream chain-of-thought as inline `<think>…</think>` in the **`content`** channel rather than `reasoning_content`/`reasoning`. Left alone, Claude Code renders the raw tags as prose. When the catalog model carries `ThinkTagReasoning: true` (plumbed to the translator via `WithThinkTagReasoning`), [`think_tag.go`](think_tag.go)'s `thinkTagSplitter` reroutes a **leading** `<think>` block into an Anthropic thinking block; everything else passes through as text. Anchored to the start (after leading whitespace) — a mid-prose `<think>` mention stays text, mirroring `leadsWithToolishMarkup`. The splitter is streaming-safe: it buffers at most `len("</think>")-1` bytes (no whole-response buffering), so a tag split across SSE deltas is still caught. Off by default; only `xiaomi/mimo-v2.5-pro` enables it, and only on the OpenAI-compat chat-completions chain.
@@ -33,6 +37,10 @@ Some OpenAI-compat upstreams (today `xiaomi/mimo-v2.5-pro`) stream chain-of-thou
 
 Inbound history can still carry Gemini-origin `thought_signature` fields (echoed by clients after a prior Gemini turn). Targeting Anthropic, `resolveAnthropicOverrides` strips the raw field from **all** blocks (`StripThoughtSignature`) — Anthropic 400s on unknown block fields. For tool calls the signature may also live in a smuggled id carrier ([`thought_signature_id.go`](thought_signature_id.go)); OpenAI emit paths clamp oversized ids under the 64-char `call_id`/`tool_calls[].id` limit (`clampOpenAIToolCallID`).
 
+
+## Cross-format reasoning signatures on Anthropic `thinking` blocks (load-bearing)
+
+The Responses→Anthropic writers smuggle an OpenAI reasoning item (`id` + `encrypted_content`) into the Anthropic `signature` field ([`openai_reasoning_signature.go`](openai_reasoning_signature.go)) so the reasoning can be replayed to OpenAI next turn. Anthropic validates that opaque field and answers `Invalid signature in thinking block`, so `resolveAnthropicOverrides` drops those blocks unconditionally (`StripForeignSignedThinkingBlocks`) alongside unsigned ones — not only when `ModelSwitched` is set. The switch guard is not sufficient: a client-side compaction rewrites the first user message, which re-keys the session, so the pin (and with it the prior served model) is gone on exactly the turn that re-routes an OpenAI-served history to Anthropic.
 
 ## Tool-call validation + strict decoding (load-bearing)
 

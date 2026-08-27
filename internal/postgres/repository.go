@@ -26,6 +26,8 @@ type Repository struct {
 	Feedback              *FeedbackRepo
 	Analytics             *AnalyticsRepo
 	FlagDefinitions       *FlagDefinitionRepo
+	Accounts              auth.AccountRepository
+	LoginSessions         auth.LoginSessionRepository
 }
 
 // NewRepository constructs a Repository. Pass auth.NoOpEncryptor{} for local dev without a keyset.
@@ -41,6 +43,8 @@ func NewRepository(tx sqlc.DBTX, encryptor auth.Encryptor) *Repository {
 		Feedback:              NewFeedbackRepo(tx),
 		Analytics:             NewAnalyticsRepo(tx),
 		FlagDefinitions:       NewFlagDefinitionRepo(tx),
+		Accounts:              &accountRepo{tx: tx},
+		LoginSessions:         &loginSessionRepo{tx: tx},
 	}
 }
 

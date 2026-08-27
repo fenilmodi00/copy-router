@@ -150,6 +150,11 @@ type Service struct {
 	// pricier than the session pin only escalates at confidence >=
 	// hmmUpgradeConfidenceThreshold. Env ROUTER_AUTHORITATIVE_UPGRADE_GATE, on by default.
 	authoritativeUpgradeGate bool
+	// authorityCacheShadow records what the HMM cache gate would have decided on
+	// an authoritative-per-turn turn, which returns before that gate can run.
+	// Observation only -- it never changes the served decision. Env
+	// ROUTER_AUTHORITY_CACHE_SHADOW, on by default.
+	authorityCacheShadow bool
 	// policyDeadlineFallback degrades a policy sidecar deadline/transport failure to
 	// the session pin instead of a 503. Kill switch: env ROUTER_POLICY_DEADLINE_FALLBACK, off by default.
 	policyDeadlineFallback bool
@@ -1155,6 +1160,11 @@ const DefaultPlannerTierUpgradeEnabled = true
 // shadow telemetry before arming.
 const DefaultPlannerColdPinFollowFresh = false
 
+// DefaultPlannerCorrectedEconomics ships OFF. The corrected cost model changes
+// routing, so it is armed per environment (staging first) rather than by
+// merging. See docs/CONFIGURATION.md for the measured effect.
+const DefaultPlannerCorrectedEconomics = false
+
 func NewService(r router.Router, providerMap map[string]providers.Client, emitter TelemetryEmitter, embedOnlyUserMessage bool, semanticCache *cache.Cache, pinStore sessionpin.Store, hardPinExplore bool, hardPinProvider, hardPinModel string, telemetry TelemetryRepository) *Service {
 	return &Service{
 		router:                       r,
@@ -1184,6 +1194,7 @@ func NewService(r router.Router, providerMap map[string]providers.Client, emitte
 		},
 		hmmUpgradeConfidenceThreshold: defaultHMMUpgradeConfidenceThreshold,
 		authoritativeUpgradeGate:      true,
+		authorityCacheShadow:          true,
 		plannerEnabled:                true,
 		scoreToolResultTurns:          true,
 		loopEscalationEnabled:         true,
@@ -1214,6 +1225,7 @@ func (s *Service) WithPlanner(cfg planner.EVConfig) *Service {
 	}
 	s.planner.TierUpgradeEnabled = cfg.TierUpgradeEnabled
 	s.planner.ColdPinFollowFresh = cfg.ColdPinFollowFresh
+	s.planner.CorrectedEconomics = cfg.CorrectedEconomics
 	return s
 }
 
@@ -1290,6 +1302,13 @@ func (s *Service) WithHMPinStickyOnArmSelectorUnavail(enabled bool) *Service {
 // decisions. On by default; disabling restores verbatim policy selection.
 func (s *Service) WithAuthoritativeUpgradeGate(enabled bool) *Service {
 	s.authoritativeUpgradeGate = enabled
+	return s
+}
+
+// WithAuthorityCacheShadow sets the kill switch (ROUTER_AUTHORITY_CACHE_SHADOW)
+// for recording the cache gate's counterfactual verdict on authoritative turns.
+func (s *Service) WithAuthorityCacheShadow(enabled bool) *Service {
+	s.authorityCacheShadow = enabled
 	return s
 }
 
@@ -1604,6 +1623,23 @@ func (s *Service) WithExcludedModelsOverride(models []string) *Service {
 // HasExcludedModelsOverride reports whether an excluded-models override is active.
 func (s *Service) HasExcludedModelsOverride() bool {
 	return s.excludedModelsOverride != nil
+}
+
+// RoutableModels returns a copy of the set of models this deployment can
+// route, so the admin guard and request-time desugaring share one definition
+// and cannot drift.
+func (s *Service) RoutableModels() map[string]struct{} {
+	// A nil Service arrives as a typed-nil interface from server.Register;
+	// return nil rather than panicking.
+	if s == nil {
+		return nil
+	}
+	universe := s.routableUniverse()
+	out := make(map[string]struct{}, len(universe))
+	for m := range universe {
+		out[m] = struct{}{}
+	}
+	return out
 }
 
 // ExcludedModelsOverride returns a sorted copy of the override list.
@@ -2221,7 +2257,7 @@ func writeLocalCountTokens(w http.ResponseWriter, body []byte) error {
 // provider. No model rewriting, no routing decision. Anthropic targets get
 // the body scrubbed via envelope parsing; others receive it verbatim.
 func (s *Service) PassthroughToNamedProvider(ctx context.Context, providerName string, body []byte, w http.ResponseWriter, r *http.Request) error {
-	log := observability.Get()
+	log := observability.FromContext(ctx)
 	p, err := s.provider(providerName)
 	if err != nil {
 		return err
@@ -2237,6 +2273,12 @@ func (s *Service) PassthroughToNamedProvider(ctx context.Context, providerName s
 	if providerName == providers.ProviderAnthropic && len(body) > 0 {
 		if canon, had, cerr := translate.CanonicalizeModelInBody(body); cerr == nil && had {
 			body = canon
+		}
+		// Same reason as the variant tag above: a provider-qualified id is
+		// valid at ingress and on the routing path, but the native Anthropic
+		// API 404s on it.
+		if bare, had, cerr := translate.StripProviderPrefixInBody(body, providerName); cerr == nil && had {
+			body = bare
 		}
 	}
 
@@ -2260,7 +2302,7 @@ func (s *Service) PassthroughToNamedProvider(ctx context.Context, providerName s
 	proxyStart := time.Now()
 	proxyErr := p.Passthrough(ctx, prep, w, r)
 	proxyMs := time.Since(proxyStart).Milliseconds()
-	log.Info("PassthroughToProvider complete", "provider", providerName, "path", r.URL.Path, "method", r.Method, "proxy_ms", proxyMs, "proxy_err", proxyErr)
+	log.Info("PassthroughToProvider complete", "provider", providerName, "proxy_ms", proxyMs, "proxy_err", proxyErr)
 	return proxyErr
 }
 
@@ -2459,7 +2501,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	ctx = s.withUsageObserver(ctx, r.Header)
 	log := observability.FromContext(ctx)
 	requestStart := time.Now()
-	requestID := uuid.New().String()
+	requestID := requestIDFor(ctx)
 	buf := s.newTelemetryBuffer()
 	ctx = buf.WithContext(ctx)
 
@@ -2475,7 +2517,9 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	// Same for the one-click thumbs footer (and its signed rate URLs), which
 	// would otherwise shift assistant prefixes off the prompt cache.
 	// Best-effort: log-and-continue on failure rather than abort over cosmetic
-	// cleanup, matching the OpenAI chat path.
+	// cleanup, matching the OpenAI chat path. The echo check must read the body
+	// before the strip erases its evidence.
+	footerEchoedSinceHumanTurn := translate.FeedbackFooterSinceLastHumanTurn(body)
 	if strippedBody, ferr := translate.StripFeedbackFooterFromMessages(body); ferr != nil {
 		log.Error("Failed to strip feedback footer from inbound messages", "err", ferr)
 	} else {
@@ -2514,14 +2558,6 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	if removed := env.StripRouterFeedbackArtifacts(); removed > 0 {
 		log.Info("Stripped router-feedback artifacts from Anthropic history", "removed_messages", removed)
 	}
-	// A dangling tool_use left by a prior mid-stream failure 400s permanently
-	// on providers that validate tool-call/response pairing (Together); other
-	// providers silently accept it, so the failure only shows up depending on
-	// which model the router picks. Must run before maybeCompact/routing so
-	// every dispatch attempt this turn sees a wire-valid history.
-	if sanitized := env.SanitizeOrphanedToolCalls(); sanitized > 0 {
-		log.Info("Sanitized orphaned tool calls before dispatch", "sanitized", sanitized)
-	}
 
 	embedFlag := s.ResolveEmbedOnlyUserMessage(ctx)
 	feats := env.RoutingFeatures(embedFlag)
@@ -2545,14 +2581,25 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	// env.body so the upstream never sees it). Session key is derived before
 	// extraction: DeriveSessionKey can fall back to prompt text, and deriving
 	// after the strip would mismatch subsequent turns with the unstripped message.
+	agentForceModel := ""
+	requestBodyChanged := false
 	if !agentShadowMode && s.pinStore != nil {
 		if cmd, hasCmd := env.ExtractForceModelCommand(); hasCmd {
 			log.Info("ProxyMessages force-model command", "force_model_cmd", cmd)
-			if err := s.handleForceModelCommand(ctx, w, env, cmd, installationID, sessionKey, feats.Tokens); err != nil {
-				return err
+			if cmd.FromToolResult {
+				var err error
+				agentForceModel, _, err = s.applyForceModelCommand(ctx, env, cmd, installationID, sessionKey)
+				if err != nil {
+					return err
+				}
+				requestBodyChanged = true
+			} else {
+				if err := s.handleForceModelCommand(ctx, w, env, cmd, installationID, sessionKey, feats.Tokens); err != nil {
+					return err
+				}
+				s.grantPostCommandContinuation(ctx, installationID, sessionKey, roleForTier(catalog.TierFor(feats.Model)))
+				return nil
 			}
-			s.grantPostCommandContinuation(ctx, installationID, sessionKey, roleForTier(catalog.TierFor(feats.Model)))
-			return nil
 		}
 	}
 	if !agentShadowMode {
@@ -2566,16 +2613,35 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		}
 	}
 
+	// Sanitize after command extraction: a skill can encode its command as a
+	// plain user string after an assistant tool_use, and sanitizing first would
+	// erase the provenance and leave a dangling tool_use that 400s on Together.
+	if sanitized := env.SanitizeOrphanedToolCalls(); sanitized > 0 {
+		log.Info("Sanitized orphaned tool calls before dispatch", "sanitized", sanitized)
+		requestBodyChanged = true
+	}
+	if requestBodyChanged {
+		feats = env.RoutingFeatures(embedFlag)
+		promptText = feats.PromptText
+		embedInput = "concatenated_stream"
+		if embedFlag && feats.OnlyUserMessageText != "" {
+			promptText = feats.OnlyUserMessageText
+			embedInput = "only_user_message"
+		}
+	}
+
 	// Honor the x-weave-force-model header (headless equivalent of /force-model).
 	// Writes the user-forced pin and falls through to normal routing, which picks
 	// the pin up and serves the requested model on this same turn.
-	forceModel := ""
+	forceModel := agentForceModel
 	forceCluster := ""
 	if !agentShadowMode {
-		var forceErr error
-		forceModel, forceErr = s.applyForceModelHeader(ctx, r, env, installationID, sessionKey)
+		headerForceModel, forceErr := s.applyForceModelHeader(ctx, r, env, installationID, sessionKey)
 		if forceErr != nil {
 			return forceErr
+		}
+		if headerForceModel != "" {
+			forceModel = headerForceModel
 		}
 		forceCluster, forceErr = applyForceClusterHeader(ctx, r)
 		if forceErr != nil {
@@ -2597,7 +2663,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 			escalatedLoop = true
 		}
 		if !escalatedLoop {
-			if loop, sig, count := detectToolCallLoop(env); loop {
+			if loop, sig, count := detectToolCallLoop(ctx, env); loop {
 				loopRole := roleForTier(catalog.TierFor(feats.Model))
 				log.Info("ProxyMessages tool-call loop detected", "tool_sig", sig, "repeat_count", count, "role", loopRole)
 				return s.handleToolCallLoopBreak(ctx, w, env, sig, count, installationID, sessionKey, loopRole, feats.Model, providers.ProviderAnthropic, feats.Tokens)
@@ -3025,7 +3091,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 			defer keepalive.Close()
 			clientSink = keepalive
 		}
-		if footer := s.feedbackFooter(ctx, ClientIdentityFrom(ctx).ClientApp, routeRes.TurnType); footer != "" {
+		if footer := s.feedbackFooter(ctx, ClientIdentityFrom(ctx).ClientApp, routeRes.TurnType, footerEchoedSinceHumanTurn); footer != "" {
 			clientSink = translate.NewAnthropicRoutingFooterWriter(clientSink, footer)
 		}
 	}
@@ -3087,7 +3153,29 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 			}
 			crossFormat = false
 			logUpstreamBody(log, routeRes.SessionKey, target, feats, prep.Body)
-			return s.anthropicNativeAttempt(env, r, prep, sink, preludeBuf, targetMarker, setExtractor), nil
+			native := s.anthropicNativeAttempt(env, r, prep, sink, preludeBuf, targetMarker, setExtractor)
+			return func(actx context.Context, d router.Decision, p providers.Client) error {
+				err := native(actx, d, p)
+				if err == nil || committed(preludeBuf) || !providers.IsUpstreamOutputConfigFormatRejection(err) {
+					return err
+				}
+				unstructuredOpts := targetOpts
+				unstructuredOpts.StripOutputConfigFormat = true
+				unstructuredPrep, emitErr := env.PrepareAnthropic(r.Header, unstructuredOpts)
+				if emitErr != nil {
+					log.Error("Failed to re-emit Anthropic body without output_config.format", "err", emitErr)
+					return err
+				}
+				log.Warn("Retrying Anthropic request without output_config.format after upstream rejected it",
+					"model", d.Model,
+					"provider", d.Provider,
+					"request_id", requestID)
+				if preludeBuf != nil {
+					preludeBuf.Discard()
+				}
+				logUpstreamBody(log, routeRes.SessionKey, target, feats, unstructuredPrep.Body)
+				return s.anthropicNativeAttempt(env, r, unstructuredPrep, sink, preludeBuf, targetMarker, setExtractor)(actx, d, p)
+			}, nil
 		case providers.FamilyOpenAICompat:
 			crossFormat = true
 			// Prep rebuilt per attempt: targetIsOpenRouter(opts) gates four
@@ -3130,6 +3218,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 						WithToolValidator(toolValidator)
 				} else {
 					translator = translate.NewAnthropicSSETranslator(sink, d.Model, usage).
+						WithLogger(log).
 						WithRoutingMarker(targetMarker).
 						WithEstimatedInputTokens(feats.Tokens).
 						WithRequestHadTools(feats.HasTools).
@@ -3615,7 +3704,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 			// same misbehaving model — this turn already streamed and can't retry.
 			s.evictPinAfterDegenerateResponse(ctx, stickyHit, decision.Reason, installationID, routeRes.SessionKey, stickyStateRole(routeRes))
 		}
-		s.fireTelemetry(InsertTelemetryParams{
+		tel := InsertTelemetryParams{
 			InstallationID:         installationID.String(),
 			APIKeyID:               apiKeyIDFromContext(ctx),
 			RequestID:              requestID,
@@ -3698,7 +3787,10 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 			CredentialSource:    credSource,
 			// Phase 0 instrumentation — Anthropic only; see unified_limit_capture.go.
 			UnifiedLimitHeaders: unifiedLimitHeadersJSON(ctx),
-		})
+		}
+		applyPlannerTelemetry(&tel, routeRes)
+		applyAuthorityShadowTelemetry(&tel, routeRes)
+		s.fireTelemetry(tel)
 	}
 
 	// No-op when billing is unwired (selfhosted); only reached on a real
@@ -4774,14 +4866,14 @@ func (s *Service) fireBilling(ctx context.Context, p billing.DebitInferenceParam
 	if p.OrganizationID == "" {
 		// Shouldn't happen on managed-mode authed requests. Debug level so a
 		// synthetic test exercising the hook doesn't page on-call.
-		observability.Get().Debug("Billing debit skipped: no organization_id on request")
+		observability.FromContext(ctx).Debug("Billing debit skipped: no organization_id on request")
 		return
 	}
 	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	balance, err := s.billing.DebitForInference(dbCtx, p)
 	if err == nil {
-		observability.Get().Debug("Billing debit complete",
+		observability.FromContext(ctx).Debug("Billing debit complete",
 			"organization_id", p.OrganizationID,
 			"router_request_id", p.RouterRequestID,
 			"model", p.Model,
@@ -4798,7 +4890,7 @@ func (s *Service) fireBilling(ctx context.Context, p billing.DebitInferenceParam
 // logBillingDebitFailure emits a structured Error log so on-call alerting can
 // fire on the resulting log rate without a new prometheus dependency.
 func logBillingDebitFailure(ctx context.Context, p billing.DebitInferenceParams, err error) {
-	observability.Get().Error("router_billing_debit_failed",
+	observability.FromContext(ctx).Error("router_billing_debit_failed",
 		"err", err,
 		"organization_id", p.OrganizationID,
 		"router_request_id", p.RouterRequestID,
@@ -4858,7 +4950,7 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	ctx = s.withUsageObserver(ctx, r.Header)
 	log := observability.FromContext(ctx)
 	requestStart := time.Now()
-	requestID := uuid.New().String()
+	requestID := requestIDFor(ctx)
 	buf := s.newTelemetryBuffer()
 	ctx = buf.WithContext(ctx)
 
@@ -4877,7 +4969,9 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	// Same for the one-click thumbs footer (and its signed rate URLs), which
 	// would otherwise shift assistant prefixes off the prompt cache.
 	// Best-effort: log-and-continue on failure rather than abort over cosmetic
-	// cleanup, matching the Anthropic Messages path.
+	// cleanup, matching the Anthropic Messages path. The echo check must read
+	// the body before the strip erases its evidence.
+	footerEchoedSinceHumanTurn := translate.FeedbackFooterSinceLastHumanTurn(body)
 	strippedBody, stripErr = translate.StripFeedbackFooterFromMessages(body)
 	if stripErr != nil {
 		log.Error("Failed to strip feedback footer from OpenAI messages", "err", stripErr)
@@ -4896,14 +4990,6 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	ctx, log, sessionKey = bindRequestLogger(ctx, env, apiKeyID, requestID, "openai_chat_completions")
 	if removed := env.StripRouterFeedbackArtifacts(); removed > 0 {
 		log.Info("Stripped router-feedback artifacts from OpenAI history", "removed_messages", removed)
-	}
-	// A dangling tool_use left by a prior mid-stream failure 400s permanently
-	// on providers that validate tool-call/response pairing (Together); other
-	// providers silently accept it, so the failure only shows up depending on
-	// which model the router picks. Must run before maybeCompact/routing so
-	// every dispatch attempt this turn sees a wire-valid history.
-	if sanitized := env.SanitizeOrphanedToolCalls(); sanitized > 0 {
-		log.Info("Sanitized orphaned tool calls before dispatch", "sanitized", sanitized)
 	}
 	embedFlag := s.ResolveEmbedOnlyUserMessage(ctx)
 	feats := env.RoutingFeatures(embedFlag)
@@ -4929,14 +5015,25 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	// env.body so the upstream never sees it). Session key is derived before
 	// extraction: DeriveSessionKey can fall back to prompt text, and deriving
 	// after the strip would mismatch subsequent turns with the unstripped message.
+	agentForceModel := ""
+	requestBodyChanged := false
 	if s.pinStore != nil {
 		if cmd, hasCmd := env.ExtractForceModelCommand(); hasCmd {
 			log.Info("ProxyOpenAIChatCompletion force-model command", "force_model_cmd", cmd)
-			if err := s.handleForceModelCommand(ctx, w, env, cmd, installationID, sessionKey, feats.Tokens); err != nil {
-				return err
+			if cmd.FromToolResult {
+				var err error
+				agentForceModel, _, err = s.applyForceModelCommand(ctx, env, cmd, installationID, sessionKey)
+				if err != nil {
+					return err
+				}
+				requestBodyChanged = true
+			} else {
+				if err := s.handleForceModelCommand(ctx, w, env, cmd, installationID, sessionKey, feats.Tokens); err != nil {
+					return err
+				}
+				s.grantPostCommandContinuation(ctx, installationID, sessionKey, roleForTier(catalog.TierFor(feats.Model)))
+				return nil
 			}
-			s.grantPostCommandContinuation(ctx, installationID, sessionKey, roleForTier(catalog.TierFor(feats.Model)))
-			return nil
 		}
 	}
 	if cmd, hasCmd := env.ExtractRouterFeedbackCommand(); hasCmd {
@@ -4948,12 +5045,33 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 		return nil
 	}
 
+	// Sanitize after command extraction: a skill can encode its command as a
+	// plain user string after an assistant tool_use, and sanitizing first would
+	// erase the provenance and leave a dangling tool_use that 400s on Together.
+	if sanitized := env.SanitizeOrphanedToolCalls(); sanitized > 0 {
+		log.Info("Sanitized orphaned tool calls before dispatch", "sanitized", sanitized)
+		requestBodyChanged = true
+	}
+	if requestBodyChanged {
+		feats = env.RoutingFeatures(embedFlag)
+		promptText = feats.PromptText
+		embedInput = "concatenated_stream"
+		if embedFlag && feats.OnlyUserMessageText != "" {
+			promptText = feats.OnlyUserMessageText
+			embedInput = "only_user_message"
+		}
+	}
+
 	// Honor the x-weave-force-model header (headless equivalent of /force-model).
 	// Writes the user-forced pin and falls through to normal routing, which picks
 	// the pin up and serves the requested model on this same turn.
-	forceModel, forceErr := s.applyForceModelHeader(ctx, r, env, installationID, sessionKey)
+	forceModel := agentForceModel
+	headerForceModel, forceErr := s.applyForceModelHeader(ctx, r, env, installationID, sessionKey)
 	if forceErr != nil {
 		return forceErr
+	}
+	if headerForceModel != "" {
+		forceModel = headerForceModel
 	}
 	forceCluster, forceErr := applyForceClusterHeader(ctx, r)
 	if forceErr != nil {
@@ -4971,7 +5089,7 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	// Tool-call loop break: same path as the Anthropic ingress. See the
 	// detectToolCallLoop / handleToolCallLoopBreak doc comments for rationale.
 	if !escalatedLoop {
-		if loop, sig, count := detectToolCallLoop(env); loop {
+		if loop, sig, count := detectToolCallLoop(ctx, env); loop {
 			loopRole := roleForTier(catalog.TierFor(feats.Model))
 			log.Info("ProxyOpenAIChatCompletion tool-call loop detected", "tool_sig", sig, "repeat_count", count, "role", loopRole)
 			return s.handleToolCallLoopBreak(ctx, w, env, sig, count, installationID, sessionKey, loopRole, feats.Model, providers.ProviderOpenAI, feats.Tokens)
@@ -5227,7 +5345,7 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	// special-casing — /v1/responses footers are a follow-up.
 	clientSink := w
 	if _, isResponses := w.(*translate.ResponsesWriter); env.Stream() && !isResponses {
-		if footer := s.feedbackFooter(ctx, ClientIdentityFrom(ctx).ClientApp, routeRes.TurnType); footer != "" {
+		if footer := s.feedbackFooter(ctx, ClientIdentityFrom(ctx).ClientApp, routeRes.TurnType, footerEchoedSinceHumanTurn); footer != "" {
 			clientSink = translate.NewOpenAIRoutingFooterWriter(w, footer)
 		}
 	}
@@ -5535,7 +5653,7 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	installationIDOAI, _ := ctx.Value(InstallationIDContextKey{}).(string)
 	if installationIDOAI != "" {
 		credentialKeyPrefix, credentialKeySuffix, credSource := s.credentialKeyParts(ctx)
-		s.fireTelemetry(InsertTelemetryParams{
+		telOAI := InsertTelemetryParams{
 			InstallationID:         installationIDOAI,
 			APIKeyID:               apiKeyIDFromContext(ctx),
 			RequestID:              requestID,
@@ -5600,7 +5718,10 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 			CredentialKeyPrefix: credentialKeyPrefix,
 			CredentialKeySuffix: credentialKeySuffix,
 			CredentialSource:    credSource,
-		})
+		}
+		applyPlannerTelemetry(&telOAI, routeRes)
+		applyAuthorityShadowTelemetry(&telOAI, routeRes)
+		s.fireTelemetry(telOAI)
 	}
 
 	log.Info("ProxyOpenAIChatCompletion complete", append([]any{"requested_model", feats.Model, "baseline_model", s.baselineFor(feats.Model), "decision_model", decision.Model, "decision_provider", decision.Provider, "primary_provider", primaryProvider, "fallback_attempts", winnerIdx, "failover_used", finalProvider != primaryProvider, "decision_reason", decision.Reason, "requested_tier", routeRes.RequestedTier.String(), "decision_tier", catalog.TierFor(decision.Model).String(), "embedded_tokens", len(promptText) / 4, "total_input_tokens", feats.Tokens, "has_tools", feats.HasTools, "embed_input", embedInput, "cross_format", crossFormat, "sticky_hit", stickyHit, "pin_tier", pinTier, "turn_type", string(tt), "route_ms", routeMs, "proxy_ms", proxyMs, "proxy_err", proxyErr, "upstream_err_body", providers.UpstreamErrorBodyMessage(proxyErr), "upstream_status", upstreamStatus(proxyErr), "routing_marker", marker, "prior_served_model", routeRes.PriorServedModel, "hard_pinned", routeRes.HardPinned}, plannerLogFields(routeRes)...)...)

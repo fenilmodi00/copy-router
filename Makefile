@@ -3,6 +3,7 @@
 #   - sqlc (go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0)
 #   - golang-migrate (brew install golang-migrate)
 #   - CompileDaemon for `make dev` (go install github.com/githubnemo/CompileDaemon@latest)
+#   - bun for `make frontend-dev` (https://bun.sh)
 #
 # Database:
 #   Targets that touch the database read DATABASE_URL from .env.development
@@ -14,7 +15,7 @@
 #   Local disposable Postgres: `make db` (Compose on 5433) or any other
 #   Postgres URL you already have running.
 
-.PHONY: generate generate-statusline build test test-verbose test-statusline test-install smoke smoke-host initdb migrate-up migrate-down migrate-create seed setup full-setup db dev check fmt vet precommit install-hooks help install-cc uninstall-cc up up-hmm down down-hmm logs
+.PHONY: generate generate-statusline build test test-verbose test-statusline test-install smoke smoke-host initdb migrate-up migrate-down migrate-create seed setup full-setup db dev frontend-dev check fmt vet precommit install-hooks help install-cc uninstall-cc up up-hmm down down-hmm logs
 
 # Load DATABASE_URL from .env files (matches docker-compose defaults).
 -include .env.development
@@ -118,18 +119,30 @@ db: ## Start the compose Postgres only (port 5433)
 	@echo "Add this to .env.local if not already set:"
 	@echo '  DATABASE_URL=postgresql://router:router@localhost:5433/router?sslmode=disable'
 
-dev: ## Run with hot-reload (CompileDaemon)
-	# `-tags ORT` is required for hugot v0.7+ to enable the ONNX Runtime
-	# backend. Without it, cluster.NewEmbedder fails at boot and the
-	# router falls open to the heuristic (Anthropic-only) — which silently
-	# breaks any eval that expects v0.X-cluster routing. The Dockerfile
-	# already builds with this tag; do not drop it from any production-
-	# bound build either. See router/CLAUDE.md "Cluster routing (P0)".
-	#
-	# CGO_LDFLAGS (libtokenizers) and ROUTER_ONNX_LIBRARY_DIR
-	# (libonnxruntime) come from .env.local on macOS — see the comments
-	# there for setup. On Linux the brew/.local paths don't apply; the
-	# Dockerfile is the production path.
+# `make dev` runs both processes with hot-reload:
+#   - Go router via CompileDaemon on :8080
+#   - Next.js dashboard via `bun run dev` on :3000 (rewrites /admin → :8080)
+#
+# `-tags ORT` is required for hugot v0.7+ to enable the ONNX Runtime
+# backend. Without it, cluster.NewEmbedder fails at boot and the
+# router falls open to the heuristic (Anthropic-only) — which silently
+# breaks any eval that expects v0.X-cluster routing. The Dockerfile
+# already builds with this tag; do not drop it from any production-
+# bound build either. See router/CLAUDE.md "Cluster routing (P0)".
+#
+# CGO_LDFLAGS (libtokenizers) and ROUTER_ONNX_LIBRARY_DIR
+# (libonnxruntime) come from .env.local on macOS — see the comments
+# there for setup. On Linux the brew/.local paths don't apply; the
+# Dockerfile is the production path.
+#
+# PORT is exported from .env.local for the Go router. Next.js also
+# reads PORT, so without an override it binds :8080 first, Go fails
+# with "address already in use", and /admin rewrites loop to Next
+# (ECONNRESET). Force the UI onto 3000 regardless of .env.local.
+dev: ## Run Go router (:8080) + Next.js UI (:3000) with hot-reload
+	@set -e; \
+	trap 'kill 0' EXIT INT TERM; \
+	(cd frontend && PORT=3000 bun run dev) & \
 	CompileDaemon \
 		-build="go build -tags ORT -o ./bin/server ./cmd/router" \
 		-command="./bin/server" \
@@ -144,6 +157,7 @@ dev: ## Run with hot-reload (CompileDaemon)
 		-exclude-dir=".bench-cache" \
 		-exclude-dir=".embedding-cache" \
 		-exclude-dir="node_modules" \
+		-exclude-dir="frontend" \
 		-exclude-dir="results" \
 		-exclude-dir="logs" \
 		-exclude-dir="assets" \
@@ -156,6 +170,9 @@ dev: ## Run with hot-reload (CompileDaemon)
 		-pattern="(.+\.go|.+\.sql)$$" \
 		-graceful-kill=true \
 		-log-prefix=false
+
+frontend-dev: ## Run Next.js dashboard alone with hot-reload (bun run dev → :3000)
+	cd frontend && bun run dev
 
 up: ## Start the compose stack in the background (no install.sh wiring)
 	docker compose up --build -d

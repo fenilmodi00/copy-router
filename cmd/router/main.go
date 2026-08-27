@@ -30,6 +30,7 @@ import (
 	"workweave/router/internal/policyclient"
 	"workweave/router/internal/postgres"
 	"workweave/router/internal/providers"
+	aiandProvider "workweave/router/internal/providers/aiand"
 	openaiCompatProvider "workweave/router/internal/providers/openaicompat"
 	"workweave/router/internal/proxy"
 	"workweave/router/internal/proxy/usage"
@@ -103,9 +104,9 @@ func main() {
 	// Run services set ROUTER_DEPLOYMENT_MODE=managed to drop that surface.
 	deploymentMode := server.DeploymentMode(config.GetOr("ROUTER_DEPLOYMENT_MODE", string(server.DeploymentModeSelfHosted)))
 	switch deploymentMode {
-	case server.DeploymentModeSelfHosted, server.DeploymentModeManaged:
+	case server.DeploymentModeSelfHosted, server.DeploymentModeManaged, server.DeploymentModeSelfServe:
 	default:
-		err := fmt.Errorf("Invalid ROUTER_DEPLOYMENT_MODE %q (expected %q or %q)", deploymentMode, server.DeploymentModeSelfHosted, server.DeploymentModeManaged)
+		err := fmt.Errorf("Invalid ROUTER_DEPLOYMENT_MODE %q (expected %q, %q, or %q)", deploymentMode, server.DeploymentModeSelfHosted, server.DeploymentModeManaged, server.DeploymentModeSelfServe)
 		logger.Error("Refusing to boot with invalid deployment mode", "err", err)
 		panic(err)
 	}
@@ -239,6 +240,24 @@ func main() {
 		WithUserClusterModelLists(repo.UserClusterModelLists, userClusterCache).
 		WithWIFTokenSource(buildWIFTokenSource(logger)).
 		WithFlagOverridesDisabled(flagOverridesDisabled)
+
+	// Self-serve mode: the dashboard is secured by an aiand-key login instead
+	// of the operator password. Each aiand user gets their own installation
+	// (account id = installation external_id). AIAND_API_KEY is the DEPLOYMENT's
+	// key for the catalog; the LOGIN probe validates arbitrary user keys against
+	// aiand's public /api/v1/me, so it never uses a deployment secret.
+	if deploymentMode == server.DeploymentModeSelfServe {
+		if repo.Accounts == nil || repo.LoginSessions == nil {
+			logger.Error("Self-serve mode requires account SQLC repos; refusing to boot", "err", nil)
+			panic("selfserve mode: account repos not wired")
+		}
+		keyVerifier := &aiandProvider.KeyVerifier{
+			Client:  &http.Client{Timeout: 15 * time.Second},
+			BaseURL: config.GetOr("AIAND_API_URL", aiandProvider.DefaultBaseURL),
+		}
+		authSvc.WithAccountRepos(repo.Accounts, repo.LoginSessions).WithKeyVerifier(keyVerifier)
+		logger.Info("Self-serve login enabled", "aiand_base_url", keyVerifier.BaseURL)
+	}
 
 	// Managed mode doesn't mount the dashboard, so this only matters selfhosted.
 	if deploymentMode == server.DeploymentModeSelfHosted {
@@ -405,6 +424,7 @@ func main() {
 		ExpectedRemainingTurns: parseEnvInt("ROUTER_SWITCH_EXPECTED_REMAINING_TURNS", proxy.DefaultPlannerExpectedRemainingTurns),
 		TierUpgradeEnabled:     config.GetOr("ROUTER_SWITCH_TIER_UPGRADE_ENABLED", boolDefault(proxy.DefaultPlannerTierUpgradeEnabled)) == "true",
 		ColdPinFollowFresh:     config.GetOr("ROUTER_SWITCH_COLD_PIN_FOLLOW_FRESH", boolDefault(proxy.DefaultPlannerColdPinFollowFresh)) == "true",
+		CorrectedEconomics:     config.GetOr("ROUTER_SWITCH_CORRECTED_ECONOMICS", boolDefault(proxy.DefaultPlannerCorrectedEconomics)) == "true",
 	}
 	prefixTrimFreeSwitch := config.GetOr("ROUTER_PREFIX_TRIM_FREE_SWITCH", "true") == "true"
 	hmmUpgradeConfidence := parseEnvFloat("ROUTER_HMM_UPGRADE_CONFIDENCE_THRESHOLD", 0.85)
@@ -413,6 +433,10 @@ func main() {
 	// authoritativeUpgradeGate keeps the 0.85 escalation floor active for authoritative-per-turn
 	// policies; kill switch for a return to verbatim policy selection.
 	authoritativeUpgradeGate := config.GetOr("ROUTER_AUTHORITATIVE_UPGRADE_GATE", "true") == "true"
+	// authorityCacheShadow records the HMM cache gate's counterfactual verdict on
+	// authoritative-per-turn turns, which return before that gate can run. Pure
+	// observation; kill switch for the added per-turn computation and log line.
+	authorityCacheShadow := config.GetOr("ROUTER_AUTHORITY_CACHE_SHADOW", "true") == "true"
 	// policyDeadlineFallback degrades a policy sidecar deadline/transport failure to
 	// the session pin (or tier-3 default below) instead of a 503. Kill switch; off by default.
 	policyDeadlineFallback := config.GetOr("ROUTER_POLICY_DEADLINE_FALLBACK", "false") == "true"
@@ -606,6 +630,7 @@ func main() {
 		flags.KeyScoreToolResultTurns:      boolDefault(scoreToolResultTurns),
 		flags.KeyPrefixTrimFreeSwitch:      boolDefault(prefixTrimFreeSwitch),
 		flags.KeyAuthoritativeUpgradeGate:  boolDefault(authoritativeUpgradeGate),
+		flags.KeyAuthorityCacheShadow:      boolDefault(authorityCacheShadow),
 		flags.KeySiblingFailover:           boolDefault(siblingFailover),
 		flags.KeyEffortEscalation:          boolDefault(effortEscalation),
 		flags.KeyCyberRefusalRepin:         boolDefault(cyberRefusalRepin),
@@ -642,6 +667,7 @@ func main() {
 		WithHMMSameTierPin(hmmSameTierPin).
 		WithHMPinStickyOnArmSelectorUnavail(hmPinStickyOnArmSelectorUnavail).
 		WithAuthoritativeUpgradeGate(authoritativeUpgradeGate).
+		WithAuthorityCacheShadow(authorityCacheShadow).
 		WithPolicyDeadlineFallback(policyDeadlineFallback).
 		WithPolicyDeadlineDefaultModel(policyDeadlineDefaultModel).
 		WithEscapeNormalize(escapeNormalize).
@@ -662,7 +688,7 @@ func main() {
 		WithPlanner(plannerCfg).
 		WithSummarizer(summarizer).
 		WithCompaction(compactionSz, compactionPct).
-		WithAvailableModels(routingTargets).
+		WithAvailableModels(proxyRoutableModels(routingTargets, availableProviders, hmmRouter != nil)).
 		WithDefaultBaselineModel(resolveDefaultBaselineModel()).
 		WithBillingService(billingSvc)
 	for _, spec := range configuredPolicySpecs {
@@ -674,7 +700,7 @@ func main() {
 	logger.Info("Loop escalation configured", "enabled", loopEscalationEnabled, "holdout_pct", loopEscalationHoldoutPct)
 	logger.Info("Spiral shadow detector configured", "enabled", spiralShadowEnabled)
 	logger.Info("Text-repetition break configured", "enabled", textRepetitionBreakEnabled)
-	logger.Info("Planner configured", "enabled", plannerEnabled, "threshold_usd", plannerCfg.ThresholdUSD, "expected_remaining_turns", plannerCfg.ExpectedRemainingTurns, "tier_upgrade_enabled", plannerCfg.TierUpgradeEnabled, "cold_pin_follow_fresh", plannerCfg.ColdPinFollowFresh, "prefix_trim_free_switch", prefixTrimFreeSwitch, "routing_targets_count", len(routingTargets))
+	logger.Info("Planner configured", "enabled", plannerEnabled, "threshold_usd", plannerCfg.ThresholdUSD, "expected_remaining_turns", plannerCfg.ExpectedRemainingTurns, "tier_upgrade_enabled", plannerCfg.TierUpgradeEnabled, "cold_pin_follow_fresh", plannerCfg.ColdPinFollowFresh, "corrected_economics", plannerCfg.CorrectedEconomics, "prefix_trim_free_switch", prefixTrimFreeSwitch, "routing_targets_count", len(routingTargets))
 	logger.Info("Tool-result scoring configured", "enabled", scoreToolResultTurns)
 
 	// Fail loud if a deployed model is missing from the tier table;
@@ -789,7 +815,17 @@ func main() {
 		})
 	}
 	analyticsSvc := analytics.NewService(repo.Analytics, time.Now)
-	server.Register(engine, authSvc, proxySvc, deployedModels, hmmRosterModels, deploymentMode, billingSvc, hmmReadinessChecker, hmmRosterSource, analyticsSvc, aiandCatalogHandler)
+	server.Register(engine, server.Services{
+		Auth:                authSvc,
+		Proxy:               proxySvc,
+		DeployedModels:      deployedModels,
+		HMMModels:           hmmRosterModels,
+		Billing:             billingSvc,
+		ReadinessChecker:    hmmReadinessChecker,
+		HMMRosterSource:     hmmRosterSource,
+		Analytics:           analyticsSvc,
+		AiandCatalogHandler: aiandCatalogHandler,
+	}, deploymentMode)
 
 	srv := &http.Server{
 		Addr:    ":" + config.GetOr("PORT", "8080"),
@@ -1153,6 +1189,21 @@ func parseEnvInt(key string, fallback int) int {
 // parseEnvFloat reads an env var as a float64, falling back on unset/empty/
 // unparseable. Zero and negative values are valid — e.g. operators set
 // ROUTER_SWITCH_EV_THRESHOLD_USD <= 0 to force aggressive planner switching.
+// proxyRoutableModels is RoutingTargetSet plus HMM-only rows when HMM is wired.
+func proxyRoutableModels(generic, providers map[string]struct{}, hmmWired bool) map[string]struct{} {
+	if !hmmWired {
+		return generic
+	}
+	out := catalog.HMMRoutingTargetSet(providers)
+	if len(generic) == 0 {
+		return out
+	}
+	for m := range generic {
+		out[m] = struct{}{}
+	}
+	return out
+}
+
 func parseEnvFloat(key string, fallback float64) float64 {
 	raw := config.GetOr(key, "")
 	if raw == "" {
@@ -1180,29 +1231,6 @@ func sseKeepaliveInterval() time.Duration {
 		return defaultSec * time.Second
 	}
 	return time.Duration(sec) * time.Second
-}
-
-// publishFlagRegistry writes internal/flags.Registry to router.flag_definitions,
-// pairing each entry with the deployment default resolved above. defaults is
-// passed in (not derived) because the resolved values are ordinary locals
-// scattered through main(); a missing key is logged and published as empty.
-func publishFlagRegistry(logger *slog.Logger, repo *postgres.FlagDefinitionRepo, defaults map[flags.Key]string) {
-	published := make([]flags.PublishedDefinition, 0, len(flags.Registry))
-	for _, def := range flags.Registry {
-		value, ok := defaults[def.Key]
-		if !ok {
-			logger.Warn("Flag registered without a published deployment default", "flag", def.Key, "env_var", def.EnvVar)
-		}
-		published = append(published, flags.PublishedDefinition{Definition: def, DeploymentDefault: value})
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), flagRegistryPublishTimeout)
-	defer cancel()
-	err := repo.Publish(ctx, published)
-	if err != nil {
-		logger.Error("Failed to publish flag registry; per-org flag override UI may be stale", "err", err)
-		return
-	}
-	logger.Info("Published flag registry", "count", len(published))
 }
 
 // boolDefault renders a bool default for config.GetOr on bool envs.
@@ -1366,9 +1394,6 @@ func runSessionPinSweep(ctx context.Context, store sessionpin.Store) {
 const (
 	defaultHardPinProvider = providers.ProviderAiand
 	defaultHardPinModel    = "deepseek-ai/deepseek-v4-flash"
-	// flagRegistryPublishTimeout bounds the boot-time registry publish so a slow
-	// or unreachable database delays startup by seconds, not indefinitely.
-	flagRegistryPublishTimeout = 10 * time.Second
 	// aiandCatalogBudget bounds the dashboard's live ai& catalog fetch. It
 	// mirrors AiandCatalogRequestBudget (the per-request upstream timeout the
 	// handler enforces internally); keeping them in sync means a slow catalog

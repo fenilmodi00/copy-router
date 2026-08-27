@@ -45,6 +45,7 @@ type fakePinStore struct {
 	overloadResetCalls     int
 	disabledProviders      []string
 	commandContinuations   map[string]sessionpin.Pin
+	persistUpserts         bool
 }
 
 func newFakePinStore() *fakePinStore {
@@ -94,6 +95,9 @@ func (f *fakePinStore) Upsert(ctx context.Context, p sessionpin.Pin) error {
 	f.upserts = append(f.upserts, p)
 	if strings.HasSuffix(p.Role, "_cmd_next") {
 		f.commandContinuations[p.Role] = p
+	} else if f.persistUpserts {
+		f.pin = p
+		f.hasPin = p.PinnedUntil.After(time.Now()) && p.Model != "" && p.Provider != ""
 	}
 	f.mu.Unlock()
 	select {
@@ -886,6 +890,7 @@ func newOpenAIPinSvc(fr *fakeRouter, store *fakePinStore) *proxy.Service {
 	return proxy.NewService(
 		fr,
 		map[string]providers.Client{
+			providers.ProviderAiand:     aiandOKProvider(),
 			providers.ProviderAnthropic: &fakeProvider{},
 			providers.ProviderOpenAI:    &fakeProvider{},
 		},
@@ -936,6 +941,114 @@ func TestService_SessionPin_OpenAI_FreshRouteCreatesPin(t *testing.T) {
 	require.Len(t, store.upserts, 1)
 	assert.Equal(t, providers.ProviderOpenAI, store.upserts[0].Provider)
 	assert.Equal(t, "gpt-4o", store.upserts[0].Model)
+}
+
+func TestService_SessionPin_AgentForceModelCommandContinuesOnForcedModel(t *testing.T) {
+	const body = `{
+		"model":"claude-opus-4-7",
+		"messages":[
+			{"role":"user","content":"analyze usage"},
+			{"role":"assistant","content":[
+				{"type":"tool_use","id":"toolu_skill","name":"Skill","input":{"skill":"fm","args":"opus"}}
+			]},
+			{"role":"user","content":[
+				{"type":"tool_result","tool_use_id":"toolu_skill","content":"Launching skill: fm"},
+				{"type":"text","text":"/force-model opus"}
+			]}
+		]
+	}`
+	store := newFakePinStore()
+	store.persistUpserts = true
+	store.hasPin = true
+	store.pin = sessionpin.Pin{
+		Provider: providers.ProviderOpenAI, Model: "gpt-5.5", Reason: "cluster:v0.2",
+		PinnedUntil: time.Now().Add(time.Hour),
+	}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "z-ai/glm-5.2", Reason: translate.ReasonUserForceModel}}
+	svc := newPinSvc(fr, store)
+
+	ctx := authedCtx(uuid.New().String())
+	rec := httptest.NewRecorder()
+	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
+	require.NoError(t, svc.ProxyMessages(ctx, []byte(body), rec, httpReq))
+
+	assert.Equal(t, 0, fr.routeCalls, "the newly forced pin must bypass automatic routing")
+	assert.Equal(t, "z-ai/glm-5.2", rec.Header().Get(proxy.HeaderRouterModel))
+	assert.NotContains(t, rec.Body.String(), "force-model applied", "only a user-issued command gets a synthetic acknowledgment")
+	require.NotEmpty(t, store.upserts)
+	assert.Equal(t, "z-ai/glm-5.2", store.upserts[0].Model)
+	assert.Equal(t, translate.ReasonUserForceModel, store.upserts[0].Reason)
+}
+
+func TestService_SessionPin_OpenAI_AgentForceModelCommandContinuesOnForcedModel(t *testing.T) {
+	const body = `{
+		"model":"gpt-4o",
+		"messages":[
+			{"role":"user","content":"analyze usage"},
+			{"role":"assistant","tool_calls":[{
+				"id":"call_skill","type":"function",
+				"function":{"name":"Skill","arguments":"{\"skill\":\"fm\"}"}
+			}]},
+			{"role":"tool","tool_call_id":"call_skill","content":"/force-model gpt-5-5"}
+		]
+	}`
+	store := newFakePinStore()
+	store.persistUpserts = true
+	store.hasPin = true
+	store.pin = sessionpin.Pin{
+		Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster:v0.2",
+		PinnedUntil: time.Now().Add(time.Hour),
+	}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "openai/gpt-oss-120b", Reason: translate.ReasonUserForceModel}}
+	svc := newOpenAIPinSvc(fr, store)
+
+	ctx := authedCtx(uuid.New().String())
+	rec := httptest.NewRecorder()
+	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
+	require.NoError(t, svc.ProxyOpenAIChatCompletion(ctx, []byte(body), rec, httpReq))
+
+	assert.Equal(t, 0, fr.routeCalls, "the newly forced pin must bypass automatic routing")
+	assert.Equal(t, "openai/gpt-oss-120b", rec.Header().Get(proxy.HeaderRouterModel))
+	assert.NotContains(t, rec.Body.String(), "force-model applied", "only a user-issued command gets a synthetic acknowledgment")
+	require.NotEmpty(t, store.upserts)
+	assert.Equal(t, "openai/gpt-oss-120b", store.upserts[0].Model)
+	assert.Equal(t, translate.ReasonUserForceModel, store.upserts[0].Reason)
+}
+
+func TestService_SessionPin_OpenAI_ForceModelCommandSetsPin(t *testing.T) {
+	const forceBody = `{
+		"model":"gpt-4o",
+		"messages":[
+			{"role":"system","content":"You are helpful."},
+			{"role":"user","content":"/force-model gpt-5-5\nuse this model for now"}
+		]
+	}`
+	store := newFakePinStore()
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster"}}
+	svc := newOpenAIPinSvc(fr, store)
+
+	ctx := authedCtx(uuid.New().String())
+	rec := httptest.NewRecorder()
+	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
+	require.NoError(t, svc.ProxyOpenAIChatCompletion(ctx, []byte(forceBody), rec, httpReq))
+
+	assert.Equal(t, 0, fr.routeCalls, "force-model command must short-circuit routing")
+	require.Len(t, store.upserts, 1)
+	assert.Equal(t, "openai/gpt-oss-120b", store.upserts[0].Model)
+	assert.Equal(t, providers.ProviderAiand, store.upserts[0].Provider)
+	assert.Equal(t, translate.ReasonUserForceModel, store.upserts[0].Reason)
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "chat.completion", resp["object"])
+	choices, ok := resp["choices"].([]any)
+	require.True(t, ok)
+	require.NotEmpty(t, choices)
+	first, ok := choices[0].(map[string]any)
+	require.True(t, ok)
+	msg, ok := first["message"].(map[string]any)
+	require.True(t, ok)
+	content, _ := msg["content"].(string)
+	assert.Contains(t, content, "force-model applied: openai/gpt-oss-120b")
 }
 
 func TestService_SessionPin_OpenAI_UnforceModelCommandClearsPin(t *testing.T) {

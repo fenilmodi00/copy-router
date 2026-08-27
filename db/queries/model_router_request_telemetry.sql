@@ -20,6 +20,10 @@
 -- the upstream credential; credential_source names the precedence branch it came
 -- from. All NULL on deployment-key turns. Matching prefix/suffix values across
 -- distinct router_user_ids reveal one subscription paying for many seats.
+-- planner_* columns persist the cache-eviction planner's per-turn verdict
+-- (outcome, reason, pin identity, EV terms in USD micros, shadow). NULL when
+-- the planner did not run. Named `_usd_micros` so they cannot be confused
+-- with the existing `*_cost_usd` bigint-micros columns.
 -- unified_limit_headers is the verbatim anthropic-ratelimit-unified-* header
 -- set observed on this turn (Claude Code cost-observing-proxy Phase 0
 -- instrumentation). NULL on non-subscription turns and on rows written before
@@ -91,7 +95,28 @@ INSERT INTO router.model_router_request_telemetry (
     credential_key_prefix,
     credential_key_suffix,
     credential_source,
-    unified_limit_headers
+    unified_limit_headers,
+    planner_outcome,
+    planner_reason,
+    planner_pin_model,
+    planner_pin_provider,
+    planner_expected_savings_usd_micros,
+    planner_eviction_cost_usd_micros,
+    planner_pin_cache_cold,
+    planner_shadow_outcome,
+    planner_shadow_savings_usd_micros,
+    authority_shadow_outcome,
+    authority_shadow_would_diverge,
+    authority_shadow_reason,
+    authority_shadow_stay_model,
+    authority_shadow_stay_provider,
+    authority_shadow_savings_usd_micros,
+    authority_shadow_eviction_cost_usd_micros,
+    authority_shadow_pin_cache_cold,
+    authority_shadow_corrected_outcome,
+    authority_shadow_corrected_savings_usd_micros,
+    authority_shadow_stay_score,
+    authority_shadow_fresh_score
 ) VALUES (
     @installation_id::uuid,
     sqlc.narg('api_key_id')::uuid,
@@ -158,7 +183,28 @@ INSERT INTO router.model_router_request_telemetry (
     sqlc.narg('credential_key_prefix')::varchar,
     sqlc.narg('credential_key_suffix')::varchar,
     sqlc.narg('credential_source')::varchar,
-    sqlc.narg('unified_limit_headers')::jsonb
+    sqlc.narg('unified_limit_headers')::jsonb,
+    sqlc.narg('planner_outcome')::varchar,
+    sqlc.narg('planner_reason')::varchar,
+    sqlc.narg('planner_pin_model')::varchar,
+    sqlc.narg('planner_pin_provider')::varchar,
+    sqlc.narg('planner_expected_savings_usd_micros')::bigint,
+    sqlc.narg('planner_eviction_cost_usd_micros')::bigint,
+    sqlc.narg('planner_pin_cache_cold')::boolean,
+    sqlc.narg('planner_shadow_outcome')::varchar,
+    sqlc.narg('planner_shadow_savings_usd_micros')::bigint,
+    sqlc.narg('authority_shadow_outcome')::varchar,
+    sqlc.narg('authority_shadow_would_diverge')::boolean,
+    sqlc.narg('authority_shadow_reason')::varchar,
+    sqlc.narg('authority_shadow_stay_model')::varchar,
+    sqlc.narg('authority_shadow_stay_provider')::varchar,
+    sqlc.narg('authority_shadow_savings_usd_micros')::bigint,
+    sqlc.narg('authority_shadow_eviction_cost_usd_micros')::bigint,
+    sqlc.narg('authority_shadow_pin_cache_cold')::boolean,
+    sqlc.narg('authority_shadow_corrected_outcome')::varchar,
+    sqlc.narg('authority_shadow_corrected_savings_usd_micros')::bigint,
+    sqlc.narg('authority_shadow_stay_score')::double precision,
+    sqlc.narg('authority_shadow_fresh_score')::double precision
 )
 ON CONFLICT (installation_id, request_id, span_type) DO NOTHING;
 

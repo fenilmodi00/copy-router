@@ -1,3 +1,4 @@
+import { DataCacheProvider } from "@/components/DataCacheProvider";
 import { TooltipProvider } from "@/components/molecules/Tooltip";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
@@ -24,7 +25,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={inter.variable}>
       <body className="h-screen overflow-hidden font-sans antialiased">
-        <TooltipProvider>{children}</TooltipProvider>
+        <DataCacheProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </DataCacheProvider>
       </body>
     </html>
   );

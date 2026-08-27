@@ -195,6 +195,44 @@ func TestIsUpstreamSchemaRejection(t *testing.T) {
 	assert.False(t, providers.IsUpstreamSchemaRejection(fmt.Errorf("transport blew up")))
 }
 
+func TestIsUpstreamOutputConfigFormatRejection(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		body   string
+		want   bool
+	}{
+		{
+			name:   "gateway rejects the structured-output knob",
+			status: http.StatusBadRequest,
+			body:   `{"message":"output_config.format: Extra inputs are not permitted"}`,
+			want:   true,
+		},
+		{
+			name:   "upstream dislikes the schema but serves the knob",
+			status: http.StatusBadRequest,
+			body:   `{"message":"output_config.format.schema: For 'object' type, 'additionalProperties' must be explicitly set to false"}`,
+			want:   false,
+		},
+		{
+			name:   "a different unknown output_config member is not this class",
+			status: http.StatusBadRequest,
+			body:   `{"message":"output_config.effort: Extra inputs are not permitted"}`,
+			want:   false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := &providers.UpstreamErrorResponse{Status: tc.status, Body: []byte(tc.body)}
+			assert.Equal(t, tc.want, providers.IsUpstreamOutputConfigFormatRejection(err))
+			if tc.want {
+				assert.False(t, providers.IsRetryable(err))
+			}
+		})
+	}
+	assert.False(t, providers.IsUpstreamOutputConfigFormatRejection(nil))
+}
+
 // TestUpstreamErrorBodyMessage pins the buffered-body extraction used by the
 // ProxyMessages complete log: nested error.message wins, top-level message is
 // the fallback, and a non-JSON body is returned truncated rather than dropped.

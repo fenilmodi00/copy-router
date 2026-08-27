@@ -5,9 +5,38 @@
 package sqlc
 
 import (
+	"net/netip"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+// Self-service login: aiand identity mapped to the router installation that owns all tenant data. Account id doubles as the installation external_id (no FK; aiand ids are opaque external strings).
+type RouterAccount struct {
+	ID                  string
+	AiandUserID         string
+	AiandOrganizationID string
+	DisplayName         *string
+	CreatedAt           pgtype.Timestamptz
+	LastLoginAt         pgtype.Timestamptz
+	// Soft-delete on key revocation / account wipe. NULL = active.
+	DeletedAt pgtype.Timestamptz
+}
+
+// Revocable dashboard sessions for self-service accounts. token_hash is the SHA-256 of the opaque cookie value; token_prefix/suffix are the safe 8+4 display parts.
+type RouterAccountSession struct {
+	ID          uuid.UUID
+	AccountID   string
+	TokenHash   string
+	TokenPrefix string
+	TokenSuffix string
+	IssuedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+	// Set on logout / account wipe. NULL = still active.
+	RevokedAt  pgtype.Timestamptz
+	LastSeenAt pgtype.Timestamptz
+	IpAtIssue  *netip.Addr
+}
 
 type RouterClusterModelList struct {
 	ID             uuid.UUID
@@ -226,6 +255,48 @@ type RouterModelRouterRequestTelemetry struct {
 	CaptureMode          *string
 	DebugRef             *string
 	UnifiedLimitHeaders  []byte
+	// Planner verdict for this turn: stay or switch. NULL when the planner did not run.
+	PlannerOutcome *string
+	// Snake-case planner reason (ev_positive, ev_negative, same_model, no_pin, …). NULL when the planner did not run.
+	PlannerReason *string
+	// Pinned model the planner compared against. On a switch this is the model that was abandoned; decision_model is the one served.
+	PlannerPinModel *string
+	// Provider binding of the pin the planner priced. Distinct from decision_provider on a switch.
+	PlannerPinProvider *string
+	// Planner expected_savings as USD micros (USD × 1e6), not float USD. NULL when the planner did not run.
+	PlannerExpectedSavingsUsdMicros *int64
+	// Planner eviction_cost as USD micros (USD × 1e6), not float USD. NULL when the planner did not run.
+	PlannerEvictionCostUsdMicros *int64
+	// Whether the EV math priced the pin as cache-cold. NULL when the planner did not run.
+	PlannerPinCacheCold *bool
+	// Shadow (corrected-economics) verdict: stay or switch. NULL when the shadow was not computed.
+	PlannerShadowOutcome *string
+	// Shadow expected_savings as USD micros (USD × 1e6). NULL when the shadow was not computed.
+	PlannerShadowSavingsUsdMicros *int64
+	// Shadow verdict of the HMM cache gate on an authoritative turn: stay or switch. NEVER what was served -- authoritative turns always serve decision_model. NULL when the shadow did not run.
+	AuthorityShadowOutcome *string
+	// The gate's own verdict that it would have served authority_shadow_stay_model instead of decision_model. Use this, not a string compare: stay_model is a serving identity that may carry ':effort' while decision_model is a bare catalog ID.
+	AuthorityShadowWouldDiverge *bool
+	// Snake-case reason from the shadow gate (ev_positive, ev_negative, same_model, no_pin, no_prior_usage, hmm_upgrade_confidence_low, ...). Read no_pin carefully: it also covers a pin that exists but whose serving identity carries ':effort', because catalog.ByID strips a date suffix and not an effort suffix, so normalizeHMMStayPin rejects it. no_pin is therefore NOT the same as 'this session had no pin'.
+	AuthorityShadowReason *string
+	// Pin the shadow gate priced against, as a serving identity -- it carries ':effort' when the pin used one, unlike the bare decision_model. Compare via authority_shadow_would_diverge rather than against decision_model directly.
+	AuthorityShadowStayModel *string
+	// Provider binding of authority_shadow_stay_model.
+	AuthorityShadowStayProvider *string
+	// Signed expected savings as USD micros (USD x 1e6) under the deployed economics config. Negative on a typical stay; not clamped. NULL on an early exit (no_pin, no_prior_usage, same_model, pricing_missing) where the cost arithmetic never ran -- a stored 0 there would be a fabricated measurement.
+	AuthorityShadowSavingsUsdMicros *int64
+	// Signed eviction cost as USD micros (USD x 1e6) under the deployed economics config. NULL on an early exit, like the savings column.
+	AuthorityShadowEvictionCostUsdMicros *int64
+	// Whether the shadow EV math priced the pin as cache-cold. NULL on an early exit, where the flag is meaningless rather than false.
+	AuthorityShadowPinCacheCold *bool
+	// Verdict under corrected cache-aware economics, computed by planner.Decide as its own shadow on every EV turn regardless of the deployed config. Pre-gate: the upgrade-confidence and same-tier overrides are NOT applied to it, unlike authority_shadow_outcome. NULL on an early exit -- the enum zero value renders as 'stay', so an uncomputed verdict must never be stored.
+	AuthorityShadowCorrectedOutcome *string
+	// Signed expected savings under corrected economics as USD micros (USD x 1e6).
+	AuthorityShadowCorrectedSavingsUsdMicros *int64
+	// Sidecar candidate score for authority_shadow_stay_model this turn. NULL when the sidecar reported no score for the pin -- that NULL rate is the measurement that decides whether a quality tie-band is implementable at all.
+	AuthorityShadowStayScore *float64
+	// Sidecar candidate score for the served model this turn, paired with authority_shadow_stay_score.
+	AuthorityShadowFreshScore *float64
 }
 
 // End-user identities seen on inbound requests, scoped to an installation. Replaces the per-user API key pattern.
@@ -511,6 +582,10 @@ type RouterSpiralShadowEvent struct {
 	MonologueLen     int32
 	ToolCallCount    int32
 	MessageCount     int32
+	// Length of the trailing A/B/A/B alternation between exactly two tool-call signatures
+	PingPongLen int32
+	// Tool calls made since the last non-errored edit/write tool_result; 0 when the session has never attempted an edit
+	StepsSinceProgress int32
 }
 
 type RouterStruggleEscalationEvent struct {
@@ -525,6 +600,10 @@ type RouterStruggleEscalationEvent struct {
 	TurnCount           int32
 	WallSeconds         int64
 	SessionEverSwitched bool
+	// What armed this escalation: turn_wall (turn/wall thresholds) or evidence (behavioral signals)
+	ArmingMode string
+	// Spiral signal classes present at arming time (err_streak, same_file_thrash, repetition, monologue, ping_pong, no_progress)
+	EvidenceReasons []string
 }
 
 type RouterStruggleShadowEvent struct {

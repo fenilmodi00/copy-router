@@ -1,6 +1,7 @@
 "use client";
 
 import { Text } from "@/components/atoms/Text";
+import { Skeleton } from "@/components/atoms/Skeleton";
 import { ChartCard } from "@/components/ChartCard";
 import { PopularityLeaderboard } from "@/components/charts/PopularityLeaderboard";
 import {
@@ -14,18 +15,18 @@ import { PageHeader } from "@/components/PageHeader";
 import { ResponsiveGrid } from "@/components/ResponsiveGrid";
 import { RouterOnboarding } from "@/components/RouterOnboarding";
 import {
-  api,
-  type AiandModel,
-  type MetricsDetailRow,
-  type MetricsSummary,
-  type ModelBreakdownBucket,
-  type TimeseriesBucket,
-} from "@/lib/api";
+  aggregateModelTotals,
+  useCatalog,
+  useMetricsModelBreakdown,
+  useMetricsSummary,
+  useMetricsTimeseries,
+  useOnboarding,
+} from "@/lib/data-cache";
 import { cn } from "@/lib/cn";
 import { formatNumber, formatUSD } from "@/lib/format";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 // "checking" suppresses a flash of either surface until the onboarding probe
 // lands.
@@ -41,8 +42,6 @@ function onboardingSkipped(): boolean {
   try {
     return window.localStorage.getItem(SKIP_ONBOARDING_KEY) === "true";
   } catch {
-    // Private-mode/blocked storage: treat as not skipped rather than throwing
-    // on the render path.
     return false;
   }
 }
@@ -55,121 +54,84 @@ function rememberOnboardingSkipped() {
   }
 }
 
+function resolveOnboarding(
+  data: { first_request_served_at: string | null } | undefined,
+  error: unknown,
+  isLoading: boolean,
+): OnboardingState {
+  if (error) return "done";
+  if (isLoading || data == null) return "checking";
+  const served = data.first_request_served_at != null;
+  return served || onboardingSkipped() ? "done" : "needed";
+}
+
 export default function DashboardPage() {
-  const dashboardFilters = useDashboardFilters("30d");
-  const { fromISO, toISO, granularity, range } = dashboardFilters.filters;
+  const dashboardFilters = useDashboardFilters();
+  const { fromISO, toISO, granularity } = dashboardFilters.filters;
   const router = useRouter();
+  const [skipOverride, setSkipOverride] = useState(false);
 
-  const [summary, setSummary] = useState<MetricsSummary | null>(null);
-  const [buckets, setBuckets] = useState<TimeseriesBucket[]>([]);
-  const [modelBuckets, setModelBuckets] = useState<ModelBreakdownBucket[]>([]);
-  const [detailRows, setDetailRows] = useState<MetricsDetailRow[]>([]);
-  const [catalog, setCatalog] = useState<AiandModel[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [onboarding, setOnboarding] = useState<OnboardingState>("checking");
+  // Onboarding + metrics run in parallel (safe): a needed-onboarding install
+  // still gets a cheap empty metrics response; an established one paints KPIs
+  // without waiting on the onboarding round-trip.
+  const onboardingQ = useOnboarding();
+  const summaryQ = useMetricsSummary(fromISO, toISO);
+  const timeseriesQ = useMetricsTimeseries(granularity, fromISO, toISO);
+  const breakdownQ = useMetricsModelBreakdown(granularity, fromISO, toISO);
+  // Catalog shares the singleton key with Models / Compare / detail.
+  useCatalog();
 
-  // A router that has never served a request has nothing to chart, so a fresh
-  // install lands in onboarding instead of on six empty charts. The gate is the
-  // installation-level first_request_served_at, not a key's last_used_at:
-  // that flag survives rotation, so rotating the key that served the first
-  // request can't send an established install back through onboarding.
-  useEffect(() => {
-    let cancelled = false;
-    api.onboarding
-      .get()
-      .then(res => {
-        if (cancelled) return;
-        const served = res.first_request_served_at != null;
-        setOnboarding(served || onboardingSkipped() ? "done" : "needed");
-      })
-      // Non-fatal: on a failed probe show the dashboard rather than trapping
-      // an established install in onboarding.
-      .catch(() => {
-        if (!cancelled) setOnboarding("done");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const onboarding: OnboardingState = skipOverride
+    ? "done"
+    : resolveOnboarding(onboardingQ.data, onboardingQ.error, onboardingQ.isLoading);
 
-  useEffect(() => {
-    if (onboarding !== "done") return;
-    let cancelled = false;
-    setError(null);
-    Promise.all([
-      api.metrics.summary(fromISO, toISO),
-      api.metrics.timeseries(granularity, fromISO, toISO),
-      api.metrics.modelBreakdown(granularity, fromISO, toISO),
-      api.metrics.details(fromISO, toISO, 1000),
-      api.aiandModels.list(),
-    ])
-      .then(([s, ts, mb, det, catalog]) => {
-        if (cancelled) return;
-        setSummary(s);
-        setBuckets(ts.buckets ?? []);
-        setModelBuckets(mb.buckets ?? []);
-        setDetailRows(det.rows ?? []);
-        setCatalog(catalog.data ?? []);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Failed to load metrics.");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [fromISO, toISO, granularity, onboarding]);
+  const summary = summaryQ.data ?? null;
+  const buckets = timeseriesQ.data?.buckets ?? [];
+  const modelBuckets = breakdownQ.data?.buckets ?? [];
 
-  // All hooks (both effects above, this memo) run before any early return so
-  // React never sees a hook-ordering shift between renders (e.g. a mount that
-  // errors must not drop the memo below). Derived values are plain
-  // recomputation on every render — cheap, and safe before the guards below.
-  const savingsRate =
-    summary == null || summary.total_requested_cost_usd === 0
-      ? 0
-      : (summary.total_savings_usd / summary.total_requested_cost_usd) * 100;
+  const metricsError =
+    summaryQ.error ?? timeseriesQ.error ?? breakdownQ.error ?? null;
+  const metricsLoading =
+    onboarding === "done" &&
+    (summaryQ.isLoading || timeseriesQ.isLoading || breakdownQ.isLoading) &&
+    summary == null;
+
   const avgTokensPerReq =
     summary == null || summary.request_count === 0
       ? 0
       : summary.total_tokens / summary.request_count;
   const cacheReadTokens = summary?.cache_read_tokens ?? 0;
   const cacheWriteTokens = summary?.cache_write_tokens ?? 0;
-  const totalInputTokens = detailRows.reduce((acc, r) => acc + r.input_tokens, 0);
+  // Without a 1000-row details fetch, approximate hit mix from cache token
+  // counters on the summary (read / read+write).
   const cacheHitRate =
-    totalInputTokens > 0 ? (cacheReadTokens / totalInputTokens) * 100 : null;
+    cacheReadTokens + cacheWriteTokens > 0
+      ? (cacheReadTokens / (cacheReadTokens + cacheWriteTokens)) * 100
+      : null;
 
-  // Per-model totals in the selected range (grouped from detail rows — the
-  // telemetry details API is the cheapest server-side per-row source we already
-  // have; the model-breakdown buckets give per-bucket, not totals).
-  const modelTotals = useMemo(() => {
-    const byModel = new Map<string, { tokens: number; costUsd: number; requests: number }>();
-    for (const r of detailRows) {
-      const key = r.decision_model || "(unknown)";
-      const cur = byModel.get(key) ?? { tokens: 0, costUsd: 0, requests: 0 };
-      cur.tokens += r.input_tokens + r.output_tokens;
-      cur.costUsd += r.actual_cost_usd;
-      cur.requests += 1;
-      byModel.set(key, cur);
-    }
-    return [...byModel.entries()]
-      .map(([id, v]) => ({ id, label: id, ...v }))
-      .sort((a, b) => b.tokens - a.tokens);
-  }, [detailRows]);
+  const modelTotals = useMemo(
+    () => aggregateModelTotals(modelBuckets),
+    [modelBuckets],
+  );
 
-  if (onboarding === "checking") return null;
+  if (onboarding === "checking") {
+    return <DashboardSkeleton />;
+  }
   if (onboarding === "needed") {
     return (
       <RouterOnboarding
-        onComplete={() => setOnboarding("done")}
+        onComplete={() => setSkipOverride(true)}
         onSkip={() => {
           rememberOnboardingSkipped();
-          setOnboarding("done");
+          setSkipOverride(true);
         }}
       />
     );
   }
 
-  if (error) {
+  if (metricsError && summary == null) {
+    const message =
+      metricsError instanceof Error ? metricsError.message : "Failed to load metrics.";
     return (
       <Page
         header={
@@ -188,7 +150,7 @@ export default function DashboardPage() {
       >
         <Page.Section>
           <div className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
-            {error}
+            {message}
           </div>
         </Page.Section>
       </Page>
@@ -213,88 +175,152 @@ export default function DashboardPage() {
     >
       <Page.Section>
         <DashboardPageFilters result={dashboardFilters} />
-        <ResponsiveGrid>
-          <MetricCard
-            className={ResponsiveGrid.Small}
-            label="Tokens"
-            value={summary == null ? "—" : formatNumber(summary.total_tokens)}
-            sub={summary == null ? undefined : `${formatNumber(avgTokensPerReq)} avg / req`}
-            sparkline={buckets.length ? buckets.map(b => b.total_tokens ?? 0) : []}
-          />
-          <MetricCard
-            className={ResponsiveGrid.Small}
-            label="Requests"
-            value={summary == null ? "—" : formatNumber(summary.request_count)}
-            sub={summary == null ? undefined : `actual ${formatUSD(summary.total_actual_cost_usd)}`}
-            sparkline={buckets.length ? buckets.map(b => b.request_count ?? 0) : []}
-          />
-          <MetricCard
-            className={ResponsiveGrid.Small}
-            label="Actual cost"
-            value={summary == null ? "—" : formatUSD(summary.total_actual_cost_usd)}
-            sub={
-              summary == null
-                ? undefined
-                : `${formatUSD(Math.abs(summary.total_savings_usd))} saved vs requested`
-            }
-            sparkline={buckets.map(b => b.actual_cost_usd)}
-          />
-          <MetricCard
-            className={ResponsiveGrid.Small}
-            label="Cache hit rate"
-            value={cacheHitRate == null ? "—%" : `${cacheHitRate.toFixed(1)}%`}
-            sub={cacheWriteTokens + cacheReadTokens === 0 ? "no cached usage yet" : "write+read tokens"}
-          />
-        </ResponsiveGrid>
+        {metricsLoading ? (
+          <DashboardMetricsSkeleton />
+        ) : (
+          <>
+            <ResponsiveGrid>
+              <MetricCard
+                className={ResponsiveGrid.Small}
+                label="Tokens"
+                value={summary == null ? "—" : formatNumber(summary.total_tokens)}
+                sub={summary == null ? undefined : `${formatNumber(avgTokensPerReq)} avg / req`}
+                sparkline={buckets.length ? buckets.map(b => b.total_tokens ?? 0) : []}
+              />
+              <MetricCard
+                className={ResponsiveGrid.Small}
+                label="Requests"
+                value={summary == null ? "—" : formatNumber(summary.request_count)}
+                sub={
+                  summary == null
+                    ? undefined
+                    : `actual ${formatUSD(summary.total_actual_cost_usd)}`
+                }
+                sparkline={buckets.length ? buckets.map(b => b.request_count ?? 0) : []}
+              />
+              <MetricCard
+                className={ResponsiveGrid.Small}
+                label="Actual cost"
+                value={summary == null ? "—" : formatUSD(summary.total_actual_cost_usd)}
+                sub={
+                  summary == null
+                    ? undefined
+                    : `${formatUSD(Math.abs(summary.total_savings_usd))} saved vs requested`
+                }
+                subAccent={summary == null ? undefined : "success"}
+                sparkline={buckets.map(b => b.actual_cost_usd)}
+              />
+              <MetricCard
+                className={ResponsiveGrid.Small}
+                label="Cache hit rate"
+                value={cacheHitRate == null ? "0.0%" : `${cacheHitRate.toFixed(1)}%`}
+                sub={
+                  cacheWriteTokens + cacheReadTokens === 0
+                    ? "no cached usage yet"
+                    : "write+read tokens"
+                }
+              />
+            </ResponsiveGrid>
 
-        <ResponsiveGrid>
-          <ChartCard
-            className={ResponsiveGrid.Medium}
-            title="Popularity"
-            subtitle="Top models by tokens processed on this install."
-          >
-            <PopularityLeaderboard
-              rows={modelTotals.map(t => ({ id: t.id, label: t.label, tokens: t.tokens, costUsd: t.costUsd }))}
-              limit={5}
-              onSelect={id => router.push(`/models/${id.replace(/\//g, "~")}`)}
-            />
-          </ChartCard>
+            <ResponsiveGrid>
+              <ChartCard
+                className={ResponsiveGrid.Medium}
+                title="Popularity"
+                subtitle="Top models by tokens processed on this install."
+              >
+                <PopularityLeaderboard
+                  rows={modelTotals.map(t => ({
+                    id: t.id,
+                    label: t.label,
+                    tokens: t.tokens,
+                    costUsd: t.costUsd,
+                  }))}
+                  limit={5}
+                  onSelect={id => router.push(`/models/${id.replace(/\//g, "~")}`)}
+                />
+              </ChartCard>
 
-          <ChartCard
-            className={ResponsiveGrid.Medium}
-            title="Top models by spend"
-            subtitle="Who's eating the actual-cost budget in the selected range."
-          >
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-2xs uppercase tracking-wider text-muted-foreground">
-                  <th className="py-1 pr-2 font-medium">Model</th>
-                  <th className="py-1 pr-2 text-right font-medium">Tokens</th>
-                  <th className="py-1 text-right font-medium">Spend</th>
-                </tr>
-              </thead>
-              <tbody>
-                {modelTotals
-                  .slice()
-                  .sort((a, b) => b.costUsd - a.costUsd)
-                  .slice(0, 8)
-                  .map(r => (
-                    <tr key={r.id} className="border-t border-border/50">
-                      <td className="py-1.5 pr-2">
-                        <Link href={`/models/${r.id.replace(/\//g, "~")}`} className="hover:text-primary">
-                          {r.label}
-                        </Link>
-                      </td>
-                      <td className="py-1.5 pr-2 text-right tabular-nums">{formatNumber(r.tokens)}</td>
-                      <td className="py-1.5 text-right tabular-nums">{formatUSD(r.costUsd)}</td>
+              <ChartCard
+                className={ResponsiveGrid.Medium}
+                title="Top models by spend"
+                subtitle="Who's eating the actual-cost budget in the selected range."
+              >
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-2xs uppercase tracking-wider text-muted-foreground">
+                      <th className="py-1 pr-2 font-medium">Model</th>
+                      <th className="py-1 pr-2 text-right font-medium">Tokens</th>
+                      <th className="py-1 text-right font-medium">Spend</th>
                     </tr>
-                  ))}
-              </tbody>
-            </table>
-          </ChartCard>
-        </ResponsiveGrid>
+                  </thead>
+                  <tbody>
+                    {modelTotals
+                      .slice()
+                      .sort((a, b) => b.costUsd - a.costUsd)
+                      .slice(0, 8)
+                      .map(r => (
+                        <tr key={r.id} className="border-t border-border/50">
+                          <td className="py-1.5 pr-2">
+                            <Link
+                              href={`/models/${r.id.replace(/\//g, "~")}`}
+                              className="hover:text-primary"
+                            >
+                              {r.label}
+                            </Link>
+                          </td>
+                          <td className="py-1.5 pr-2 text-right tabular-nums">
+                            {formatNumber(r.tokens)}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums">
+                            {formatUSD(r.costUsd)}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </ChartCard>
+            </ResponsiveGrid>
+          </>
+        )}
       </Page.Section>
     </Page>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <Page
+      header={
+        <PageHeader
+          left={
+            <Text variant="h4" as="h2">
+              Overview
+            </Text>
+          }
+        />
+      }
+    >
+      <Page.Section>
+        <DashboardMetricsSkeleton />
+      </Page.Section>
+    </Page>
+  );
+}
+
+function DashboardMetricsSkeleton() {
+  return (
+    <>
+      <ResponsiveGrid>
+        <Card.Loading className={ResponsiveGrid.Small} />
+        <Card.Loading className={ResponsiveGrid.Small} />
+        <Card.Loading className={ResponsiveGrid.Small} />
+        <Card.Loading className={ResponsiveGrid.Small} />
+      </ResponsiveGrid>
+      <ResponsiveGrid>
+        <Card.Loading className={ResponsiveGrid.Medium} />
+        <Card.Loading className={ResponsiveGrid.Medium} />
+      </ResponsiveGrid>
+    </>
   );
 }
 
@@ -304,10 +330,21 @@ interface MetricCardProps {
   value: string;
   sub?: string;
   accent?: "default" | "success" | "danger" | "info";
+  // When "success", recolors the sub line green so a saving figure draws the
+  // eye without disturbing the value's own accent.
+  subAccent?: "default" | "success";
   sparkline?: number[];
 }
 
-function MetricCard({ className, label, value, sub, accent = "default", sparkline }: MetricCardProps) {
+function MetricCard({
+  className,
+  label,
+  value,
+  sub,
+  accent = "default",
+  subAccent = "default",
+  sparkline,
+}: MetricCardProps) {
   const accentClass =
     accent === "success"
       ? "text-success"
@@ -336,7 +373,16 @@ function MetricCard({ className, label, value, sub, accent = "default", sparklin
           </Text>
           {sparkline != null && sparkline.length > 0 && <Sparkline data={sparkline} />}
         </div>
-        {sub != null && <Text className="mt-1 text-2xs text-muted-foreground">{sub}</Text>}
+        {sub != null && (
+          <Text
+            className={cn(
+              "mt-1 text-2xs",
+              subAccent === "success" ? "text-success" : "text-muted-foreground",
+            )}
+          >
+            {sub}
+          </Text>
+        )}
       </Card.Content>
     </Card>
   );

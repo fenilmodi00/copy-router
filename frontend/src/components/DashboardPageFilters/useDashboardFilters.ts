@@ -39,12 +39,37 @@ function addMonths(d: Date, n: number): Date {
   return new Date(d.getFullYear(), d.getMonth() + n, d.getDate(), 0, 0, 0, 0);
 }
 
+function hoursAgo(now: Date, hours: number): Date {
+  return new Date(now.getTime() - hours * 3600_000);
+}
+
+function daysAgo(now: Date, days: number): Date {
+  return new Date(now.getTime() - days * 24 * 3600_000);
+}
+
 /**
- * Mirrors WorkWeave's default date filter set (week- and month-anchored
- * windows ending at "now"), trimmed to the granularities the router
- * supports.
+ * Rolling windows first (KPI-friendly hour buckets), then week- and
+ * month-anchored ranges for longer looks.
  */
 export const DATE_RANGES: readonly DateRange[] = [
+  {
+    id: "last-24h",
+    label: "Last 24 hours",
+    defaultGranularity: "hour",
+    start: now => hoursAgo(now, 24),
+  },
+  {
+    id: "last-7d",
+    label: "Last 7 days",
+    defaultGranularity: "day",
+    start: now => daysAgo(now, 7),
+  },
+  {
+    id: "last-30d",
+    label: "Last 30 days",
+    defaultGranularity: "day",
+    start: now => daysAgo(now, 30),
+  },
   {
     id: "this-week",
     label: "This week",
@@ -83,7 +108,8 @@ export const DATE_RANGES: readonly DateRange[] = [
   },
 ] as const;
 
-const DEFAULT_RANGE_ID = "last-month";
+/** Default Overview range: recent usage with hourly KPI buckets. */
+export const DEFAULT_RANGE_ID = "last-24h";
 
 export interface UseDashboardFiltersResult {
   filters: {
@@ -99,11 +125,9 @@ export interface UseDashboardFiltersResult {
 }
 
 /**
- * Router-local filter state. Mirrors WW's useDashboardPageFilters /
- * useGranularitySelector contract but without nuqs/PostHog/GraphQL.
- * Granularity defaults from the selected range; the user can override
- * it with setGranularity, and the override is reset whenever the range
- * changes.
+ * Router-local filter state. Granularity defaults from the selected range;
+ * the user can override it with setGranularity, and the override is reset
+ * whenever the range changes.
  */
 export function useDashboardFilters(
   initialRangeId: string = DEFAULT_RANGE_ID,

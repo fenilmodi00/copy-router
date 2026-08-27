@@ -207,6 +207,7 @@ func (c *Client) Proxy(ctx context.Context, decision router.Decision, prep provi
 			t.StampUpstreamEOF()
 		}
 		httputil.LogUpstreamStatus(
+			ctx,
 			"Upstream OpenAI-compatible provider returned error status",
 			resp.StatusCode,
 			"base_url", baseURL,
@@ -256,7 +257,7 @@ func (c *Client) Proxy(ctx context.Context, decision router.Decision, prep provi
 
 	streamErr := httputil.StreamBody(ctx, cancel, c.idleTimeout(), resp.Body, resp.StatusCode, w, t)
 	if errors.Is(streamErr, httputil.ErrUpstreamIdleTimeout) || errors.Is(streamErr, httputil.ErrUpstreamOutputStall) || errors.Is(streamErr, httputil.ErrUpstreamSlowThroughput) {
-		logStreamStall(decision.Model, baseURL, streamErr)
+		logStreamStall(ctx, decision.Model, baseURL, streamErr)
 	}
 	return streamErr
 }
@@ -264,7 +265,7 @@ func (c *Client) Proxy(ctx context.Context, decision router.Decision, prep provi
 // logStreamStall reports a watchdog trip at ERROR after upstream returned
 // 200 + headers then stalled for the full budget. Both stall kinds are
 // retryable (dispatchWithFallback re-attempts); this is the paper trail.
-func logStreamStall(model, baseURL string, cause error) {
+func logStreamStall(ctx context.Context, model, baseURL string, cause error) {
 	stallKind := "byte_idle"
 	switch {
 	case errors.Is(cause, httputil.ErrUpstreamOutputStall):
@@ -272,7 +273,7 @@ func logStreamStall(model, baseURL string, cause error) {
 	case errors.Is(cause, httputil.ErrUpstreamSlowThroughput):
 		stallKind = "slow_throughput"
 	}
-	observability.Get().Error("Upstream OpenAI-compatible stream stalled mid-response; aborting for retry",
+	observability.FromContext(ctx).Error("Upstream OpenAI-compatible stream stalled mid-response; aborting for retry",
 		"model", model,
 		"base_url", baseURL,
 		"stall_kind", stallKind,
@@ -313,7 +314,7 @@ func (c *Client) Passthrough(ctx context.Context, prep providers.PreparedRequest
 	providers.CopyUpstreamHeaders(w, resp)
 	w.WriteHeader(resp.StatusCode)
 	if resp.StatusCode >= 400 {
-		return httputil.WritePassthroughError(w, resp, nil, nil, "Upstream OpenAI-compatible provider returned error status (passthrough)", "base_url", baseURL, "path", r.URL.Path)
+		return httputil.WritePassthroughError(r.Context(), w, resp, nil, nil, "Upstream OpenAI-compatible provider returned error status (passthrough)", "base_url", baseURL, "path", r.URL.Path)
 	}
 	_, err = io.Copy(w, resp.Body)
 	return err

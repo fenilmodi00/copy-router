@@ -8,17 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"workweave/router/internal/analytics"
+	account "workweave/router/internal/api/account"
 	"workweave/router/internal/api/admin"
 	analyticsapi "workweave/router/internal/api/analytics"
 	anthropicapi "workweave/router/internal/api/anthropic"
 	openaiapi "workweave/router/internal/api/openai"
-	"workweave/router/internal/auth"
 	"workweave/router/internal/billing"
 	"workweave/router/internal/policyclient"
-	"workweave/router/internal/proxy"
 	"workweave/router/internal/router"
-	"workweave/router/internal/router/policy"
 	"workweave/router/internal/server/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -53,66 +50,51 @@ const (
 	DeploymentModeSelfHosted DeploymentMode = "selfhosted"
 	// DeploymentModeManaged skips the dashboard and admin API entirely so misconfig can't expose a redundant control plane.
 	DeploymentModeManaged DeploymentMode = "managed"
+	// DeploymentModeSelfServe mounts the dashboard driven by self-service
+	// (aiand-key) login instead of the operator password. The dashboard data
+	// plane is a separate /admin/v1 surface scoped to the logged-in account's
+	// installation; the operator admin API is NOT mounted.
+	DeploymentModeSelfServe DeploymentMode = "selfserve"
 )
 
 // Register wires routes onto the engine. In managed mode the dashboard +
 // /admin/v1/* routes are not registered at all.
 //
-// deployedModels may be nil in tests; required in selfhosted prod so the
+// DeployedModels may be nil in tests; required in selfhosted prod so the
 // dashboard can render the universe of routable models.
 //
-// hmmModels is optional; nil when no HMM sidecar is wired — falls back to the
+// HMMModels is optional; nil when no HMM sidecar is wired — falls back to the
 // cluster registry.
 //
-// billingSvc is set only in managed mode when credit-billing is enabled; it
+// Billing is set only in managed mode when credit-billing is enabled; it
 // gates every inference route on prepaid balance via WithBalanceCheck. nil
 // leaves inference routes open (BYOK/platform key still controls upstream auth).
 //
-// readinessChecker gates /readyz only; /health remains process liveness.
+// ReadinessChecker gates /readyz only; /health remains process liveness.
 //
-// hmmRosterSource, when non-nil, mounts GET /v1/router/hmm-roster for the
+// HMMRosterSource, when non-nil, mounts GET /v1/router/hmm-roster for the
 // control plane's cluster allowlist UI.
 //
-// analyticsSvc, when non-nil, mounts the /v1/analytics/* export surface;
-// nil leaves it unmounted (tests, deployments without telemetry storage).
-// Register wires routes onto the engine. In managed mode the dashboard +
-// /admin/v1/* routes are not registered at all.
-//
-// deployedModels may be nil in tests; required in selfhosted prod so the
-// dashboard can render the universe of routable models.
-//
-// hmmModels is optional; nil when no HMM sidecar is wired — falls back to the
-// cluster registry.
-//
-// billingSvc is set only in managed mode when credit-billing is enabled; it
-// gates every inference route on prepaid balance via WithBalanceCheck. nil
-// leaves inference routes open (BYOK/platform key still controls upstream auth).
-//
-// readinessChecker gates /readyz only; /health remains process liveness.
-//
-// hmmRosterSource, when non-nil, mounts GET /v1/router/hmm-roster for the
-// control plane's cluster allowlist UI.
-//
-// analyticsSvc, when non-nil, mounts the /v1/analytics/* export surface;
+// Analytics, when non-nil, mounts the /v1/analytics/* export surface;
 // nil leaves it unmounted (tests, deployments without telemetry storage).
 //
-// aiandCatalogHandler, when non-nil, mounts the live ai& model catalog
-// (GET /admin/v1/aiand/models) inside the selfhosted metrics group. nil means
+// AiandCatalogHandler, when non-nil, mounts the live ai& model catalog
+// (GET /admin/v1/aiand/models) inside the dashboard metrics group. nil means
 // AIAND_API_KEY was absent at boot — fail-closed: no route is registered so the
 // dashboard hides the Models section instead of erroring per request.
-func Register(engine *gin.Engine, authSvc *auth.Service, proxySvc *proxy.Service, deployedModels admin.DeployedModelsSource, hmmModels admin.HMMRosterSource, mode DeploymentMode, billingSvc *billing.Service, readinessChecker admin.HealthChecker, hmmRosterSource policy.RosterSource, analyticsSvc *analytics.Service, aiandCatalogHandler gin.HandlerFunc) {
+func Register(engine *gin.Engine, s Services, mode DeploymentMode) {
 	// Managed mode: BYOK is opt-in per installation (see WithAuth).
 	byokRequiresOptIn := mode == DeploymentModeManaged
 
 	engine.GET("/health", middleware.WithTimeout(healthTimeout), admin.HealthHandler)
-	engine.GET("/readyz", middleware.WithTimeout(readinessTimeout), admin.ReadinessHandler(readinessChecker))
+	engine.GET("/readyz", middleware.WithTimeout(readinessTimeout), admin.ReadinessHandler(s.ReadinessChecker))
 
 	// /v1/version reports the binary's git commit + build time (via -ldflags),
 	// used by the README's managed-deployment badge. Public build metadata, unauthed like /health.
 	engine.GET("/v1/version", middleware.WithTimeout(healthTimeout), admin.VersionHandler)
 	var registeredStrategies []router.Strategy
-	if proxySvc != nil {
-		registeredStrategies = proxySvc.RegisteredStrategies()
+	if s.Proxy != nil {
+		registeredStrategies = s.Proxy.RegisteredStrategies()
 	}
 	defaultStrategy := router.Strategy(strings.ToLower(strings.TrimSpace(os.Getenv("ROUTER_DEFAULT_STRATEGY"))))
 	if defaultStrategy == "" {
@@ -122,96 +104,74 @@ func Register(engine *gin.Engine, authSvc *auth.Service, proxySvc *proxy.Service
 	engine.GET(
 		"/v1/router/policies",
 		middleware.WithTimeout(healthTimeout),
-		admin.PolicyCatalogHandler(proxySvc, defaultStrategy),
+		admin.PolicyCatalogHandler(s.Proxy, defaultStrategy),
 	)
 
 	// /v1/router/models lets the Weave control plane validate per-org exclusion
 	// submissions against the live deployed-models universe instead of
 	// hand-copying it per gitlink bump. Unauthed: read-only, and the list is
 	// already public on the RouterArena leaderboard.
-	if deployedModels != nil {
-		engine.GET("/v1/router/models", middleware.WithTimeout(catalogModelsTimeout), admin.CatalogModelsHandler(deployedModels, hmmModels))
+	if s.DeployedModels != nil {
+		engine.GET("/v1/router/models", middleware.WithTimeout(catalogModelsTimeout), admin.CatalogModelsHandler(s.DeployedModels, s.HMMModels))
 
 		// Projects the quality-vs-price dial's model mix across dial positions
 		// for the dashboard's distribution preview. Same unauthed rationale as
 		// /v1/router/models; the assertion skips sources that can't project one.
-		if dist, ok := deployedModels.(admin.RoutingDistributionSource); ok {
+		if dist, ok := s.DeployedModels.(admin.RoutingDistributionSource); ok {
 			engine.GET("/v1/router/routing-distribution", middleware.WithTimeout(healthTimeout), admin.RoutingDistributionHandler(dist))
 		}
 	}
 
 	// /v1/router/hmm-roster: frozen per-cluster arm roster mapped to catalog IDs.
 	// Unauthed — read-only and non-sensitive, same rationale as /v1/router/models.
-	if hmmRosterSource != nil {
-		engine.GET("/v1/router/hmm-roster", middleware.WithTimeout(readinessTimeout), admin.HMMRosterHandler(hmmRosterSource))
+	if s.HMMRosterSource != nil {
+		engine.GET("/v1/router/hmm-roster", middleware.WithTimeout(readinessTimeout), admin.HMMRosterHandler(s.HMMRosterSource))
+	}
+
+	// /internal/v1/*: control-plane-to-router calls, authed by a shared secret
+	// and mounted only when one is configured. This is not a second admin API —
+	// it carries only work the control plane cannot do itself because the
+	// credential is minted here per request (key-pair, workload identity).
+	if internalToken := strings.TrimSpace(os.Getenv("ROUTER_INTERNAL_SERVICE_TOKEN")); internalToken != "" {
+		internalGroup := engine.Group("/internal/v1", middleware.WithTimeout(adminTimeout), middleware.WithInternalServiceAuth(internalToken))
+		internalGroup.POST("/provider-keys/models", admin.InternalListUpstreamModelsHandler(s.Auth, s.Proxy))
 	}
 
 	// /validate is a token-validity probe used by clients (not the dashboard), so it stays mounted in both modes.
-	adminAuthed := engine.Group("", middleware.WithTimeout(validateTimeout), middleware.WithAuth(authSvc, byokRequiresOptIn))
+	adminAuthed := engine.Group("", middleware.WithTimeout(validateTimeout), middleware.WithAuth(s.Auth, byokRequiresOptIn))
 	adminAuthed.GET("/validate", admin.ValidateHandler)
 
 	if mode == DeploymentModeSelfHosted {
-		engine.GET("/", func(c *gin.Context) { c.Redirect(http.StatusFound, "/ui") })
-		registerUIStatic(engine, "./assets/ui")
-
 		// Public — mounting inside WithAuth would be a chicken-and-egg
 		// deadlock for users who don't yet have a cookie.
 		authPublic := engine.Group("/admin/v1/auth", middleware.WithTimeout(adminTimeout))
-		authPublic.POST("/login", admin.LoginHandler(authSvc))
+		authPublic.POST("/login", admin.LoginHandler(s.Auth))
 		authPublic.POST("/logout", admin.LogoutHandler())
-		authPublic.GET("/me", admin.MeHandler(authSvc))
-
-		// Read-only metrics: dashboard cookie OR rk_ bearer so an installation can fetch its own data for monitoring scripts. Per-installation scoping is enforced inside the handlers.
-		metrics := engine.Group("/admin/v1", middleware.WithTimeout(adminTimeout), middleware.WithAdminOrAuth(authSvc, byokRequiresOptIn))
-		metrics.GET("/metrics/summary", admin.MetricsSummaryHandler(proxySvc))
-		metrics.GET("/metrics/timeseries", admin.MetricsTimeseriesHandler(proxySvc))
-		metrics.GET("/metrics/details", admin.MetricsDetailsHandler(proxySvc))
-		metrics.GET("/metrics/model-breakdown", admin.MetricsModelBreakdownHandler(proxySvc))
-		// Live ai& catalog for the Models section; display source-of-truth only
-		// (the routing catalog is untouched). Registered only when the boot-time
-		// AIAND_API_KEY is set — fail-closed: absent key means no route.
-		if aiandCatalogHandler != nil {
-			metrics.GET("/aiand/models", aiandCatalogHandler)
-		}
-
-		// Mutations: admin cookie REQUIRED. rk_ tokens are rejected so a leaked data-plane key can't mint fresh router keys or rotate provider credentials.
-		mgmt := engine.Group("/admin/v1", middleware.WithTimeout(adminTimeout), middleware.WithAdminOnly(authSvc))
-		mgmt.GET("/keys", admin.ListAPIKeysHandler(authSvc))
-		mgmt.POST("/keys", admin.IssueAPIKeyHandler(authSvc))
-		mgmt.POST("/keys/:id/rotate", admin.RotateAPIKeyHandler(authSvc))
-		mgmt.DELETE("/keys/:id", admin.DeleteAPIKeyHandler(authSvc))
-		mgmt.GET("/provider-keys", admin.ListExternalKeysHandler(authSvc))
-		mgmt.POST("/provider-keys", admin.UpsertExternalKeyHandler(authSvc, deployedModels))
-		mgmt.PUT("/provider-keys/:id/model-aliases", admin.UpdateExternalKeyAliasesHandler(authSvc, deployedModels))
-		// Discovery hits the provider endpoint itself; the group's adminTimeout
-		// (10s) bounds that upstream GET /models call.
-		mgmt.GET("/provider-keys/:id/models", admin.ListUpstreamModelsHandler(authSvc, proxySvc))
-		mgmt.POST("/provider-keys/discover-models", admin.DiscoverModelsHandler(proxySvc))
-		mgmt.DELETE("/provider-keys/:id", admin.DeleteExternalKeyHandler(authSvc))
-		mgmt.GET("/config", admin.ConfigHandler)
-		mgmt.GET("/onboarding", admin.OnboardingHandler(authSvc))
-		mgmt.GET("/routing-preferences", admin.GetRoutingPreferencesHandler(authSvc))
-		mgmt.PUT("/routing-preferences", admin.UpdateRoutingPreferencesHandler(authSvc))
-		mgmt.GET("/content-capture", admin.GetContentCaptureHandler(authSvc, proxySvc))
-		mgmt.PUT("/content-capture", admin.UpdateContentCaptureHandler(authSvc, proxySvc))
-		if deployedModels != nil {
-			mgmt.GET("/excluded-models", admin.GetExcludedModelsHandler(authSvc, deployedModels, proxySvc))
-			mgmt.PUT("/excluded-models", admin.UpdateExcludedModelsHandler(authSvc, deployedModels, proxySvc))
-			mgmt.GET("/allowed-models", admin.GetAllowedModelsHandler(authSvc, deployedModels))
-			mgmt.PUT("/allowed-models", admin.UpdateAllowedModelsHandler(authSvc, deployedModels))
-			mgmt.GET("/excluded-providers", admin.GetExcludedProvidersHandler(authSvc, deployedModels, proxySvc))
-			mgmt.PUT("/excluded-providers", admin.UpdateExcludedProvidersHandler(authSvc, deployedModels, proxySvc))
-		}
+		authPublic.GET("/me", admin.MeHandler(s.Auth))
 	}
+
+	if mode == DeploymentModeSelfServe {
+		// Public — login must be reachable without a session cookie.
+		accountPublic := engine.Group("/account/v1", middleware.WithTimeout(adminTimeout))
+		accountPublic.POST("/login", account.LoginHandler(s.Auth))
+		accountPublic.POST("/logout", account.LogoutHandler())
+		accountPublic.GET("/me", account.MeHandler(s.Auth))
+	}
+
+	// Dashboard data plane (metrics, keys, provider-keys, config, excluded-models,
+	// content-capture): single source of truth in dashboard_routes.go, mounted by
+	// the helper for both selfhosted and selfserve. Managed mode is a no-op.
+	// Login surfaces above are genuinely mode-specific and stay here.
+	mountDashboardRoutes(engine, s, mode, byokRequiresOptIn)
 
 	messagesMiddleware := []gin.HandlerFunc{
 		middleware.WithTimingEntry(),
 		middleware.WithTimeout(messagesTimeout),
-		middleware.WithAuth(authSvc, byokRequiresOptIn),
+		middleware.WithAuth(s.Auth, byokRequiresOptIn),
 		middleware.WithAgentShadowEvaluation(),
 	}
-	if billingSvc != nil {
-		messagesMiddleware = append(messagesMiddleware, middleware.WithBalanceCheck(billingSvc, billing.MinBalanceMicros), middleware.WithAPIKeySpendCap(billingSvc), middleware.WithOrgMonthlySpendCap(billingSvc))
+	if s.Billing != nil {
+		messagesMiddleware = append(messagesMiddleware, middleware.WithBalanceCheck(s.Billing, billing.MinBalanceMicros), middleware.WithAPIKeySpendCap(s.Billing), middleware.WithOrgMonthlySpendCap(s.Billing))
 	}
 	messagesMiddleware = append(messagesMiddleware,
 		middleware.WithEmbedOnlyUserMessageOverride(),
@@ -222,15 +182,15 @@ func Register(engine *gin.Engine, authSvc *auth.Service, proxySvc *proxy.Service
 		middleware.WithForceEffortOverride(),
 	)
 	messagesGroup := engine.Group("", messagesMiddleware...)
-	messagesGroup.POST("/v1/messages", anthropicapi.MessagesHandler(proxySvc, authSvc))
+	messagesGroup.POST("/v1/messages", anthropicapi.MessagesHandler(s.Proxy, s.Auth))
 
 	chatCompletionMiddleware := []gin.HandlerFunc{
 		middleware.WithTimingEntry(),
 		middleware.WithTimeout(chatCompletionTimeout),
-		middleware.WithAuth(authSvc, byokRequiresOptIn),
+		middleware.WithAuth(s.Auth, byokRequiresOptIn),
 	}
-	if billingSvc != nil {
-		chatCompletionMiddleware = append(chatCompletionMiddleware, middleware.WithBalanceCheck(billingSvc, billing.MinBalanceMicros), middleware.WithAPIKeySpendCap(billingSvc), middleware.WithOrgMonthlySpendCap(billingSvc))
+	if s.Billing != nil {
+		chatCompletionMiddleware = append(chatCompletionMiddleware, middleware.WithBalanceCheck(s.Billing, billing.MinBalanceMicros), middleware.WithAPIKeySpendCap(s.Billing), middleware.WithOrgMonthlySpendCap(s.Billing))
 	}
 	chatCompletionMiddleware = append(chatCompletionMiddleware,
 		middleware.WithEmbedOnlyUserMessageOverride(),
@@ -241,30 +201,30 @@ func Register(engine *gin.Engine, authSvc *auth.Service, proxySvc *proxy.Service
 		middleware.WithForceEffortOverride(),
 	)
 	chatCompletionGroup := engine.Group("", chatCompletionMiddleware...)
-	chatCompletionGroup.POST("/v1/chat/completions", openaiapi.ChatCompletionHandler(proxySvc, authSvc))
+	chatCompletionGroup.POST("/v1/chat/completions", openaiapi.ChatCompletionHandler(s.Proxy, s.Auth))
 	// Responses surface required by Codex CLI after wire_api="chat" was retired;
 	// translated internally to chat completions so the turn loop is reused.
-	chatCompletionGroup.POST("/v1/responses", openaiapi.ResponsesHandler(proxySvc, authSvc))
+	chatCompletionGroup.POST("/v1/responses", openaiapi.ResponsesHandler(s.Proxy, s.Auth))
 
 	// Passthrough endpoints cost no upstream tokens, so they stay open even
 	// with billing enabled — count_tokens is the SDK's pre-flight call before
 	// /v1/messages, and gating it would break client negotiation.
 	passthroughGroup := engine.Group("",
 		middleware.WithTimeout(passthroughTimeout),
-		middleware.WithAuth(authSvc, byokRequiresOptIn),
+		middleware.WithAuth(s.Auth, byokRequiresOptIn),
 	)
-	passthroughGroup.POST("/v1/messages/count_tokens", anthropicapi.PassthroughHandler(proxySvc))
-	passthroughGroup.GET("/v1/models", openaiapi.ModelsHandler(anthropicapi.PassthroughHandler(proxySvc)))
-	passthroughGroup.GET("/v1/models/:model", anthropicapi.PassthroughHandler(proxySvc))
+	passthroughGroup.POST("/v1/messages/count_tokens", anthropicapi.PassthroughHandler(s.Proxy))
+	passthroughGroup.GET("/v1/models", openaiapi.ModelsHandler(anthropicapi.PassthroughHandler(s.Proxy)))
+	passthroughGroup.GET("/v1/models/:model", anthropicapi.PassthroughHandler(s.Proxy))
 	// Rides the passthrough group (cheap, no billing middleware) — read-only, no routing side-effects.
 	passthroughGroup.GET("/v1/display-settings", admin.DisplaySettingsHandler)
 
 	routeMiddleware := []gin.HandlerFunc{
 		middleware.WithTimeout(routeTimeout),
-		middleware.WithAuth(authSvc, byokRequiresOptIn),
+		middleware.WithAuth(s.Auth, byokRequiresOptIn),
 	}
-	if billingSvc != nil {
-		routeMiddleware = append(routeMiddleware, middleware.WithBalanceCheck(billingSvc, billing.MinBalanceMicros), middleware.WithAPIKeySpendCap(billingSvc), middleware.WithOrgMonthlySpendCap(billingSvc))
+	if s.Billing != nil {
+		routeMiddleware = append(routeMiddleware, middleware.WithBalanceCheck(s.Billing, billing.MinBalanceMicros), middleware.WithAPIKeySpendCap(s.Billing), middleware.WithOrgMonthlySpendCap(s.Billing))
 	}
 	routeMiddleware = append(routeMiddleware,
 		middleware.WithEmbedOnlyUserMessageOverride(),
@@ -275,28 +235,28 @@ func Register(engine *gin.Engine, authSvc *auth.Service, proxySvc *proxy.Service
 		middleware.WithForceEffortOverride(),
 	)
 	routeGroup := engine.Group("", routeMiddleware...)
-	routeGroup.POST("/v1/route", anthropicapi.RouteHandler(proxySvc))
+	routeGroup.POST("/v1/route", anthropicapi.RouteHandler(s.Proxy))
 
 	previewGroup := engine.Group("",
 		middleware.WithTimingEntry(),
 		middleware.WithTimeout(routeTimeout),
-		middleware.WithAuth(authSvc, byokRequiresOptIn),
+		middleware.WithAuth(s.Auth, byokRequiresOptIn),
 		middleware.WithEmbedOnlyUserMessageOverride(),
 		middleware.WithRouterStrategyDefault(defaultStrategy, registeredStrategies...),
 		middleware.WithPolicyDebugOverride(),
 		middleware.WithRoutingKnobsOverride(),
 	)
-	previewGroup.POST("/v1/route/preview", anthropicapi.PreviewRouteHandler(proxySvc))
+	previewGroup.POST("/v1/route/preview", anthropicapi.PreviewRouteHandler(s.Proxy))
 
 	// Read-only routing-decision export. Product surface, so it mounts in both
 	// modes; ra_ keys only, no spend path.
-	if analyticsSvc != nil {
+	if s.Analytics != nil {
 		analyticsGroup := engine.Group("/v1/analytics",
 			middleware.WithTimeout(analyticsTimeout),
-			middleware.WithAnalyticsKey(authSvc),
+			middleware.WithAnalyticsKey(s.Auth),
 			middleware.WithAnalyticsRateLimit(middleware.AnalyticsRequestsPerMinute),
 		)
-		analyticsGroup.GET("/routing-decisions", analyticsapi.RoutingDecisionsHandler(analyticsSvc))
+		analyticsGroup.GET("/routing-decisions", analyticsapi.RoutingDecisionsHandler(s.Analytics))
 		analyticsGroup.GET("/models", analyticsapi.ModelsHandler())
 		analyticsGroup.GET("/schema", analyticsapi.SchemaHandler())
 	}

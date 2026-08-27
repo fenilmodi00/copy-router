@@ -34,6 +34,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Absolute-path variant of request() — used for /account/v1/* which lives
+// outside the /admin/v1 BASE group. Shares the 401 bounce + error shape so
+// callers don't observe a difference in failure handling.
+async function requestRaw<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((init?.headers as Record<string, string>) ?? {}),
+  };
+  const res = await fetch(path, { ...init, credentials: "include", headers });
+  if (res.status === 401 && typeof window !== "undefined") {
+    if (!window.location.pathname.startsWith("/ui/login")) {
+      const current = window.location.pathname;
+      const internal = current.startsWith("/ui/") ? current.slice(3) : "/dashboard";
+      const next = encodeURIComponent(internal);
+      window.location.href = `/ui/login?next=${next}`;
+      throw new Error("401: redirecting to login");
+    }
+  }
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`${res.status}: ${body}`);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
 export interface MetricsSummary {
   request_count: number;
   total_tokens: number;
@@ -118,32 +144,6 @@ export interface IssueAPIKeyResponse {
   token: string;
 }
 
-// ProviderAuthType is how a BYOK key authenticates upstream. "wif" keys hold no
-// secret at all: the router presents its own workload attestation per request.
-export type ProviderAuthType = "bearer" | "keypair_jwt" | "wif";
-
-export interface ExternalKey {
-  id: string;
-  provider: string;
-  name: string | null;
-  key_prefix: string;
-  key_suffix: string;
-  // Endpoint this key is scoped to; absent when the provider's default is used.
-  base_url?: string;
-  // Catalog model ID -> the ID this endpoint publishes it under; absent when it
-  // uses catalog names directly.
-  model_aliases?: Record<string, string>;
-  // "bearer" (send the stored secret), "keypair_jwt" (the secret is an RSA
-  // private key the router signs short-lived tokens with), or "wif" (no stored
-  // secret; the router attests its own workload identity); absent means bearer.
-  auth_type?: ProviderAuthType;
-  // Principal a minted token is issued for; present only with keypair_jwt.
-  auth_account?: string;
-  auth_user?: string;
-  last_used_at: string | null;
-  created_at: string;
-}
-
 export interface RouterConfig {
   cluster_version: string;
   embed_only_user_message: boolean;
@@ -165,6 +165,18 @@ export interface MeResponse {
   authenticated: boolean;
   subject?: string;
 }
+
+// Self-service (aiand key) login session probe. `authenticated:false` with
+// a 200 means the account endpoints exist and the caller is logged out —
+// the login page shows the aiand-key form. A thrown response (404 etc.)
+// means the deployment is selfhosted/managed with no account surface, so
+// the login page falls back to the admin-password form.
+export interface AccountMeResponse {
+  authenticated: boolean;
+  account_id?: string;
+  display_name?: string;
+}
+
 
 export interface DeployedModel {
   model: string;
@@ -218,6 +230,16 @@ export const api = {
         body: JSON.stringify({ password }),
       }),
     logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+    // Self-service (aiand key) login surface. Lives under /account/v1/*
+    // (outside BASE=/admin/v1), so these route through requestRaw.
+    accountMe: () => requestRaw<AccountMeResponse>("/account/v1/me"),
+    loginWithKey: (key: string) =>
+      requestRaw<{ ok: boolean; expires_at: string }>("/account/v1/login", {
+        method: "POST",
+        body: JSON.stringify({ key }),
+      }),
+    accountLogout: () =>
+      requestRaw<{ ok: boolean }>("/account/v1/logout", { method: "POST" }),
   },
   metrics: {
     summary: (from?: string, to?: string) => {
@@ -260,48 +282,6 @@ export const api = {
     rotate: (id: string) =>
       request<IssueAPIKeyResponse>(`/keys/${id}/rotate`, { method: "POST" }),
     delete: (id: string) => request<void>(`/keys/${id}`, { method: "DELETE" }),
-  },
-  providerKeys: {
-    list: () => request<{ keys: ExternalKey[] }>("/provider-keys"),
-    upsert: (
-      provider: string,
-      key: string,
-      name?: string,
-      baseURL?: string,
-      modelAliases?: Record<string, string>,
-      auth?: { type: ProviderAuthType; account?: string; user?: string },
-    ) =>
-      request<ExternalKey>("/provider-keys", {
-        method: "POST",
-        body: JSON.stringify({
-          provider,
-          key,
-          name,
-          base_url: baseURL,
-          model_aliases: modelAliases,
-          auth_type: auth?.type ?? "bearer",
-          auth_account: auth?.account,
-          auth_user: auth?.user,
-        }),
-      }),
-    // Replaces the alias map in place; the stored secret is untouched, so
-    // retargeting model names doesn't need the credential re-entered.
-    updateModelAliases: (id: string, modelAliases: Record<string, string>) =>
-      request<ExternalKey>(`/provider-keys/${id}/model-aliases`, {
-        method: "PUT",
-        body: JSON.stringify({ model_aliases: modelAliases }),
-      }),
-    delete: (id: string) => request<void>(`/provider-keys/${id}`, { method: "DELETE" }),
-    // Lists the model IDs a saved key's endpoint publishes.
-    listUpstreamModels: (id: string) =>
-      request<{ models: string[] }>(`/provider-keys/${id}/models`),
-    // Lists an endpoint's models before the key is saved; the credential is
-    // used for the one upstream call and never persisted.
-    discoverModels: (provider: string, key: string, baseURL?: string) =>
-      request<{ models: string[] }>("/provider-keys/discover-models", {
-        method: "POST",
-        body: JSON.stringify({ provider, key, base_url: baseURL }),
-      }),
   },
   config: {
     get: () => request<RouterConfig>("/config"),

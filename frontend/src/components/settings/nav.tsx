@@ -1,4 +1,4 @@
-import { KeyRound, Plug, SlidersHorizontal } from "lucide-react";
+import { KeyRound, SlidersHorizontal } from "lucide-react";
 import { type ReactNode } from "react";
 
 export interface SettingsNavItem {
@@ -7,15 +7,13 @@ export interface SettingsNavItem {
   icon: ReactNode;
 }
 
-/**
- * The settings tabs, in nav order. Mirrors the hosted dashboard's settings
- * shell: one route per section, driven by a single label/icon config. Billing
- * and uninstall are hosted-only, so self-hosted stops at three tabs.
- */
+// Source of truth for the settings tabs that now live on the main sidebar.
+// Labels match `Sidebar.PRIMARY_NAV` so the page header agrees with the nav
+// item the user clicked. Each entry also backs the SettingsPage header via
+// `settingsNavItem`.
 export const SETTINGS_NAV: SettingsNavItem[] = [
-  { href: "/settings", label: "General", icon: <KeyRound size={16} /> },
-  { href: "/settings/providers", label: "Provider keys", icon: <Plug size={16} /> },
-  { href: "/settings/models", label: "Models & routing", icon: <SlidersHorizontal size={16} /> },
+  { href: "/settings", label: "API keys", icon: <KeyRound size={16} /> },
+  { href: "/settings/models", label: "Routing", icon: <SlidersHorizontal size={16} /> },
 ];
 
 export function settingsNavItem(href: string): SettingsNavItem {

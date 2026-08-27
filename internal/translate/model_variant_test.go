@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
+	"workweave/router/internal/providers"
 	"workweave/router/internal/translate"
 )
 
@@ -59,5 +60,78 @@ func TestCanonicalizeModelInBody(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, had)
 		assert.Equal(t, body, out)
+	})
+}
+
+func TestStripProviderPrefix(t *testing.T) {
+	cases := []struct {
+		name     string
+		model    string
+		provider string
+		stripped string
+		had      bool
+	}{
+		{"anthropic qualified", "anthropic/claude-opus-4-8", providers.ProviderAnthropic, "claude-opus-4-8", true},
+		{"already bare", "claude-opus-4-8", providers.ProviderAnthropic, "claude-opus-4-8", false},
+		{"other provider left alone", "openai/gpt-5.6-luna", providers.ProviderAnthropic, "openai/gpt-5.6-luna", false},
+		{"prefix not at start", "x-anthropic/claude-opus-4-8", providers.ProviderAnthropic, "x-anthropic/claude-opus-4-8", false},
+		{"empty provider is a no-op", "anthropic/claude-opus-4-8", "", "anthropic/claude-opus-4-8", false},
+		{"empty model", "", providers.ProviderAnthropic, "", false},
+		{"only the first segment is dropped", "anthropic/vendor/model", providers.ProviderAnthropic, "vendor/model", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, had := translate.StripProviderPrefix(tc.model, tc.provider)
+			assert.Equal(t, tc.stripped, got)
+			assert.Equal(t, tc.had, had)
+		})
+	}
+}
+
+func TestStripProviderPrefixInBody(t *testing.T) {
+	t.Run("rewrites a qualified id and preserves the rest of the body", func(t *testing.T) {
+		body := []byte(`{"model":"anthropic/claude-opus-4-8","messages":[{"role":"user","content":"hi"}]}`)
+
+		out, had, err := translate.StripProviderPrefixInBody(body, providers.ProviderAnthropic)
+
+		require.NoError(t, err)
+		assert.True(t, had)
+		assert.Equal(t, "claude-opus-4-8", gjson.GetBytes(out, "model").String())
+		assert.Equal(t, "hi", gjson.GetBytes(out, "messages.0.content").String())
+	})
+
+	t.Run("leaves a bare id untouched", func(t *testing.T) {
+		body := []byte(`{"model":"claude-opus-4-8"}`)
+
+		out, had, err := translate.StripProviderPrefixInBody(body, providers.ProviderAnthropic)
+
+		require.NoError(t, err)
+		assert.False(t, had)
+		assert.Equal(t, body, out)
+	})
+
+	t.Run("leaves a body with no model field untouched", func(t *testing.T) {
+		body := []byte(`{"messages":[]}`)
+
+		out, had, err := translate.StripProviderPrefixInBody(body, providers.ProviderAnthropic)
+
+		require.NoError(t, err)
+		assert.False(t, had)
+		assert.Equal(t, body, out)
+	})
+
+	t.Run("composes with the variant tag as the passthrough does", func(t *testing.T) {
+		// Claude Code can send both at once: a qualified id carrying the 1M tag.
+		body := []byte(`{"model":"anthropic/claude-opus-4-8[1m]"}`)
+
+		canon, hadTag, err := translate.CanonicalizeModelInBody(body)
+		require.NoError(t, err)
+		require.True(t, hadTag)
+
+		out, hadPrefix, err := translate.StripProviderPrefixInBody(canon, providers.ProviderAnthropic)
+		require.NoError(t, err)
+		require.True(t, hadPrefix)
+
+		assert.Equal(t, "claude-opus-4-8", gjson.GetBytes(out, "model").String())
 	})
 }
