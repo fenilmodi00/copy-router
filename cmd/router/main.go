@@ -30,6 +30,7 @@ import (
 	"workweave/router/internal/policyclient"
 	"workweave/router/internal/postgres"
 	"workweave/router/internal/providers"
+	aiandProvider "workweave/router/internal/providers/aiand"
 	openaiCompatProvider "workweave/router/internal/providers/openaicompat"
 	"workweave/router/internal/proxy"
 	"workweave/router/internal/proxy/usage"
@@ -103,9 +104,9 @@ func main() {
 	// Run services set ROUTER_DEPLOYMENT_MODE=managed to drop that surface.
 	deploymentMode := server.DeploymentMode(config.GetOr("ROUTER_DEPLOYMENT_MODE", string(server.DeploymentModeSelfHosted)))
 	switch deploymentMode {
-	case server.DeploymentModeSelfHosted, server.DeploymentModeManaged:
+	case server.DeploymentModeSelfHosted, server.DeploymentModeManaged, server.DeploymentModeSelfServe:
 	default:
-		err := fmt.Errorf("Invalid ROUTER_DEPLOYMENT_MODE %q (expected %q or %q)", deploymentMode, server.DeploymentModeSelfHosted, server.DeploymentModeManaged)
+		err := fmt.Errorf("Invalid ROUTER_DEPLOYMENT_MODE %q (expected %q, %q, or %q)", deploymentMode, server.DeploymentModeSelfHosted, server.DeploymentModeManaged, server.DeploymentModeSelfServe)
 		logger.Error("Refusing to boot with invalid deployment mode", "err", err)
 		panic(err)
 	}
@@ -239,6 +240,24 @@ func main() {
 		WithUserClusterModelLists(repo.UserClusterModelLists, userClusterCache).
 		WithWIFTokenSource(buildWIFTokenSource(logger)).
 		WithFlagOverridesDisabled(flagOverridesDisabled)
+
+	// Self-serve mode: the dashboard is secured by an aiand-key login instead
+	// of the operator password. Each aiand user gets their own installation
+	// (account id = installation external_id). AIAND_API_KEY is the DEPLOYMENT's
+	// key for the catalog; the LOGIN probe validates arbitrary user keys against
+	// aiand's public /api/v1/me, so it never uses a deployment secret.
+	if deploymentMode == server.DeploymentModeSelfServe {
+		if repo.Accounts == nil || repo.LoginSessions == nil {
+			logger.Error("Self-serve mode requires account SQLC repos; refusing to boot", "err", nil)
+			panic("selfserve mode: account repos not wired")
+		}
+		keyVerifier := &aiandProvider.KeyVerifier{
+			Client:  &http.Client{Timeout: 15 * time.Second},
+			BaseURL: config.GetOr("AIAND_API_URL", aiandProvider.DefaultBaseURL),
+		}
+		authSvc.WithAccountRepos(repo.Accounts, repo.LoginSessions).WithKeyVerifier(keyVerifier)
+		logger.Info("Self-serve login enabled", "aiand_base_url", keyVerifier.BaseURL)
+	}
 
 	// Managed mode doesn't mount the dashboard, so this only matters selfhosted.
 	if deploymentMode == server.DeploymentModeSelfHosted {
