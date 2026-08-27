@@ -815,7 +815,17 @@ func main() {
 		})
 	}
 	analyticsSvc := analytics.NewService(repo.Analytics, time.Now)
-	server.Register(engine, authSvc, proxySvc, deployedModels, hmmRosterModels, deploymentMode, billingSvc, hmmReadinessChecker, hmmRosterSource, analyticsSvc, aiandCatalogHandler)
+	server.Register(engine, server.Services{
+		Auth:                authSvc,
+		Proxy:               proxySvc,
+		DeployedModels:      deployedModels,
+		HMMModels:           hmmRosterModels,
+		Billing:             billingSvc,
+		ReadinessChecker:    hmmReadinessChecker,
+		HMMRosterSource:     hmmRosterSource,
+		Analytics:           analyticsSvc,
+		AiandCatalogHandler: aiandCatalogHandler,
+	}, deploymentMode)
 
 	srv := &http.Server{
 		Addr:    ":" + config.GetOr("PORT", "8080"),
