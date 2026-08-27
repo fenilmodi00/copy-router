@@ -33,6 +33,20 @@ type KeyVerifier struct {
 	BaseURL string
 }
 
+// identityAPIRoot returns the aiand API root for the key-auth probe.
+// AIAND_API_URL is shared with OpenAI-compat inference, which already includes
+// /v1 (openaicompat.AiandBaseURL). Stripping a trailing /v1 keeps the probe at
+// GET {root}/v1/models instead of the broken /v1/v1/models that maps to
+// ErrKeyUnavailable → HTTP 503 key_validation_unavailable.
+func identityAPIRoot(baseURL string) string {
+	base := strings.TrimSuffix(strings.TrimSpace(baseURL), "/")
+	base = strings.TrimSuffix(base, "/v1")
+	if base == "" {
+		return DefaultBaseURL
+	}
+	return base
+}
+
 // Validate calls aiand's GET /v1/models with the key as a bearer token and
 // maps the response to auth sentinels. Never returns a partial identity on
 // error.
@@ -40,10 +54,7 @@ func (v *KeyVerifier) Validate(ctx context.Context, rawKey string) (*auth.AiandI
 	if v.Client == nil {
 		return nil, errors.New("aiand: nil http client")
 	}
-	base := strings.TrimSuffix(v.BaseURL, "/")
-	if base == "" {
-		base = DefaultBaseURL
-	}
+	base := identityAPIRoot(v.BaseURL)
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/v1/models", nil)

@@ -76,3 +76,23 @@ func TestKeyVerifierValidateUpstreamDown(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, auth.ErrKeyUnavailable)
 }
+
+// Regression: Build.io / openaicompat default AIAND_API_URL ends with /v1.
+// Before normalize, Validate probed /v1/v1/models → 404 → key_validation_unavailable.
+func TestKeyVerifierValidateAcceptsInferenceBaseURL(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("X-Org-Id", "org-from-inference-base")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"object":"list","data":[]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	v := &aiand.KeyVerifier{Client: srv.Client(), BaseURL: srv.URL + "/v1"}
+	identity, err := v.Validate(context.Background(), "sk-test")
+	require.NoError(t, err)
+	require.NotNil(t, identity)
+	assert.Equal(t, "/v1/models", gotPath)
+	assert.Equal(t, "org-from-inference-base", identity.UserID)
+}
