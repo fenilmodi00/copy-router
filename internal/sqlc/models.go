@@ -5,9 +5,38 @@
 package sqlc
 
 import (
+	"net/netip"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+// Self-service login: aiand identity mapped to the router installation that owns all tenant data. Account id doubles as the installation external_id (no FK; aiand ids are opaque external strings).
+type RouterAccount struct {
+	ID                  string
+	AiandUserID         string
+	AiandOrganizationID string
+	DisplayName         *string
+	CreatedAt           pgtype.Timestamptz
+	LastLoginAt         pgtype.Timestamptz
+	// Soft-delete on key revocation / account wipe. NULL = active.
+	DeletedAt pgtype.Timestamptz
+}
+
+// Revocable dashboard sessions for self-service accounts. token_hash is the SHA-256 of the opaque cookie value; token_prefix/suffix are the safe 8+4 display parts.
+type RouterAccountSession struct {
+	ID          uuid.UUID
+	AccountID   string
+	TokenHash   string
+	TokenPrefix string
+	TokenSuffix string
+	IssuedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+	// Set on logout / account wipe. NULL = still active.
+	RevokedAt  pgtype.Timestamptz
+	LastSeenAt pgtype.Timestamptz
+	IpAtIssue  *netip.Addr
+}
 
 type RouterClusterModelList struct {
 	ID             uuid.UUID
