@@ -78,8 +78,8 @@ BEGIN;
 -- router.accounts is the login binding; the ACTUAL tenant is a single row of
 -- the existing router.model_router_installations table, which owns ALL
 -- per-installation data (rk_ keys, BYOK secrets, metrics scoping, billing
--- org_id, allowed/excluded models). The account id (a uuid column, generated
--- in Go) is stored AS that installation's external_id, so the binding is 1:1
+-- org_id, allowed/excluded models). The account id (a varchar column, an
+-- acct_ prefix id generated in Go) is stored AS that installation's external_id, so the binding is 1:1
 -- and re-hydration mirrors the proven EnsureAdminInstallation create-or-relist
 -- pattern. There is NO FK column to model_router_installations: aiand_user_id
 -- / aiand_organization_id are opaque external strings (never FK), and the
@@ -90,7 +90,7 @@ BEGIN;
 -- the user revokes the key, their router install + data are wiped (account row
 -- soft-deleted). This is intentional and matches the user's stated design.
 CREATE TABLE router.accounts (
-  id                    UUID PRIMARY KEY,
+  id                    VARCHAR(36) PRIMARY KEY,
   aiand_user_id         VARCHAR(128) NOT NULL,
   aiand_organization_id VARCHAR(128) NOT NULL,
   display_name          VARCHAR(255),
@@ -119,7 +119,7 @@ COMMENT ON COLUMN router.accounts.deleted_at IS
 -- the same shape as admin sessions — deliberately not JWT.
 CREATE TABLE router.account_sessions (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  account_id   UUID NOT NULL REFERENCES router.accounts(id) ON DELETE CASCADE,
+  account_id   VARCHAR(36) NOT NULL REFERENCES router.accounts(id) ON DELETE CASCADE,
   token_hash   VARCHAR(64) NOT NULL,
   token_prefix VARCHAR(16) NOT NULL,
   token_suffix VARCHAR(16) NOT NULL,
@@ -306,7 +306,7 @@ git commit -m "feat(login): add accounts + account_sessions tables and SQLC quer
 
 **Interfaces:**
 - Consumes: nothing new from Task 1 (types only).
-- Produces: `type Account struct { ID, AiandUserID, AiandOrganizationID string; DisplayName *string; CreatedAt, LastLoginAt time.Time; DeletedAt *time.Time }`; `type LoginSession struct { ID, AccountID, TokenHash, TokenPrefix, TokenSuffix string; IssuedAt, ExpiresAt time.Time; RevokedAt *time.Time; LastSeenAt time.Time; IPAtIssue *net.IP }`; `type AccountRepository interface { UpsertByAiandUser(ctx context.Context, p AccountUpsertParams) (*Account, error); GetByAiandUserID(ctx context.Context, aiandUserID string) (*Account, error); GetByID(ctx context.Context, id string) (*Account, error); SoftDelete(ctx context.Context, id string) error }`; `type LoginSessionRepository interface { Insert(ctx context.Context, s LoginSession) error; GetActiveByTokenHash(ctx context.Context, tokenHash string) (*LoginSession, error); TouchLastSeen(ctx context.Context, accountID, sessionID string) error; RevokeByID(ctx context.Context, accountID, sessionID string) error; RevokeAllForAccount(ctx context.Context, accountID string) error; ListForAccount(ctx context.Context, accountID string) ([]LoginSession, error) }`.
+- Produces: `type Account struct { ID, AiandUserID, AiandOrganizationID string; DisplayName *string; CreatedAt, LastLoginAt time.Time; DeletedAt *time.Time }`; `type LoginSession struct { ID, AccountID, TokenHash, TokenPrefix, TokenSuffix string; IssuedAt, ExpiresAt time.Time; RevokedAt *time.Time; LastSeenAt time.Time; IPAtIssue *net.IP }`; `type AccountRepository interface { UpsertByAiandUser(ctx context.Context, p AccountUpsertParams) (*Account, error); GetByAiandUserID(ctx context.Context, aiandUserID string) (*Account, error); GetByID(ctx context.Context, id string) (*Account, error); SoftDelete(ctx context.Context, id string) error }`; `type LoginSessionRepository interface { Insert(ctx context.Context, s LoginSession) (*LoginSession, error); GetActiveByTokenHash(ctx context.Context, tokenHash string) (*LoginSession, error); TouchLastSeen(ctx context.Context, accountID, sessionID string) error; RevokeByID(ctx context.Context, accountID, sessionID string) error; RevokeAllForAccount(ctx context.Context, accountID string) error; ListForAccount(ctx context.Context, accountID string) ([]LoginSession, error) }`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -377,9 +377,9 @@ func (r *inMemoryAccountRepo) SoftDelete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r *inMemoryAccountRepo) Insert(ctx context.Context, s LoginSession) error {
+func (r *inMemoryAccountRepo) Insert(ctx context.Context, s LoginSession) (*LoginSession, error) {
 	r.sessions[s.TokenHash] = &s
-	return nil
+	return &s, nil
 }
 
 func (r *inMemoryAccountRepo) GetActiveByTokenHash(ctx context.Context, tokenHash string) (*LoginSession, error) {
@@ -512,7 +512,7 @@ type LoginSession struct {
 // LoginSessionRepository persists dashboard sessions for self-service accounts.
 // Implemented by internal/postgres.
 type LoginSessionRepository interface {
-	Insert(ctx context.Context, s LoginSession) error
+	Insert(ctx context.Context, s LoginSession) (*LoginSession, error)
 	GetActiveByTokenHash(ctx context.Context, tokenHash string) (*LoginSession, error)
 	TouchLastSeen(ctx context.Context, accountID, sessionID string) error
 	RevokeByID(ctx context.Context, accountID, sessionID string) error
@@ -859,7 +859,7 @@ func (s *Service) LoginWithKey(ctx context.Context, rawKey string) (*Account, *I
 	// login the upsert returns the EXISTING row's id (see the query's ON
 	// CONFLICT), so both callers converge on one installation.
 	account, err := s.accounts.UpsertByAiandUser(ctx, AccountUpsertParams{
-		ID:                  uuid.NewString(),
+		ID:                  GenerateID("acct"),
 		AiandUserID:         identity.UserID,
 		AiandOrganizationID: identity.OrganizationID,
 	})
@@ -929,8 +929,7 @@ func (s *Service) IssueLoginSession(ctx context.Context, account *Account) (stri
 	expiresAt := now.Add(DefaultLoginSessionTTL)
 	raw := generateLoginSessionToken()
 	hash, prefix, suffix := APITokenFingerprint(raw)
-	err := s.loginSessions.Insert(ctx, LoginSession{
-		ID:          GenerateID("ssn"),
+	session, err := s.loginSessions.Insert(ctx, LoginSession{
 		AccountID:   account.ID,
 		TokenHash:   hash,
 		TokenPrefix: prefix,
@@ -940,6 +939,9 @@ func (s *Service) IssueLoginSession(ctx context.Context, account *Account) (stri
 	})
 	if err != nil {
 		return "", time.Time{}, err
+	}
+	if session == nil || session.ID == "" {
+		return "", time.Time{}, ErrLoginSessionInvalid
 	}
 	return raw, expiresAt, nil
 }
@@ -1226,7 +1228,7 @@ git commit -m "feat(login): aiand /api/v1/me key probe adapter"
 
 **Interfaces:**
 - Consumes: Task 1 queries (`UpsertAccount`, `GetAccountByAiandUserID`, `GetAccountByID`, `SoftDeleteAccount`, `InsertAccountSession`, `GetActiveAccountSessionByHash`, `TouchAccountSessionLastSeen`, `RevokeAccountSessionByID`, `RevokeAllAccountSessionsForAccount`, `ListAccountSessionsForAccount`); Task 2 interfaces; `internal/sqlc` generated types; this repo's existing mapper + helper patterns (`parseUUID`, `timePtr`, `stringPtr`).
-- Produces: `func (r *Repository) UpsertAccount(ctx, p auth.AccountUpsertParams) (*auth.Account, error)`; `func (r *Repository) GetAccountByAiandUserID(ctx, aiandUserID string) (*auth.Account, error)`; `func (r *Repository) GetAccountByID(ctx, id string) (*auth.Account, error)`; `func (r *Repository) SoftDeleteAccount(ctx, id string) error`; `func (r *Repository) InsertLoginSession(ctx, s auth.LoginSession) error`; `func (r *Repository) GetActiveLoginSessionByHash(ctx, hash string) (*auth.LoginSession, error)`; `func (r *Repository) TouchLoginSessionLastSeen(ctx, accountID, sessionID string) error`; `func (r *Repository) RevokeLoginSessionByID(ctx, accountID, sessionID string) error`; `func (r *Repository) RevokeAllLoginSessionsForAccount(ctx, accountID string) error`; `func (r *Repository) ListLoginSessionsForAccount(ctx, accountID string) ([]auth.LoginSession, error)`.
+- Produces: `internal/postgres/account_repo.go` (type `accountRepo`, methods `UpsertAccount`, `GetAccountByAiandUserID`, `GetAccountByID`, `SoftDeleteAccount`); `internal/postgres/login_session_repo.go` (type `loginSessionRepo`, methods `Insert`, `GetActiveByTokenHash`, `TouchLastSeen`, `RevokeByID`, `RevokeAllForAccount`, `ListForAccount`); Repository struct fields `Accounts auth.AccountRepository` + `LoginSessions auth.LoginSessionRepository` (Task 9 consumes `repo.Accounts` / `repo.LoginSessions`).
 
 - [ ] **Step 1: Write the account repo**
 
@@ -1242,10 +1244,17 @@ import (
 	"workweave/router/internal/sqlc"
 )
 
+// accountRepo implements auth.AccountRepository over SQLC. Account ids are
+// acct_ VARCHAR strings that double as installation external_ids, so no UUID
+// conversion is needed — every column maps to a plain Go string.
+type accountRepo struct {
+	tx sqlc.DBTX
+}
+
 // accountRow converts a sqlc.Account row to the domain Account.
 func accountRow(row sqlc.Account) *auth.Account {
 	return &auth.Account{
-		ID:                  row.ID.String(),
+		ID:                  row.ID,
 		AiandUserID:         row.AiandUserID,
 		AiandOrganizationID: row.AiandOrganizationID,
 		DisplayName:         stringPtr(row.DisplayName),
@@ -1255,9 +1264,10 @@ func accountRow(row sqlc.Account) *auth.Account {
 	}
 }
 
-func (r *Repository) UpsertAccount(ctx context.Context, p auth.AccountUpsertParams) (*auth.Account, error) {
-	row, err := r.q.UpsertAccount(ctx, sqlc.UpsertAccountParams{
-		ID:                  parseUUID(p.ID),
+func (r *accountRepo) UpsertAccount(ctx context.Context, p auth.AccountUpsertParams) (*auth.Account, error) {
+	q := sqlc.New(r.tx)
+	row, err := q.UpsertAccount(ctx, sqlc.UpsertAccountParams{
+		ID:                  p.ID,
 		AiandUserID:         p.AiandUserID,
 		AiandOrganizationID: p.AiandOrganizationID,
 		DisplayName:         stringPtr(p.DisplayName),
@@ -1268,24 +1278,27 @@ func (r *Repository) UpsertAccount(ctx context.Context, p auth.AccountUpsertPara
 	return accountRow(row), nil
 }
 
-func (r *Repository) GetAccountByAiandUserID(ctx context.Context, aiandUserID string) (*auth.Account, error) {
-	row, err := r.q.GetAccountByAiandUserID(ctx, aiandUserID)
+func (r *accountRepo) GetAccountByAiandUserID(ctx context.Context, aiandUserID string) (*auth.Account, error) {
+	q := sqlc.New(r.tx)
+	row, err := q.GetAccountByAiandUserID(ctx, aiandUserID)
 	if err != nil {
 		return nil, err
 	}
 	return accountRow(row), nil
 }
 
-func (r *Repository) GetAccountByID(ctx context.Context, id string) (*auth.Account, error) {
-	row, err := r.q.GetAccountByID(ctx, parseUUID(id))
+func (r *accountRepo) GetAccountByID(ctx context.Context, id string) (*auth.Account, error) {
+	q := sqlc.New(r.tx)
+	row, err := q.GetAccountByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	return accountRow(row), nil
 }
 
-func (r *Repository) SoftDeleteAccount(ctx context.Context, id string) error {
-	return r.q.SoftDeleteAccount(ctx, parseUUID(id))
+func (r *accountRepo) SoftDeleteAccount(ctx context.Context, id string) error {
+	q := sqlc.New(r.tx)
+	return q.SoftDeleteAccount(ctx, id)
 }
 ```
 
@@ -1306,6 +1319,12 @@ import (
 	"workweave/router/internal/sqlc"
 )
 
+// loginSessionRepo implements auth.LoginSessionRepository over SQLC. Session
+// ids are DB-generated UUIDs; account_id is the acct_ VARCHAR string.
+type loginSessionRepo struct {
+	tx sqlc.DBTX
+}
+
 // loginSessionRow converts a sqlc.AccountSession row to the domain LoginSession.
 func loginSessionRow(row sqlc.AccountSession) *auth.LoginSession {
 	var ip *net.IP
@@ -1315,7 +1334,7 @@ func loginSessionRow(row sqlc.AccountSession) *auth.LoginSession {
 	}
 	return &auth.LoginSession{
 		ID:          row.ID.String(),
-		AccountID:   row.AccountID.String(),
+		AccountID:   row.AccountID,
 		TokenHash:   row.TokenHash,
 		TokenPrefix: row.TokenPrefix,
 		TokenSuffix: row.TokenSuffix,
@@ -1327,49 +1346,58 @@ func loginSessionRow(row sqlc.AccountSession) *auth.LoginSession {
 	}
 }
 
-func (r *Repository) InsertLoginSession(ctx context.Context, s auth.LoginSession) error {
-	_, err := r.q.InsertAccountSession(ctx, sqlc.InsertAccountSessionParams{
-		AccountID:   parseUUID(s.AccountID),
+func (r *loginSessionRepo) Insert(ctx context.Context, s auth.LoginSession) (*auth.LoginSession, error) {
+	q := sqlc.New(r.tx)
+	row, err := q.InsertAccountSession(ctx, sqlc.InsertAccountSessionParams{
+		AccountID:   s.AccountID,
 		TokenHash:   s.TokenHash,
 		TokenPrefix: s.TokenPrefix,
 		TokenSuffix: s.TokenSuffix,
 		ExpiresAt:   s.ExpiresAt,
 		IPAtIssue:   inetPtr(s.IPAtIssue),
 	})
-	return err
-}
-
-func (r *Repository) GetActiveLoginSessionByHash(ctx context.Context, tokenHash string) (*auth.LoginSession, error) {
-	row, err := r.q.GetActiveAccountSessionByHash(ctx, tokenHash)
 	if err != nil {
 		return nil, err
 	}
 	return loginSessionRow(row), nil
 }
 
-func (r *Repository) TouchLoginSessionLastSeen(ctx context.Context, accountID, sessionID string) error {
-	_, err := r.q.TouchAccountSessionLastSeen(ctx, sqlc.TouchAccountSessionLastSeenParams{
-		AccountID: parseUUID(accountID),
+func (r *loginSessionRepo) GetActiveByTokenHash(ctx context.Context, tokenHash string) (*auth.LoginSession, error) {
+	q := sqlc.New(r.tx)
+	row, err := q.GetActiveAccountSessionByHash(ctx, tokenHash)
+	if err != nil {
+		return nil, err
+	}
+	return loginSessionRow(row), nil
+}
+
+func (r *loginSessionRepo) TouchLastSeen(ctx context.Context, accountID, sessionID string) error {
+	q := sqlc.New(r.tx)
+	_, err := q.TouchAccountSessionLastSeen(ctx, sqlc.TouchAccountSessionLastSeenParams{
+		AccountID: accountID,
 		ID:        parseUUID(sessionID),
 	})
 	return err
 }
 
-func (r *Repository) RevokeLoginSessionByID(ctx context.Context, accountID, sessionID string) error {
-	_, err := r.q.RevokeAccountSessionByID(ctx, sqlc.RevokeAccountSessionByIDParams{
-		AccountID: parseUUID(accountID),
+func (r *loginSessionRepo) RevokeByID(ctx context.Context, accountID, sessionID string) error {
+	q := sqlc.New(r.tx)
+	_, err := q.RevokeAccountSessionByID(ctx, sqlc.RevokeAccountSessionByIDParams{
+		AccountID: accountID,
 		ID:        parseUUID(sessionID),
 	})
 	return err
 }
 
-func (r *Repository) RevokeAllLoginSessionsForAccount(ctx context.Context, accountID string) error {
-	_, err := r.q.RevokeAllAccountSessionsForAccount(ctx, parseUUID(accountID))
+func (r *loginSessionRepo) RevokeAllForAccount(ctx context.Context, accountID string) error {
+	q := sqlc.New(r.tx)
+	_, err := q.RevokeAllAccountSessionsForAccount(ctx, accountID)
 	return err
 }
 
-func (r *Repository) ListLoginSessionsForAccount(ctx context.Context, accountID string) ([]auth.LoginSession, error) {
-	rows, err := r.q.ListAccountSessionsForAccount(ctx, parseUUID(accountID))
+func (r *loginSessionRepo) ListForAccount(ctx context.Context, accountID string) ([]auth.LoginSession, error) {
+	q := sqlc.New(r.tx)
+	rows, err := q.ListAccountSessionsForAccount(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -1383,6 +1411,20 @@ func (r *Repository) ListLoginSessionsForAccount(ctx context.Context, accountID 
 ```
 
 > **Note:** the `inet` column surfaces as `*pgtype.Inet` in SQLC output. If `inetPtr` doesn't exist as a helper, build the `pgtype.Inet` from `net.ParseIP(s.IPAtIssue.String())` using the same pattern this repo uses elsewhere for `inet` columns.
+
+> **Wiring requirement:** Task 9 (`cmd/router/main.go`) reads `repo.Accounts` and `repo.LoginSessions` as struct fields. Add those fields to `postgres.Repository` in `repository.go` and populate them in `NewRepository` (mirroring `Installations: &installationRepo{tx: tx}`):
+
+```go
+type Repository struct {
+	// ... existing fields ...
+	Accounts       auth.AccountRepository
+	LoginSessions  auth.LoginSessionRepository
+}
+
+// in NewRepository:
+Accounts:      &accountRepo{tx: tx},
+LoginSessions: &loginSessionRepo{tx: tx},
+```
 
 - [ ] **Step 3: Run tests / compile**
 
@@ -1614,9 +1656,9 @@ func (r *fakeAccountRepo) GetByID(ctx context.Context, id string) (*auth.Account
 
 func (r *fakeAccountRepo) SoftDelete(ctx context.Context, id string) error { return nil }
 
-func (r *fakeAccountRepo) Insert(ctx context.Context, s auth.LoginSession) error {
+func (r *fakeAccountRepo) Insert(ctx context.Context, s auth.LoginSession) (*auth.LoginSession, error) {
 	r.sessions[s.TokenHash] = &s
-	return nil
+	return &s, nil
 }
 
 func (r *fakeAccountRepo) GetActiveByTokenHash(ctx context.Context, tokenHash string) (*auth.LoginSession, error) {
@@ -1768,26 +1810,28 @@ func LoginHandler(authSvc *auth.Service) gin.HandlerFunc {
 		}
 		// Use raw TCP peer (not c.ClientIP) — X-Forwarded-For is attacker-controlled.
 		peerIP := remotePeerIP(c)
-		if err := checkLoginRateLimit(authSvc, peerIP); err != nil {
+		if authSvc.LoginRateLimited(peerIP) {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "too_many_attempts"})
 			return
 		}
 		acct, _, token, expiresAt, err := authSvc.LoginWithKey(c.Request.Context(), req.Key)
 		if err != nil {
-			handleLoginError(c, err, peerIP)
+			handleLoginError(c, authSvc, err, peerIP)
 			return
 		}
+		authSvc.ClearLoginFailures(peerIP)
 		setAccountSessionCookie(c, token, expiresAt)
 		observability.FromGin(c).Info("Account login succeeded", "account_id", acct.ID, "remote_ip", peerIP)
 		c.JSON(http.StatusOK, loginResponse{OK: true, ExpiresAt: expiresAt})
 	}
 }
 
-func handleLoginError(c *gin.Context, err error, peerIP string) {
+func handleLoginError(c *gin.Context, authSvc *auth.Service, err error, peerIP string) {
 	logger := observability.FromGin(c)
 	switch {
 	case errors.Is(err, auth.ErrKeyInvalid):
 		logger.Info("Account login rejected: invalid key", "remote_ip", peerIP)
+		authSvc.NoteLoginFailure(peerIP)
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid_key"})
 	case errors.Is(err, auth.ErrKeyInsufficientCredits):
 		logger.Info("Account login rejected: insufficient credits", "remote_ip", peerIP)

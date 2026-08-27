@@ -35,14 +35,14 @@ func TestInternalListUpstreamModelsHandler_ListsWithMintedCredential(t *testing.
 	key := &auth.ExternalAPIKey{
 		ID:             "ext-1",
 		InstallationID: testInstallationID,
-		Provider:       providers.ProviderOpenAIGateway,
+		Provider:       providers.ProviderAiand,
 		Plaintext:      []byte("sk-byok"),
-		BaseURL:        "https://cortex.example/api/v2/cortex/v1",
+		BaseURL:        "https://api.aiand.com/v1",
 	}
-	lister := &modelListingClient{models: []string{"claude-fable-5"}}
+	lister := &modelListingClient{models: []string{"deepseek-ai/deepseek-v4-flash"}}
 	engine := internalUpstreamModelsEngine(
 		upstreamModelsAuthService([]*auth.ExternalAPIKey{key}),
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: lister}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: lister}),
 	)
 
 	rec := httptest.NewRecorder()
@@ -53,7 +53,7 @@ func TestInternalListUpstreamModelsHandler_ListsWithMintedCredential(t *testing.
 		Models []string `json:"models"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	assert.Equal(t, []string{"claude-fable-5"}, body.Models)
+	assert.Equal(t, []string{"deepseek-ai/deepseek-v4-flash"}, body.Models)
 	require.NotNil(t, lister.seenCreds)
 	assert.Equal(t, key.BaseURL, lister.seenCreds.BaseURL)
 }
@@ -62,13 +62,14 @@ func TestInternalListUpstreamModelsHandler_UnmintableCredentialIs502(t *testing.
 	key := &auth.ExternalAPIKey{
 		ID:             "ext-1",
 		InstallationID: testInstallationID,
-		Provider:       providers.ProviderOpenAIGateway,
-		AuthType:       auth.AuthTypeWIF,
-		BaseURL:        "https://cortex.example/api/v2/cortex/v1",
+		Provider:       providers.ProviderAiand,
+		AuthType:       auth.AuthTypeKeypairJWT,
+		AuthAccount:    "acct",
+		BaseURL:        "https://api.aiand.com/v1",
 	}
 	engine := internalUpstreamModelsEngine(
 		upstreamModelsAuthService([]*auth.ExternalAPIKey{key}),
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: &modelListingClient{}}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: &modelListingClient{}}),
 	)
 
 	rec := httptest.NewRecorder()
@@ -81,12 +82,12 @@ func TestInternalListUpstreamModelsHandler_KeyOfAnotherInstallationIs404(t *test
 	key := &auth.ExternalAPIKey{
 		ID:             "ext-1",
 		InstallationID: testInstallationID,
-		Provider:       providers.ProviderOpenAIGateway,
-		BaseURL:        "https://cortex.example/api/v2/cortex/v1",
+		Provider:       providers.ProviderAiand,
+		BaseURL:        "https://api.aiand.com/v1",
 	}
 	engine := internalUpstreamModelsEngine(
 		upstreamModelsAuthService([]*auth.ExternalAPIKey{key}),
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: &modelListingClient{}}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: &modelListingClient{}}),
 	)
 
 	rec := httptest.NewRecorder()

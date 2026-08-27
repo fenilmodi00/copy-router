@@ -46,13 +46,13 @@ func upstreamModelsService(providerMap map[string]providers.Client) *proxy.Servi
 }
 
 func TestListUpstreamModels_PassesCredentialsToLister(t *testing.T) {
-	lister := &listerClient{models: []string{"cortex-a", "cortex-b"}}
-	svc := upstreamModelsService(map[string]providers.Client{providers.ProviderOpenAIGateway: lister})
+	lister := &listerClient{models: []string{"deepseek-ai/deepseek-v4-flash", "moonshotai/kimi-k3"}}
+	svc := upstreamModelsService(map[string]providers.Client{providers.ProviderAiand: lister})
 
-	creds := &proxy.Credentials{APIKey: []byte("byok"), BaseURL: "https://cortex.example/api/v2/cortex/v1"}
-	models, err := svc.ListUpstreamModels(context.Background(), providers.ProviderOpenAIGateway, creds)
+	creds := &proxy.Credentials{APIKey: []byte("byok"), BaseURL: "https://api.aiand.com/v1"}
+	models, err := svc.ListUpstreamModels(context.Background(), providers.ProviderAiand, creds)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"cortex-a", "cortex-b"}, models)
+	assert.Equal(t, []string{"deepseek-ai/deepseek-v4-flash", "moonshotai/kimi-k3"}, models)
 	require.NotNil(t, lister.seenCreds, "the BYOK credentials must reach the adapter via context")
 	assert.Equal(t, "byok", string(lister.seenCreds.APIKey))
 }
@@ -67,6 +67,6 @@ func TestListUpstreamModels_UnsupportedProvider(t *testing.T) {
 func TestListUpstreamModels_UnknownProvider(t *testing.T) {
 	svc := upstreamModelsService(nil)
 
-	_, err := svc.ListUpstreamModels(context.Background(), providers.ProviderOpenAIGateway, nil)
+	_, err := svc.ListUpstreamModels(context.Background(), providers.ProviderAiand, nil)
 	assert.ErrorIs(t, err, proxy.ErrProviderNotConfigured)
 }
