@@ -63,6 +63,7 @@ func (r *inMemoryAccountRepo) SoftDelete(ctx context.Context, id string) error {
 }
 
 func (r *inMemoryAccountRepo) Insert(ctx context.Context, s LoginSession) (*LoginSession, error) {
+	s.ID = GenerateID("sess")
 	r.sessions[s.TokenHash] = &s
 	return &s, nil
 }

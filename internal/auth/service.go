@@ -84,6 +84,16 @@ type Service struct {
 	// adminLoginFailures throttles per-IP brute-force login attempts.
 	adminLoginFailures *expirable.LRU[string, int]
 	adminLoginMu       sync.Mutex
+
+	// accounts + loginSessions back the self-service aiand-key login; nil
+	// (default) means login is disabled. keyVerifier is the I/O boundary for
+	// the aiand identity probe (implemented in internal/providers/aiand).
+	accounts      AccountRepository
+	loginSessions LoginSessionRepository
+	keyVerifier   AiandKeyVerifier
+	// loginFailures throttles per-IP login attempts (same LRU shape as the
+	// admin password limiter).
+	loginFailures *expirable.LRU[string, int]
 }
 
 func NewService(

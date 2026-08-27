@@ -34,3 +34,24 @@ var (
 	// report the change as applied when nothing changed.
 	ErrInstallationNotFound = errors.New("installation not found")
 )
+
+var (
+	// ErrKeyInvalid is returned when the aiand key fails validation against
+	// aiand's GET /api/v1/me (401/403 from the probe).
+	ErrKeyInvalid = errors.New("account login: aiand key invalid")
+	// ErrKeyInsufficientCredits is returned when the aiand key is valid but
+	// the account has no balance to route through.
+	ErrKeyInsufficientCredits = errors.New("account login: aiand key has insufficient credits")
+	// ErrLoginRateLimited is returned when a login attempt is throttled
+	// (per-IP failure cap).
+	ErrLoginRateLimited = errors.New("account login: rate limited")
+	// ErrKeyUnavailable is returned when aiand's API is unreachable or
+	// errored (transient; the caller should retry later).
+	ErrKeyUnavailable = errors.New("account login: aiand key validation unavailable")
+	// ErrLoginDisabled is returned when login is called before the account
+	// repos / key verifier are wired.
+	ErrLoginDisabled = errors.New("account login: not enabled")
+	// ErrLoginSessionInvalid is returned when a session token fails to verify
+	// (unknown, expired, or revoked).
+	ErrLoginSessionInvalid = errors.New("account login: session invalid")
+)
