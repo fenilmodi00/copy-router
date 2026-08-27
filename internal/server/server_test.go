@@ -61,12 +61,13 @@ func adminDataPlaneRoutes(engine *gin.Engine) map[string]struct{} {
 	return out
 }
 
-// selfserveParityGapRoutes are the 5 routes mounted in selfhosted but not
-// yet in selfserve. The parity test pins the gap (asserts they are present in
-// selfhosted and absent in selfserve) until each row's modes bitmask is
-// extended to include modeSelfServe, at which point the assertion flips to
-// parity.
-var selfserveParityGapRoutes = []string{
+// selfservePreviouslyMissingRoutes are the 5 routes that were historically
+// mounted in selfhosted but missing from selfserve, causing the frontend
+// Provider Keys settings page and content-capture controls to 404 in
+// selfserve. They now mount in both modes; TestRegister_DashboardParity
+// asserts they are present in selfserve and that the selfserve data plane
+// equals the selfhosted data plane.
+var selfservePreviouslyMissingRoutes = []string{
 	"PUT /admin/v1/provider-keys/:id/model-aliases",
 	"GET /admin/v1/provider-keys/:id/models",
 	"POST /admin/v1/provider-keys/discover-models",
@@ -205,13 +206,11 @@ func TestRegisterSeparatesLivenessFromReadiness(t *testing.T) {
 	}
 }
 
-// TestRegister_DashboardParity pins the selfserve data-plane gap: the 5
-// parity-gap routes are present in selfhosted but absent in selfserve. When a
-// gap row's modes bitmask is extended to include modeSelfServe, drop it from
-// selfserveParityGapRoutes and the assertion here adjusts automatically. Once
-// the gap is fully closed, this test collapses to a full-set-equality check
-// (selfhosted data plane == selfserve data plane, excluding the legitimately
-// different login surfaces).
+// TestRegister_DashboardParity asserts the selfserve /admin/v1/* data-plane
+// route set EQUALS the selfhosted one (excluding the legitimately-different
+// login surfaces: /admin/v1/auth/* operator password vs /account/v1/* aiand
+// key). It also pins that the 5 routes historically missing from selfserve
+// (provider-key model discovery/aliases + content-capture) are now present.
 func TestRegister_DashboardParity(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -227,17 +226,14 @@ func TestRegister_DashboardParity(t *testing.T) {
 	selfhostedData := adminDataPlaneRoutes(mkEngine(server.DeploymentModeSelfHosted))
 	selfserveData := adminDataPlaneRoutes(mkEngine(server.DeploymentModeSelfServe))
 
-	// Each gap route must be mounted in selfhosted and still absent from
-	// selfserve. Adding modeSelfServe to a row's modes is the switch that
-	// moves it out of the gap.
-	for _, r := range selfserveParityGapRoutes {
-		assert.Contains(t, selfhostedData, r, "gap route must be mounted in selfhosted: %s", r)
-		assert.NotContains(t, selfserveData, r, "gap route must stay absent from selfserve until its modes bitmask is extended: %s", r)
-	}
+	// Parity: the selfserve data-plane set equals the selfhosted one.
+	assert.Equal(t, selfhostedData, selfserveData, "selfserve /admin/v1/* data plane must equal selfhosted (login surfaces are intentionally excluded)")
 
-	// Full parity (selfhosted data plane == selfserve data plane) is the
-	// end state once every gap row is extended. The byte-identical test
-	// pins the exact sets in both modes; it carries the load until then.
+	// The 5 routes historically missing from selfserve are now present.
+	for _, r := range selfservePreviouslyMissingRoutes {
+		assert.Contains(t, selfserveData, r, "previously-missing route must now mount in selfserve: %s", r)
+		assert.Contains(t, selfhostedData, r, "previously-missing route must remain mounted in selfhosted: %s", r)
+	}
 }
 
 // TestRegister_DashboardConditionalRoutes verifies the needs bitmask: a nil
@@ -275,15 +271,13 @@ func TestRegister_DashboardConditionalRoutes(t *testing.T) {
 			for _, r := range deployedGatedRoutes {
 				assert.NotContains(t, got, r, "deployed-gated route must not mount with nil DeployedModels: %s", r)
 			}
-			// The deployed-gated rows are absent (no DeployedModels).
-			// The always-mounted rows (needs: 0) appear in selfhosted;
-			// the gap rows among them are gated to selfhosted only by
-			// modes, so selfserve gains them when its modes bitmask is
-			// extended. aiand/models requires needsAiandCatalog; absent.
-			if mode == server.DeploymentModeSelfHosted {
-				for _, r := range alwaysMounted {
-					assert.Contains(t, got, r, "needs-0 route must mount even with nil DeployedModels: %s", r)
-				}
+			// The deployed-gated rows aside, the always-mounted rows
+			// (needs: 0) — including the previously-selfserve-missing
+			// discovery/aliases/content-capture rows — mount in both
+			// modes even with nil DeployedModels. aiand/models
+			// requires needsAiandCatalog; absent here.
+			for _, r := range alwaysMounted {
+				assert.Contains(t, got, r, "needs-0 route must mount even with nil DeployedModels: %s", r)
 			}
 			assert.NotContains(t, got, "GET /admin/v1/aiand/models")
 		})
@@ -340,14 +334,16 @@ func TestRegister_DashboardRouteSet_ByteIdentical_BeforeAfter(t *testing.T) {
 		"PUT /admin/v1/routing-preferences",
 	}
 	// selfserve /admin/v1/* (data plane; account login is at /account/v1,
-	// deliberately out of scope). The 5 gap rows are gated to selfhosted
-	// only, so they are absent here — matching the current selfserve set.
+	// deliberately out of scope). Full parity with selfhosted's data
+	// plane: the provider-key model discovery/aliases and content-capture
+	// rows now mount in selfserve too.
 	selfserveWant := []string{
 		"DELETE /admin/v1/keys/:id",
 		"DELETE /admin/v1/provider-keys/:id",
 		"GET /admin/v1/aiand/models",
 		"GET /admin/v1/allowed-models",
 		"GET /admin/v1/config",
+		"GET /admin/v1/content-capture",
 		"GET /admin/v1/excluded-models",
 		"GET /admin/v1/excluded-providers",
 		"GET /admin/v1/keys",
@@ -357,13 +353,17 @@ func TestRegister_DashboardRouteSet_ByteIdentical_BeforeAfter(t *testing.T) {
 		"GET /admin/v1/metrics/timeseries",
 		"GET /admin/v1/onboarding",
 		"GET /admin/v1/provider-keys",
+		"GET /admin/v1/provider-keys/:id/models",
 		"GET /admin/v1/routing-preferences",
 		"POST /admin/v1/keys",
 		"POST /admin/v1/keys/:id/rotate",
 		"POST /admin/v1/provider-keys",
+		"POST /admin/v1/provider-keys/discover-models",
 		"PUT /admin/v1/allowed-models",
+		"PUT /admin/v1/content-capture",
 		"PUT /admin/v1/excluded-models",
 		"PUT /admin/v1/excluded-providers",
+		"PUT /admin/v1/provider-keys/:id/model-aliases",
 		"PUT /admin/v1/routing-preferences",
 	}
 

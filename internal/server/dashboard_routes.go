@@ -99,20 +99,15 @@ func dashboardRoutes(s Services) []dashboardRoute {
 		{method: "POST", path: "/keys/:id/rotate", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.RotateAPIKeyHandler(s.Auth)},
 		{method: "DELETE", path: "/keys/:id", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.DeleteAPIKeyHandler(s.Auth)},
 
-		// Provider (BYOK) keys. The first two and delete always mount; aliases,
-		// :id/models, and discover-models mount unconditionally too — the
-		// aliases handler tolerates a nil DeployedModels (alias validation
-		// skips), and discovery/list/content-capture never needed it.
+		// Provider (BYOK) keys. List/upsert/delete plus aliases,
+		// :id/models, and discover-models mount in both dashboard modes;
+		// the aliases handler tolerates a nil DeployedModels (alias
+		// validation skips), and discovery/list never needed it.
 		{method: "GET", path: "/provider-keys", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.ListExternalKeysHandler(s.Auth)},
 		{method: "POST", path: "/provider-keys", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.UpsertExternalKeyHandler(s.Auth, s.DeployedModels)},
-		// The model-aliases, :id/models, discover-models, and
-		// content-capture rows are gated to selfhosted only for now —
-		// selfserve does not yet expose them. Adding modeSelfServe to
-		// these rows is the per-row switch that extends each to the
-		// selfserve dashboard.
-		{method: "PUT", path: "/provider-keys/:id/model-aliases", section: sectionMgmt, modes: modeSelfHosted, handler: admin.UpdateExternalKeyAliasesHandler(s.Auth, s.DeployedModels)},
-		{method: "GET", path: "/provider-keys/:id/models", section: sectionMgmt, modes: modeSelfHosted, handler: admin.ListUpstreamModelsHandler(s.Auth, s.Proxy)},
-		{method: "POST", path: "/provider-keys/discover-models", section: sectionMgmt, modes: modeSelfHosted, handler: admin.DiscoverModelsHandler(s.Proxy)},
+		{method: "PUT", path: "/provider-keys/:id/model-aliases", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.UpdateExternalKeyAliasesHandler(s.Auth, s.DeployedModels)},
+		{method: "GET", path: "/provider-keys/:id/models", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.ListUpstreamModelsHandler(s.Auth, s.Proxy)},
+		{method: "POST", path: "/provider-keys/discover-models", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.DiscoverModelsHandler(s.Proxy)},
 		{method: "DELETE", path: "/provider-keys/:id", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.DeleteExternalKeyHandler(s.Auth)},
 
 		// Config + onboarding + routing preferences.
@@ -122,8 +117,8 @@ func dashboardRoutes(s Services) []dashboardRoute {
 		{method: "PUT", path: "/routing-preferences", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.UpdateRoutingPreferencesHandler(s.Auth)},
 
 		// Content capture — installation-scoped; capture source is *proxy.Service.
-		{method: "GET", path: "/content-capture", section: sectionMgmt, modes: modeSelfHosted, handler: admin.GetContentCaptureHandler(s.Auth, s.Proxy)},
-		{method: "PUT", path: "/content-capture", section: sectionMgmt, modes: modeSelfHosted, handler: admin.UpdateContentCaptureHandler(s.Auth, s.Proxy)},
+		{method: "GET", path: "/content-capture", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.GetContentCaptureHandler(s.Auth, s.Proxy)},
+		{method: "PUT", path: "/content-capture", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.UpdateContentCaptureHandler(s.Auth, s.Proxy)},
 
 		// Excluded/allowed models + providers. The 6 rows need a non-nil
 		// DeployedModels (the handlers use it, or its 3-arg form); they mount

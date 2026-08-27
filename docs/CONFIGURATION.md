@@ -337,6 +337,14 @@ What mounts, versus `selfhosted`:
 | `POST /account/v1/login` + `/logout`, `GET /account/v1/me` (aiand-key) | No | Yes |
 | `/admin/v1/*` dashboard data plane | Admin cookie or `rk_` bearer | Account cookie only |
 
+The `/admin/v1/*` dashboard data plane has full parity between the two
+modes: metrics, API keys, BYOK provider keys (including model-alias editing,
+per-key model discovery, and the pre-save discover-models probe), routing
+preferences, content-capture controls, and the excluded/allowed models +
+providers surfaces all mount in `selfserve` exactly as they do in
+`selfhosted`. The only intentional difference is the auth frontier
+(operator password vs account cookie) and the login surface itself.
+
 The operator password admin surface is deliberately absent in `selfserve`:
 the dashboard authenticates through the account cookie, and `WithAccountCookie`
 (not `WithAdminOnly`) gates the `/admin/v1/*` group. A valid `rk_` data-plane

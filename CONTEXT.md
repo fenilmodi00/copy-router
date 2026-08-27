@@ -31,3 +31,26 @@ _Avoid_: Treating Claude Code as deploy baseline; equating harness presence with
 **IngressSurface**:
 HTTP product surface clients call. Primary: OpenAI-compatible `/v1/chat/completions`. Peripheral: `/v1/messages` (Anthropic wire in, translated before aiand OpenAI-compat dispatch). Ingress is not the same as Provider or TranslationFamily.
 _Avoid_: Treating `/v1/messages` as a second upstream; leading with Anthropic ingress as the product story
+
+## Identity & login
+
+**selfserve**:
+`ROUTER_DEPLOYMENT_MODE=selfserve` deployment mode. Dashboard authenticates by aiand user key (not an operator password); each aiand user maps 1:1 to their own router installation. Sits between `selfhosted` (operator-password dashboard, env-var provider keys) and `managed` (no dashboard; control plane owns keys/config).
+_Avoid_: Treating selfserve as a flavor of managed (it mounts the dashboard) or of selfhosted (no operator password)
+
+**Account**:
+The selfserve dashboard identity. One Account per aiand user, created/looked-up at login via the aiand identity probe. Soft-deleted when the user revokes their aiand key (the router can no longer prove the installation is theirs).
+_Avoid_: Equating Account with Installation; the account is the login identity, the installation is the tenancy row
+
+**Account ↔ Installation invariant**:
+`account.id` doubles as the installation `external_id` — a 1:1 mapping. Every dashboard row (metrics, API keys, BYOK, config, exclusions) is scoped to that installation; there is no account-without-installation or installation-without-account state in selfserve.
+_Avoid_: Introducing a many-accounts-per-installation or many-installations-per-account shape
+
+**LoginSession**:
+The 7-day TTL session cookie (`router_account_session`, HttpOnly) minted by `POST /account/v1/login` after the aiand probe succeeds. `POST /account/v1/logout` clears it; `WithAccountCookie` rejects requests without a valid one with 401.
+_Avoid_: Treating the `rk_` data-plane bearer as a dashboard credential; it never authorizes `/admin/v1/*` in selfserve
+
+**WithAccountCookie**:
+The selfserve-mode counterpart to `WithAdminOnly`. Resolves the LoginSession cookie to the Account, then to its installation, and stashes both on ctx so the existing per-installation admin handlers scope unchanged. A valid `rk_` data-plane key does **not** satisfy it.
+_Avoid_: Adding `rk_`-bearer acceptance to the selfserve `/admin/v1/*` group; that would blur the dashboard-vs-data-plane credential boundary
+
