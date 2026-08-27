@@ -16,6 +16,12 @@ import (
 	"workweave/router/internal/translate"
 )
 
+const (
+	struggleLowModel  = "deepseek-ai/deepseek-v4-flash"
+	struggleMidModel  = "deepseek-ai/deepseek-v4-pro"
+	struggleHighModel = "moonshotai/kimi-k3"
+)
+
 // fakeRosterSource serves a fixed per-cluster arm roster.
 type fakeRosterSource struct {
 	clusters map[string][]string
@@ -64,7 +70,7 @@ func strugglingPin(model, group string) sessionpin.Pin {
 }
 
 func newStruggleEscalationSvc(pins *stubPinStore, events *recordingStruggleStore, clusters map[string][]string) *Service {
-	return NewService(nil, nil, nil, false, nil, pins, false, "anthropic", "claude-haiku-4-5", nil).
+	return NewService(nil, nil, nil, false, nil, pins, false, "aiand", struggleLowModel, nil).
 		WithStruggleEscalationConfig(true, 0).
 		WithStruggleEscalationStore(events).
 		WithStruggleEscalationRoster(NewStruggleRoster(fakeRosterSource{clusters: clusters}))
@@ -80,84 +86,84 @@ func TestClustersAbove(t *testing.T) {
 
 func TestEscalationTarget_PrefersTheClusterAbove(t *testing.T) {
 	roster := NewStruggleRoster(fakeRosterSource{clusters: map[string][]string{
-		"balanced": {"anthropic/claude-haiku-4.5", "anthropic/claude-sonnet-4-5"},
-		"high":     {"anthropic/claude-opus-5"},
+		"balanced": {struggleLowModel, struggleMidModel},
+		"high":     {struggleHighModel},
 	}})
 
 	target, cluster, err := roster.EscalationTarget(
-		context.Background(), "balanced", "claude-haiku-4-5", nil, func(string) bool { return true },
+		context.Background(), "balanced", struggleLowModel, nil, func(string) bool { return true },
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, "claude-opus-5", target, "a struggling session must move up, not sideways")
+	assert.Equal(t, struggleHighModel, target, "a struggling session must move up, not sideways")
 	assert.Equal(t, "high", cluster)
 }
 
 func TestEscalationTarget_FallsBackSidewaysWhenNothingAboveIsDispatchable(t *testing.T) {
 	roster := NewStruggleRoster(fakeRosterSource{clusters: map[string][]string{
-		"balanced": {"anthropic/claude-haiku-4.5", "anthropic/claude-sonnet-4-5"},
-		"high":     {"anthropic/claude-opus-5"},
+		"balanced": {struggleLowModel, struggleMidModel},
+		"high":     {struggleHighModel},
 	}})
 
 	target, cluster, err := roster.EscalationTarget(
-		context.Background(), "balanced", "claude-haiku-4-5", nil,
-		func(model string) bool { return model != "claude-opus-5" },
+		context.Background(), "balanced", struggleLowModel, nil,
+		func(model string) bool { return model != struggleHighModel },
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, "claude-sonnet-4-5", target)
+	assert.Equal(t, struggleMidModel, target)
 	assert.Equal(t, "balanced", cluster)
 }
 
 func TestEscalationTarget_TopClusterMovesSideways(t *testing.T) {
 	roster := NewStruggleRoster(fakeRosterSource{clusters: map[string][]string{
-		"maximum": {"anthropic/claude-opus-5", "anthropic/claude-sonnet-4-5"},
+		"maximum": {struggleHighModel, struggleMidModel},
 	}})
 
 	target, cluster, err := roster.EscalationTarget(
-		context.Background(), "maximum", "claude-opus-5", nil, func(string) bool { return true },
+		context.Background(), "maximum", struggleHighModel, nil, func(string) bool { return true },
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, "claude-sonnet-4-5", target)
+	assert.Equal(t, struggleMidModel, target)
 	assert.Equal(t, "maximum", cluster)
 }
 
 func TestHandleStruggleEscalation_PinsTheClusterAbove(t *testing.T) {
 	pins := newStubPinStore()
 	pins.getFound = true
-	pins.getPin = strugglingPin("claude-haiku-4-5", "balanced")
+	pins.getPin = strugglingPin(struggleLowModel, "balanced")
 	events := &recordingStruggleStore{}
 	svc := newStruggleEscalationSvc(pins, events, map[string][]string{
-		"balanced": {"anthropic/claude-haiku-4.5", "anthropic/claude-sonnet-4-5"},
-		"high":     {"anthropic/claude-opus-5"},
+		"balanced": {struggleLowModel, struggleMidModel},
+		"high":     {struggleHighModel},
 	})
 
 	svc.handleStruggleEscalation(context.Background(), uuid.New(), struggleTestKey(1), "default")
 
 	require.Len(t, pins.upserts, 1)
-	assert.Equal(t, "claude-opus-5", pins.upserts[0].Model)
+	assert.Equal(t, struggleHighModel, pins.upserts[0].Model)
 	assert.Equal(t, "high", pins.upserts[0].PolicyGroup, "the pin must carry the cluster it was escalated into")
 	assert.Equal(t, translate.ReasonStruggleEscalation, pins.upserts[0].Reason)
 
 	require.Len(t, events.events, 1)
 	assert.Equal(t, struggleActionUpCluster, events.events[0].Action)
-	assert.Equal(t, "claude-opus-5", events.events[0].EscalationTarget)
+	assert.Equal(t, struggleHighModel, events.events[0].EscalationTarget)
 }
 
 func TestHandleStruggleEscalation_SidewaysWhenTheClusterAboveCannotServe(t *testing.T) {
 	pins := newStubPinStore()
 	pins.getFound = true
-	pins.getPin = strugglingPin("claude-haiku-4-5", "balanced")
+	pins.getPin = strugglingPin(struggleLowModel, "balanced")
 	events := &recordingStruggleStore{}
 	svc := newStruggleEscalationSvc(pins, events, map[string][]string{
-		"balanced": {"anthropic/claude-haiku-4.5", "anthropic/claude-sonnet-4-5"},
+		"balanced": {struggleLowModel, struggleMidModel},
 	})
 
 	svc.handleStruggleEscalation(context.Background(), uuid.New(), struggleTestKey(2), "default")
 
 	require.Len(t, pins.upserts, 1)
-	assert.Equal(t, "claude-sonnet-4-5", pins.upserts[0].Model)
+	assert.Equal(t, struggleMidModel, pins.upserts[0].Model)
 	assert.Equal(t, "balanced", pins.upserts[0].PolicyGroup)
 
 	require.Len(t, events.events, 1)
