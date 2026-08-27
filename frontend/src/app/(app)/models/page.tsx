@@ -1,16 +1,16 @@
 "use client";
 
 import { Badge } from "@/components/atoms/Badge";
-import { ModelSelectorPill, type ModelDescriptor } from "@/components/DashboardPageFilters/ModelSelectorPill";
+import { ModelSelectorPill } from "@/components/DashboardPageFilters/ModelSelectorPill";
 import { useDashboardFilters } from "@/components/DashboardPageFilters";
 import { Page } from "@/components/Page";
 import { PageHeader } from "@/components/PageHeader";
 import { Text } from "@/components/atoms/Text";
 import { Card } from "@/components/molecules/Card";
-import { api, type AiandModel, type ModelBreakdownBucket } from "@/lib/api";
+import { useCatalog, useMetricsModelBreakdown } from "@/lib/data-cache";
 import { toNumber, formatContext, formatUSD } from "@/lib/format";
 import { tierForContextWindow, type ModelTier } from "@/lib/tier";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 
 type SortKey = "popular" | "price_asc" | "price_desc" | "context_desc" | "newest";
@@ -23,51 +23,39 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "newest", label: "Newest" },
 ];
 
-const TIER_OPTIONS: ModelDescriptor[] = [
+const TIER_OPTIONS = [
   { id: "low", label: "low" },
   { id: "mid", label: "mid" },
   { id: "high", label: "high" },
 ];
 
 export default function ModelsPage() {
-  const dashboardFilters = useDashboardFilters("30d");
+  const dashboardFilters = useDashboardFilters();
   const { fromISO, toISO, granularity } = dashboardFilters.filters;
 
-  const [catalog, setCatalog] = useState<AiandModel[] | null>(null);
-  const [popularityBuckets, setPopularityBuckets] = useState<ModelBreakdownBucket[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const catalogQ = useCatalog();
+  const popularityQ = useMetricsModelBreakdown(granularity, fromISO, toISO);
+
   const [q, setQ] = useState("");
   const [caps, setCaps] = useState<string[]>([]);
   const [providers, setProviders] = useState<string[]>([]);
   const [tiers, setTiers] = useState<ModelTier[]>([]);
   const [sort, setSort] = useState<SortKey>("popular");
 
-  useEffect(() => {
-    api.aiandModels
-      .list()
-      .then(res => setCatalog(res.data ?? []))
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : "Failed to load the ai& catalog."));
-  }, []);
-
-  useEffect(() => {
-    api.metrics
-      .modelBreakdown(granularity, fromISO, toISO)
-      .then(res => setPopularityBuckets(res.buckets ?? []))
-      .catch(() => setPopularityBuckets([]));
-  }, [granularity, fromISO, toISO]);
+  const catalog = catalogQ.data ?? null;
+  const popularityBuckets = popularityQ.data?.buckets ?? [];
+  const error =
+    catalogQ.error instanceof Error
+      ? catalogQ.error.message
+      : catalogQ.error
+        ? "Failed to load the ai& catalog."
+        : null;
 
   const rows = catalog ?? [];
-
-  const modelDescriptors: ModelDescriptor[] = useMemo(
-    () => rows.map(m => ({ id: m.id, label: m.id })),
-    [rows],
-  );
 
   const allCaps = useMemo(() => [...new Set(rows.flatMap(m => m.capabilities))].sort(), [rows]);
   const allProviders = useMemo(() => [...new Set(rows.map(m => m.provider))].sort(), [rows]);
 
-  // sort/filter pipeline
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const filtered = rows.filter(m => {
@@ -93,7 +81,7 @@ export default function ModelsPage() {
           return b.created - a.created;
         }
         default:
-          return 0; // "popular" rank comes from usage; see below
+          return 0;
       }
     });
     if (sort === "popular") {
@@ -142,20 +130,28 @@ export default function ModelsPage() {
             models={allCaps.map(c => ({ id: c, label: c }))}
             selected={caps}
             onToggle={id =>
-              setCaps(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))}
+              setCaps(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))
+            }
           />
           <ModelSelectorPill
             models={allProviders.map(p => ({ id: p, label: p }))}
             selected={providers}
             onToggle={id =>
-              setProviders(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))}
+              setProviders(prev =>
+                prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
+              )
+            }
           />
           <ModelSelectorPill
             models={TIER_OPTIONS}
             selected={tiers}
             onToggle={id =>
               setTiers(prev =>
-                prev.includes(id as ModelTier) ? prev.filter(x => x !== id) : [...prev, id as ModelTier])}
+                prev.includes(id as ModelTier)
+                  ? prev.filter(x => x !== id)
+                  : [...prev, id as ModelTier],
+              )
+            }
           />
           <select
             value={sort}
@@ -172,60 +168,75 @@ export default function ModelsPage() {
 
         <Card>
           <Card.Content className="overflow-x-auto p-0">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-2xs uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-2 font-medium">Model</th>
-                  <th className="px-4 py-2 font-medium">Provider</th>
-                  <th className="px-4 py-2 font-medium">Context</th>
-                  <th className="px-4 py-2 font-medium">Capabilities</th>
-                  <th className="px-4 py-2 text-right font-medium">Input/1M</th>
-                  <th className="px-4 py-2 text-right font-medium">Output/1M</th>
-                  <th className="px-4 py-2 text-right font-medium">Cached/1M</th>
-                  <th className="px-4 py-2 text-right font-medium">Currency</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
-                      No models match these filters.
-                    </td>
+            {catalog == null && error == null ? (
+              <div className="space-y-2 p-4">
+                <Card.Loading className="border-0 shadow-none" />
+                <Card.Loading className="border-0 shadow-none" />
+              </div>
+            ) : (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-2xs uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-2 font-medium">Model</th>
+                    <th className="px-4 py-2 font-medium">Provider</th>
+                    <th className="px-4 py-2 font-medium">Context</th>
+                    <th className="px-4 py-2 font-medium">Capabilities</th>
+                    <th className="px-4 py-2 text-right font-medium">Input/1M</th>
+                    <th className="px-4 py-2 text-right font-medium">Output/1M</th>
+                    <th className="px-4 py-2 text-right font-medium">Cached/1M</th>
+                    <th className="px-4 py-2 text-right font-medium">Currency</th>
                   </tr>
-                ) : (
-                  shown.map(m => {
-                    const tier = tierForContextWindow(m.context_window);
-                    return (
-                      <tr key={m.id} className="border-t border-border/50 hover:bg-foreground/5">
-                        <td className="px-4 py-2">
-                          <Link
-                            href={`/models/${m.id.replace(/\//g, "~")}`}
-                            className="font-medium hover:text-primary"
-                            title={m.id}
-                          >
-                            {m.id}
-                          </Link>
-                          <Badge.Tier tier={tier} />
-                        </td>
-                        <td className="px-4 py-2 text-muted-foreground">{m.provider}</td>
-                        <td className="px-4 py-2 tabular-nums">{formatContext(m.context_window)}</td>
-                        <td className="px-4 py-2">
-                          <span className="flex flex-wrap gap-1">
-                            {m.capabilities.map(cap => (
-                              <Badge.Capability key={cap} name={cap} />
-                            ))}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums">{formatUSD(toNumber(m.input_per_1m))}</td>
-                        <td className="px-4 py-2 text-right tabular-nums">{formatUSD(toNumber(m.output_per_1m))}</td>
-                        <td className="px-4 py-2 text-right tabular-nums">{formatUSD(toNumber(m.cached_input_per_1m))}</td>
-                        <td className="px-4 py-2 text-right uppercase">{m.currency}</td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {shown.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                        No models match these filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    shown.map(m => {
+                      const tier = tierForContextWindow(m.context_window);
+                      return (
+                        <tr key={m.id} className="border-t border-border/50 hover:bg-foreground/5">
+                          <td className="px-4 py-2">
+                            <Link
+                              href={`/models/${m.id.replace(/\//g, "~")}`}
+                              className="font-medium hover:text-primary"
+                              title={m.id}
+                            >
+                              {m.id}
+                            </Link>
+                            <Badge.Tier tier={tier} />
+                          </td>
+                          <td className="px-4 py-2 text-muted-foreground">{m.provider}</td>
+                          <td className="px-4 py-2 tabular-nums">
+                            {formatContext(m.context_window)}
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className="flex flex-wrap gap-1">
+                              {m.capabilities.map(cap => (
+                                <Badge.Capability key={cap} name={cap} />
+                              ))}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-right tabular-nums">
+                            {formatUSD(toNumber(m.input_per_1m))}
+                          </td>
+                          <td className="px-4 py-2 text-right tabular-nums">
+                            {formatUSD(toNumber(m.output_per_1m))}
+                          </td>
+                          <td className="px-4 py-2 text-right tabular-nums">
+                            {formatUSD(toNumber(m.cached_input_per_1m))}
+                          </td>
+                          <td className="px-4 py-2 text-right uppercase">{m.currency}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            )}
           </Card.Content>
         </Card>
       </Page.Section>

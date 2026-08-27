@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SWRConfig } from "swr";
 
 // Route-level ?ids= deep-link test on the real compare page: the page owns
 // the URL hydration (basket.add per URL id, setHydrated(true)) in a mount
@@ -76,7 +77,11 @@ describe("ComparePage ?ids= deep link", () => {
   it("hydrates the basket from a shared ?ids= URL and prices the sample", async () => {
     window.history.replaceState({}, "", "/models/compare?ids=model-a,model-b,model-c");
     const { default: ComparePage } = await import("./page");
-    render(<ComparePage />);
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <ComparePage />
+      </SWRConfig>,
+    );
 
     expect(await screen.findByText("model-a")).toBeInTheDocument();
     expect(screen.getByText("model-b")).toBeInTheDocument();
@@ -99,7 +104,11 @@ describe("ComparePage ?ids= deep link", () => {
 
   it("renders the empty state when no ids are in the URL", async () => {
     const { default: ComparePage } = await import("./page");
-    render(<ComparePage />);
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <ComparePage />
+      </SWRConfig>,
+    );
     expect(await screen.findByText(/No models selected/)).toBeInTheDocument();
   });
 });

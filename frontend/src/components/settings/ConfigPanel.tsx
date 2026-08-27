@@ -2,8 +2,8 @@
 
 import { ErrorBanner } from "./shared";
 import { Card } from "@/components/molecules/Card";
-import { api, type RouterConfig } from "@/lib/api";
-import { useEffect, useState } from "react";
+import { useConfig } from "@/lib/data-cache";
+import type { RouterConfig } from "@/lib/api";
 
 interface ConfigRow {
   label: string;
@@ -21,7 +21,8 @@ function buildRows(cfg: RouterConfig): ConfigRow[] {
     {
       label: "Embed only user message",
       value: cfg.embed_only_user_message ? "Enabled" : "Disabled",
-      description: "Whether the router embeds user-role text only (no system, assistant, or tool_result content) for cluster routing",
+      description:
+        "Whether the router embeds user-role text only (no system, assistant, or tool_result content) for cluster routing",
     },
     {
       label: "Sticky decision TTL",
@@ -47,17 +48,13 @@ function buildRows(cfg: RouterConfig): ConfigRow[] {
 }
 
 export function ConfigPanel() {
-  const [config, setConfig] = useState<RouterConfig | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.config
-      .get()
-      .then(setConfig)
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : "Failed to load config."),
-      );
-  }, []);
+  const { data: config, error: rawError, isLoading } = useConfig();
+  const error =
+    rawError instanceof Error
+      ? rawError.message
+      : rawError
+        ? "Failed to load config."
+        : null;
 
   return (
     <>
@@ -69,9 +66,15 @@ export function ConfigPanel() {
         </Card.Header>
         <Card.Content>
           {config == null ? (
-            <div className="px-5 py-8 text-center text-2xs text-muted-foreground">
-              {error != null ? "Failed to load" : "Loading…"}
-            </div>
+            isLoading || error == null ? (
+              <div className="space-y-3 px-5 py-6">
+                <Card.Loading className="border-0 shadow-none" />
+              </div>
+            ) : (
+              <div className="px-5 py-8 text-center text-2xs text-muted-foreground">
+                Failed to load
+              </div>
+            )
           ) : (
             <ul className="divide-y divide-border">
               {buildRows(config).map(row => (

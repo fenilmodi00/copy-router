@@ -1,19 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-// ... dashboard regression test description ...
-
-import { Text } from "@/components/atoms/Text";
-import { TextProps } from "@/components/atoms/Text";
+import { SWRConfig } from "swr";
 
 const { lastHref } = vi.hoisted(() => ({ lastHref: { value: "" } }));
 
-// BasePath-aware next/link stand-in: Next's real <Link> prefixes the /ui
-// basePath onto internal hrefs; the mocked anchor keeps that behavior so the
-// basePath assertions exercise the real seam (raw <a href> does NOT prefix).
 vi.mock("next/link", () => ({
   default: ({ href, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
-    const full = typeof href === "string" && href.startsWith("/") && !href.startsWith("/ui") ? `/ui${href}` : href;
+    const full =
+      typeof href === "string" && href.startsWith("/") && !href.startsWith("/ui")
+        ? `/ui${href}`
+        : href;
     lastHref.value = full ?? "";
     return <a href={full} {...rest} />;
   },
@@ -38,7 +34,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
 }));
 
-const { api, onSkip, onComplete } = vi.hoisted(() => {
+const { api } = vi.hoisted(() => {
   const api = {
     onboarding: {
       get: vi.fn().mockResolvedValue({ first_request_served_at: "2026-08-20T00:00:00Z" }),
@@ -55,60 +51,67 @@ const { api, onSkip, onComplete } = vi.hoisted(() => {
       }),
       timeseries: vi.fn().mockResolvedValue({
         buckets: [
-          { bucket: "2026-08-27T00:00:00Z", requested_cost_usd: 2.0, actual_cost_usd: 1.0, total_tokens: 40_000, request_count: 8 },
-          { bucket: "2026-08-27T01:00:00Z", requested_cost_usd: 0.35, actual_cost_usd: 0.17, total_tokens: 7_000, request_count: 2 },
-        ],
-      }),
-      modelBreakdown: vi.fn().mockResolvedValue({ buckets: [] }),
-      details: vi.fn().mockResolvedValue({
-        rows: [
           {
-            timestamp: "2026-08-27T00:00:00Z",
-            request_id: "req-1",
-            requested_model: "deepseek-ai/deepseek-v4-flash",
-            decision_model: "deepseek-ai/deepseek-v4-flash",
-            decision_provider: "deepseek-ai",
-            decision_reason: "scored",
-            sticky_hit: false,
-            input_tokens: 40_000,
-            output_tokens: 0,
-            cache_creation_tokens: null,
-            cache_read_tokens: null,
+            bucket: "2026-08-27T00:00:00Z",
             requested_cost_usd: 2.0,
             actual_cost_usd: 1.0,
-            total_latency_ms: 120,
-            upstream_status_code: 200,
-            router_user_id: "user-1",
-            client_app: "cli",
-            turn_type: "main_loop",
-            user_email: "",
+            total_tokens: 40_000,
+            request_count: 8,
+          },
+          {
+            bucket: "2026-08-27T01:00:00Z",
+            requested_cost_usd: 0.35,
+            actual_cost_usd: 0.17,
+            total_tokens: 7_000,
+            request_count: 2,
+          },
+        ],
+      }),
+      modelBreakdown: vi.fn().mockResolvedValue({
+        buckets: [
+          {
+            bucket: "2026-08-27T00:00:00Z",
+            decision_model: "deepseek-ai/deepseek-v4-flash",
+            request_count: 1,
+            total_tokens: 40_000,
+            actual_cost_usd: 1.0,
+          },
+        ],
+      }),
+      details: vi.fn(),
+    },
+    aiandModels: {
+      list: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: "deepseek-ai/deepseek-v4-flash",
+            provider: "deepseek-ai",
+            context_window: 1_000_000,
+            capabilities: ["reasoning"],
+            reasoning_efforts: ["none"],
+            reasoning_effort_default: "none",
+            input_per_1m: "0.15",
+            output_per_1m: "0.25",
+            cached_input_per_1m: "0.08",
+            currency: "usd",
           },
         ],
       }),
     },
-    aiandModels: {
-      list: vi.fn().mockResolvedValue({
-        data: [{ id: "deepseek-ai/deepseek-v4-flash", provider: "deepseek-ai", context_window: 1_000_000, capabilities: ["reasoning"], reasoning_efforts: ["none"], reasoning_effort_default: "none", input_per_1m: "0.15", output_per_1m: "0.25", cached_input_per_1m: "0.08", currency: "usd" }],
-      }),
-    },
   };
-  const onSkip = vi.fn();
-  const onComplete = vi.fn();
-  return { api, onSkip, onComplete };
+  return { api };
 });
 
 vi.mock("@/lib/api", () => ({ api }));
 
-// Route-level test: mock the full dashboard filter bar (Popover/Command are
-// heavy) and the RouterOnboarding panel; everything else renders for real.
 vi.mock("@/components/DashboardPageFilters", () => {
   const DashboardPageFilters = () => <div>filters</div>;
   const useDashboardFilters = () => ({
     filters: {
-      fromISO: "2026-08-01T00:00:00Z",
-      toISO: "2026-08-27T00:00:00Z",
-      granularity: "day",
-      range: { id: "last-month", label: "Last month" },
+      fromISO: "2026-08-26T15:30:00Z",
+      toISO: "2026-08-27T15:30:00Z",
+      granularity: "hour",
+      range: { id: "last-24h", label: "Last 24 hours" },
     },
     setRangeId: vi.fn(),
     setGranularity: vi.fn(),
@@ -117,14 +120,11 @@ vi.mock("@/components/DashboardPageFilters", () => {
 });
 
 vi.mock("@/components/RouterOnboarding", () => ({
-  default: () => <div>onboarding</div>,
+  RouterOnboarding: () => <div>onboarding</div>,
 }));
 
 import DashboardPage from "./page";
 
-// Reads the JSON'd sparkline arrays back off the mocked Sparkline spans — the
-// card passes its series straight through, so this asserts exactly what each
-// KPI card is fed.
 function sparklineValues(): number[][] {
   const spans = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="sparkline"]'));
   return spans
@@ -132,7 +132,6 @@ function sparklineValues(): number[][] {
     .map(el => JSON.parse(el.dataset.values ?? "[]") as number[]);
 }
 
-// token/request/cost series are the first three KPI cards, in render order.
 function series(): { tokens: number[]; requests: number[]; costs: number[] } {
   const [tokens, requests, costs] = sparklineValues();
   return { tokens: tokens ?? [], requests: requests ?? [], costs: costs ?? [] };
@@ -140,6 +139,15 @@ function series(): { tokens: number[]; requests: number[]; costs: number[] } {
 
 function isFlat(a: number[]): boolean {
   return a.length < 2 || new Set(a).size <= 1;
+}
+
+function renderDashboard() {
+  // Isolate SWR cache per test so mocks don't leak across cases.
+  return render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      <DashboardPage />
+    </SWRConfig>,
+  );
 }
 
 describe("DashboardPage bugfix regression", () => {
@@ -150,49 +158,46 @@ describe("DashboardPage bugfix regression", () => {
   });
 
   it("feeds the Tokens KPI the per-bucket token series, not the cost curve — non-flat at tiny spend", async () => {
-    render(<DashboardPage />);
-    // The sparkline series land in the same async settle as the spend table
-    // rows (metrics effect), so wait on a post-effect DOM signal first.
+    renderDashboard();
     await screen.findByRole("link", { name: "deepseek-ai/deepseek-v4-flash" });
 
     const { tokens } = series();
-    // Tokens must come from total_tokens: the fixture's buckets hold 40K vs
-    // 7K tokens but near-zero dollars, so a cost-fed Tokens card would be a
-    // flat two-point line. A tokens-fed card must not be.
     expect(tokens.length).toBeGreaterThanOrEqual(2);
     expect(isFlat(tokens)).toBe(false);
   });
 
   it("feeds the Requests KPI request_count and the Actual-cost KPI actual cost", async () => {
-    render(<DashboardPage />);
+    renderDashboard();
     await screen.findByText("Overview");
     await screen.findByRole("link", { name: "deepseek-ai/deepseek-v4-flash" });
 
     const { requests, costs } = series();
-    // Requests must come from request_count ([8, 2]); the old code plotted
-    // requested cost on this card (a near-flat [2.0, 0.35] at this spend).
     expect(requests).toEqual([8, 2]);
     expect(costs).toEqual([1, 0.17]);
   });
 
   it("renders the spend-table model link with the /ui basePath", async () => {
-    render(<DashboardPage />);
+    renderDashboard();
     await screen.findByText("Overview");
     const link = await screen.findByRole("link", { name: "deepseek-ai/deepseek-v4-flash" });
     expect(link).toHaveAttribute("href", "/ui/models/deepseek-ai~deepseek-v4-flash");
   });
 
   it("pushes the Popularity leaderboard selection via basePath-aware router.push", async () => {
-    render(<DashboardPage />);
+    renderDashboard();
     await screen.findByRole("link", { name: "deepseek-ai/deepseek-v4-flash" });
-    // The leaderboard renders one row button per model (name + token count);
-    // clicking it must route through basePath-aware router.push.
     const row = screen.getByRole("button", { name: /deepseek-ai\/deepseek-v4-flash.*tok/ });
     fireEvent.click(row);
     expect(push).toHaveBeenCalled();
-    // route() is next 15's (url, options) signature; url is always the string.
     const call = push.mock.calls[push.mock.calls.length - 1];
     const url = typeof call === "string" ? call : call[0];
     expect(url).toMatch(/^\/models\/deepseek-ai~deepseek-v4-flash$/);
+  });
+
+  it("does not fetch the 1000-row details endpoint for popularity", async () => {
+    renderDashboard();
+    await screen.findByRole("link", { name: "deepseek-ai/deepseek-v4-flash" });
+    expect(api.metrics.details).not.toHaveBeenCalled();
+    expect(api.metrics.modelBreakdown).toHaveBeenCalled();
   });
 });

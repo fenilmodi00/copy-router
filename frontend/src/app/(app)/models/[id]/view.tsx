@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/atoms/Badge";
 import { MetricToggle } from "@/components/atoms/MetricToggle";
+import { Skeleton } from "@/components/atoms/Skeleton";
 import { Card } from "@/components/molecules/Card";
 import { Text } from "@/components/atoms/Text";
 import { Tooltip } from "@/components/molecules/Tooltip";
@@ -11,18 +12,19 @@ import { PageHeader } from "@/components/PageHeader";
 import { ResponsiveGrid } from "@/components/ResponsiveGrid";
 import { ModelBreakdownChart, ModelBreakdownMetric } from "@/components/charts/ModelBreakdownChart";
 import { useDashboardFilters } from "@/components/DashboardPageFilters";
-import { api, type AiandModel, type ModelBreakdownBucket } from "@/lib/api";
+import {
+  modelWindowStats,
+  useCatalog,
+  useMetricsModelBreakdown,
+  type ModelWindow,
+} from "@/lib/data-cache";
 import { formatContext, formatNumber, formatUSD, toNumber } from "@/lib/format";
 import { tierForContextWindow } from "@/lib/tier";
 import { useCompareBasket } from "@/lib/compare-basket-store";
 import { usePathname, useParams } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-// The catalog ids are URL-unfriendly (`deepseek-ai/deepseek-v4-flash`), so the
-// static export's generated files must avoid a raw slash in the segment. The
-// catalog explorer and leaderboard link with ~ in place of /, and this page
-// accepts both that simplified form and Next's automatically-decoded params.
 function normalizeId(id: string): string {
   return id.replace(/~/g, "/");
 }
@@ -31,9 +33,6 @@ export default function ModelDetailView(props: { params?: { id?: string } }) {
   const params = useParams<{ id?: string }>();
   const pathname = usePathname();
 
-  // Fall back to the pathname when params were pre-rendered (deep link into
-  // the static export without client-side nav carries placeholder params:
-  // generateStaticParams baked "__none__" into the page).
   const rawId = props?.params?.id ?? params.id;
   const finalId =
     rawId && rawId !== "__none__"
@@ -44,41 +43,53 @@ export default function ModelDetailView(props: { params?: { id?: string } }) {
 }
 
 function ModelDetailPage({ id }: { id: string }) {
-  const dashboardFilters = useDashboardFilters("30d");
+  const dashboardFilters = useDashboardFilters();
   const { fromISO, toISO, granularity } = dashboardFilters.filters;
 
-  const [model, setModel] = useState<AiandModel | null>(null);
-  const [all, setAll] = useState<AiandModel[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const catalogQ = useCatalog();
+  const chartQ = useMetricsModelBreakdown(granularity, fromISO, toISO);
+
+  // One 30d hour-breakdown fans into all three MiniStat windows (was 3× fetches).
+  // Hour buckets keep the 24h column honest; day granularity would flatten
+  // same-calendar-day usage into a single point.
+  const windowTo = useMemo(() => new Date(), []);
+  const windowFromISO = useMemo(
+    () => new Date(windowTo.getTime() - 30 * 24 * 3600_000).toISOString(),
+    [windowTo],
+  );
+  const windowsQ = useMetricsModelBreakdown("hour", windowFromISO, windowTo.toISOString());
+
   const [metric, setMetric] = useState<ModelBreakdownMetric>("requests");
-  const [buckets, setBuckets] = useState<ModelBreakdownBucket[]>([]);
   const basket = useCompareBasket();
 
-  useEffect(() => {
-    api.aiandModels
-      .list()
-      .then(res => {
-        const rows = res.data ?? [];
-        setAll(rows);
-        const found = rows.find(m => m.id === id);
-        if (found) setModel(found);
-        else setError(`Model "${id}" is not in the live ai& catalog.`);
-      })
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : "Catalog unavailable."));
-  }, [id]);
+  const all = catalogQ.data ?? [];
+  const model = all.find(m => m.id === id) ?? null;
+  const catalogError =
+    catalogQ.error instanceof Error
+      ? catalogQ.error.message
+      : catalogQ.error
+        ? "Catalog unavailable."
+        : null;
+  const missing =
+    !catalogQ.isLoading && catalogQ.data != null && model == null
+      ? `Model "${id}" is not in the live ai& catalog.`
+      : null;
+  const metricsError =
+    chartQ.error instanceof Error
+      ? chartQ.error.message
+      : chartQ.error
+        ? "Metrics unavailable."
+        : null;
+  const error = catalogError ?? missing ?? metricsError;
 
-  useEffect(() => {
-    if (model == null) return;
-    api.metrics
-      .modelBreakdown(granularity, fromISO, toISO)
-      .then(res => setBuckets(res.buckets?.filter(b => b.decision_model === id) ?? []))
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : "Metrics unavailable."));
-  }, [model, id, granularity, fromISO, toISO]);
+  const buckets =
+    chartQ.data?.buckets?.filter(b => b.decision_model === id) ?? [];
 
-  // All hooks run unconditionally; the guards below only choose between the
-  // two layouts, never between hook sets.
+  const windowStats = useMemo(
+    () => modelWindowStats(windowsQ.data?.buckets ?? [], id, windowTo),
+    [windowsQ.data, id, windowTo],
+  );
+
   const sameTier = useMemo(() => {
     if (model == null) return [];
     const tier = tierForContextWindow(model.context_window);
@@ -87,8 +98,33 @@ function ModelDetailPage({ id }: { id: string }) {
       .slice(0, 3);
   }, [model, all]);
 
-  if (error) return renderError(error);
-  if (model == null) return null;
+  if (error && model == null) return renderError(error);
+  if (catalogQ.isLoading && model == null) {
+    return (
+      <Page
+        header={
+          <PageHeader
+            left={
+              <Text variant="h4" as="h2">
+                Model
+              </Text>
+            }
+          />
+        }
+      >
+        <Page.Section>
+          <ResponsiveGrid>
+            <Card.Loading className="w-40" />
+            <Card.Loading className="w-40" />
+            <Card.Loading className="w-40" />
+            <Card.Loading className="w-40" />
+          </ResponsiveGrid>
+          <Card.Loading />
+        </Page.Section>
+      </Page>
+    );
+  }
+  if (model == null) return renderError(missing ?? "Model not found.");
 
   return (
     <Page
@@ -145,7 +181,9 @@ function ModelDetailPage({ id }: { id: string }) {
             />
           }
         >
-          {buckets.length === 0 ? (
+          {chartQ.isLoading && buckets.length === 0 ? (
+            <Card.Loading className="border-0 shadow-none" />
+          ) : buckets.length === 0 ? (
             <EmptyChart />
           ) : (
             <ModelBreakdownChart buckets={buckets} granularity={granularity} metric={metric} />
@@ -158,7 +196,13 @@ function ModelDetailPage({ id }: { id: string }) {
             <Card.Description>Mini-statistics over three windows for this model.</Card.Description>
           </Card.Header>
           <Card.Content className="flex flex-row flex-wrap gap-4">
-            {(["24h", "7d", "30d"] as const).map(range => <MiniStatCard key={range} range={range} id={id} />)}
+            {(["24h", "7d", "30d"] as const).map(range => (
+              <MiniStatCard
+                key={range}
+                range={range}
+                stat={windowsQ.isLoading ? null : windowStats[range]}
+              />
+            ))}
           </Card.Content>
         </Card>
 
@@ -191,7 +235,9 @@ function MiniCard({ label, value }: { label: string; value: string }) {
   return (
     <Card size="sm" className="w-40">
       <Card.Header>
-        <Text className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">{label}</Text>
+        <Text className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
+          {label}
+        </Text>
       </Card.Header>
       <Card.Content>
         <Text className="font-display text-xl font-semibold tabular-nums">{value}</Text>
@@ -200,24 +246,24 @@ function MiniCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MiniStatCard({ range, id }: { range: "24h" | "7d" | "30d"; id: string }) {
-  const [stat, setStat] = useState<{ requests: number; tokens: number; cost: number } | null>(null);
-  useEffect(() => {
-    const to = new Date();
-    const from = new Date(to.getTime() - (range === "24h" ? 24 : range === "7d" ? 7 : 30) * 3600_000);
-    api.metrics
-      .modelBreakdown("day", from.toISOString(), to.toISOString())
-      .then(res => {
-        const rows = res.buckets?.filter(b => b.decision_model === id) ?? [];
-        setStat({
-          requests: rows.reduce((acc, b) => acc + b.request_count, 0),
-          tokens: rows.reduce((acc, b) => acc + b.total_tokens, 0),
-          cost: rows.reduce((acc, b) => acc + b.actual_cost_usd, 0),
-        });
-      })
-      .catch(() => setStat({ requests: 0, tokens: 0, cost: 0 }));
-  }, [range, id]);
-  if (stat == null) return <MiniCard label={`${range} requests`} value="…" />;
+function MiniStatCard({
+  range,
+  stat,
+}: {
+  range: ModelWindow;
+  stat: { requests: number; tokens: number; cost: number } | null;
+}) {
+  if (stat == null) {
+    return (
+      <Card size="sm" className="w-28">
+        <Card.Content className="space-y-2 p-3">
+          <Skeleton className="h-3 w-8" />
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-3 w-14" />
+        </Card.Content>
+      </Card>
+    );
+  }
   return (
     <div className="flex flex-col gap-0.5 rounded-lg border border-border p-3 text-2xs">
       <span className="text-muted-foreground">{range}</span>

@@ -1,17 +1,24 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/Input";
 import { Button } from "@/components/molecules/Button";
+import { Skeleton } from "@/components/atoms/Skeleton";
 import { Appearance, Intent } from "@/components/types";
 import { api } from "@/lib/api";
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <div className="w-full max-w-sm rounded-lg border border-border-darker bg-background p-6 shadow-sm">
+          <Skeleton className="mb-4 h-8 w-32" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      }
+    >
       <LoginInner />
     </Suspense>
   );
@@ -66,7 +73,23 @@ function LoginInner() {
     };
   }, [router, next]);
 
-  if (mode === "loading") return null;
+  if (mode === "loading") {
+    return (
+      <div className="w-full max-w-sm rounded-lg border border-border-darker bg-background p-6 shadow-sm">
+        <div className="mb-6 flex items-center gap-3">
+          <Skeleton className="h-8 w-8" />
+          <div className="flex flex-1 flex-col gap-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-3 w-40" />
+          </div>
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      </div>
+    );
+  }
   if (mode === "aiand") return <AiandKeyForm next={next} />;
   return <AdminPasswordForm next={next} />;
 }

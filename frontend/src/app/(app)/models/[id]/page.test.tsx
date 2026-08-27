@@ -1,14 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SWRConfig } from "swr";
 import { TooltipProvider } from "@/components/molecules/Tooltip";
 import ModelDetailView from "./view";
 
-// Route-level test against the real implementation: `page.tsx` is a thin
-// static-export wrapper; `view.tsx` resolves the id from `props.params`
-// (client nav) falling back to the pathname when `props.params` is absent and
-// `useParams` still carries the "__none__" placeholder generateStaticParams
-// baked into the export (deep link). Catalog ids contain "/", so the static
-// export links with "~" and the page normalizes both forms.
+function renderView(ui: React.ReactElement) {
+  return render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      <TooltipProvider>{ui}</TooltipProvider>
+    </SWRConfig>,
+  );
+}
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "__none__" }),
@@ -62,29 +64,18 @@ describe("ModelDetailView (models/[id] route)", () => {
   });
 
   it("resolves the id from props.params and renders the model name", async () => {
-    render(
-      <TooltipProvider>
-        <ModelDetailView params={{ id: "deepseek-ai~deepseek-v4-flash" }} />
-      </TooltipProvider>,
-    );
-    // The header is `{provider} / {id}` (`deepseek-ai / deepseek-v4-flash`)
-    // split across nested Text nodes ("/"), so match the heading's normalized
-    // text with a regex rather than an exact single-node text matcher.
+    renderView(<ModelDetailView params={{ id: "deepseek-ai~deepseek-v4-flash" }} />);
     expect(await screen.findByRole("heading", { name: /deepseek-ai.*deepseek-v4-flash/ })).toBeInTheDocument();
   });
 
   it("falls back to the pathname when params carry the __none__ placeholder", async () => {
-    render(
-      <TooltipProvider>
-        <ModelDetailView />
-      </TooltipProvider>,
-    );
+    renderView(<ModelDetailView />);
     expect(await screen.findByRole("heading", { name: /deepseek-ai.*deepseek-v4-flash/ })).toBeInTheDocument();
   });
 
   it("renders an empty state when the catalog has no matching id", async () => {
     aiandModels.list.mockResolvedValue({ data: [] });
-    render(<ModelDetailView />);
+    renderView(<ModelDetailView />);
     expect(
       await screen.findByText(
         'Model "deepseek-ai/deepseek-v4-flash" is not in the live ai& catalog.',

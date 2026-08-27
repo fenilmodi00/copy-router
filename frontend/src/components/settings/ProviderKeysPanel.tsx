@@ -14,6 +14,12 @@ import {
   type ExternalKey,
   type ProviderAuthType,
 } from "@/lib/api";
+import {
+  invalidateProviderKeys,
+  useConfig,
+  useExcludedModels,
+  useProviderKeys,
+} from "@/lib/data-cache";
 import { ChevronDown, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -216,7 +222,10 @@ function ModelAliasEditor({
 }
 
 export function ProviderKeysPanel() {
-  const [keys, setKeys] = useState<ExternalKey[]>([]);
+  const keysQ = useProviderKeys();
+  const configQ = useConfig();
+  const excludedQ = useExcludedModels();
+  const keys = keysQ.data ?? [];
   const [envKeyed, setEnvKeyed] = useState<Provider[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pickedProvider, setPickedProvider] = useState<Provider | null>(null);
@@ -248,39 +257,37 @@ export function ProviderKeysPanel() {
   const editFetchIDRef = useRef<string | null>(null);
 
   function load() {
-    api.providerKeys
-      .list()
-      .then(r => setKeys(r.keys ?? []))
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : "Failed to load keys."),
-      );
+    void invalidateProviderKeys();
   }
 
-  useEffect(load, []);
+  useEffect(() => {
+    if (keysQ.error) {
+      setError(
+        keysQ.error instanceof Error ? keysQ.error.message : "Failed to load keys.",
+      );
+    }
+  }, [keysQ.error]);
 
   useEffect(() => {
-    api.config
-      .get()
-      .then(cfg => {
-        const set = (cfg.env_provider_keys ?? []).filter((p): p is Provider =>
-          (PROVIDERS as readonly string[]).includes(p),
-        );
-        setEnvKeyed(set);
-      })
-      .catch(() => {
-        // Non-fatal: the panel still works, env-keyed providers just won't
-        // be flagged as read-only.
-        setEnvKeyed([]);
-      });
-  }, []);
+    const cfg = configQ.data;
+    if (cfg == null) {
+      if (configQ.error) setEnvKeyed([]);
+      return;
+    }
+    const set = (cfg.env_provider_keys ?? []).filter((p): p is Provider =>
+      (PROVIDERS as readonly string[]).includes(p),
+    );
+    setEnvKeyed(set);
+  }, [configQ.data, configQ.error]);
 
   useEffect(() => {
-    api.excludedModels
-      .get()
-      // Non-fatal: aliases stay typeable, just without catalog suggestions.
-      .then(r => setCatalogModels(r.available ?? []))
-      .catch(() => setCatalogModels([]));
-  }, []);
+    const res = excludedQ.data;
+    if (res == null) {
+      if (excludedQ.error) setCatalogModels([]);
+      return;
+    }
+    setCatalogModels(res.available ?? []);
+  }, [excludedQ.data, excludedQ.error]);
 
   const taken = new Set<string>([...keys.map(k => k.provider), ...envKeyed]);
   const available: Provider[] = PROVIDERS.filter(p => !taken.has(p));
