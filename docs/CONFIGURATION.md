@@ -13,6 +13,7 @@ This page is the exhaustive reference; the [README](../README.md) has the
   - [Workload identity federation](#workload-identity-federation)
 - [Postgres](#postgres)
 - [Server](#server)
+  - [Self-service mode (`ROUTER_DEPLOYMENT_MODE=selfserve`)](#self-service-mode-router_deployment_modeselfserve)
 - [Routing](#routing)
 - [Provider and model exclusions](#provider-and-model-exclusions)
 - [Policy sidecars](#policy-sidecars)
@@ -315,8 +316,68 @@ Step-by-step: [HOST_WSL_SUPABASE.md](HOST_WSL_SUPABASE.md).
 | Variable                 | Default      | Purpose |
 | ------------------------ | ------------ | ------- |
 | `PORT`                   | `8080`       | HTTP listen port. |
-| `ROUTER_DEPLOYMENT_MODE` | `selfhosted` | `selfhosted` mounts `/ui/*` and `/admin/v1/*`. `managed` skips both (for SaaS deployments with a separate admin UI). |
-| `ROUTER_ADMIN_PASSWORD`  | `admin`      | Dashboard password. Defaults to `admin` with a startup warning when unset — **set this for any internet-facing deployment**. |
+| `ROUTER_DEPLOYMENT_MODE` | `selfhosted` | `selfhosted` mounts `/ui/*` and `/admin/v1/*`. `managed` skips both (for SaaS deployments with a separate admin UI). `selfserve` mounts a self-service dashboard plane instead. |
+| `ROUTER_ADMIN_PASSWORD`  | `admin`      | Dashboard password. Defaults to `admin` with a startup warning when unset — **set this for any internet-facing deployment**. Not used in `selfserve` mode (see below). |
+
+### Self-service mode (`ROUTER_DEPLOYMENT_MODE=selfserve`)
+
+`selfserve` lets any user log into their own dashboard with their aiand `sk-`
+API key instead of an operator password. Each aiand user authenticates against
+aiand's public `GET /api/v1/me` identity endpoint and is mapped to their own
+router installation (the account id doubles as the installation
+`external_id`), so every row they see — metrics, API keys, BYOK provider keys,
+config, model exclusions — is scoped to that installation.
+
+What mounts, versus `selfhosted`:
+
+| Surface | `selfhosted` | `selfserve` |
+| --- | --- | --- |
+| Static dashboard at `/ui/*` | Yes | Yes |
+| `POST /admin/v1/auth/login` + `GET /admin/v1/auth/me` (operator password) | Yes | **Not mounted** |
+| `POST /account/v1/login` + `/logout`, `GET /account/v1/me` (aiand-key) | No | Yes |
+| `/admin/v1/*` dashboard data plane | Admin cookie or `rk_` bearer | Account cookie only |
+
+The operator password admin surface is deliberately absent in `selfserve`:
+the dashboard authenticates through the account cookie, and `WithAccountCookie`
+(not `WithAdminOnly`) gates the `/admin/v1/*` group. A valid `rk_` data-plane
+key does **not** authorize it, and `/admin/v1/auth/login` isn't registered, so
+there is no password avenue into the dashboard.
+
+The account session cookie is `router_account_session`, HttpOnly with a
+7-day TTL; `POST /account/v1/logout` clears it, after which `/admin/v1/*`
+returns 401.
+
+#### aiand identity probe
+
+| Variable       | Default                    | Effect |
+| -------------- | -------------------------- | ------ |
+| `AIAND_API_URL` | `https://api.aiand.com` | API root for the identity probe; the login key is validated against `GET <root>/api/v1/me`. This is the API **root**, not the OpenAI-compatible inference base in [Provider API keys](#provider-api-keys) (which already includes `/v1`). |
+
+The probe validates an arbitrary user `sk-` key as a bearer token against
+`/api/v1/me` — it never uses the deployment's own `AIAND_API_KEY`, so a
+self-serve login can't spend platform budget. Responses map to the login
+outcomes: `200` → authenticated (identity stored), `401`/`403` → `invalid_key`,
+`402` → `insufficient_credits`, `429` → rate-limited, anything else (including
+a network failure) → `503 key_validation_unavailable`. Failed logins are
+rate-limited per source IP (5 failures / 5 minutes).
+
+#### Wipe on key revocation
+
+`selfserve` treats key revocation as an account wipe. aiand's API exposes no
+endpoint to retrieve a user's data or re-instantiate an account from a revoked
+key, so when the user revokes their aiand key the router has no way to prove the
+installation is still theirs and the account row is soft-deleted — with it, the
+installation and all its data (API keys, BYOK secrets, config, metrics scoping)
+are gone. The soft-delete keeps the row so audit trails survive.
+
+Presenting a fresh aiand key for the same `aiand_user_id` re-instantiates a new
+account + installation from scratch. There is no data restore: login never
+keys into a deleted account (the unique index on `aiand_user_id` is partial on
+`deleted_at IS NULL`).
+
+Key **rotation** (logging in with a different valid key for the same aiand
+user) does **not** wipe anything — the existing account and installation are
+returned unchanged, so the dashboard shows the same data.
 
 ## Routing
 
