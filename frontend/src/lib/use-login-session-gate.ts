@@ -1,11 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { api } from "@/lib/api";
 
 export type LoginSessionState = "checking" | "authed" | "anonymous";
+
+/** Which login cookie surface authenticated this shell. */
+export type AuthSurface = "account" | "admin";
+
+export type LoginSession = {
+  state: LoginSessionState;
+  surface: AuthSurface | null;
+};
+
+const defaultSession: LoginSession = { state: "checking", surface: null };
+
+const LoginSessionContext = createContext<LoginSession>(defaultSession);
 
 /**
  * Probes the active login surface once at shell mount.
@@ -19,36 +38,47 @@ export type LoginSessionState = "checking" | "authed" | "anonymous";
  * Path changes only swap sidebar/children — 401 bounce for expired
  * sessions stays in api.request.
  */
-export function useLoginSessionGate(): LoginSessionState {
+export function useLoginSessionGate(): LoginSession {
   const router = useRouter();
   const pathname = usePathname();
-  const [state, setState] = useState<LoginSessionState>("checking");
+  const [session, setSession] = useState<LoginSession>(defaultSession);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function probe(): Promise<boolean> {
+    async function probe(): Promise<{
+      authed: boolean;
+      surface: AuthSurface | null;
+    }> {
       try {
         const res = await api.auth.accountMe();
-        return res.authenticated;
+        if (res.authenticated) {
+          return { authed: true, surface: "account" };
+        }
+        // Account surface mounted but anonymous — do not fall through to
+        // admin me (selfserve never mounts it).
+        return { authed: false, surface: "account" };
       } catch {
         // Account surface not mounted (selfhosted / managed).
       }
       try {
         const res = await api.auth.me();
-        return res.authenticated;
+        return {
+          authed: res.authenticated,
+          surface: res.authenticated ? "admin" : null,
+        };
       } catch {
-        return false;
+        return { authed: false, surface: null };
       }
     }
 
-    probe().then(authed => {
+    probe().then(({ authed, surface }) => {
       if (cancelled) return;
       if (authed) {
-        setState("authed");
+        setSession({ state: "authed", surface });
         return;
       }
-      setState("anonymous");
+      setSession({ state: "anonymous", surface });
       const next = encodeURIComponent(pathname || "/dashboard");
       router.replace(`/login?next=${next}`);
     });
@@ -60,5 +90,16 @@ export function useLoginSessionGate(): LoginSessionState {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return state;
+  return session;
+}
+
+/** Provides the probed LoginSession to dashboard shell descendants. */
+export function LoginSessionProvider({ children }: { children: ReactNode }) {
+  const session = useLoginSessionGate();
+  return createElement(LoginSessionContext.Provider, { value: session }, children);
+}
+
+/** Reads the shell login session (surface drives onboarding skip + logout). */
+export function useLoginSession(): LoginSession {
+  return useContext(LoginSessionContext);
 }

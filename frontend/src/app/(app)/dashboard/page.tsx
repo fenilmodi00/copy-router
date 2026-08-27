@@ -24,6 +24,7 @@ import {
 } from "@/lib/data-cache";
 import { cn } from "@/lib/cn";
 import { formatNumber, formatUSD } from "@/lib/format";
+import { useLoginSession } from "@/lib/use-login-session-gate";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -69,6 +70,7 @@ export default function DashboardPage() {
   const dashboardFilters = useDashboardFilters();
   const { fromISO, toISO, granularity } = dashboardFilters.filters;
   const router = useRouter();
+  const { surface } = useLoginSession();
   const [skipOverride, setSkipOverride] = useState(false);
 
   // Onboarding + metrics run in parallel (safe): a needed-onboarding install
@@ -81,9 +83,13 @@ export default function DashboardPage() {
   // Catalog shares the singleton key with Models / Compare / detail.
   useCatalog();
 
-  const onboarding: OnboardingState = skipOverride
-    ? "done"
-    : resolveOnboarding(onboardingQ.data, onboardingQ.error, onboardingQ.isLoading);
+  // Selfserve (aiand-key account cookie): the user already authenticated and
+  // owns an installation — harness install onboarding is for selfhosted
+  // operators minting their first rk_ key, not for account sessions.
+  const onboarding: OnboardingState =
+    skipOverride || surface === "account"
+      ? "done"
+      : resolveOnboarding(onboardingQ.data, onboardingQ.error, onboardingQ.isLoading);
 
   const summary = summaryQ.data ?? null;
   const buckets = timeseriesQ.data?.buckets ?? [];

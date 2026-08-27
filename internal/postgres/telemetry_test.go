@@ -30,8 +30,8 @@ func TestTelemetryConvertersCarryCacheWriteRead(t *testing.T) {
 		CacheReadTokens:  700,
 	}
 	for name, got := range map[string]proxy.TelemetryBucket{
-		"hourly":       telemetryBucketFromHourlyRow(bucket(300, 700)),
-		"daily":        telemetryBucketFromDailyRow(sqlc.GetTelemetryTimeseriesDailyRow{ // same 4 fields
+		"hourly": telemetryBucketFromHourlyRow(bucket(300, 700)),
+		"daily": telemetryBucketFromDailyRow(sqlc.GetTelemetryTimeseriesDailyRow{ // same 4 fields
 			Bucket: bucket(300, 700).Bucket, RequestedCostUsd: bucket(300, 700).RequestedCostUsd,
 			ActualCostUsd: bucket(300, 700).ActualCostUsd, CacheWriteTokens: 300, CacheReadTokens: 700,
 		}),

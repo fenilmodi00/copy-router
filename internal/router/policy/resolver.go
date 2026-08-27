@@ -501,4 +501,3 @@ func softFilter(in []eligibleCandidate, active bool, drop map[string]struct{}, r
 	}
 	return kept, diagnostics
 }
-

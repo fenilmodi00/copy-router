@@ -3,10 +3,13 @@
 import { Sidebar } from "@/components/Sidebar";
 import { SidebarLayout } from "@/components/SidebarLayout";
 import { Skeleton } from "@/components/atoms/Skeleton";
-import { useLoginSessionGate } from "@/lib/use-login-session-gate";
+import {
+  LoginSessionProvider,
+  useLoginSession,
+} from "@/lib/use-login-session-gate";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const state = useLoginSessionGate();
+function AppShell({ children }: { children: React.ReactNode }) {
+  const { state } = useLoginSession();
 
   if (state !== "authed") {
     return (
@@ -21,4 +24,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return <SidebarLayout sidebar={<Sidebar />}>{children}</SidebarLayout>;
+}
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <LoginSessionProvider>
+      <AppShell>{children}</AppShell>
+    </LoginSessionProvider>
+  );
 }

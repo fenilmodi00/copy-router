@@ -37,7 +37,8 @@ describe("useLoginSessionGate", () => {
       { initialProps: { path: "/dashboard" } },
     );
 
-    await waitFor(() => expect(result.current).toBe("authed"));
+    await waitFor(() => expect(result.current.state).toBe("authed"));
+    expect(result.current.surface).toBe("admin");
     expect(accountMe).toHaveBeenCalledTimes(1);
     expect(me).toHaveBeenCalledTimes(1);
 
@@ -57,7 +58,8 @@ describe("useLoginSessionGate", () => {
 
     const { result } = renderHook(() => useLoginSessionGate());
 
-    await waitFor(() => expect(result.current).toBe("authed"));
+    await waitFor(() => expect(result.current.state).toBe("authed"));
+    expect(result.current.surface).toBe("account");
     expect(accountMe).toHaveBeenCalledTimes(1);
     expect(me).not.toHaveBeenCalled();
     expect(replace).not.toHaveBeenCalled();
@@ -68,7 +70,8 @@ describe("useLoginSessionGate", () => {
 
     const { result } = renderHook(() => useLoginSessionGate());
 
-    await waitFor(() => expect(result.current).toBe("anonymous"));
+    await waitFor(() => expect(result.current.state).toBe("anonymous"));
+    expect(result.current.surface).toBe("account");
     expect(me).not.toHaveBeenCalled();
     expect(replace).toHaveBeenCalledWith("/login?next=%2Fdashboard");
   });

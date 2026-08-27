@@ -117,7 +117,7 @@ var (
 var (
 	openaiReasoning = NewSpecWithReasoning(ReasoningCapabilities{Levels: []string{"low", "medium", "high"}, SupportsBudget: true}, CapReasoning)
 	openaiBase      = NewSpec()
-	grok46 = NewSpecWithReasoning(ReasoningCapabilities{Levels: []string{"low", "medium", "high"}, SupportsBudget: true}, CapReasoning)
+	grok46          = NewSpecWithReasoning(ReasoningCapabilities{Levels: []string{"low", "medium", "high"}, SupportsBudget: true}, CapReasoning)
 )
 
 // Gemini's OpenAI-compatible endpoint does not honor reasoning_effort or
@@ -130,10 +130,10 @@ var openAICompatBase = NewSpec()
 var registry = map[string]ModelSpec{
 	// claude-fable-5 has adaptive thinking always on (disabled is rejected);
 	// 1M context is native, so CapExtendedContext's beta header is a no-op.
-	"claude-fable-5":  anthropicAdaptive,
-	"claude-opus-5":   anthropicAdaptive,
-	"claude-opus-4-8": anthropicAdaptive,
-	"claude-opus-4-7": anthropicAdaptive,
+	"claude-fable-5":    anthropicAdaptive,
+	"claude-opus-5":     anthropicAdaptive,
+	"claude-opus-4-8":   anthropicAdaptive,
+	"claude-opus-4-7":   anthropicAdaptive,
 	"claude-sonnet-5":   anthropicAdaptive,
 	"claude-sonnet-4-6": anthropicAdaptive,
 	"claude-opus-4-6":   anthropicAdaptive,

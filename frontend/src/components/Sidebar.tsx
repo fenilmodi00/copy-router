@@ -6,6 +6,7 @@ import { Tooltip } from "@/components/molecules/Tooltip";
 import { Appearance } from "@/components/types";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { useLoginSession } from "@/lib/use-login-session-gate";
 import { BarChart2, KeyRound, Layers, LogOut, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -53,10 +54,15 @@ function NavLink({ item }: { item: NavItem }) {
 
 export function Sidebar() {
   const router = useRouter();
+  const { surface } = useLoginSession();
 
   async function handleSignOut() {
     try {
-      await api.auth.logout();
+      if (surface === "account") {
+        await api.auth.accountLogout();
+      } else {
+        await api.auth.logout();
+      }
     } catch {
       // Best-effort: even if the network call fails, redirect to /login so
       // the user is no longer in a half-authed state.

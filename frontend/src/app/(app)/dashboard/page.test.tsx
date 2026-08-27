@@ -39,6 +39,12 @@ const { api } = vi.hoisted(() => {
     onboarding: {
       get: vi.fn().mockResolvedValue({ first_request_served_at: "2026-08-20T00:00:00Z" }),
     },
+    auth: {
+      accountMe: vi.fn(),
+      me: vi.fn(),
+      logout: vi.fn(),
+      accountLogout: vi.fn(),
+    },
     metrics: {
       summary: vi.fn().mockResolvedValue({
         request_count: 10,
@@ -104,6 +110,16 @@ const { api } = vi.hoisted(() => {
 
 vi.mock("@/lib/api", () => ({ api }));
 
+const { loginSession } = vi.hoisted(() => ({
+  loginSession: { state: "authed" as const, surface: null as "account" | "admin" | null },
+}));
+
+vi.mock("@/lib/use-login-session-gate", () => ({
+  useLoginSession: () => loginSession,
+  useLoginSessionGate: () => loginSession,
+  LoginSessionProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 vi.mock("@/components/DashboardPageFilters", () => {
   const DashboardPageFilters = () => <div>filters</div>;
   const useDashboardFilters = () => ({
@@ -155,6 +171,28 @@ describe("DashboardPage bugfix regression", () => {
     vi.clearAllMocks();
     lastHref.value = "";
     sparklineIndex = 0;
+    loginSession.surface = null;
+    api.onboarding.get.mockResolvedValue({ first_request_served_at: "2026-08-20T00:00:00Z" });
+  });
+
+  it("skips harness onboarding for selfserve account sessions with no first request", async () => {
+    loginSession.surface = "account";
+    api.onboarding.get.mockResolvedValue({ first_request_served_at: null });
+
+    renderDashboard();
+
+    expect(await screen.findByText("Overview")).toBeInTheDocument();
+    expect(screen.queryByText("onboarding")).not.toBeInTheDocument();
+  });
+
+  it("still shows harness onboarding for selfhosted when no request has been served", async () => {
+    loginSession.surface = "admin";
+    api.onboarding.get.mockResolvedValue({ first_request_served_at: null });
+
+    renderDashboard();
+
+    expect(await screen.findByText("onboarding")).toBeInTheDocument();
+    expect(screen.queryByText("Overview")).not.toBeInTheDocument();
   });
 
   it("feeds the Tokens KPI the per-bucket token series, not the cost curve — non-flat at tiny spend", async () => {
