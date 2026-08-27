@@ -21,12 +21,12 @@ import (
 // Use observability.FromContext(ctx) for request-path sites. Only lower these.
 var globalLoggerBudget = map[string]int{
 	// Composition root: no request exists yet.
-	"cmd/router": 11,
+	"cmd/router": 10,
 
 	// Pure schema-emit / validation helpers with no ctx in scope. Threading a
 	// ctx through these is a wider refactor; they are diagnostics about a
 	// tool schema, not about a request's fate.
-	"internal/translate":           13,
+	"internal/translate":           7,
 	"internal/translate/toolcheck": 5,
 
 	// The exporter itself: logging its own transport failures. A ctx here
@@ -35,7 +35,7 @@ var globalLoggerBudget = map[string]int{
 	"internal/observability/apm":  1,
 
 	// Background Pub/Sub listeners; no inbound request.
-	"internal/pubsub": 4,
+	"internal/pubsub": 0,
 
 	// Fire-and-forget writebacks (SafeGo) + a pure predicate. Documented in
 	// root CLAUDE.md as the off-request-path exception.
