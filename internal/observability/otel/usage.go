@@ -165,7 +165,7 @@ func (u *UsageExtractor) extractFromSSEEvent(eventType []byte, data []byte) {
 	switch providers.FamilyFor(u.provider) {
 	case providers.FamilyAnthropic:
 		u.extractAnthropicSSE(eventType, data)
-	case providers.FamilyOpenAICompat, providers.FamilyGemini:
+	case providers.FamilyOpenAICompat:
 		u.extractOpenAISSE(data)
 	}
 }
@@ -254,15 +254,6 @@ func (u *UsageExtractor) tryExtractFromJSON() {
 func extractUsageGJSON(data []byte, provider string) (input, output, cacheCreation, cacheRead int, found bool) {
 	family := providers.FamilyFor(provider)
 
-	if family == providers.FamilyGemini {
-		if meta := gjson.GetBytes(data, "usageMetadata"); meta.Exists() {
-			input = int(meta.Get("promptTokenCount").Int())
-			output = int(meta.Get("candidatesTokenCount").Int())
-			cacheRead = int(meta.Get("cachedContentTokenCount").Int())
-			return input, output, 0, cacheRead, true
-		}
-	}
-
 	usage := gjson.GetBytes(data, "usage")
 	if !usage.Exists() && family == providers.FamilyAnthropic {
 		usage = gjson.GetBytes(data, "message.usage")
@@ -282,7 +273,7 @@ func extractUsageGJSON(data []byte, provider string) (input, output, cacheCreati
 		output = int(usage.Get("output_tokens").Int())
 		cacheCreation = int(usage.Get("cache_creation_input_tokens").Int())
 		cacheRead = int(usage.Get("cache_read_input_tokens").Int())
-	case providers.FamilyOpenAICompat, providers.FamilyGemini:
+	case providers.FamilyOpenAICompat:
 		// Chat Completions uses prompt_tokens/completion_tokens; Responses API
 		// (Codex passthrough) uses input_tokens/output_tokens. Probe both.
 		if pt := usage.Get("prompt_tokens"); pt.Exists() {

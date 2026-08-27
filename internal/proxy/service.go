@@ -2517,7 +2517,9 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	// Same for the one-click thumbs footer (and its signed rate URLs), which
 	// would otherwise shift assistant prefixes off the prompt cache.
 	// Best-effort: log-and-continue on failure rather than abort over cosmetic
-	// cleanup, matching the OpenAI chat path.
+	// cleanup, matching the OpenAI chat path. The echo check must read the body
+	// before the strip erases its evidence.
+	footerEchoedSinceHumanTurn := translate.FeedbackFooterSinceLastHumanTurn(body)
 	if strippedBody, ferr := translate.StripFeedbackFooterFromMessages(body); ferr != nil {
 		log.Error("Failed to strip feedback footer from inbound messages", "err", ferr)
 	} else {
@@ -3067,7 +3069,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 			defer keepalive.Close()
 			clientSink = keepalive
 		}
-		if footer := s.feedbackFooter(ctx, ClientIdentityFrom(ctx).ClientApp, routeRes.TurnType); footer != "" {
+		if footer := s.feedbackFooter(ctx, ClientIdentityFrom(ctx).ClientApp, routeRes.TurnType, footerEchoedSinceHumanTurn); footer != "" {
 			clientSink = translate.NewAnthropicRoutingFooterWriter(clientSink, footer)
 		}
 	}
@@ -3129,7 +3131,29 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 			}
 			crossFormat = false
 			logUpstreamBody(log, routeRes.SessionKey, target, feats, prep.Body)
-			return s.anthropicNativeAttempt(env, r, prep, sink, preludeBuf, targetMarker, setExtractor), nil
+			native := s.anthropicNativeAttempt(env, r, prep, sink, preludeBuf, targetMarker, setExtractor)
+			return func(actx context.Context, d router.Decision, p providers.Client) error {
+				err := native(actx, d, p)
+				if err == nil || committed(preludeBuf) || !providers.IsUpstreamOutputConfigFormatRejection(err) {
+					return err
+				}
+				unstructuredOpts := targetOpts
+				unstructuredOpts.StripOutputConfigFormat = true
+				unstructuredPrep, emitErr := env.PrepareAnthropic(r.Header, unstructuredOpts)
+				if emitErr != nil {
+					log.Error("Failed to re-emit Anthropic body without output_config.format", "err", emitErr)
+					return err
+				}
+				log.Warn("Retrying Anthropic request without output_config.format after upstream rejected it",
+					"model", d.Model,
+					"provider", d.Provider,
+					"request_id", requestID)
+				if preludeBuf != nil {
+					preludeBuf.Discard()
+				}
+				logUpstreamBody(log, routeRes.SessionKey, target, feats, unstructuredPrep.Body)
+				return s.anthropicNativeAttempt(env, r, unstructuredPrep, sink, preludeBuf, targetMarker, setExtractor)(actx, d, p)
+			}, nil
 		case providers.FamilyOpenAICompat:
 			crossFormat = true
 			// Prep rebuilt per attempt: targetIsOpenRouter(opts) gates four
@@ -4922,7 +4946,9 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	// Same for the one-click thumbs footer (and its signed rate URLs), which
 	// would otherwise shift assistant prefixes off the prompt cache.
 	// Best-effort: log-and-continue on failure rather than abort over cosmetic
-	// cleanup, matching the Anthropic Messages path.
+	// cleanup, matching the Anthropic Messages path. The echo check must read
+	// the body before the strip erases its evidence.
+	footerEchoedSinceHumanTurn := translate.FeedbackFooterSinceLastHumanTurn(body)
 	strippedBody, stripErr = translate.StripFeedbackFooterFromMessages(body)
 	if stripErr != nil {
 		log.Error("Failed to strip feedback footer from OpenAI messages", "err", stripErr)
@@ -5272,7 +5298,7 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	// special-casing — /v1/responses footers are a follow-up.
 	clientSink := w
 	if _, isResponses := w.(*translate.ResponsesWriter); env.Stream() && !isResponses {
-		if footer := s.feedbackFooter(ctx, ClientIdentityFrom(ctx).ClientApp, routeRes.TurnType); footer != "" {
+		if footer := s.feedbackFooter(ctx, ClientIdentityFrom(ctx).ClientApp, routeRes.TurnType, footerEchoedSinceHumanTurn); footer != "" {
 			clientSink = translate.NewOpenAIRoutingFooterWriter(w, footer)
 		}
 	}

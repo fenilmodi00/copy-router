@@ -65,6 +65,9 @@ type EmitOptions struct {
 	// tools are always stripped. Set from ROUTER_CC_ORCH_TOOLS_CROSSVENDOR;
 	// zero value false preserves historical strip-all behavior.
 	KeepCrossVendorOrchestrationTools bool
+	// StripOutputConfigFormat drops output_config.format. Set only on a one-shot
+	// retry after an upstream 400 rejects the knob as an unknown field.
+	StripOutputConfigFormat bool
 }
 
 // RequestEnvelope wraps a parsed request body regardless of wire format.
@@ -352,6 +355,9 @@ type EmitOverrides struct {
 	// CanonicalizeInboundEffort rewrites legacy effort aliases on inbound wire
 	// fields (`effort`, `output_config.effort`) to canonical levels on emit.
 	CanonicalizeInboundEffort bool
+	// StripOutputConfigFormat drops output_config.format, pruning output_config
+	// when nothing else remains. Mirrors EmitOptions.StripOutputConfigFormat.
+	StripOutputConfigFormat bool
 }
 
 func (e *RequestEnvelope) emitSameFormat(ov EmitOverrides) ([]byte, error) {
@@ -488,6 +494,13 @@ func applyOverrides(body []byte, ov EmitOverrides) ([]byte, error) {
 		}
 	}
 
+	if ov.StripOutputConfigFormat {
+		out, err = stripOutputConfigFormatBytes(out)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	for _, key := range ov.DeleteKeys {
 		out, err = sjson.DeleteBytes(out, key)
 		if err != nil {
@@ -495,6 +508,26 @@ func applyOverrides(body []byte, ov EmitOverrides) ([]byte, error) {
 		}
 	}
 
+	return out, nil
+}
+
+// stripOutputConfigFormatBytes drops output_config.format and, when that
+// leaves output_config empty, the container too.
+func stripOutputConfigFormatBytes(body []byte) ([]byte, error) {
+	if !gjson.GetBytes(body, "output_config.format").Exists() {
+		return body, nil
+	}
+	out, err := sjson.DeleteBytes(body, "output_config.format")
+	if err != nil {
+		return nil, fmt.Errorf("delete output_config.format: %w", err)
+	}
+	if len(gjson.GetBytes(out, "output_config").Map()) > 0 {
+		return out, nil
+	}
+	out, err = sjson.DeleteBytes(out, "output_config")
+	if err != nil {
+		return nil, fmt.Errorf("delete empty output_config: %w", err)
+	}
 	return out, nil
 }
 
@@ -1098,6 +1131,8 @@ func resolveAnthropicOverrides(body []byte, opts EmitOptions) EmitOverrides {
 		ov.DefaultMaxTokensKey = "max_tokens"
 		ov.DefaultMaxTokensValue = defaultOutputTokens(opts.TargetModel)
 	}
+
+	ov.StripOutputConfigFormat = opts.StripOutputConfigFormat
 
 	return ov
 }
