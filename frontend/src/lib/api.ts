@@ -34,6 +34,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Absolute-path variant of request() — used for /account/v1/* which lives
+// outside the /admin/v1 BASE group. Shares the 401 bounce + error shape so
+// callers don't observe a difference in failure handling.
+async function requestRaw<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((init?.headers as Record<string, string>) ?? {}),
+  };
+  const res = await fetch(path, { ...init, credentials: "include", headers });
+  if (res.status === 401 && typeof window !== "undefined") {
+    if (!window.location.pathname.startsWith("/ui/login")) {
+      const current = window.location.pathname;
+      const internal = current.startsWith("/ui/") ? current.slice(3) : "/dashboard";
+      const next = encodeURIComponent(internal);
+      window.location.href = `/ui/login?next=${next}`;
+      throw new Error("401: redirecting to login");
+    }
+  }
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`${res.status}: ${body}`);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
 export interface MetricsSummary {
   request_count: number;
   total_tokens: number;
@@ -166,6 +192,18 @@ export interface MeResponse {
   subject?: string;
 }
 
+// Self-service (aiand key) login session probe. `authenticated:false` with
+// a 200 means the account endpoints exist and the caller is logged out —
+// the login page shows the aiand-key form. A thrown response (404 etc.)
+// means the deployment is selfhosted/managed with no account surface, so
+// the login page falls back to the admin-password form.
+export interface AccountMeResponse {
+  authenticated: boolean;
+  account_id?: string;
+  display_name?: string;
+}
+
+
 export interface DeployedModel {
   model: string;
   provider: string;
@@ -218,6 +256,16 @@ export const api = {
         body: JSON.stringify({ password }),
       }),
     logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+    // Self-service (aiand key) login surface. Lives under /account/v1/*
+    // (outside BASE=/admin/v1), so these route through requestRaw.
+    accountMe: () => requestRaw<AccountMeResponse>("/account/v1/me"),
+    loginWithKey: (key: string) =>
+      requestRaw<{ ok: boolean; expires_at: string }>("/account/v1/login", {
+        method: "POST",
+        body: JSON.stringify({ key }),
+      }),
+    accountLogout: () =>
+      requestRaw<{ ok: boolean }>("/account/v1/logout", { method: "POST" }),
   },
   metrics: {
     summary: (from?: string, to?: string) => {
