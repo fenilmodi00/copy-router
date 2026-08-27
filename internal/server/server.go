@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"workweave/router/internal/analytics"
+	account "workweave/router/internal/api/account"
 	"workweave/router/internal/api/admin"
 	analyticsapi "workweave/router/internal/api/analytics"
 	anthropicapi "workweave/router/internal/api/anthropic"
@@ -53,6 +54,11 @@ const (
 	DeploymentModeSelfHosted DeploymentMode = "selfhosted"
 	// DeploymentModeManaged skips the dashboard and admin API entirely so misconfig can't expose a redundant control plane.
 	DeploymentModeManaged DeploymentMode = "managed"
+	// DeploymentModeSelfServe mounts the dashboard driven by self-service
+	// (aiand-key) login instead of the operator password. The dashboard data
+	// plane is a separate /admin/v1 surface scoped to the logged-in account's
+	// installation; the operator admin API is NOT mounted.
+	DeploymentModeSelfServe DeploymentMode = "selfserve"
 )
 
 // Register wires routes onto the engine. In managed mode the dashboard +
@@ -210,6 +216,50 @@ func Register(engine *gin.Engine, authSvc *auth.Service, proxySvc *proxy.Service
 			mgmt.PUT("/allowed-models", admin.UpdateAllowedModelsHandler(authSvc, deployedModels, proxySvc))
 			mgmt.GET("/excluded-providers", admin.GetExcludedProvidersHandler(authSvc, deployedModels, proxySvc))
 			mgmt.PUT("/excluded-providers", admin.UpdateExcludedProvidersHandler(authSvc, deployedModels, proxySvc))
+		}
+	}
+
+	if mode == DeploymentModeSelfServe {
+		engine.GET("/", func(c *gin.Context) { c.Redirect(http.StatusFound, "/ui") })
+		registerUIStatic(engine, "./assets/ui")
+
+		// Public — login must be reachable without a session cookie.
+		accountPublic := engine.Group("/account/v1", middleware.WithTimeout(adminTimeout))
+		accountPublic.POST("/login", account.LoginHandler(authSvc))
+		accountPublic.POST("/logout", account.LogoutHandler())
+		accountPublic.GET("/me", account.MeHandler(authSvc))
+
+		// Dashboard data plane: an account cookie resolves to that account's
+		// installation, which the existing handlers scope to (metricsScope,
+		// key repos, BYOK, config all read the stashed Installation).
+		accountAuthed := engine.Group("/admin/v1", middleware.WithTimeout(adminTimeout), middleware.WithAccountCookie(authSvc))
+		accountAuthed.GET("/metrics/summary", admin.MetricsSummaryHandler(proxySvc))
+		accountAuthed.GET("/metrics/timeseries", admin.MetricsTimeseriesHandler(proxySvc))
+		accountAuthed.GET("/metrics/details", admin.MetricsDetailsHandler(proxySvc))
+		accountAuthed.GET("/metrics/model-breakdown", admin.MetricsModelBreakdownHandler(proxySvc))
+		accountAuthed.GET("/keys", admin.ListAPIKeysHandler(authSvc))
+		accountAuthed.POST("/keys", admin.IssueAPIKeyHandler(authSvc))
+		accountAuthed.POST("/keys/:id/rotate", admin.RotateAPIKeyHandler(authSvc))
+		accountAuthed.DELETE("/keys/:id", admin.DeleteAPIKeyHandler(authSvc))
+		accountAuthed.GET("/provider-keys", admin.ListExternalKeysHandler(authSvc))
+		accountAuthed.POST("/provider-keys", admin.UpsertExternalKeyHandler(authSvc, deployedModels))
+		accountAuthed.DELETE("/provider-keys/:id", admin.DeleteExternalKeyHandler(authSvc))
+		accountAuthed.GET("/config", admin.ConfigHandler)
+		accountAuthed.GET("/onboarding", admin.OnboardingHandler(authSvc))
+		accountAuthed.GET("/routing-preferences", admin.GetRoutingPreferencesHandler(authSvc))
+		accountAuthed.PUT("/routing-preferences", admin.UpdateRoutingPreferencesHandler(authSvc))
+		if aiandCatalogHandler != nil {
+			accountAuthed.GET("/aiand/models", aiandCatalogHandler)
+		}
+		// The live-catalog "models" section stays mounted under /admin/v1 too,
+		// since the dashboard fetches it through the account cookie path.
+		if deployedModels != nil {
+			accountAuthed.GET("/excluded-models", admin.GetExcludedModelsHandler(authSvc, deployedModels, proxySvc))
+			accountAuthed.PUT("/excluded-models", admin.UpdateExcludedModelsHandler(authSvc, deployedModels, proxySvc))
+			accountAuthed.GET("/allowed-models", admin.GetAllowedModelsHandler(authSvc, deployedModels))
+			accountAuthed.PUT("/allowed-models", admin.UpdateAllowedModelsHandler(authSvc, deployedModels, proxySvc))
+			accountAuthed.GET("/excluded-providers", admin.GetExcludedProvidersHandler(authSvc, deployedModels, proxySvc))
+			accountAuthed.PUT("/excluded-providers", admin.UpdateExcludedProvidersHandler(authSvc, deployedModels, proxySvc))
 		}
 	}
 
