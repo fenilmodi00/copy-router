@@ -207,12 +207,13 @@ export default function DashboardPage() {
                     ? undefined
                     : `${formatUSD(Math.abs(summary.total_savings_usd))} saved vs requested`
                 }
+                subAccent={summary == null ? undefined : "success"}
                 sparkline={buckets.map(b => b.actual_cost_usd)}
               />
               <MetricCard
                 className={ResponsiveGrid.Small}
                 label="Cache hit rate"
-                value={cacheHitRate == null ? "—%" : `${cacheHitRate.toFixed(1)}%`}
+                value={cacheHitRate == null ? "0.0%" : `${cacheHitRate.toFixed(1)}%`}
                 sub={
                   cacheWriteTokens + cacheReadTokens === 0
                     ? "no cached usage yet"
@@ -329,6 +330,9 @@ interface MetricCardProps {
   value: string;
   sub?: string;
   accent?: "default" | "success" | "danger" | "info";
+  // When "success", recolors the sub line green so a saving figure draws the
+  // eye without disturbing the value's own accent.
+  subAccent?: "default" | "success";
   sparkline?: number[];
 }
 
@@ -338,6 +342,7 @@ function MetricCard({
   value,
   sub,
   accent = "default",
+  subAccent = "default",
   sparkline,
 }: MetricCardProps) {
   const accentClass =
@@ -368,7 +373,16 @@ function MetricCard({
           </Text>
           {sparkline != null && sparkline.length > 0 && <Sparkline data={sparkline} />}
         </div>
-        {sub != null && <Text className="mt-1 text-2xs text-muted-foreground">{sub}</Text>}
+        {sub != null && (
+          <Text
+            className={cn(
+              "mt-1 text-2xs",
+              subAccent === "success" ? "text-success" : "text-muted-foreground",
+            )}
+          >
+            {sub}
+          </Text>
+        )}
       </Card.Content>
     </Card>
   );

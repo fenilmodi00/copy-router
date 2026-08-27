@@ -6,7 +6,7 @@ import { Tooltip } from "@/components/molecules/Tooltip";
 import { Appearance } from "@/components/types";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { BarChart2, Layers, LogOut, Settings } from "lucide-react";
+import { BarChart2, KeyRound, Layers, LogOut, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode } from "react";
@@ -15,19 +15,23 @@ interface NavItem {
   href: string;
   label: string;
   icon: ReactNode;
-  matchPrefix?: string;
+  // When true, lights up only on an exact path match. Used for index routes
+  // (e.g. /settings) that would otherwise satisfy every nested route too.
+  exact?: boolean;
 }
 
 const PRIMARY_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: <BarChart2 size={16} /> },
   { href: "/models", label: "Models", icon: <Layers size={16} /> },
+  { href: "/settings", label: "API keys", icon: <KeyRound size={16} />, exact: true },
+  { href: "/settings/models", label: "Routing", icon: <SlidersHorizontal size={16} /> },
 ];
 
 function NavLink({ item }: { item: NavItem }) {
   const pathname = usePathname();
   const active =
-    item.matchPrefix != null
-      ? pathname.startsWith(item.matchPrefix)
+    item.exact
+      ? pathname === item.href
       : pathname === item.href || pathname.startsWith(item.href + "/");
 
   return (
@@ -72,17 +76,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="relative z-10 flex w-full items-center justify-between gap-2 p-2">
-        <Tooltip content="Settings" side="right" interactiveChild>
-          <Button
-            href="/settings"
-            appearance={Appearance.Hollow}
-            className={sidebarFooterButton}
-          >
-            <Settings className="size-4" />
-          </Button>
-        </Tooltip>
-
+      <div className="relative z-10 flex w-full items-center justify-end gap-2 p-2">
         <Tooltip content="Sign out" side="left" interactiveChild>
           <Button
             appearance={Appearance.Hollow}
@@ -99,8 +93,8 @@ export function Sidebar() {
   );
 }
 
-// Identical visual treatment for both footer buttons so the only difference
-// the user sees is the icon. Kept as a constant to guarantee the two stay in
+// Identical visual treatment for the footer button so the only difference
+// the user sees is the icon. Kept as a constant to guarantee it stays in
 // lockstep when the design changes.
 const sidebarFooterButton =
   "size-8 shrink-0 justify-center rounded-md border border-border-darker bg-muted p-0 text-muted-foreground hover:bg-border-darker hover:text-foreground";

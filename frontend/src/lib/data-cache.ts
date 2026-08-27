@@ -4,7 +4,6 @@ import {
   api,
   type AiandModel,
   type APIKey,
-  type ExternalKey,
   type ModelBreakdownBucket,
 } from "@/lib/api";
 
@@ -16,7 +15,6 @@ export const queryKeys = {
   onboarding: ["onboarding"] as const,
   config: ["config"] as const,
   keys: ["keys"] as const,
-  providerKeys: ["provider-keys"] as const,
   excludedModels: ["excluded-models"] as const,
   excludedProviders: ["excluded-providers"] as const,
   routingPreferences: ["routing-preferences"] as const,
@@ -168,17 +166,6 @@ export function useKeys(config?: SWRConfiguration) {
   );
 }
 
-export function useProviderKeys(config?: SWRConfiguration) {
-  return useSWR(
-    queryKeys.providerKeys,
-    async () => {
-      const r = await api.providerKeys.list();
-      return (r.keys ?? []) as ExternalKey[];
-    },
-    { ...swrDefaults, ...config },
-  );
-}
-
 export function useExcludedModels(config?: SWRConfiguration) {
   return useSWR(queryKeys.excludedModels, () => api.excludedModels.get(), {
     ...swrDefaults,
@@ -202,10 +189,6 @@ export function useRoutingPreferences(config?: SWRConfiguration) {
 
 export function invalidateKeys() {
   return swrMutate(queryKeys.keys);
-}
-
-export function invalidateProviderKeys() {
-  return swrMutate(queryKeys.providerKeys);
 }
 
 export function invalidateExcludedModels() {
