@@ -15,10 +15,11 @@ import (
 
 func TestKeyVerifierValidateSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/me", r.URL.Path, "probe must hit GET /api/v1/me")
+		assert.Equal(t, "/v1/models", r.URL.Path, "probe must hit GET /v1/models (key-auth)")
 		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"), "probe must forward the raw key as Authorization: Bearer")
+		w.Header().Set("X-Org-Id", "org-abc")
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"user_id":"u-1","organization_id":"o-1","plan":"pro"}`))
+		w.Write([]byte(`{"object":"list","data":[]}`))
 	}))
 	defer srv.Close()
 
@@ -26,9 +27,21 @@ func TestKeyVerifierValidateSuccess(t *testing.T) {
 	identity, err := v.Validate(context.Background(), "sk-test")
 	require.NoError(t, err)
 	require.NotNil(t, identity)
-	assert.Equal(t, "u-1", identity.UserID)
-	assert.Equal(t, "o-1", identity.OrganizationID)
-	assert.Equal(t, "pro", identity.Plan)
+	assert.Equal(t, "org-abc", identity.UserID)
+	assert.Equal(t, "org-abc", identity.OrganizationID)
+}
+
+func TestKeyVerifierValidateMissingOrgHeader(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"object":"list","data":[]}`))
+	}))
+	defer srv.Close()
+
+	v := &aiand.KeyVerifier{Client: srv.Client(), BaseURL: srv.URL}
+	_, err := v.Validate(context.Background(), "sk-test")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, auth.ErrKeyUnavailable)
 }
 
 func TestKeyVerifierValidateInvalidKey(t *testing.T) {

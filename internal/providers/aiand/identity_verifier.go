@@ -1,10 +1,10 @@
 // Package aiand provides the aiand (aiand.com) identity probe used by the
-// self-service dashboard login: validating an sk- key against GET /api/v1/me.
+// self-service dashboard login: validating an sk- key against a key-auth
+// endpoint and reading the org from the response.
 package aiand
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,17 +16,24 @@ import (
 )
 
 // DefaultBaseURL is aiand's API root. Note: the OpenAI-compatible inference
-// base URL (openaicompat.AiandBaseURL) already includes /v1; the identity
-// endpoint lives at the API root + /api/v1/me.
+// base URL (openaicompat.AiandBaseURL) already includes /v1; identity probing
+// uses the API root + /v1/models (key-auth), not /api/v1/me (JWT-only).
 const DefaultBaseURL = "https://api.aiand.com"
 
-// KeyVerifier validates an aiand sk- key by probing GET /api/v1/me.
+// KeyVerifier validates an aiand sk- key by probing GET /v1/models.
+//
+// Live ai& docs: /api/v1/me requires a JWT session token (console cookie),
+// not an sk- API key. sk- keys authenticate OpenAI-compat + analytics
+// surfaces and stamp X-Org-Id on the response. We probe /v1/models (cheap,
+// key-auth) and treat that header as the stable tenant identity — API keys
+// are org-scoped, so one org → one selfserve account (key rotation within
+// the same org reuses the same installation).
 type KeyVerifier struct {
 	Client  *http.Client
 	BaseURL string
 }
 
-// Validate calls aiand's GET /api/v1/me with the key as a bearer token and
+// Validate calls aiand's GET /v1/models with the key as a bearer token and
 // maps the response to auth sentinels. Never returns a partial identity on
 // error.
 func (v *KeyVerifier) Validate(ctx context.Context, rawKey string) (*auth.AiandIdentity, error) {
@@ -39,7 +46,7 @@ func (v *KeyVerifier) Validate(ctx context.Context, rawKey string) (*auth.AiandI
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/me", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("aiand: build probe request: %w", err)
 	}
@@ -51,24 +58,20 @@ func (v *KeyVerifier) Validate(ctx context.Context, rawKey string) (*auth.AiandI
 		return nil, fmt.Errorf("%w: %v", auth.ErrKeyUnavailable, err)
 	}
 	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 
 	switch resp.StatusCode {
 	case http.StatusOK:
-		var body struct {
-			UserID         string `json:"user_id"`
-			OrganizationID string `json:"organization_id"`
-			Plan           string `json:"plan"`
+		orgID := strings.TrimSpace(resp.Header.Get("X-Org-Id"))
+		if orgID == "" {
+			return nil, fmt.Errorf("%w: aiand /v1/models missing X-Org-Id", auth.ErrKeyUnavailable)
 		}
-		if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body); err != nil {
-			return nil, fmt.Errorf("aiand: decode /me response: %w", err)
-		}
-		if body.UserID == "" {
-			return nil, auth.ErrKeyInvalid
-		}
+		// sk- keys are org-scoped; there is no separate user_id on the
+		// key-auth path. Use the org as the account upsert key so rotating
+		// to another key in the same org keeps the same installation.
 		return &auth.AiandIdentity{
-			UserID:         body.UserID,
-			OrganizationID: body.OrganizationID,
-			Plan:           body.Plan,
+			UserID:         orgID,
+			OrganizationID: orgID,
 		}, nil
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return nil, auth.ErrKeyInvalid
@@ -77,6 +80,6 @@ func (v *KeyVerifier) Validate(ctx context.Context, rawKey string) (*auth.AiandI
 	case http.StatusTooManyRequests:
 		return nil, auth.ErrLoginRateLimited
 	default:
-		return nil, fmt.Errorf("%w: aiand /me returned %d", auth.ErrKeyUnavailable, resp.StatusCode)
+		return nil, fmt.Errorf("%w: aiand /v1/models returned %d", auth.ErrKeyUnavailable, resp.StatusCode)
 	}
 }
