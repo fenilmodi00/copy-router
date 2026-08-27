@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"workweave/router/internal/providers"
 	"workweave/router/internal/router/policy"
 	"workweave/router/internal/router/sessionpin"
 	"workweave/router/internal/translate"
@@ -70,7 +71,7 @@ func strugglingPin(model, group string) sessionpin.Pin {
 }
 
 func newStruggleEscalationSvc(pins *stubPinStore, events *recordingStruggleStore, clusters map[string][]string) *Service {
-	return NewService(nil, nil, nil, false, nil, pins, false, "aiand", struggleLowModel, nil).
+	return NewService(nil, nil, nil, false, nil, pins, false, providers.ProviderAiand, struggleLowModel, nil).
 		WithStruggleEscalationConfig(true, 0).
 		WithStruggleEscalationStore(events).
 		WithStruggleEscalationRoster(NewStruggleRoster(fakeRosterSource{clusters: clusters}))

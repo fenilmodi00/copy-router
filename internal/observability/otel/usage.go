@@ -125,7 +125,7 @@ func (u *UsageExtractor) Tokens() (input, output int) {
 }
 
 // CacheTokens returns the extracted cache creation/read counts. Zero means the
-// provider doesn't emit cache tokens (Google) or there were no cache hits.
+// upstream did not emit cache token fields or there were no cache hits.
 func (u *UsageExtractor) CacheTokens() (creation, read int) {
 	if u == nil {
 		return 0, 0
@@ -249,8 +249,6 @@ func (u *UsageExtractor) tryExtractFromJSON() {
 
 // extractUsageGJSON probes usage fields via gjson (no json.Unmarshal/map allocs).
 // OpenAI cache-read maps from cached_tokens; GPT-5.6+ cache-write maps from cache_write_tokens.
-// Google's native :generateContent uses usageMetadata; its OpenAI-compat surface
-// uses the OpenAI shape instead.
 func extractUsageGJSON(data []byte, provider string) (input, output, cacheCreation, cacheRead int, found bool) {
 	family := providers.FamilyFor(provider)
 

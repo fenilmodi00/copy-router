@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"workweave/router/internal/providers"
 	"workweave/router/internal/router/catalog"
 
 	"github.com/stretchr/testify/assert"
@@ -11,7 +12,7 @@ import (
 
 func TestProxyRoutableModels_WithoutHMMLeavesGenericSet(t *testing.T) {
 	generic := map[string]struct{}{"claude-opus-4-7": {}}
-	got := proxyRoutableModels(generic, map[string]struct{}{"anthropic": {}}, false)
+	got := proxyRoutableModels(generic, map[string]struct{}{providers.ProviderAnthropic: {}}, false)
 	assert.Equal(t, generic, got)
 }
 
