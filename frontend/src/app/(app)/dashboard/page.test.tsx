@@ -195,6 +195,13 @@ describe("DashboardPage bugfix regression", () => {
     expect(screen.queryByText("Overview")).not.toBeInTheDocument();
   });
 
+  it("shows em dash cache hit rate when no prompt or semantic cache usage", async () => {
+    renderDashboard();
+    await screen.findByText("Overview");
+    expect(screen.getByText("—%")).toBeInTheDocument();
+    expect(screen.getByText("no cached usage yet")).toBeInTheDocument();
+  });
+
   it("feeds the Tokens KPI the per-bucket token series, not the cost curve — non-flat at tiny spend", async () => {
     renderDashboard();
     await screen.findByRole("link", { name: "deepseek-ai/deepseek-v4-flash" });
@@ -210,8 +217,11 @@ describe("DashboardPage bugfix regression", () => {
     await screen.findByRole("link", { name: "deepseek-ai/deepseek-v4-flash" });
 
     const { requests, costs } = series();
-    expect(requests).toEqual([8, 2]);
-    expect(costs).toEqual([1, 0.17]);
+    expect(requests.length).toBeGreaterThan(2);
+    expect(Math.max(...requests)).toBe(8);
+    expect(requests.reduce((a, b) => a + b, 0)).toBe(10);
+    expect(Math.max(...costs)).toBe(1);
+    expect(costs.reduce((a, b) => a + b, 0)).toBeCloseTo(1.17, 5);
   });
 
   it("renders the spend-table model link with the /ui basePath", async () => {

@@ -11,6 +11,9 @@ import (
 // Defaults to a realistic shape with the large stable system prefix, a tool registry,
 // and a high max_tokens so turn classification doesn't pin onto a cheap probe path.
 type requestBuilder struct {
+	// modelField is the routing-intent `model` value to emit; "" keeps the builder
+	// default (see modelValue).
+	modelField  string
 	userID      string
 	stream      bool
 	maxTokens   int
@@ -34,6 +37,22 @@ func newRequest(userID string) *requestBuilder {
 func (b *requestBuilder) streaming() *requestBuilder    { b.stream = true; return b }
 func (b *requestBuilder) tokens(n int) *requestBuilder  { b.maxTokens = n; return b }
 func (b *requestBuilder) text(s string) *requestBuilder { b.userText = s; return b }
+func (b *requestBuilder) model(m string) *requestBuilder {
+	b.modelField = m
+	return b
+}
+
+// modelValue returns the routing-intent `model` field this builder emits. An
+// empty model picks the suite-wide default pin so callers that don't care
+// about the field (cache-token accounting, stream lifecycle) keep
+// byte-identical bodies. The router reads this field as routing intent: a
+// resolvable value forces that model, "auto" routes normally.
+func (b *requestBuilder) modelValue() string {
+	if b.modelField != "" {
+		return b.modelField
+	}
+	return "deepseek-ai/deepseek-v4-pro"
+}
 
 // withTool appends a raw tool definition (as built by tool()) to the request's
 // tool registry, alongside the default Bash/Read/Edit set.
@@ -64,7 +83,7 @@ func (b *requestBuilder) build(t *testing.T) []byte {
 	}
 
 	req := map[string]any{
-		"model":      "deepseek-ai/deepseek-v4-pro", // ignored by router; the force-model header pins the served model
+		"model":      b.modelValue(),
 		"max_tokens": b.maxTokens,
 		"system":     []any{sysBlock},
 		"messages": []any{

@@ -8,11 +8,31 @@ export function formatUSD(v: number): string {
   return `$${v.toFixed(2)}`;
 }
 
+/** formatSavingsUSD renders a positive savings delta without rounding to $0.00. */
+export function formatSavingsUSD(v: number): string {
+  if (!Number.isFinite(v) || v <= 0) return "$0.00";
+  const abs = Math.abs(v);
+  if (abs < 0.005) return "<$0.01";
+  if (abs < 0.01) return `$${abs.toFixed(3)}`;
+  return formatUSD(abs);
+}
+
 export function formatNumber(v: number): string {
   if (Number.isNaN(v)) return "—";
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
   return String(v);
+}
+
+const averageFormatter = new Intl.NumberFormat(undefined, {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+/** formatAverage renders per-request or ratio figures with at most two decimal places. */
+export function formatAverage(v: number): string {
+  if (Number.isNaN(v)) return "—";
+  return averageFormatter.format(v);
 }
 
 export function formatContext(v: number): string {

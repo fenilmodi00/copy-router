@@ -43,4 +43,18 @@ func TestOpenAIResponsesAPI(t *testing.T) {
 		}
 		assertServedByModel(t, r, cfg.OpenAIPinModel, "aiand")
 	})
+
+	// The inbound `model` field is the routing intent on the OpenAI-facing
+	// surface too: forcing cfg.OpenAIPinModel in-band must serve that exact
+	// catalog id. The Anthropic->OpenAI emit path rebuilds the body (model is
+	// rewritten to the decision; metadata.user_id is dropped), so the upstream
+	// body is unchanged and this reuses the recorded openai-basic cassette.
+	t.Run("model field forces the pinned gpt-oss model", func(t *testing.T) {
+		body := newRequest("smoke-openai-basic").tokens(64).
+			text("Reply with exactly the word: ok").build(t)
+		r := callModel(t, body, cfg.OpenAIPinModel)
+
+		requireOKMessage(t, r)
+		assertServedByModel(t, r, cfg.OpenAIPinModel, "aiand")
+	})
 }

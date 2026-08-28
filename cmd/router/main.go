@@ -252,11 +252,11 @@ func main() {
 			panic("selfserve mode: account repos not wired")
 		}
 		keyVerifier := &aiandProvider.KeyVerifier{
-			Client:  &http.Client{Timeout: 15 * time.Second},
-			BaseURL: config.GetOr("AIAND_API_URL", aiandProvider.DefaultBaseURL),
+			Client:      &http.Client{Timeout: 15 * time.Second},
+			IdentityURL: config.GetOr("AIAND_IDENTITY_URL", aiandProvider.DefaultBaseURL),
 		}
 		authSvc.WithAccountRepos(repo.Accounts, repo.LoginSessions).WithKeyVerifier(keyVerifier)
-		logger.Info("Self-serve login enabled", "aiand_base_url", keyVerifier.BaseURL)
+		logger.Info("Self-serve login enabled", "aiand_identity_url", keyVerifier.IdentityURL)
 	}
 
 	// Managed mode doesn't mount the dashboard, so this only matters selfhosted.

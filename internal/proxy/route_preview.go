@@ -36,6 +36,10 @@ func (s *Service) anthropicRoutingRequest(ctx context.Context, body []byte, head
 	if err != nil {
 		return router.Request{}, fmt.Errorf("parse request: %w", err)
 	}
+	previewForceModel, err := previewForceModelFromRequest(headers, env)
+	if err != nil {
+		return router.Request{}, err
+	}
 	embedOnlyUser := s.ResolveEmbedOnlyUserMessage(ctx)
 	features := env.RoutingFeatures(embedOnlyUser)
 	promptText := features.PromptText
@@ -68,6 +72,7 @@ func (s *Service) anthropicRoutingRequest(ctx context.Context, body []byte, head
 	}
 	return router.Request{
 		RequestedModel:               features.Model,
+		ForceModel:                   previewForceModel,
 		EstimatedInputTokens:         features.Tokens,
 		HasTools:                     features.HasTools,
 		HasImages:                    features.HasImages,

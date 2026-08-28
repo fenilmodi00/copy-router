@@ -49,22 +49,28 @@ func (e *ForcedModelUnknownError) Unwrap() error { return ErrForcedModelUnknown 
 
 var forceModelAliases = map[string]string{
 	// Anthropic-family client aliases → aiand catalog IDs (Appendix F).
-	"anthropic":         "z-ai/glm-5.2",
-	"claude":            "z-ai/glm-5.2",
-	"opus":              "z-ai/glm-5.2",
-	"claude-opus":       "z-ai/glm-5.2",
-	"claude-opus-5":     "z-ai/glm-5.2",
-	"opus-5":            "z-ai/glm-5.2",
-	"opus-5.0":          "z-ai/glm-5.2",
-	"opus5":             "z-ai/glm-5.2",
-	"claude-5":          "z-ai/glm-5.2",
-	"claude-opus-4-8":   "z-ai/glm-5.2",
-	"opus-4-8":          "z-ai/glm-5.2",
-	"opus-4.8":          "z-ai/glm-5.2",
-	"claude-4-8":        "z-ai/glm-5.2",
-	"claude-4.8":        "z-ai/glm-5.2",
-	"claude-opus-4-7":   "z-ai/glm-5.2",
-	"claude-opus-4-6":   "z-ai/glm-5.2",
+	// GLM-5.2's canonical catalog id is zai-org/glm-5.2 (ai&'s served name);
+	// z-ai/glm-5.2 is the historical pre-rename string and stays a recognized
+	// alias through catalog.aliases, so it keeps resolving either way. The
+	// explicit z-ai/glm-5.2 entry below documents the legacy→canonical hop
+	// for force-model specifically.
+	"anthropic":         "zai-org/glm-5.2",
+	"claude":            "zai-org/glm-5.2",
+	"opus":              "zai-org/glm-5.2",
+	"claude-opus":       "zai-org/glm-5.2",
+	"claude-opus-5":     "zai-org/glm-5.2",
+	"opus-5":            "zai-org/glm-5.2",
+	"opus-5.0":          "zai-org/glm-5.2",
+	"opus5":             "zai-org/glm-5.2",
+	"claude-5":          "zai-org/glm-5.2",
+	"claude-opus-4-8":   "zai-org/glm-5.2",
+	"opus-4-8":          "zai-org/glm-5.2",
+	"opus-4.8":          "zai-org/glm-5.2",
+	"claude-4-8":        "zai-org/glm-5.2",
+	"claude-4.8":        "zai-org/glm-5.2",
+	"claude-opus-4-7":   "zai-org/glm-5.2",
+	"claude-opus-4-6":   "zai-org/glm-5.2",
+	"z-ai/glm-5.2":      "zai-org/glm-5.2",
 	"fable":             "moonshotai/kimi-k3",
 	"fable-5":           "moonshotai/kimi-k3",
 	"fable5":            "moonshotai/kimi-k3",
@@ -134,12 +140,12 @@ var forceModelAliases = map[string]string{
 	"kimi-k3":      "moonshotai/kimi-k3",
 	"kimi-k2.7":    "moonshotai/kimi-k2.7",
 	"kimi-k2.6":    "moonshotai/kimi-k2.7",
-	"glm":          "z-ai/glm-5.2",
-	"zai":          "z-ai/glm-5.2",
-	"z-ai":         "z-ai/glm-5.2",
-	"glm-5.2":      "z-ai/glm-5.2",
-	"glm-5.1":      "z-ai/glm-5.2",
-	"glm-5":        "z-ai/glm-5.2",
+	"glm":          "zai-org/glm-5.2",
+	"zai":          "zai-org/glm-5.2",
+	"z-ai":         "zai-org/glm-5.2",
+	"glm-5.2":      "zai-org/glm-5.2",
+	"glm-5.1":      "zai-org/glm-5.2",
+	"glm-5":        "zai-org/glm-5.2",
 	"minimax":      "deepseek-ai/deepseek-v4-flash",
 	"minimax-m3":   "deepseek-ai/deepseek-v4-flash",
 	"minimax-m2.7": "deepseek-ai/deepseek-v4-flash",
@@ -305,44 +311,87 @@ func (s *Service) setForceModelPin(
 	return s.pinStore.Upsert(context.Background(), forced)
 }
 
-// applyForceModelHeader honors the x-weave-force-model request header,
-// writing the same session pin the /force-model command writes. It's
-// (re)written on every request carrying the header. A model that names no
-// catalog entry, or one the exclusion policy forbids, fails the request —
-// silently routing elsewhere would serve a model the caller never asked for.
-//
-// A `:level` suffix is stashed on context as router.Overrides.ForceEffort
-// so pin + effort land in one header.
-func (s *Service) applyForceModelHeader(
+// previewForceModelFromRequest resolves force intent for decision-only route
+// endpoints (/v1/route, playground preview). Mirrors applyForceModel's
+// rawForceModelFromRequest + resolve path: only resolvable model fields or
+// x-weave-force-model force; unknown client passthrough names (e.g.
+// claude-sonnet-4-20250514) leave ForceModel empty so cluster routing proceeds.
+// Resolve-only — never writes a pin.
+func previewForceModelFromRequest(headers http.Header, env *translate.RequestEnvelope) (string, error) {
+	raw := rawForceModelFromHeaders(headers, env)
+	if raw == "" {
+		return "", nil
+	}
+	canonicalModel, _, known, _ := resolveForceModelWithEffort(raw)
+	if !known {
+		return "", &ForcedModelUnknownError{Model: raw}
+	}
+	return canonicalModel, nil
+}
+
+// rawForceModelFromHeaders picks the raw force-model string from the inbound
+// model field and x-weave-force-model header. A catalog-resolvable, non-auto
+// model field wins over a conflicting header; model=auto, empty, or unknown
+// defers to the header.
+func rawForceModelFromHeaders(headers http.Header, env *translate.RequestEnvelope) string {
+	bodyModel, _ := translate.CanonicalModel(env.Model())
+	bodyModel = strings.TrimSpace(bodyModel)
+	if bodyModel != "" && bodyModel != "auto" {
+		if _, _, known, _ := resolveForceModelWithEffort(bodyModel); known {
+			return bodyModel
+		}
+	}
+	if headers == nil {
+		return ""
+	}
+	return strings.TrimSpace(headers.Get(ForceModelHeader))
+}
+
+// rawForceModelFromRequest picks the raw force-model string from the inbound
+// model field and x-weave-force-model header. A catalog-resolvable, non-auto
+// model field wins over a conflicting header; model=auto, empty, or unknown
+// defers to the header.
+func rawForceModelFromRequest(r *http.Request, env *translate.RequestEnvelope) string {
+	if r == nil {
+		return rawForceModelFromHeaders(nil, env)
+	}
+	return rawForceModelFromHeaders(r.Header, env)
+}
+
+// mergeForceEffortKnobs stashes effortLevel on the request context as
+// router.Overrides.ForceEffort without dropping other routing knobs.
+func mergeForceEffortKnobs(r *http.Request, effortLevel string) {
+	if effortLevel == "" {
+		return
+	}
+	merged := router.Overrides{ForceEffort: effortLevel}
+	if existing := router.RoutingKnobsFromContext(r.Context()); existing != nil {
+		merged.Alpha = existing.Alpha
+		merged.QualityBias = existing.QualityBias
+		merged.SpeedWeight = existing.SpeedWeight
+		merged.OutputCostRatio = existing.OutputCostRatio
+		merged.ExpectedOutputTokens = existing.ExpectedOutputTokens
+		merged.PerModelVerbosity = existing.PerModelVerbosity
+	}
+	*r = *r.WithContext(router.WithRoutingKnobs(r.Context(), &merged))
+}
+
+// applyResolvedForceModel resolves raw, writes the session pin, and returns
+// the canonical catalog id. logLabel names the source in log lines
+// ("force-model", "x-weave-force-model").
+func (s *Service) applyResolvedForceModel(
 	ctx context.Context,
 	r *http.Request,
 	env *translate.RequestEnvelope,
 	installationID uuid.UUID,
 	sessionKey [sessionpin.SessionKeyLen]byte,
+	raw, logLabel string,
 ) (string, error) {
-	raw := strings.TrimSpace(r.Header.Get(ForceModelHeader))
-	if raw == "" {
-		return "", nil
-	}
 	log := observability.FromContext(ctx)
 	canonicalModel, provider, known, effortLevel := resolveForceModelWithEffort(raw)
-	if effortLevel != "" {
-		// Merge with any existing knobs so ForceEffort doesn't drop Alpha/QualityBias.
-		merged := router.Overrides{ForceEffort: effortLevel}
-		if existing := router.RoutingKnobsFromContext(r.Context()); existing != nil {
-			merged.Alpha = existing.Alpha
-			merged.QualityBias = existing.QualityBias
-			merged.SpeedWeight = existing.SpeedWeight
-			merged.OutputCostRatio = existing.OutputCostRatio
-			merged.ExpectedOutputTokens = existing.ExpectedOutputTokens
-			merged.PerModelVerbosity = existing.PerModelVerbosity
-		}
-		// Mutate *r so the caller's downstream routingKnobsForRequest
-		// (which reads ctx from r.Context()) discovers the knob.
-		*r = *r.WithContext(router.WithRoutingKnobs(r.Context(), &merged))
-	}
+	mergeForceEffortKnobs(r, effortLevel)
 	if !known {
-		log.Warn("x-weave-force-model: rejected unrecognized model",
+		log.Warn(logLabel+": rejected unrecognized model",
 			"input_model", raw,
 			"session_key_hex", fmt.Sprintf("%x", sessionKey),
 		)
@@ -350,7 +399,7 @@ func (s *Service) applyForceModelHeader(
 	}
 	binding, reason := s.forcedModelBinding(ctx, canonicalModel, provider)
 	if reason != "" {
-		log.Warn("x-weave-force-model: rejected excluded model",
+		log.Warn(logLabel+": rejected excluded model",
 			"input_model", raw,
 			"canonical_model", canonicalModel,
 			"provider", provider,
@@ -364,10 +413,10 @@ func (s *Service) applyForceModelHeader(
 	}
 	role := roleForTier(catalog.TierFor(env.Model()))
 	if err := s.setForceModelPin(ctx, sessionKey, role, installationID, canonicalModel, provider); err != nil {
-		log.Error("x-weave-force-model: pin store upsert failed", "err", err)
+		log.Error(logLabel+": pin store upsert failed", "err", err)
 		return canonicalModel, nil
 	}
-	log.Info("x-weave-force-model applied",
+	log.Info(logLabel+" applied",
 		"input_model", raw,
 		"canonical_model", canonicalModel,
 		"provider", provider,
@@ -378,9 +427,46 @@ func (s *Service) applyForceModelHeader(
 	return canonicalModel, nil
 }
 
-// handleForceModelCommand processes a user-issued directive and writes a
-// synthetic acknowledgment without dispatching upstream. inputTokens is the
-// request's RoutingFeatures.Tokens so counts reflect actual turn input.
+// applyForceModel honors force intent from the inbound model field and the
+// x-weave-force-model header, writing the same session pin the /force-model
+// command writes. A resolvable model field beats a conflicting header;
+// model=auto or empty defers to the header.
+func (s *Service) applyForceModel(
+	ctx context.Context,
+	r *http.Request,
+	env *translate.RequestEnvelope,
+	installationID uuid.UUID,
+	sessionKey [sessionpin.SessionKeyLen]byte,
+) (string, error) {
+	raw := rawForceModelFromRequest(r, env)
+	if raw == "" {
+		return "", nil
+	}
+	return s.applyResolvedForceModel(ctx, r, env, installationID, sessionKey, raw, "force-model")
+}
+
+// applyForceModelHeader honors only the x-weave-force-model request header.
+// Dispatch paths should prefer applyForceModel, which also reads the model
+// field; this wrapper remains for header-only call sites and tests.
+func (s *Service) applyForceModelHeader(
+	ctx context.Context,
+	r *http.Request,
+	env *translate.RequestEnvelope,
+	installationID uuid.UUID,
+	sessionKey [sessionpin.SessionKeyLen]byte,
+) (string, error) {
+	raw := strings.TrimSpace(r.Header.Get(ForceModelHeader))
+	if raw == "" {
+		return "", nil
+	}
+	return s.applyResolvedForceModel(ctx, r, env, installationID, sessionKey, raw, "x-weave-force-model")
+}
+
+// handleForceModelCommand processes a /force-model or /unforce-model directive:
+// writes (or expires) the session pin and returns a synthetic acknowledgment
+// response without dispatching upstream. inputTokens should be the request's
+// RoutingFeatures.Tokens so the token counter reflects actual turn input, not
+// just the synthetic response text.
 func (s *Service) handleForceModelCommand(
 	ctx context.Context,
 	w http.ResponseWriter,
@@ -415,9 +501,6 @@ func (s *Service) applyForceModelCommand(
 	log := observability.FromContext(ctx)
 	role := roleForTier(catalog.TierFor(env.Model()))
 
-	// Formatted as a routing marker (✦ **Weave Router** → …\n\n) so
-	// StripRoutingMarkerFromMessages strips it from later inbound requests;
-	// otherwise it'd persist in history and leak router internals upstream.
 	var msg string
 	if cmd.Clear {
 		if s.pinStore != nil && installationID != uuid.Nil {
@@ -444,9 +527,9 @@ func (s *Service) applyForceModelCommand(
 			"session_key_hex", fmt.Sprintf("%x", sessionKey),
 			"role", role,
 		)
-		msg = fmt.Sprintf("✦ **Weave Router** → force-model: %q isn't a recognized model · keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek-ai/deepseek-v4-flash, or z-ai/glm-5.2.\n\n", cmd.Model)
+		msg = fmt.Sprintf("✦ **Weave Router** → force-model: %q isn't a recognized model · keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek-ai/deepseek-v4-flash, or zai-org/glm-5.2.\n\n", cmd.Model)
 		if env.SourceFormat() == translate.FormatOpenAI {
-			msg = fmt.Sprintf("Weave Router: force-model: %q isn't a recognized model; keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek-ai/deepseek-v4-flash, or z-ai/glm-5.2.", cmd.Model)
+			msg = fmt.Sprintf("Weave Router: force-model: %q isn't a recognized model; keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek-ai/deepseek-v4-flash, or zai-org/glm-5.2.", cmd.Model)
 		}
 		return "", msg, nil
 	}

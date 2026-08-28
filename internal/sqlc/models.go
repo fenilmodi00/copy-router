@@ -36,6 +36,8 @@ type RouterAccountSession struct {
 	RevokedAt  pgtype.Timestamptz
 	LastSeenAt pgtype.Timestamptz
 	IpAtIssue  *netip.Addr
+	// Installation UUID resolved at login; avoids per-request EnsureAccountInstallation in dashboard middleware.
+	InstallationID *string
 }
 
 type RouterClusterModelList struct {
@@ -297,6 +299,8 @@ type RouterModelRouterRequestTelemetry struct {
 	AuthorityShadowStayScore *float64
 	// Sidecar candidate score for the served model this turn, paired with authority_shadow_stay_score.
 	AuthorityShadowFreshScore *float64
+	// True when the turn was served from the router semantic response cache (x-router-cache: hit). Distinct from upstream prompt-cache token counters.
+	SemanticCacheHit *bool
 }
 
 // End-user identities seen on inbound requests, scoped to an installation. Replaces the per-user API key pattern.

@@ -50,7 +50,7 @@ func netIPToInet(ip *net.IP) *netip.Addr {
 // LoginSession. issued_at / expires_at / last_seen_at are NOT NULL timestamptz;
 // revoked_at is nullable (nil while the session is still active).
 func loginSessionRow(row sqlc.RouterAccountSession) *auth.LoginSession {
-	return &auth.LoginSession{
+	s := &auth.LoginSession{
 		ID:          row.ID.String(),
 		AccountID:   row.AccountID,
 		TokenHash:   row.TokenHash,
@@ -62,18 +62,26 @@ func loginSessionRow(row sqlc.RouterAccountSession) *auth.LoginSession {
 		LastSeenAt:  timestamptzOrZero(row.LastSeenAt),
 		IPAtIssue:   inetToNetIP(row.IpAtIssue),
 	}
+	if row.InstallationID != nil {
+		s.InstallationID = *row.InstallationID
+	}
+	return s
 }
 
 func (r *loginSessionRepo) Insert(ctx context.Context, s auth.LoginSession) (*auth.LoginSession, error) {
 	q := sqlc.New(r.tx)
-	row, err := q.InsertAccountSession(ctx, sqlc.InsertAccountSessionParams{
+	params := sqlc.InsertAccountSessionParams{
 		AccountID:   s.AccountID,
 		TokenHash:   s.TokenHash,
 		TokenPrefix: s.TokenPrefix,
 		TokenSuffix: s.TokenSuffix,
 		ExpiresAt:   pgtype.Timestamptz{Time: s.ExpiresAt, Valid: true},
 		IpAtIssue:   netIPToInet(s.IPAtIssue),
-	})
+	}
+	if s.InstallationID != "" {
+		params.InstallationID = &s.InstallationID
+	}
+	row, err := q.InsertAccountSession(ctx, params)
 	if err != nil {
 		return nil, err
 	}

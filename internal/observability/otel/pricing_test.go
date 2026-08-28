@@ -24,11 +24,11 @@ func TestLookup(t *testing.T) {
 		{name: "qwen/qwen3.6-27b", model: "qwen/qwen3.6-27b", wantInput: 0.320, wantOutput: 3.200},
 		{name: "google/gemma-4-31b-it", model: "google/gemma-4-31b-it", wantInput: 0.200, wantOutput: 0.500},
 		{name: "motif-technologies/motif-3", model: "motif-technologies/motif-3", wantInput: 0.500, wantOutput: 2.000},
-		{name: "z-ai/glm-5.2", model: "z-ai/glm-5.2", wantInput: 1.000, wantOutput: 4.000},
+		{name: "zai-org/glm-5.2", model: "zai-org/glm-5.2", wantInput: 1.000, wantOutput: 4.000},
 
 		// ── Dated variants (8-digit suffix normalization) ──────
 		{name: "moonshotai/kimi-k3-20260101", model: "moonshotai/kimi-k3-20260101", wantInput: 3.000, wantOutput: 12.500},
-		{name: "z-ai/glm-5.2-20260528", model: "z-ai/glm-5.2-20260528", wantInput: 1.000, wantOutput: 4.000},
+		{name: "zai-org/glm-5.2-20260528", model: "zai-org/glm-5.2-20260528", wantInput: 1.000, wantOutput: 4.000},
 		{name: "deepseek-ai/deepseek-v4-flash-20251001", model: "deepseek-ai/deepseek-v4-flash-20251001", wantInput: 0.150, wantOutput: 0.250},
 
 		// ── Client aliases (no catalog row; zero pricing) ──────

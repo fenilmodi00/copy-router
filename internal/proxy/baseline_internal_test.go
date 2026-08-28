@@ -27,6 +27,11 @@ func TestBaselineFor(t *testing.T) {
 		s := &Service{}
 		assert.Equal(t, "", s.baselineFor("weave-router"))
 	})
+
+	t.Run("client alias resolves to canonical baseline", func(t *testing.T) {
+		s := &Service{defaultBaselineModel: "deepseek-ai/deepseek-v4-pro"}
+		assert.Equal(t, "deepseek-ai/deepseek-v4-flash", s.baselineFor("claude-haiku-4-5"))
+	})
 }
 
 func TestWithDefaultBaselineModel(t *testing.T) {
@@ -39,9 +44,9 @@ func TestWithDefaultBaselineModel(t *testing.T) {
 // models never enter the desugared exclusion set, so ExcludedModels alone won't block them.
 func TestBaselineModelPermittedByAllowlist(t *testing.T) {
 	restricted := context.WithValue(context.Background(),
-		InstallationAllowedModelsContextKey{}, []string{"z-ai/glm-5.2"})
+		InstallationAllowedModelsContextKey{}, []string{"zai-org/glm-5.2"})
 
-	assert.True(t, modelPermittedByAllowlist(restricted, "z-ai/glm-5.2"),
+	assert.True(t, modelPermittedByAllowlist(restricted, "zai-org/glm-5.2"),
 		"an allowlisted model clears the gate")
 	assert.False(t, modelPermittedByAllowlist(restricted, "moonshotai/kimi-k3"),
 		"a passthrough-only model outside the allowlist must NOT be rescued to")

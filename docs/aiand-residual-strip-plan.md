@@ -81,11 +81,11 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-u
 
 **Build.**
 
-- [ ] Encode Appendix F in `forceModelAliases`. Prefer exact full IDs clients still send (`claude-fable-5`, `claude-opus-4-8`, `claude-opus-5`, `claude-sonnet-5`, `claude-haiku-4-5`, and peers). Align short keys with the same targets. Set `escalateModel` to `z-ai/glm-5.2`. Set the Service constructor cyber fallback default to `moonshotai/kimi-k2.7`. Do not invent new catalog rows. Do not rewrite `artifacts/**`. Do not treat Claude Code as a reason to keep Claude catalog IDs. Use the cloud-agent prompt in Appendix D under `model-remap`.
+- [ ] Encode Appendix F in `forceModelAliases`. Prefer exact full IDs clients still send (`claude-fable-5`, `claude-opus-4-8`, `claude-opus-5`, `claude-sonnet-5`, `claude-haiku-4-5`, and peers). Align short keys with the same targets. Set `escalateModel` to `zai-org/glm-5.2`. Set the Service constructor cyber fallback default to `moonshotai/kimi-k2.7`. Do not invent new catalog rows. Do not rewrite `artifacts/**`. Do not treat Claude Code as a reason to keep Claude catalog IDs. Use the cloud-agent prompt in Appendix D under `model-remap`.
 
 **You see.**
 
-- [ ] `resolveForceModel("claude-fable-5")` returns catalog id `moonshotai/kimi-k3` and `ProviderAiand`. `resolveForceModel("claude-opus-4-8")` returns `z-ai/glm-5.2`. Loop escalation pins `z-ai/glm-5.2`. Unconfigured cyber fallback default is `moonshotai/kimi-k2.7`.
+- [ ] `resolveForceModel("claude-fable-5")` returns catalog id `moonshotai/kimi-k3` and `ProviderAiand`. `resolveForceModel("claude-opus-4-8")` returns `zai-org/glm-5.2`. Loop escalation pins `zai-org/glm-5.2`. Unconfigured cyber fallback default is `moonshotai/kimi-k2.7`.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -94,10 +94,10 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-u
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.6-fast-xhigh` at the PR head, per the boot recipe.
 
 - [ ] Lane 1. Resolve `claude-fable-5` through the force path. Save `force-fable.png`. Pass when canonical id is `moonshotai/kimi-k3` and provider is `aiand`.
-- [ ] Lane 2. Resolve `claude-opus-4-8`. Save `force-opus48.png`. Pass when canonical id is `z-ai/glm-5.2`.
-- [ ] Lane 3. Resolve `claude-opus-5` and `opus`. Save `force-opus5.png`. Pass when both land on `z-ai/glm-5.2`.
+- [ ] Lane 2. Resolve `claude-opus-4-8`. Save `force-opus48.png`. Pass when canonical id is `zai-org/glm-5.2`.
+- [ ] Lane 3. Resolve `claude-opus-5` and `opus`. Save `force-opus5.png`. Pass when both land on `zai-org/glm-5.2`.
 - [ ] Lane 4. Resolve `claude-sonnet-5` and `claude-haiku-4-5`. Save `force-sonnet-haiku.png`. Pass when targets match Appendix F.
-- [ ] Lane 5. Confirm `escalateModel` constant. Save `escalate-const.png`. Pass when it equals `z-ai/glm-5.2`.
+- [ ] Lane 5. Confirm `escalateModel` constant. Save `escalate-const.png`. Pass when it equals `zai-org/glm-5.2`.
 - [ ] Lane 6. Confirm Service cyber default. Save `cyber-default.png`. Pass when constructor default is `moonshotai/kimi-k2.7`.
 - [ ] Lane 7. Confirm main env default still `ROUTER_CYBER_REFUSAL_FALLBACK_MODEL` → kimi-k2.7. Save `main-cyber.png`. Pass when env default matches.
 - [ ] Lane 8. Confirm v0.76 registry and `artifacts/latest` untouched. Save `artifacts-frozen.png`. Pass when `git diff --name-only` excludes `internal/router/cluster/artifacts/`.
@@ -401,11 +401,11 @@ Product course-correction locked OpenAI-first plus Claude-to-aiand remap. No new
 
 Evidence already in tree.
 
-1. Catalog (`internal/router/catalog/catalog.go`) is aiand-only. Exact ids include `moonshotai/kimi-k3` and `z-ai/glm-5.2`.
+1. Catalog (`internal/router/catalog/catalog.go`) is aiand-only. Exact ids include `moonshotai/kimi-k3` and `zai-org/glm-5.2`.
 2. Deploy pointer `artifacts/latest` is `v0.76`. Registry models are already aiand upstream ids. Leave frozen history alone.
 3. `forceModelAliases` already remaps short Claude keys. Full ids like `claude-fable-5` and `claude-opus-4-8` still miss exact entries and fall through to `ProviderAnthropic` unknown.
 4. Live bug. `escalateModel` is still `claude-opus-5`. Service constructor cyber default is still `claude-sonnet-5` (main env default is already kimi-k2.7).
-5. Prior force map sent `opus-4-8` / `claude-4-8` to `moonshotai/kimi-k3`. Operator override maps `claude-opus-4-8` to `z-ai/glm-5.2`. Appendix F follows the operator.
+5. Prior force map sent `opus-4-8` / `claude-4-8` to `moonshotai/kimi-k3`. Operator override maps `claude-opus-4-8` to `zai-org/glm-5.2`. Appendix F follows the operator.
 
 Unproven until owners run live lanes.
 
@@ -514,12 +514,12 @@ Product intent. OpenAI-compatible router. First-party path is ProviderAiand and 
 
 Appendix F is authoritative. Encode full IDs and align short keys.
 - claude-fable-5 (and fable short keys) -> moonshotai/kimi-k3
-- claude-opus-4-8 (and opus-4-8 / claude-4-8 keys) -> z-ai/glm-5.2  [operator override; old map used kimi-k3]
-- claude-opus-5 / claude-opus / opus / claude-5 -> z-ai/glm-5.2
+- claude-opus-4-8 (and opus-4-8 / claude-4-8 keys) -> zai-org/glm-5.2  [operator override; old map used kimi-k3]
+- claude-opus-5 / claude-opus / opus / claude-5 -> zai-org/glm-5.2
 - claude-sonnet-5 / claude-sonnet / sonnet -> moonshotai/kimi-k2.7
 - claude-sonnet-4-6 / sonnet-4-6 -> deepseek-ai/deepseek-v4-pro
 - claude-haiku-4-5 / claude-haiku / haiku -> deepseek-ai/deepseek-v4-flash
-Also set escalateModel in loop_detection.go to z-ai/glm-5.2.
+Also set escalateModel in loop_detection.go to zai-org/glm-5.2.
 Set Service constructor cyberRefusalFallbackModel default to moonshotai/kimi-k2.7 (match main env default).
 
 Stay. Do not edit artifacts/. Do not invent catalog rows. Do not rename ProviderAnthropic. Do not edit handover.go, docs, or frontend.
@@ -631,9 +631,9 @@ Source of truth for `model-remap` and for docs. Prefer existing `catalog.Models`
 | Client or force input | aiand catalog ID | Notes |
 | --- | --- | --- |
 | `claude-fable-5`, `claude-fable`, `fable`, `fable-5`, `fable5` | `moonshotai/kimi-k3` | Operator example. High-tier long-context peer. |
-| `claude-opus-4-8`, `opus-4-8`, `opus-4.8`, `claude-4-8`, `claude-4.8` | `z-ai/glm-5.2` | Operator example. Overrides older force map that used kimi-k3. |
-| `claude-opus-5`, `claude-opus`, `opus`, `claude`, `anthropic`, `claude-5`, `opus-5`, `opus-5.0`, `opus5` | `z-ai/glm-5.2` | Flagship high tier. Also `escalateModel` target. |
-| `claude-opus-4-7`, `claude-opus-4-6` | `z-ai/glm-5.2` | Same opus family. Closest live high-tier peer. Mark if evals assumed kimi. |
+| `claude-opus-4-8`, `opus-4-8`, `opus-4.8`, `claude-4-8`, `claude-4.8` | `zai-org/glm-5.2` | Operator example. Overrides older force map that used kimi-k3. |
+| `claude-opus-5`, `claude-opus`, `opus`, `claude`, `anthropic`, `claude-5`, `opus-5`, `opus-5.0`, `opus5` | `zai-org/glm-5.2` | Flagship high tier. Also `escalateModel` target. |
+| `claude-opus-4-7`, `claude-opus-4-6` | `zai-org/glm-5.2` | Same opus family. Closest live high-tier peer. Mark if evals assumed kimi. |
 | `claude-sonnet-5`, `claude-sonnet`, `sonnet`, `sonnet-5` | `moonshotai/kimi-k2.7` | Existing sonnet aliases. Cyber fallback peer. |
 | `claude-sonnet-4-6`, `sonnet-4-6`, `sonnet-4.6` | `deepseek-ai/deepseek-v4-pro` | Existing mid-tier alias. |
 | `claude-haiku-4-5`, `claude-haiku`, `haiku`, `haiku-4-5`, `haiku-4.5` | `deepseek-ai/deepseek-v4-flash` | Existing low-tier alias. Hard-pin default peer. |

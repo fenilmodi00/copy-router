@@ -126,6 +126,18 @@ func (c *captureTelemetry) firstRow(t *testing.T) proxy.InsertTelemetryParams {
 	return c.rows[0]
 }
 
+// semanticCacheHitRow returns the first telemetry row marked semantic_cache_hit.
+func (c *captureTelemetry) semanticCacheHitRow() *proxy.InsertTelemetryParams {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range c.rows {
+		if c.rows[i].SemanticCacheHit != nil && *c.rows[i].SemanticCacheHit {
+			return &c.rows[i]
+		}
+	}
+	return nil
+}
+
 func (c *captureTelemetry) firstShadowRow(t *testing.T) proxy.PolicyShadowDecision {
 	t.Helper()
 	select {

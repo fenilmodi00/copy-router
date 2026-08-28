@@ -1218,7 +1218,8 @@ SELECT
         (actual_input_cost_usd + actual_output_cost_usd)
     ), 0)::bigint                                             AS total_savings_usd,
     COALESCE(SUM(cache_creation_tokens), 0)::bigint           AS cache_write_tokens,
-    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens
+    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens,
+    COALESCE(COUNT(*) FILTER (WHERE semantic_cache_hit IS TRUE), 0)::bigint AS semantic_cache_hits
 FROM router.model_router_request_telemetry
 WHERE installation_id = $1::uuid
   AND span_type = 'router.upstream'
@@ -1240,6 +1241,7 @@ type GetTelemetrySummaryRow struct {
 	TotalSavingsUsd       int64
 	CacheWriteTokens      int64
 	CacheReadTokens       int64
+	SemanticCacheHits     int64
 }
 
 // Returns aggregated cost and token totals for the dashboard cards.
@@ -1254,7 +1256,8 @@ type GetTelemetrySummaryRow struct {
 //	        (actual_input_cost_usd + actual_output_cost_usd)
 //	    ), 0)::bigint                                             AS total_savings_usd,
 //	    COALESCE(SUM(cache_creation_tokens), 0)::bigint           AS cache_write_tokens,
-//	    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens,
+//	    COALESCE(COUNT(*) FILTER (WHERE semantic_cache_hit IS TRUE), 0)::bigint AS semantic_cache_hits
 //	FROM router.model_router_request_telemetry
 //	WHERE installation_id = $1::uuid
 //	  AND span_type = 'router.upstream'
@@ -1271,6 +1274,7 @@ func (q *Queries) GetTelemetrySummary(ctx context.Context, arg GetTelemetrySumma
 		&i.TotalSavingsUsd,
 		&i.CacheWriteTokens,
 		&i.CacheReadTokens,
+		&i.SemanticCacheHits,
 	)
 	return i, err
 }
@@ -1286,7 +1290,8 @@ SELECT
         (actual_input_cost_usd + actual_output_cost_usd)
     ), 0)::bigint                                             AS total_savings_usd,
     COALESCE(SUM(cache_creation_tokens), 0)::bigint           AS cache_write_tokens,
-    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens
+    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens,
+    COALESCE(COUNT(*) FILTER (WHERE semantic_cache_hit IS TRUE), 0)::bigint AS semantic_cache_hits
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= $1::timestamptz
@@ -1306,6 +1311,7 @@ type GetTelemetrySummaryAllRow struct {
 	TotalSavingsUsd       int64
 	CacheWriteTokens      int64
 	CacheReadTokens       int64
+	SemanticCacheHits     int64
 }
 
 // Returns aggregated cost and token totals across every installation.
@@ -1322,7 +1328,8 @@ type GetTelemetrySummaryAllRow struct {
 //	        (actual_input_cost_usd + actual_output_cost_usd)
 //	    ), 0)::bigint                                             AS total_savings_usd,
 //	    COALESCE(SUM(cache_creation_tokens), 0)::bigint           AS cache_write_tokens,
-//	    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens,
+//	    COALESCE(COUNT(*) FILTER (WHERE semantic_cache_hit IS TRUE), 0)::bigint AS semantic_cache_hits
 //	FROM router.model_router_request_telemetry
 //	WHERE span_type = 'router.upstream'
 //	  AND timestamp >= $1::timestamptz
@@ -1338,6 +1345,7 @@ func (q *Queries) GetTelemetrySummaryAll(ctx context.Context, arg GetTelemetrySu
 		&i.TotalSavingsUsd,
 		&i.CacheWriteTokens,
 		&i.CacheReadTokens,
+		&i.SemanticCacheHits,
 	)
 	return i, err
 }
@@ -1853,6 +1861,7 @@ INSERT INTO router.model_router_request_telemetry (
     ttft_ms,
     cache_creation_tokens,
     cache_read_tokens,
+    semantic_cache_hit,
     device_id,
     session_id,
     router_user_id,
@@ -1941,49 +1950,50 @@ INSERT INTO router.model_router_request_telemetry (
     $42::bigint,
     $43::int,
     $44::int,
-    $45::varchar,
+    $45::boolean,
     $46::varchar,
-    $47::uuid,
-    $48::text,
-    $49::varchar,
+    $47::varchar,
+    $48::uuid,
+    $49::text,
     $50::varchar,
-    $51::text,
+    $51::varchar,
     $52::text,
-    $53::int,
+    $53::text,
     $54::int,
-    $55::boolean,
+    $55::int,
     $56::boolean,
-    $57::bytea,
-    $58::varchar,
+    $57::boolean,
+    $58::bytea,
     $59::varchar,
-    $60::jsonb,
-    $61::bigint,
-    $62::int,
-    $63::varchar,
+    $60::varchar,
+    $61::jsonb,
+    $62::bigint,
+    $63::int,
     $64::varchar,
     $65::varchar,
-    $66::jsonb,
-    $67::varchar,
+    $66::varchar,
+    $67::jsonb,
     $68::varchar,
     $69::varchar,
     $70::varchar,
-    $71::bigint,
+    $71::varchar,
     $72::bigint,
-    $73::boolean,
-    $74::varchar,
-    $75::bigint,
-    $76::varchar,
-    $77::boolean,
-    $78::varchar,
+    $73::bigint,
+    $74::boolean,
+    $75::varchar,
+    $76::bigint,
+    $77::varchar,
+    $78::boolean,
     $79::varchar,
     $80::varchar,
-    $81::bigint,
+    $81::varchar,
     $82::bigint,
-    $83::boolean,
-    $84::varchar,
-    $85::bigint,
-    $86::double precision,
-    $87::double precision
+    $83::bigint,
+    $84::boolean,
+    $85::varchar,
+    $86::bigint,
+    $87::double precision,
+    $88::double precision
 )
 ON CONFLICT (installation_id, request_id, span_type) DO NOTHING
 `
@@ -2033,6 +2043,7 @@ type InsertRequestTelemetryParams struct {
 	TtftMs                                   *int64
 	CacheCreationTokens                      *int32
 	CacheReadTokens                          *int32
+	SemanticCacheHit                         *bool
 	DeviceID                                 *string
 	SessionID                                *string
 	RouterUserID                             pgtype.UUID
@@ -2154,6 +2165,7 @@ type InsertRequestTelemetryParams struct {
 //	    ttft_ms,
 //	    cache_creation_tokens,
 //	    cache_read_tokens,
+//	    semantic_cache_hit,
 //	    device_id,
 //	    session_id,
 //	    router_user_id,
@@ -2242,49 +2254,50 @@ type InsertRequestTelemetryParams struct {
 //	    $42::bigint,
 //	    $43::int,
 //	    $44::int,
-//	    $45::varchar,
+//	    $45::boolean,
 //	    $46::varchar,
-//	    $47::uuid,
-//	    $48::text,
-//	    $49::varchar,
+//	    $47::varchar,
+//	    $48::uuid,
+//	    $49::text,
 //	    $50::varchar,
-//	    $51::text,
+//	    $51::varchar,
 //	    $52::text,
-//	    $53::int,
+//	    $53::text,
 //	    $54::int,
-//	    $55::boolean,
+//	    $55::int,
 //	    $56::boolean,
-//	    $57::bytea,
-//	    $58::varchar,
+//	    $57::boolean,
+//	    $58::bytea,
 //	    $59::varchar,
-//	    $60::jsonb,
-//	    $61::bigint,
-//	    $62::int,
-//	    $63::varchar,
+//	    $60::varchar,
+//	    $61::jsonb,
+//	    $62::bigint,
+//	    $63::int,
 //	    $64::varchar,
 //	    $65::varchar,
-//	    $66::jsonb,
-//	    $67::varchar,
+//	    $66::varchar,
+//	    $67::jsonb,
 //	    $68::varchar,
 //	    $69::varchar,
 //	    $70::varchar,
-//	    $71::bigint,
+//	    $71::varchar,
 //	    $72::bigint,
-//	    $73::boolean,
-//	    $74::varchar,
-//	    $75::bigint,
-//	    $76::varchar,
-//	    $77::boolean,
-//	    $78::varchar,
+//	    $73::bigint,
+//	    $74::boolean,
+//	    $75::varchar,
+//	    $76::bigint,
+//	    $77::varchar,
+//	    $78::boolean,
 //	    $79::varchar,
 //	    $80::varchar,
-//	    $81::bigint,
+//	    $81::varchar,
 //	    $82::bigint,
-//	    $83::boolean,
-//	    $84::varchar,
-//	    $85::bigint,
-//	    $86::double precision,
-//	    $87::double precision
+//	    $83::bigint,
+//	    $84::boolean,
+//	    $85::varchar,
+//	    $86::bigint,
+//	    $87::double precision,
+//	    $88::double precision
 //	)
 //	ON CONFLICT (installation_id, request_id, span_type) DO NOTHING
 func (q *Queries) InsertRequestTelemetry(ctx context.Context, arg InsertRequestTelemetryParams) error {
@@ -2333,6 +2346,7 @@ func (q *Queries) InsertRequestTelemetry(ctx context.Context, arg InsertRequestT
 		arg.TtftMs,
 		arg.CacheCreationTokens,
 		arg.CacheReadTokens,
+		arg.SemanticCacheHit,
 		arg.DeviceID,
 		arg.SessionID,
 		arg.RouterUserID,

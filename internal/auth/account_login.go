@@ -138,11 +138,28 @@ func (s *Service) LoginWithKey(ctx context.Context, rawKey string) (*Account, *I
 		return nil, nil, "", time.Time{}, err
 	}
 
-	token, expiresAt, err := s.IssueLoginSession(ctx, account)
+	token, expiresAt, err := s.IssueLoginSession(ctx, account, installation)
 	if err != nil {
 		return nil, nil, "", time.Time{}, err
 	}
 	return account, installation, token, expiresAt, nil
+}
+
+// InstallationForAccountSession returns the installation bound to a dashboard
+// session. When installation_id was cached at login, loads that row directly;
+// otherwise falls back to EnsureAccountInstallation (repair path for sessions
+// minted before the column existed).
+func (s *Service) InstallationForAccountSession(ctx context.Context, account *Account, session *LoginSession) (*Installation, error) {
+	if account == nil {
+		return nil, ErrLoginSessionInvalid
+	}
+	if session != nil && session.InstallationID != "" {
+		inst, err := s.installations.Get(ctx, account.ID, session.InstallationID)
+		if err == nil && inst != nil && inst.DeletedAt == nil {
+			return inst, nil
+		}
+	}
+	return s.EnsureAccountInstallation(ctx, account)
 }
 
 // EnsureAccountInstallation returns the installation whose external_id equals
@@ -187,21 +204,25 @@ func (s *Service) findAccountInstallation(ctx context.Context, accountID string)
 
 // IssueLoginSession mints an opaque token, stores its SHA-256 hash, and returns
 // the raw token + expiry. The raw token is returned once and never stored.
-func (s *Service) IssueLoginSession(ctx context.Context, account *Account) (string, time.Time, error) {
+func (s *Service) IssueLoginSession(ctx context.Context, account *Account, installation *Installation) (string, time.Time, error) {
 	if s.loginSessions == nil {
 		return "", time.Time{}, ErrLoginDisabled
+	}
+	if installation == nil || installation.ID == "" {
+		return "", time.Time{}, ErrLoginSessionInvalid
 	}
 	now := s.now()
 	expiresAt := now.Add(DefaultLoginSessionTTL)
 	raw := generateLoginSessionToken()
 	hash, prefix, suffix := APITokenFingerprint(raw)
 	session, err := s.loginSessions.Insert(ctx, LoginSession{
-		AccountID:   account.ID,
-		TokenHash:   hash,
-		TokenPrefix: prefix,
-		TokenSuffix: suffix,
-		IssuedAt:    now,
-		ExpiresAt:   expiresAt,
+		AccountID:      account.ID,
+		InstallationID: installation.ID,
+		TokenHash:      hash,
+		TokenPrefix:    prefix,
+		TokenSuffix:    suffix,
+		IssuedAt:       now,
+		ExpiresAt:      expiresAt,
 	})
 	if err != nil {
 		return "", time.Time{}, err
@@ -215,22 +236,29 @@ func (s *Service) IssueLoginSession(ctx context.Context, account *Account) (stri
 // VerifyLoginSession resolves a cookie token to its account. Returns
 // ErrLoginSessionInvalid for unknown, expired, or revoked tokens.
 func (s *Service) VerifyLoginSession(ctx context.Context, token string) (*Account, error) {
+	acct, _, err := s.VerifyLoginSessionDetails(ctx, token)
+	return acct, err
+}
+
+// VerifyLoginSessionDetails resolves a cookie token to its account and session
+// row. Returns ErrLoginSessionInvalid for unknown, expired, or revoked tokens.
+func (s *Service) VerifyLoginSessionDetails(ctx context.Context, token string) (*Account, *LoginSession, error) {
 	if s.loginSessions == nil || s.accounts == nil {
-		return nil, ErrLoginSessionInvalid
+		return nil, nil, ErrLoginSessionInvalid
 	}
 	hash := HashAPIKeySHA256(token)
 	session, err := s.loginSessions.GetActiveByTokenHash(ctx, hash)
 	if err != nil {
-		return nil, ErrLoginSessionInvalid
+		return nil, nil, ErrLoginSessionInvalid
 	}
 	if session == nil || session.AccountID == "" {
-		return nil, ErrLoginSessionInvalid
+		return nil, nil, ErrLoginSessionInvalid
 	}
 	account, err := s.accounts.GetByID(ctx, session.AccountID)
 	if err != nil {
-		return nil, ErrLoginSessionInvalid
+		return nil, nil, ErrLoginSessionInvalid
 	}
-	return account, nil
+	return account, session, nil
 }
 
 // AccountFromContext returns the account stashed on ctx by the middleware, or

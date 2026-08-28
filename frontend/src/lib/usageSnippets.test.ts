@@ -19,11 +19,11 @@ describe("usageSnippet", () => {
     expect(snip).toContain(`Authorization: Bearer ${KEY_PLACEHOLDER}`);
   });
 
-  it("force curl includes x-weave-force-model and the model id", () => {
+  it("force curl puts the model in the body and the model id", () => {
     const snip = usageSnippet("curl", "force", ctx);
-    expect(snip).toContain("x-weave-force-model");
     expect(snip).toContain(DEFAULT_FORCE_MODEL);
-    expect(snip).toMatch(/"model":\s*"auto"/);
+    expect(snip).toContain(`"model": "${DEFAULT_FORCE_MODEL}"`);
+    expect(snip).not.toContain("x-weave-force-model");
   });
 
   it("python uses base_url ending in /v1", () => {
@@ -40,15 +40,17 @@ describe("usageSnippet", () => {
     expect(snip).toContain('model: "auto"');
   });
 
-  it("force python and typescript pin via default headers", () => {
+  it("force python and typescript use model on the create call", () => {
     const py = usageSnippet("python", "force", {
       ...ctx,
       forceModel: "moonshotai/kimi-k2.7",
     });
-    expect(py).toContain('default_headers={"x-weave-force-model": "moonshotai/kimi-k2.7"}');
+    expect(py).toContain('model="moonshotai/kimi-k2.7"');
+    expect(py).not.toContain("default_headers");
 
     const ts = usageSnippet("typescript", "force", ctx);
-    expect(ts).toContain(`"x-weave-force-model": "${DEFAULT_FORCE_MODEL}"`);
+    expect(ts).toContain(`model: "${DEFAULT_FORCE_MODEL}"`);
+    expect(ts).not.toContain("defaultHeaders");
   });
 
   it("empty origin still produces a string", () => {

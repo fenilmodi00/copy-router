@@ -9,7 +9,7 @@ func TestFamilyAndVersion(t *testing.T) {
 		version [2]int
 		ok      bool
 	}{
-		{"z-ai/glm-5.2", "z-ai/glm", [2]int{5, 2}, true},
+		{"zai-org/glm-5.2", "zai-org/glm", [2]int{5, 2}, true},
 		{"moonshotai/kimi-k2.7", "moonshotai/kimi-k", [2]int{2, 7}, true},
 		{"moonshotai/kimi-k3", "moonshotai/kimi-k", [2]int{3, 0}, true},
 		{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v-flash", [2]int{4, 0}, true},
@@ -39,7 +39,7 @@ func TestFamilyDuplicates(t *testing.T) {
 	ids := []string{
 		"moonshotai/kimi-k2.7",
 		"moonshotai/kimi-k3",
-		"z-ai/glm-5.2",
+		"zai-org/glm-5.2",
 	}
 	dups := FamilyDuplicates(ids)
 	got := make(map[string]string, len(dups))

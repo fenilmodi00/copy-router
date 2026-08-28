@@ -70,6 +70,11 @@ type translationConstraint struct {
 // while its Chat projection is routed through the existing turn loop.
 type responsesRequirementsContextKey struct{}
 
+// modelIntentResolutionSkippedContextKey marks a request whose model field
+// must not drive force resolution: ProxyOpenAIResponses sets it for verbatim
+// native passthroughs, which dispatch the caller's original body unchanged.
+type modelIntentResolutionSkippedContextKey struct{}
+
 type responsesTransformsContextKey struct{}
 
 type translationPlanAppliedContextKey struct{}

@@ -10,7 +10,7 @@ import (
 func BenchmarkResolveBinding(b *testing.B) {
 	available := map[string]struct{}{providers.ProviderAiand: {}}
 	models := []string{
-		"z-ai/glm-5.2",
+		"zai-org/glm-5.2",
 		"moonshotai/kimi-k3",
 		"motif-technologies/motif-3",
 	}

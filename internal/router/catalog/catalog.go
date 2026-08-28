@@ -248,10 +248,30 @@ var Models = []Model{
 			{Provider: providers.ProviderAiand, UpstreamID: "motif-technologies/motif-3",
 				Price: Pricing{InputUSDPer1M: 0.500, OutputUSDPer1M: 2.000, CacheReadMultiplier: 0.20 / 0.500}},
 		}},
-	{ID: "z-ai/glm-5.2", Tier: TierHigh, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported,
+	// GLM-5.2: canonical id is zai-org/glm-5.2, ai&'s served model name. The
+	// legacy z-ai/glm-5.2 string (frozen v0.69–v0.74 + candidate-k12 training
+	// artifacts, stored session pins, archived client integrations) stays
+	// resolvable via the aliases table in lookup.go. UpstreamID equals the
+	// catalog ID, so indexUpstreamID skips this binding (no rewrite needed;
+	// the catalog id is the wire id).
+	{ID: "zai-org/glm-5.2", Tier: TierHigh, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported,
 		ReasoningEfforts: []string{EffortNone, EffortHigh, EffortMax},
 		Providers: []ProviderBinding{
 			{Provider: providers.ProviderAiand, UpstreamID: "zai-org/glm-5.2",
 				Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 4.000, CacheReadMultiplier: 0.30 / 1.000}},
 		}},
+}
+
+// aliases maps retired catalog IDs onto their current canonical rows. The
+// canonical ID is the one the live cluster scorer and /v1/router/models
+// surface; an alias entry keeps an older name resolvable so frozen training
+// artifacts (whose model_registry.json ranks the legacy name), stored
+// session pins, and archived client integrations keep landing on the same
+// Model row. Aliases are dispatch-invisible by construction: byID holds the
+// legacy→canonical index, but byUpstreamID never gains the alias, so
+// AvailableBindings/EnumerateBindings never hand dispatch a legacy upstream
+// wire name. Add aliases here only when a model is renamed and the old name
+// still appears in committed frozen artifacts or live client state.
+var aliases = map[string]string{
+	"z-ai/glm-5.2": "zai-org/glm-5.2",
 }

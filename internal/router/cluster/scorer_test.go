@@ -369,12 +369,12 @@ func imageFilterArtifacts(t *testing.T) (centroidsBlob, rankingsBlob, registryBl
 	centroidsBlob = buildCentroidsBlob(t, 1, dim, c0)
 	rankingsBlob = []byte(`{
 		"rankings": {
-			"0": {"z-ai/glm-5.2": 0.9, "moonshotai/kimi-k3": 0.1}
+			"0": {"zai-org/glm-5.2": 0.9, "moonshotai/kimi-k3": 0.1}
 		}
 	}`)
 	registryBlob = []byte(`{
 		"deployed_models": [
-			{"model": "z-ai/glm-5.2", "provider": "aiand", "bench_column": "x", "proxy": true},
+			{"model": "zai-org/glm-5.2", "provider": "aiand", "bench_column": "x", "proxy": true},
 			{"model": "moonshotai/kimi-k3", "provider": "aiand", "bench_column": "y", "proxy": true}
 		]
 	}`)
@@ -390,12 +390,12 @@ func TestScorer_DropsTextOnlyModelOnImageTurn(t *testing.T) {
 
 	textTurn, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100)})
 	require.NoError(t, err)
-	assert.Equal(t, "z-ai/glm-5.2", textTurn.Model, "text turn routes to the cluster-preferred model")
+	assert.Equal(t, "zai-org/glm-5.2", textTurn.Model, "text turn routes to the cluster-preferred model")
 
 	imageTurn, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100), HasImages: true})
 	require.NoError(t, err)
 	assert.Equal(t, "moonshotai/kimi-k3", imageTurn.Model, "image turn must skip the text-only model")
-	assert.NotContains(t, imageTurn.Metadata.CandidateModels, "z-ai/glm-5.2",
+	assert.NotContains(t, imageTurn.Metadata.CandidateModels, "zai-org/glm-5.2",
 		"text-only model must be absent from the image-turn candidate set")
 }
 
@@ -404,8 +404,8 @@ func TestScorer_KeepsTextOnlyPoolWhenNoImageCapableCandidate(t *testing.T) {
 	c0 := make([]float32, dim)
 	c0[0] = 1
 	cb := buildCentroidsBlob(t, 1, dim, c0)
-	rb := []byte(`{"rankings": {"0": {"z-ai/glm-5.2": 0.9}}}`)
-	regb := []byte(`{"deployed_models": [{"model": "z-ai/glm-5.2", "provider": "aiand", "bench_column": "x", "proxy": true}]}`)
+	rb := []byte(`{"rankings": {"0": {"zai-org/glm-5.2": 0.9}}}`)
+	regb := []byte(`{"deployed_models": [{"model": "zai-org/glm-5.2", "provider": "aiand", "bench_column": "x", "proxy": true}]}`)
 	bundle := bundleFromBlobs(t, "v-test", cb, rb, regb)
 	s, err := NewScorer(bundle, cfgForTest(), &fakeEmbedder{vec: makeOpusVec()}, map[string]struct{}{providers.ProviderAiand: {}})
 	require.NoError(t, err)
@@ -414,7 +414,7 @@ func TestScorer_KeepsTextOnlyPoolWhenNoImageCapableCandidate(t *testing.T) {
 	// decision rather than erroring; upstream reports the rejection.
 	got, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100), HasImages: true})
 	require.NoError(t, err)
-	assert.Equal(t, "z-ai/glm-5.2", got.Model)
+	assert.Equal(t, "zai-org/glm-5.2", got.Model)
 }
 
 func TestScorer_ReturnsErrOnEmbedderError(t *testing.T) {

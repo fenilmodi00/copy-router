@@ -8,6 +8,7 @@ This page is the exhaustive reference; the [README](../README.md) has the
 
 - [Provider API keys](#provider-api-keys)
   - [Client Claude aliases → catalog IDs](#client-claude-aliases--catalog-ids)
+  - [Routing intent via the `model` field](#routing-intent-via-the-model-field)
   - [Peripheral gateway / BYOK env](#peripheral-gateway--byok-env)
   - [Key-pair auth](#key-pair-auth)
   - [Workload identity federation](#workload-identity-federation)
@@ -25,7 +26,7 @@ This page is the exhaustive reference; the [README](../README.md) has the
 
 This deploy registers **ai& (aiand) only** at boot. The product lead is
 OpenAI-compatible `POST /v1/chat/completions` against the open-weight catalog
-(`moonshotai/…`, `z-ai/…`, `deepseek-ai/…`). Set `AIAND_API_KEY` — that is the
+(`moonshotai/…`, `zai-org/…`, `deepseek-ai/…`). Set `AIAND_API_KEY` — that is the
 deploy baseline. A secondary `POST /v1/messages` ingress accepts Anthropic wire
 and translates to OpenAI-compat before dispatch; do not treat it as a second
 upstream.
@@ -34,6 +35,7 @@ upstream.
 | --------------- | -------------------------- | ------ |
 | `AIAND_API_KEY` | *(none)*                   | **Deploy baseline.** Enables ai& (aiand.com) OpenAI-compatible inference for the open-weight catalog. |
 | `AIAND_API_URL` | `https://api.aiand.com/v1` | Base URL for ai&; `/chat/completions` is appended to it. |
+| `AIAND_IDENTITY_URL` | `https://api.aiand.com` | API root for the dashboard identity probe (`GET <root>/v1/models`). Separate from `AIAND_API_URL`, which is the OpenAI-compatible inference base and already includes `/v1`. |
 
 **BYOK (per-installation keys).** Instead of (or in addition to) the env vars
 above, each installation can supply its own provider keys via the dashboard.
@@ -43,19 +45,57 @@ See [BYOK encryption](#byok-encryption).
 ### Client Claude aliases → catalog IDs
 
 Clients may still send Claude-era model names on **force-model** paths
-(`claude-sonnet-5`, `/force-model opus`, `x-weave-force-model`, …). Those
-strings are **remap inputs only** — they are not catalog rows. Force-model
-resolution maps them onto existing aiand catalog IDs (a plain inbound `model`
-field is not rewritten before routing):
+(`claude-sonnet-5`, `/force-model opus`, `x-weave-force-model`, `model="opus"`,
+…). Those strings are **remap inputs only** — they are not catalog rows.
+Force-model resolution maps them onto existing aiand catalog IDs:
 
 | Client alias | Catalog ID |
 | --- | --- |
 | `claude-fable-5` (+ fable shorts) | `moonshotai/kimi-k3` |
-| `claude-opus-4-8` (+ `opus-4-8` / `claude-4-8`) | `z-ai/glm-5.2` |
-| `claude-opus-5` / `opus` / `claude-5` | `z-ai/glm-5.2` |
+| `claude-opus-4-8` (+ `opus-4-8` / `claude-4-8`) | `zai-org/glm-5.2` |
+| `claude-opus-5` / `opus` / `claude-5` | `zai-org/glm-5.2` |
 | `claude-sonnet-5` / `sonnet` | `moonshotai/kimi-k2.7` |
 | `claude-sonnet-4-6` | `deepseek-ai/deepseek-v4-pro` |
 | `claude-haiku-4-5` / `haiku` | `deepseek-ai/deepseek-v4-flash` |
+
+### Routing intent via the `model` field
+
+The plain inbound `model` field is now routing intent, not a passthrough. Two
+values plus everything in between:
+
+- `model="auto"` — the default. Route normally: the scorer picks the model per
+  action.
+- `model="<catalog-id-or-alias>"` — force exactly that model: a canonical
+  catalog ID (`moonshotai/kimi-k2.7`, `deepseek-ai/deepseek-v4-flash`), a bare
+  tail (`kimi-k2.7`), an alias (`opus`, `kimi-k3`, `claude-sonnet-5`,
+  `claude-haiku-4-5`), an `openai/…` provider prefix, optionally with a
+  `:level` effort suffix (`opus:high`). This is **exactly equivalent** to the
+  `x-weave-force-model` header / `/force-model` command: it writes the same
+  user-forced session pin (`ReasonUserForceModel`, never expires), serves that
+  model on the same turn, and 400s on values that name no catalog model. A
+  Claude Code `[1m]` context-window variant tag on the field
+  (`kimi-k2.7[1m]`) is stripped before resolution.
+
+Precedence, when more than one carrier names a model:
+`/force-model` chat command > `model` field > `x-weave-force-model` header. All
+three still work; the header is now the fallback when the field is empty or
+`auto`.
+
+Two rules that make `auto` safe:
+
+- `model="auto"` **never clears** an existing pin. A user-forced pin from an
+  earlier `/force-model`, header, or model field survives `auto` turns —
+  only `/unforce-model` clears it.
+- A `model` value that resolves to **no catalog model** (typo, misleading
+  entry) is now HTTP 400 instead of being silently ignored. This is the
+  headline behavior change: previously such fields were skipped and the request
+  routed on; now they fail loud with the unresolvable value quoted back.
+
+The router reuses `translate.CanonicalModel` to strip Claude Code's `[1m]`
+variant tag from the field before deciding, and ranges every resolvable value
+through the same forced-model resolver as the header and command. A `:level`
+suffix on the winning value is honored exactly as it is on `x-weave-force-model`
+(effort lands in `router.Overrides.ForceEffort`).
 
 ### Peripheral gateway / BYOK env
 
@@ -359,10 +399,10 @@ returns 401.
 
 | Variable       | Default                    | Effect |
 | -------------- | -------------------------- | ------ |
-| `AIAND_API_URL` | `https://api.aiand.com` | API root for the identity probe; the login key is validated against `GET <root>/api/v1/me`. This is the API **root**, not the OpenAI-compatible inference base in [Provider API keys](#provider-api-keys) (which already includes `/v1`). |
+| `AIAND_IDENTITY_URL` | `https://api.aiand.com` | API root for the identity probe; the login key is validated against `GET <root>/v1/models`. This is the API **root**, not the OpenAI-compatible inference base in [Provider API keys](#provider-api-keys) (which uses `AIAND_API_URL` and already includes `/v1`). |
 
 The probe validates an arbitrary user `sk-` key as a bearer token against
-`/api/v1/me` — it never uses the deployment's own `AIAND_API_KEY`, so a
+`/v1/models` — it never uses the deployment's own `AIAND_API_KEY`, so a
 self-serve login can't spend platform budget. Responses map to the login
 outcomes: `200` → authenticated (identity stored), `401`/`403` → `invalid_key`,
 `402` → `insufficient_credits`, `429` → rate-limited, anything else (including
@@ -453,12 +493,14 @@ with nowhere to go (HTTP 503 from the scorer), so exclude deliberately.
 
 ## Forcing a model or a routing cluster
 
-`/force-model <model>` (alias `/fm`) pins the session to one model. The name is
-matched **exactly** — it must be a canonical catalog ID (`qwen/qwen3.8-max`),
-that model's bare name without the vendor prefix (`qwen3.8-max`), or an alias
-(`opus`, `qwen-max`), optionally with a `:level` effort suffix (`opus:high`).
-There is no prefix, substring, or nearest-match fallback: a name the router
-doesn't recognize is refused, never approximated.
+`/force-model <model>` (alias `/fm`) pins the session to one model, and the
+inbound `model` field / `x-weave-force-model` header are its headless
+equivalents (see [Routing intent via the `model` field](#routing-intent-via-the-model-field)).
+The name is matched **exactly** — it must be a canonical catalog ID
+(`qwen/qwen3.8-max`), that model's bare name without the vendor prefix
+(`qwen3.8-max`), or an alias (`opus`, `qwen-max`), optionally with a `:level`
+effort suffix (`opus:high`). There is no prefix, substring, or nearest-match
+fallback: a name the router doesn't recognize is refused, never approximated.
 
 That strictness is the point. Approximate matching served a model the caller
 never named — `/fm qwen 3.8` resolved through the bare `qwen` alias to
@@ -472,12 +514,16 @@ now fix the failing test
 ```
 
 Two request headers let a headless caller (eval harness, CI, any client whose
-UI eats slash commands) override routing. Both fail the request rather than
-routing on, so a typo can't look like it took effect.
+UI eats slash commands) override routing. The header is now a **fallback**:
+the inbound `model` field is the primary mechanism (see [Routing intent via the
+`model` field](#routing-intent-via-the-model-field)) — a resolvable `model`
+field wins over a conflicting header, and the header only takes effect when the
+field is empty or `auto`. Both carriers fail the request rather than routing
+on, so a typo can't look like it took effect.
 
 | Header | Effect |
 | ------ | ------ |
-| `x-weave-force-model` | Pins the session to one model, exactly as `/force-model` does — same exact-match rule. Accepts a canonical catalog ID, a bare name, or an alias (`opus`, `gpt`, `qwen-max`, …) plus an optional `:level` effort suffix (`opus:high`). A value naming no catalog model is HTTP 400. |
+| `x-weave-force-model` | COMpat/fallback path for `model="..."`. Pins the session to one model, exactly as `/force-model` does — same exact-match rule. Accepts a canonical catalog ID, a bare name, or an alias (`opus`, `gpt`, `qwen-max`, …) plus an optional `:level` effort suffix (`opus:high`). A value naming no catalog model is HTTP 400. |
 | `x-weave-force-cluster` | Constrains serving to one of the policy sidecar's routing clusters, leaving the choice *within* it to the policy. |
 
 `x-weave-force-cluster` takes an opaque label — the router holds no list of

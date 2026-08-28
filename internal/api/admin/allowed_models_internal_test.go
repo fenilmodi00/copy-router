@@ -64,13 +64,15 @@ func TestAllowlistLosesRoutability_UnknownUniverseFailsOpen(t *testing.T) {
 	assert.False(t, allowlistLosesRoutability([]string{"anything"}, known("anything"), routable()))
 }
 
-// Catalog membership is wider than the routable set; otherwise this guard is dead.
+// Catalog membership equals the routable universe under aiand-only bindings +
+// every model tiered: no catalog row is passthrough-only, so the live guard
+// `allowlistLosesRoutability` is exercised only by its unit tests feeding
+// deliberately non-routable inputs. Equality (not Less) catches a future
+// TierUnknown row that would silently revive the dead-code path.
 func TestFullCatalogExceedsRoutableUniverse(t *testing.T) {
 	catalogIDs := fullCatalogDTO()
 	require.NotEmpty(t, catalogIDs)
 
-	// Every provider bound: still narrower than the catalog, because
-	// passthrough-only rows carry no tier and are never scored.
 	all := make(map[string]struct{})
 	for _, m := range catalog.Models {
 		for _, b := range m.Providers {
@@ -80,6 +82,6 @@ func TestFullCatalogExceedsRoutableUniverse(t *testing.T) {
 	targets := catalog.RoutingTargetSet(all)
 
 	require.NotEmpty(t, targets)
-	assert.Less(t, len(targets), len(catalogIDs),
-		"expected catalog rows that no deployment can route; guard would be dead code otherwise")
+	assert.Equal(t, len(targets), len(catalogIDs),
+		"every catalog row must be routable when its bound provider is available; a TierUnknown row would silently make the allowlist guard unreachable")
 }

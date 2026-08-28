@@ -101,9 +101,23 @@ prints in the logs.
 
 ```bash
 # Lead surface: OpenAI Chat Completions (catalog IDs)
+# model="auto" routes normally (scorer picks per action)...
+curl -sS http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer rk_..." \
+  -d '{"model":"auto",
+       "messages":[{"role":"user","content":"hi"}]}'
+
+# ...and a catalog ID or alias in `model` forces exactly that model,
+# same user-forced pin as /force-model / x-weave-force-model.
 curl -sS http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer rk_..." \
   -d '{"model":"moonshotai/kimi-k2.7",
+       "messages":[{"role":"user","content":"hi"}]}'
+
+# Optional :level effort suffix rides along (opus:high).
+curl -sS http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer rk_..." \
+  -d '{"model":"opus:high",
        "messages":[{"role":"user","content":"hi"}]}'
 
 # Secondary: Anthropic Messages ingress (same catalog after remap/translate)
@@ -116,10 +130,14 @@ curl -sS http://localhost:8080/v1/messages \
 curl -sS http://localhost:8080/v1/route -H "Authorization: Bearer rk_..." -d '...'
 ```
 
-Clients that still send Claude-era aliases on force-model paths
-(`/force-model`, `x-weave-force-model`, …) are remapped to catalog IDs — see
-[docs/CONFIGURATION.md](docs/CONFIGURATION.md#client-claude-aliases--catalog-ids).
-A plain inbound `model` field is not rewritten before routing.
+The `model` field is routing intent: `model="auto"` (the default) routes
+normally, while a catalog ID or alias forces that model — exactly equivalent
+to `/force-model` or `x-weave-force-model` (same session pin, same-turn
+serving, same HTTP 400 on unknown values). Precedence is `/force-model`
+command > `model` field > `x-weave-force-model` header; `auto` never clears an
+existing pin. Clients that still send Claude-era aliases are remapped to
+catalog IDs — see [docs/CONFIGURATION.md](docs/CONFIGURATION.md#client-claude-aliases--catalog-ids)
+and the [routing-intent section](docs/CONFIGURATION.md#routing-intent-via-the-model-field).
 
 ### What that stack looks like
 

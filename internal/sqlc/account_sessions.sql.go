@@ -14,7 +14,7 @@ import (
 )
 
 const getActiveAccountSessionByHash = `-- name: GetActiveAccountSessionByHash :one
-SELECT id, account_id, token_hash, token_prefix, token_suffix, issued_at, expires_at, revoked_at, last_seen_at, ip_at_issue
+SELECT id, account_id, token_hash, token_prefix, token_suffix, issued_at, expires_at, revoked_at, last_seen_at, ip_at_issue, installation_id
 FROM router.account_sessions
 WHERE token_hash = $1::varchar
   AND revoked_at IS NULL
@@ -24,7 +24,7 @@ WHERE token_hash = $1::varchar
 // Active-session lookup by token hash. Returns a row only while the session is
 // live (not revoked, not expired).
 //
-//	SELECT id, account_id, token_hash, token_prefix, token_suffix, issued_at, expires_at, revoked_at, last_seen_at, ip_at_issue
+//	SELECT id, account_id, token_hash, token_prefix, token_suffix, issued_at, expires_at, revoked_at, last_seen_at, ip_at_issue, installation_id
 //	FROM router.account_sessions
 //	WHERE token_hash = $1::varchar
 //	  AND revoked_at IS NULL
@@ -43,6 +43,7 @@ func (q *Queries) GetActiveAccountSessionByHash(ctx context.Context, tokenHash s
 		&i.RevokedAt,
 		&i.LastSeenAt,
 		&i.IpAtIssue,
+		&i.InstallationID,
 	)
 	return i, err
 }
@@ -50,6 +51,7 @@ func (q *Queries) GetActiveAccountSessionByHash(ctx context.Context, tokenHash s
 const insertAccountSession = `-- name: InsertAccountSession :one
 INSERT INTO router.account_sessions (
     account_id,
+    installation_id,
     token_hash,
     token_prefix,
     token_suffix,
@@ -61,26 +63,30 @@ VALUES (
     $2::varchar,
     $3::varchar,
     $4::varchar,
-    $5::timestamptz,
-    $6::inet
+    $5::varchar,
+    $6::timestamptz,
+    $7::inet
 )
-RETURNING id, account_id, token_hash, token_prefix, token_suffix, issued_at, expires_at, revoked_at, last_seen_at, ip_at_issue
+RETURNING id, account_id, token_hash, token_prefix, token_suffix, issued_at, expires_at, revoked_at, last_seen_at, ip_at_issue, installation_id
 `
 
 type InsertAccountSessionParams struct {
-	AccountID   string
-	TokenHash   string
-	TokenPrefix string
-	TokenSuffix string
-	ExpiresAt   pgtype.Timestamptz
-	IpAtIssue   *netip.Addr
+	AccountID      string
+	InstallationID *string
+	TokenHash      string
+	TokenPrefix    string
+	TokenSuffix    string
+	ExpiresAt      pgtype.Timestamptz
+	IpAtIssue      *netip.Addr
 }
 
 // Mints a new session row for an account. token_hash is the SHA-256 of the
 // opaque cookie value; token_prefix/token_suffix are the safe 8+4 display parts.
+// installation_id is the tenant row resolved at login.
 //
 //	INSERT INTO router.account_sessions (
 //	    account_id,
+//	    installation_id,
 //	    token_hash,
 //	    token_prefix,
 //	    token_suffix,
@@ -92,13 +98,15 @@ type InsertAccountSessionParams struct {
 //	    $2::varchar,
 //	    $3::varchar,
 //	    $4::varchar,
-//	    $5::timestamptz,
-//	    $6::inet
+//	    $5::varchar,
+//	    $6::timestamptz,
+//	    $7::inet
 //	)
-//	RETURNING id, account_id, token_hash, token_prefix, token_suffix, issued_at, expires_at, revoked_at, last_seen_at, ip_at_issue
+//	RETURNING id, account_id, token_hash, token_prefix, token_suffix, issued_at, expires_at, revoked_at, last_seen_at, ip_at_issue, installation_id
 func (q *Queries) InsertAccountSession(ctx context.Context, arg InsertAccountSessionParams) (RouterAccountSession, error) {
 	row := q.db.QueryRow(ctx, insertAccountSession,
 		arg.AccountID,
+		arg.InstallationID,
 		arg.TokenHash,
 		arg.TokenPrefix,
 		arg.TokenSuffix,
@@ -117,12 +125,13 @@ func (q *Queries) InsertAccountSession(ctx context.Context, arg InsertAccountSes
 		&i.RevokedAt,
 		&i.LastSeenAt,
 		&i.IpAtIssue,
+		&i.InstallationID,
 	)
 	return i, err
 }
 
 const listAccountSessionsForAccount = `-- name: ListAccountSessionsForAccount :many
-SELECT id, account_id, token_hash, token_prefix, token_suffix, issued_at, expires_at, revoked_at, last_seen_at, ip_at_issue
+SELECT id, account_id, token_hash, token_prefix, token_suffix, issued_at, expires_at, revoked_at, last_seen_at, ip_at_issue, installation_id
 FROM router.account_sessions
 WHERE account_id = $1::varchar
 ORDER BY issued_at DESC
@@ -130,7 +139,7 @@ ORDER BY issued_at DESC
 
 // Session index for "my sessions" dashboard UI.
 //
-//	SELECT id, account_id, token_hash, token_prefix, token_suffix, issued_at, expires_at, revoked_at, last_seen_at, ip_at_issue
+//	SELECT id, account_id, token_hash, token_prefix, token_suffix, issued_at, expires_at, revoked_at, last_seen_at, ip_at_issue, installation_id
 //	FROM router.account_sessions
 //	WHERE account_id = $1::varchar
 //	ORDER BY issued_at DESC
@@ -154,6 +163,7 @@ func (q *Queries) ListAccountSessionsForAccount(ctx context.Context, accountID s
 			&i.RevokedAt,
 			&i.LastSeenAt,
 			&i.IpAtIssue,
+			&i.InstallationID,
 		); err != nil {
 			return nil, err
 		}

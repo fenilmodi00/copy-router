@@ -448,7 +448,7 @@ prices='{
     "motif-technologies/motif-3":    0.0005,
     "openai/gpt-oss-120b":           0.00015,
     "qwen/qwen3.6-27b":              0.00032,
-    "z-ai/glm-5.2":                  0.001
+    "zai-org/glm-5.2":               0.001
   },
   "output": {
     "deepseek-ai/deepseek-v4-flash": 0.00025,
@@ -459,7 +459,7 @@ prices='{
     "motif-technologies/motif-3":    0.002,
     "openai/gpt-oss-120b":           0.0006,
     "qwen/qwen3.6-27b":              0.0032,
-    "z-ai/glm-5.2":                  0.004
+    "zai-org/glm-5.2":               0.004
   }
 }'
 # END_GENERATED_PRICES

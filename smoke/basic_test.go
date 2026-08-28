@@ -58,8 +58,86 @@ func TestBasic(t *testing.T) {
 	})
 }
 
-// TestForceHeaderRejections covers the two force-header refusals that resolve
-// before any upstream call, so they need no cassette and run in replay-only CI.
+// TestModelFieldRouting covers the inbound `model` field as the primary
+// routing-intent channel: it forces the served model in-band (the Anthropic-
+// surface non-stream + stream scenarios the feature demands), the
+// x-weave-force-model header still works as the fallback, the field beats a
+// conflicting header, and model="auto" routes normally.
+//
+// Cassette reuse: the routing carrier never reaches upstream — the router
+// rewrites the outbound `model` to its decision before emitting — and these
+// subtests reuse the byte-identical smoke-basic-nonstream / smoke-basic-stream
+// bodies already recorded, so they replay existing cassettes with zero new
+// recordings. The unknown-model 400s are exercised in TestForceHeaderRejections.
+func TestModelFieldRouting(t *testing.T) {
+	const flash = "deepseek-ai/deepseek-v4-flash"
+
+	// Non-stream: `model` field forces deepseek-flash (replays the recorded
+	// non-stream turn fixture).
+	t.Run("model=deepseek-ai/deepseek-v4-flash pins a non-stream turn", func(t *testing.T) {
+		body := newRequest("smoke-basic-nonstream").tokens(64).
+			text("Reply with exactly the word: ok").build(t)
+		r := callModel(t, body, flash)
+		requireOKMessage(t, r)
+		assertServedByModel(t, r, flash, "aiand")
+	})
+
+	// Stream: same in-band force, SSE lifecycle intact (replays the recorded
+	// streaming turn fixture).
+	t.Run("model=deepseek-ai/deepseek-v4-flash pins a streamed turn", func(t *testing.T) {
+		body := newRequest("smoke-basic-stream").tokens(64).streaming().
+			text("Reply with exactly the word: ok").build(t)
+		r := callModel(t, body, flash)
+		if r.status != http.StatusOK {
+			t.Fatalf("stream: want 200, got %d; body: %s", r.status, truncate(r.body, 400))
+		}
+		assertStreamWellFormed(t, r)
+		assertServedByModel(t, r, flash, "aiand")
+	})
+
+	// The x-weave-force-model header remains supported as the fallback path
+	// (identical upstream body, so it replays the same cassette).
+	t.Run("force-model header still works", func(t *testing.T) {
+		body := newRequest("smoke-basic-nonstream").tokens(64).
+			text("Reply with exactly the word: ok").build(t)
+		r := callHeader(t, body, flash)
+		requireOKMessage(t, r)
+		assertServedByModel(t, r, flash, "aiand")
+	})
+
+	// model="auto" is the default routing intent: normal routing, no force.
+	// The outbound body is identical (the router lands on its own decision), so
+	// this too replays the recorded non-stream fixture.
+	t.Run("model=auto routes normally", func(t *testing.T) {
+		body := newRequest("smoke-basic-nonstream").tokens(64).
+			text("Reply with exactly the word: ok").build(t)
+		r := callModel(t, body, "auto")
+		requireOKMessage(t, r)
+		if got := r.headers.Get(headerRouterModel); got == "" {
+			t.Errorf("missing %s header", headerRouterModel)
+		}
+	})
+
+	// Precedence: a resolvable `model` field beats a conflicting header. sonnet
+	// resolves to a different catalog model than flash, so a header-first
+	// implementation would serve deepseek-ai/deepseek-v4-pro instead.
+	t.Run("model field beats a conflicting force-model header", func(t *testing.T) {
+		body := newRequest("smoke-basic-nonstream").tokens(64).
+			text("Reply with exactly the word: ok").build(t)
+		r := callModelWithHeaders(t, body, flash,
+			map[string]string{forceModelHeader: "sonnet"})
+
+		requireOKMessage(t, r)
+		assertServedByModel(t, r, flash, "aiand")
+	})
+}
+
+// TestForceHeaderRejections covers the force refusals that resolve before any
+// upstream call, so they need no cassette and run in replay-only CI:
+// force-cluster on the default strategy, an unknown x-weave-force-model value,
+// and the rejection twin for the inbound `model` field — an unknown value must
+// 400 instead of being silently ignored (the headline behavior change of
+// field-driven routing).
 //
 // The success path (a label that IS in the live roster serving from that
 // cluster's arms) is deliberately absent: it needs the HMM sidecar container,
@@ -73,7 +151,7 @@ func TestForceHeaderRejections(t *testing.T) {
 		// cluster to constrain to. Silently serving would look like the force took.
 		body := newRequest("smoke-force-cluster-unsupported").tokens(64).
 			text("Reply with exactly the word: ok").build(t)
-		r := callModelWithHeaders(t, body, cfg.PinModel,
+		r := callHeaderWithExtra(t, body, cfg.PinModel,
 			map[string]string{forceClusterHeader: "maximum"})
 
 		if r.status != http.StatusBadRequest {
@@ -84,8 +162,24 @@ func TestForceHeaderRejections(t *testing.T) {
 		}
 	})
 
-	t.Run("force-model naming no catalog model is refused", func(t *testing.T) {
-		body := newRequest("smoke-force-model-unknown").tokens(64).
+	t.Run("force-model header naming no catalog model is refused", func(t *testing.T) {
+		body := newRequest("smoke-force-model-unknown-header").tokens(64).model("auto").
+			text("Reply with exactly the word: ok").build(t)
+		r := callHeader(t, body, "totally-not-a-model")
+
+		if r.status != http.StatusBadRequest {
+			t.Fatalf("want 400, got %d; body: %s", r.status, truncate(r.body, 600))
+		}
+		if !strings.Contains(string(r.body), "totally-not-a-model") {
+			t.Errorf("want the unresolvable value quoted back, got: %s", truncate(r.body, 600))
+		}
+	})
+
+	// Rejection twin for the inbound `model` field: an unknown value must 400
+	// instead of being silently ignored — the headline behavior change this
+	// field-driven routing introduced.
+	t.Run("model field naming no catalog model is refused", func(t *testing.T) {
+		body := newRequest("smoke-model-field-unknown").tokens(64).
 			text("Reply with exactly the word: ok").build(t)
 		r := callModel(t, body, "totally-not-a-model")
 
@@ -128,4 +222,6 @@ const (
 	headerRouterModel    = "x-router-model"
 	headerRouterProvider = "x-router-provider"
 	headerRouterDecision = "x-router-decision"
+	headerRouterCache    = "x-router-cache"
+	routerCacheHit       = "hit"
 )

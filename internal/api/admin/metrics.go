@@ -19,6 +19,7 @@ type metricsSummaryResponse struct {
 	TotalSavingsUSD       float64 `json:"total_savings_usd"`
 	CacheWriteTokens      int64   `json:"cache_write_tokens"`
 	CacheReadTokens       int64   `json:"cache_read_tokens"`
+	SemanticCacheHits     int64   `json:"semantic_cache_hits"`
 }
 
 type timeseriesBucket struct {
@@ -79,6 +80,7 @@ func MetricsSummaryHandler(proxySvc *proxy.Service) gin.HandlerFunc {
 			TotalSavingsUSD:       summary.TotalSavingsUSD,
 			CacheWriteTokens:      summary.CacheWriteTokens,
 			CacheReadTokens:       summary.CacheReadTokens,
+			SemanticCacheHits:     summary.SemanticCacheHits,
 		})
 	}
 }

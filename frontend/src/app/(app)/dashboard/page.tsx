@@ -23,7 +23,9 @@ import {
   useOnboarding,
 } from "@/lib/data-cache";
 import { cn } from "@/lib/cn";
-import { formatNumber, formatUSD } from "@/lib/format";
+import { formatAverage, formatNumber, formatUSD } from "@/lib/format";
+import { denseTimeseriesBuckets } from "@/lib/metrics-timeseries";
+import { savingsSubline } from "@/lib/metrics-summary";
 import { useLoginSession } from "@/lib/use-login-session-gate";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -92,7 +94,16 @@ export default function DashboardPage() {
       : resolveOnboarding(onboardingQ.data, onboardingQ.error, onboardingQ.isLoading);
 
   const summary = summaryQ.data ?? null;
-  const buckets = timeseriesQ.data?.buckets ?? [];
+  const buckets = useMemo(
+    () =>
+      denseTimeseriesBuckets(
+        timeseriesQ.data?.buckets ?? [],
+        granularity,
+        fromISO,
+        toISO,
+      ),
+    [timeseriesQ.data?.buckets, granularity, fromISO, toISO],
+  );
   const modelBuckets = breakdownQ.data?.buckets ?? [];
 
   const metricsError =
@@ -108,17 +119,24 @@ export default function DashboardPage() {
       : summary.total_tokens / summary.request_count;
   const cacheReadTokens = summary?.cache_read_tokens ?? 0;
   const cacheWriteTokens = summary?.cache_write_tokens ?? 0;
-  // Without a 1000-row details fetch, approximate hit mix from cache token
-  // counters on the summary (read / read+write).
+  const semanticCacheHits = summary?.semantic_cache_hits ?? 0;
+  const promptCacheTokens = cacheReadTokens + cacheWriteTokens;
+  // Prefer upstream prompt-cache token mix when present; otherwise derive
+  // semantic-cache hit rate from telemetry rows (dashboard had shown 0.0%
+  // forever when only semantic cache was active).
   const cacheHitRate =
-    cacheReadTokens + cacheWriteTokens > 0
-      ? (cacheReadTokens / (cacheReadTokens + cacheWriteTokens)) * 100
-      : null;
+    promptCacheTokens > 0
+      ? (cacheReadTokens / promptCacheTokens) * 100
+      : summary != null && summary.request_count > 0 && semanticCacheHits > 0
+        ? (semanticCacheHits / summary.request_count) * 100
+        : null;
 
   const modelTotals = useMemo(
     () => aggregateModelTotals(modelBuckets),
     [modelBuckets],
   );
+
+  const actualCostSub = summary == null ? undefined : savingsSubline(summary, buckets);
 
   if (onboarding === "checking") {
     return <DashboardSkeleton />;
@@ -190,7 +208,7 @@ export default function DashboardPage() {
                 className={ResponsiveGrid.Small}
                 label="Tokens"
                 value={summary == null ? "—" : formatNumber(summary.total_tokens)}
-                sub={summary == null ? undefined : `${formatNumber(avgTokensPerReq)} avg / req`}
+                sub={summary == null ? undefined : `${formatAverage(avgTokensPerReq)} avg / req`}
                 sparkline={buckets.length ? buckets.map(b => b.total_tokens ?? 0) : []}
               />
               <MetricCard
@@ -208,22 +226,20 @@ export default function DashboardPage() {
                 className={ResponsiveGrid.Small}
                 label="Actual cost"
                 value={summary == null ? "—" : formatUSD(summary.total_actual_cost_usd)}
-                sub={
-                  summary == null
-                    ? undefined
-                    : `${formatUSD(Math.abs(summary.total_savings_usd))} saved vs requested`
-                }
-                subAccent={summary == null ? undefined : "success"}
+                sub={actualCostSub?.text}
+                subAccent={actualCostSub?.accent}
                 sparkline={buckets.map(b => b.actual_cost_usd)}
               />
               <MetricCard
                 className={ResponsiveGrid.Small}
                 label="Cache hit rate"
-                value={cacheHitRate == null ? "0.0%" : `${cacheHitRate.toFixed(1)}%`}
+                value={cacheHitRate == null ? "—%" : `${cacheHitRate.toFixed(1)}%`}
                 sub={
-                  cacheWriteTokens + cacheReadTokens === 0
-                    ? "no cached usage yet"
-                    : "write+read tokens"
+                  promptCacheTokens > 0
+                    ? "write+read tokens"
+                    : semanticCacheHits > 0
+                      ? "semantic cache hits"
+                      : "no cached usage yet"
                 }
               />
             </ResponsiveGrid>

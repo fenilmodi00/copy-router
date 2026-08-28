@@ -29,7 +29,11 @@ from npm on next start and loads this extension via its `pi.extensions` field.
 - **Force-model commands.** `/fm <model>` and `/force-model <model>` pin the
   current router session; `/ufm` and `/unforce-model` resume automatic routing.
   The persistent status changes to `WEAVE ROUTER — <model> [forced]` after the
-  router validates and canonicalizes the requested model.
+  router validates and canonicalizes the requested model. Headless clients
+  (no slash-command UI) can pin the same way with the OpenAI-compatible
+  `model` field instead — e.g. `model="moonshotai/kimi-k2.7":high` — which is
+  treated as identical routing intent. Use `model="auto"` to route normally
+  without touching an existing pin (only `/unforce-model` clears one).
 - **Per-process routing bias.** Static `x-weave-routing-*` knob headers bias the
   router: quality on the main loop and speed + cheap on subagents.
 - **Long tool-loop compaction.** Pi can cross its context threshold inside an

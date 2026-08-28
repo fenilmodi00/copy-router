@@ -62,13 +62,12 @@ export function usageSnippet(lang: SnippetLanguage, mode: SnippetMode, ctx: Snip
 }
 
 function curlSnippet(url: string, apiKey: string, mode: SnippetMode, forceModel: string): string {
-  const forceHeader =
-    mode === "force" ? ` \\\n  -H "x-weave-force-model: ${forceModel}"` : "";
+  const model = mode === "force" ? forceModel : "auto";
   return `curl ${url} \\
   -H "Authorization: Bearer ${apiKey}" \\
-  -H "Content-Type: application/json"${forceHeader} \\
+  -H "Content-Type: application/json" \\
   -d '{
-    "model": "auto",
+    "model": "${model}",
     "messages": [
       {"role": "user", "content": "Hello"}
     ]
@@ -76,19 +75,16 @@ function curlSnippet(url: string, apiKey: string, mode: SnippetMode, forceModel:
 }
 
 function pythonSnippet(baseURL: string, apiKey: string, mode: SnippetMode, forceModel: string): string {
-  const extraHeaders =
-    mode === "force"
-      ? `\n    default_headers={"x-weave-force-model": "${forceModel}"},`
-      : "";
+  const model = mode === "force" ? forceModel : "auto";
   return `from openai import OpenAI
 
 client = OpenAI(
     base_url="${baseURL}",
-    api_key="${apiKey}",${extraHeaders}
+    api_key="${apiKey}",
 )
 
 completion = client.chat.completions.create(
-    model="auto",
+    model="${model}",
     messages=[
         {"role": "user", "content": "Hello"},
     ],
@@ -102,19 +98,16 @@ function typescriptSnippet(
   mode: SnippetMode,
   forceModel: string,
 ): string {
-  const defaultHeaders =
-    mode === "force"
-      ? `\n  defaultHeaders: { "x-weave-force-model": "${forceModel}" },`
-      : "";
+  const model = mode === "force" ? forceModel : "auto";
   return `import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "${baseURL}",
-  apiKey: "${apiKey}",${defaultHeaders}
+  apiKey: "${apiKey}",
 });
 
 const completion = await client.chat.completions.create({
-  model: "auto",
+  model: "${model}",
   messages: [{ role: "user", content: "Hello" }],
 });
 console.log(completion.choices[0].message.content);`;

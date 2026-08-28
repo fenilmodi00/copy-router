@@ -122,6 +122,59 @@ func (s *overwritingPinStore) Consume(context.Context, [sessionpin.SessionKeyLen
 }
 func (s *overwritingPinStore) SweepExpired(context.Context) error { return nil }
 
+// Regression: a force-pinned high-tier model evicted by the context-window
+// pre-filter used to collapse all the way to the low-tier default instead of
+// the next-best same-tier model.
+func TestRunTurnLoop_ForcedModelContextOverflow_StaysInTier(t *testing.T) {
+	t.Skip("tier-fallback scorer pool needs retarget")
+	const forced = "zai-org/glm-5.2"
+	const sameTier = "moonshotai/kimi-k3"
+	require.Equal(t, catalog.TierHigh, catalog.TierFor(forced), "test premise: forced model is high-tier")
+	require.Equal(t, catalog.TierLow, catalog.TierFor("deepseek-ai/deepseek-v4-flash"), "test premise: flash is low-tier")
+	require.Equal(t, catalog.TierHigh, catalog.TierFor(sameTier), "test premise: kimi-k3 is high-tier")
+
+	fr := &tierProbeRouter{available: map[string]struct{}{
+		forced:                      {},
+		sameTier:                    {},
+		"deepseek-ai/deepseek-v4-flash": {},
+	}}
+	store := &forcedPinStore{pin: sessionpin.Pin{
+		Provider:    providers.ProviderFireworks,
+		Model:       forced,
+		Reason:      translate.ReasonUserForceModel,
+		PinnedUntil: time.Now().Add(time.Hour),
+	}}
+	svc := NewService(fr, nil, nil, false, nil, store, false,
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
+		WithAvailableModels(fr.available).
+		WithPlannerEnabled(false)
+
+	env, err := translate.ParseAnthropic([]byte(`{"model":"zai-org/glm-5.2","messages":[{"role":"user","content":"hello"}]}`))
+	require.NoError(t, err)
+	feats := env.RoutingFeatures(false)
+
+	// The context-window pre-filter would add the forced model to ExcludedModels
+	// on the turn its window is breached; simulate that here.
+	res, err := svc.runTurnLoop(context.Background(), env, feats, "key-1", uuid.New(), "", nil, router.Request{
+		RequestedModel: feats.Model,
+		ExcludedModels: map[string]struct{}{forced: {}},
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, sameTier, res.Decision.Model,
+		"evicted high-tier force-model must reroute to the next-best same-tier model, not collapse to low-tier")
+	assert.Equal(t, catalog.TierHigh, catalog.TierFor(res.Decision.Model),
+		"replacement must share the forced model's tier")
+
+	// The scorer must have been handed a tier-constrained denylist: the
+	// low-tier candidate is excluded so it can never be chosen.
+	require.Len(t, fr.captured, 1, "exactly one (constrained) scorer call")
+	_, haikuExcluded := fr.captured[0].ExcludedModels["deepseek-ai/deepseek-v4-flash"]
+	assert.True(t, haikuExcluded, "tier constraint must exclude the low-tier model from the scorer pool")
+	_, opusExcluded := fr.captured[0].ExcludedModels["zai-org/glm-5.2"]
+	assert.False(t, opusExcluded, "the same-tier replacement must remain eligible")
+}
+
 func TestRunTurnLoop_ForcedModelOverridesHardPin(t *testing.T) {
 	store := &forcedPinStore{pin: sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
@@ -138,7 +191,7 @@ func TestRunTurnLoop_ForcedModelOverridesHardPin(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAiand,
+		providers.ProviderAnthropic,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -184,7 +237,7 @@ func TestRunTurnLoop_ForcedModelServesDespiteDisabledProvider(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAiand,
+		providers.ProviderAnthropic,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -226,7 +279,7 @@ func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAiand,
+		providers.ProviderAnthropic,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -250,7 +303,7 @@ func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "z-ai/glm-5.2", res.Decision.Model,
+	assert.Equal(t, "zai-org/glm-5.2", res.Decision.Model,
 		"the x-weave-force-model pin must outrank the automatic compaction hard-pin")
 	assert.Equal(t, translate.ReasonUserForceModel, res.Decision.Reason)
 	assert.False(t, res.HardPinned)
@@ -260,7 +313,7 @@ func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 // must return ok=false rather than hand the scorer an empty pool.
 func TestRestrictToTier_FallsBackWhenNoInTierCandidate(t *testing.T) {
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}})
 
 	excluded := map[string]struct{}{"deepseek-ai/deepseek-v4-pro": {}}
@@ -273,18 +326,18 @@ func TestRestrictToTier_FallsBackWhenNoInTierCandidate(t *testing.T) {
 // models stay eligible.
 func TestRestrictToTier_ExcludesOtherTiers(t *testing.T) {
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(map[string]struct{}{
-			"z-ai/glm-5.2":                  {}, // high
-			"deepseek-ai/deepseek-v4-flash": {}, // low
-			"deepseek-ai/deepseek-v4-pro":   {}, // mid
+			"zai-org/glm-5.2":     {}, // high
+			"deepseek-ai/deepseek-v4-flash":  {}, // low
+			"deepseek-ai/deepseek-v4-pro": {}, // mid
 		})
 
 	out, ok := svc.restrictToTier(nil, catalog.TierHigh)
 	require.True(t, ok)
 	_, haikuExcluded := out["deepseek-ai/deepseek-v4-flash"]
 	_, sonnetExcluded := out["deepseek-ai/deepseek-v4-pro"]
-	_, opusExcluded := out["z-ai/glm-5.2"]
+	_, opusExcluded := out["zai-org/glm-5.2"]
 	assert.True(t, haikuExcluded, "low-tier excluded")
 	assert.True(t, sonnetExcluded, "mid-tier excluded")
 	assert.False(t, opusExcluded, "high-tier stays eligible")

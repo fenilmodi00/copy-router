@@ -129,6 +129,7 @@ func (r *TelemetryRepo) InsertRequestTelemetry(ctx context.Context, p proxy.Inse
 		TtftMs:                                   p.TTFTMs,
 		CacheCreationTokens:                      p.CacheCreationTokens,
 		CacheReadTokens:                          p.CacheReadTokens,
+		SemanticCacheHit:                         p.SemanticCacheHit,
 		DeviceID:                                 stringPtrOrNil(p.DeviceID),
 		SessionID:                                stringPtrOrNil(p.SessionID),
 		RouterUserID:                             uuidOrNil(p.RouterUserID),
@@ -418,6 +419,7 @@ func summaryFromRow(row sqlc.GetTelemetrySummaryRow) proxy.TelemetrySummary {
 		row.TotalSavingsUsd,
 		row.CacheWriteTokens,
 		row.CacheReadTokens,
+		row.SemanticCacheHits,
 	)
 }
 
@@ -433,10 +435,11 @@ func summaryFromAllRow(row sqlc.GetTelemetrySummaryAllRow) proxy.TelemetrySummar
 		row.TotalSavingsUsd,
 		row.CacheWriteTokens,
 		row.CacheReadTokens,
+		row.SemanticCacheHits,
 	)
 }
 
-func summaryFromValues(requestCount, totalTokens, totalRequestedCostUsd, totalActualCostUsd, totalSavingsUsd, cacheWriteTokens, cacheReadTokens int64) proxy.TelemetrySummary {
+func summaryFromValues(requestCount, totalTokens, totalRequestedCostUsd, totalActualCostUsd, totalSavingsUsd, cacheWriteTokens, cacheReadTokens, semanticCacheHits int64) proxy.TelemetrySummary {
 	return proxy.TelemetrySummary{
 		RequestCount:          requestCount,
 		TotalTokens:           totalTokens,
@@ -445,6 +448,7 @@ func summaryFromValues(requestCount, totalTokens, totalRequestedCostUsd, totalAc
 		TotalSavingsUSD:       microsToUSD(totalSavingsUsd),
 		CacheWriteTokens:      cacheWriteTokens,
 		CacheReadTokens:       cacheReadTokens,
+		SemanticCacheHits:     semanticCacheHits,
 	}
 }
 

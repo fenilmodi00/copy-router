@@ -25,6 +25,13 @@ func (s *stubInstallRepo) ListForExternalID(ctx context.Context, externalID stri
 	return nil, nil
 }
 
+func (s *stubInstallRepo) Get(ctx context.Context, externalID, id string) (*Installation, error) {
+	if inst, ok := s.byExternalID[externalID]; ok && inst.ID == id {
+		return inst, nil
+	}
+	return nil, ErrLoginSessionInvalid
+}
+
 func (s *stubInstallRepo) Create(ctx context.Context, params CreateInstallationParams) (*Installation, error) {
 	inst := &Installation{ID: "inst-" + params.ExternalID, ExternalID: params.ExternalID, Name: params.Name}
 	s.byExternalID[params.ExternalID] = inst
@@ -116,14 +123,40 @@ func TestLoginSession_IssueAndVerifyRoundTrip(t *testing.T) {
 	svc, _, _ := newLoginTestService(t, repo)
 	acct := &Account{ID: "acct-1", AiandUserID: "user-aiand-1"}
 	repo.byID[acct.ID] = acct
+	inst := &Installation{ID: "inst-1", ExternalID: acct.ID}
 
-	token, _, err := svc.IssueLoginSession(context.Background(), acct)
+	token, _, err := svc.IssueLoginSession(context.Background(), acct, inst)
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 
 	got, err := svc.VerifyLoginSession(context.Background(), token)
 	require.NoError(t, err)
 	assert.Equal(t, acct.ID, got.ID, "the session must resolve to the account that issued it")
+}
+
+func TestInstallationForAccountSession_UsesCachedInstallationID(t *testing.T) {
+	repo := newInMemoryAccountRepo()
+	svc, _, insts := newLoginTestService(t, repo)
+	acct := &Account{ID: "acct-1", AiandUserID: "user-aiand-1"}
+	repo.byID[acct.ID] = acct
+	cached := &Installation{ID: "inst-cached", ExternalID: acct.ID}
+	insts.byExternalID[acct.ID] = cached
+
+	inst, err := svc.InstallationForAccountSession(context.Background(), acct, &LoginSession{InstallationID: cached.ID})
+	require.NoError(t, err)
+	assert.Equal(t, cached.ID, inst.ID)
+}
+
+func TestInstallationForAccountSession_RepairsMissingCache(t *testing.T) {
+	repo := newInMemoryAccountRepo()
+	svc, _, insts := newLoginTestService(t, repo)
+	acct := &Account{ID: "acct-1", AiandUserID: "user-aiand-1"}
+	repo.byID[acct.ID] = acct
+
+	inst, err := svc.InstallationForAccountSession(context.Background(), acct, &LoginSession{})
+	require.NoError(t, err)
+	require.NotNil(t, inst)
+	assert.Len(t, insts.byExternalID, 1, "repair path must ensure installation exists")
 }
 
 func TestLoginSession_InvalidTokenRejected(t *testing.T) {

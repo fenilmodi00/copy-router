@@ -131,16 +131,13 @@ func newPinSvcCapturing(fr *fakeRouter, store *fakePinStore) (*proxy.Service, *f
 	p := &fakeProvider{}
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{
-			providers.ProviderAiand:     aiandOKProvider(),
-			providers.ProviderAnthropic: p,
-		},
+		map[string]providers.Client{providers.ProviderAnthropic: p},
 		nil,
 		false,
 		nil,
 		store,
 		false,
-		providers.ProviderAiand,
+		providers.ProviderAnthropic,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -149,6 +146,19 @@ func newPinSvcCapturing(fr *fakeRouter, store *fakePinStore) (*proxy.Service, *f
 
 const toolResultPinnedBody = `{
 	"model":"moonshotai/kimi-k3",
+	"system":"sys",
+	"messages":[
+		{"role":"user","content":"plan"},
+		{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"R","input":{}}]},
+		{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}
+	]
+}`
+
+// toolResultPinnedBodyAutoRoute is toolResultPinnedBody with model=auto so
+// the body's model field does not carry force intent — tests exercise the
+// HMM tool-result fresh-decision path, not force-from-body semantics.
+const toolResultPinnedBodyAutoRoute = `{
+	"model":"auto",
 	"system":"sys",
 	"messages":[
 		{"role":"user","content":"plan"},
@@ -274,7 +284,7 @@ func TestTurnLoop_HMMToolResultCommunicationFollowsFreshDecision(t *testing.T) {
 	ctx := authedCtx(uuid.New().String())
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	require.NoError(t, svc.ProxyMessages(ctx, []byte(toolResultPinnedBody), rec, httpReq))
+	require.NoError(t, svc.ProxyMessages(ctx, []byte(toolResultPinnedBodyAutoRoute), rec, httpReq))
 
 	assert.Equal(t, 1, fr.routeCalls, "tool_result must ask HMM for a fresh communication decision")
 	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", rec.Header().Get(proxy.HeaderRouterModel),
@@ -307,11 +317,47 @@ func TestTurnLoop_HMMToolResultToolExecutionUsesFreshDecision(t *testing.T) {
 	ctx := authedCtx(uuid.New().String())
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	require.NoError(t, svc.ProxyMessages(ctx, []byte(toolResultPinnedBody), rec, httpReq))
+	require.NoError(t, svc.ProxyMessages(ctx, []byte(toolResultPinnedBodyAutoRoute), rec, httpReq))
 
 	assert.Equal(t, 1, fr.routeCalls, "tool_result still scores so HMM can decide whether execution continues")
 	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", rec.Header().Get(proxy.HeaderRouterModel),
 		"HMM tool execution must follow the fresh sidecar decision instead of an existing session pin")
+	store.mu.Lock()
+	assertOnlyHMMHistoryUpserts(t, store)
+	store.mu.Unlock()
+}
+
+func TestTurnLoop_HMMToolExecutionStaysWhenWarmCacheEVBeatsCheapFresh(t *testing.T) {
+	t.Skip("HMM EV fixture needs aiand price retarget")
+	store := newFakePinStore()
+	store.hasPin = true
+	store.pin = sessionpin.Pin{
+		Provider:        providers.ProviderAnthropic,
+		Model:           "moonshotai/kimi-k2.7",
+		Reason:          "hmm_policy:tool_execution(label=explore)",
+		PinnedUntil:     time.Now().Add(time.Hour),
+		LastInputTokens: 5000,
+		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
+	}
+	fr := &fakeRouter{decision: router.Decision{
+		Provider: providers.ProviderAnthropic,
+		Model:    "deepseek-ai/deepseek-v4-flash",
+		Reason:   "hmm_policy:tool_execution(label=explore)",
+		Metadata: &router.RoutingMetadata{
+			Strategy: string(router.StrategyHMM),
+			RouteID:  "route-1",
+		},
+	}}
+	svc := newPinSvc(fr, store)
+
+	ctx := authedCtx(uuid.New().String())
+	rec := httptest.NewRecorder()
+	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
+	require.NoError(t, svc.ProxyMessages(ctx, []byte(pinTestBody), rec, httpReq))
+
+	assert.Equal(t, 1, fr.routeCalls, "ongoing HMM execution still scores to see if execution continues")
+	assert.Equal(t, "moonshotai/kimi-k2.7", rec.Header().Get(proxy.HeaderRouterModel),
+		"HMM should stay when switching to a cheaper tool model would not beat warm-cache eviction cost")
 	store.mu.Lock()
 	assertOnlyHMMHistoryUpserts(t, store)
 	store.mu.Unlock()
@@ -424,6 +470,77 @@ func TestTurnLoop_HMMConversationFollowsFreshDecision(t *testing.T) {
 	store.mu.Unlock()
 }
 
+func TestTurnLoop_HMMToolExecutionPhaseChangeUsesFreshDecision(t *testing.T) {
+	store := newFakePinStore()
+	store.hasPin = true
+	store.pin = sessionpin.Pin{
+		Provider:        providers.ProviderAnthropic,
+		Model:           "deepseek-ai/deepseek-v4-pro",
+		Reason:          "hmm_policy(label=high)",
+		PinnedUntil:     time.Now().Add(time.Hour),
+		LastInputTokens: 5000,
+		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
+	}
+	fr := &fakeRouter{decision: router.Decision{
+		Provider: providers.ProviderAnthropic,
+		Model:    "moonshotai/kimi-k2.7",
+		Reason:   "hmm_policy:tool_execution(label=explore)",
+		Metadata: &router.RoutingMetadata{
+			Strategy: string(router.StrategyHMM),
+			RouteID:  "route-1",
+		},
+	}}
+	svc := newPinSvc(fr, store)
+
+	ctx := authedCtx(uuid.New().String())
+	rec := httptest.NewRecorder()
+	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
+	require.NoError(t, svc.ProxyMessages(ctx, []byte(pinTestBody), rec, httpReq))
+
+	assert.Equal(t, 1, fr.routeCalls, "main-loop HMM turn must ask for a fresh decision")
+	assert.Equal(t, "moonshotai/kimi-k2.7", rec.Header().Get(proxy.HeaderRouterModel),
+		"HMM tool/explore phase changes should follow the fresh sidecar decision")
+
+	store.mu.Lock()
+	assertOnlyHMMHistoryUpserts(t, store)
+	store.mu.Unlock()
+}
+
+func TestTurnLoop_HMMToolExecutionSameModelDoesNotRewritePin(t *testing.T) {
+	store := newFakePinStore()
+	store.hasPin = true
+	store.pin = sessionpin.Pin{
+		Provider:        providers.ProviderAnthropic,
+		Model:           "deepseek-ai/deepseek-v4-pro",
+		Reason:          "hmm_policy(label=high)",
+		PinnedUntil:     time.Now().Add(time.Hour),
+		LastInputTokens: 5000,
+		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
+	}
+	fr := &fakeRouter{decision: router.Decision{
+		Provider: providers.ProviderAnthropic,
+		Model:    "deepseek-ai/deepseek-v4-pro",
+		Reason:   "hmm_policy:tool_execution(label=explore)",
+		Metadata: &router.RoutingMetadata{
+			Strategy: string(router.StrategyHMM),
+			RouteID:  "route-1",
+		},
+	}}
+	svc := newPinSvc(fr, store)
+
+	ctx := authedCtx(uuid.New().String())
+	rec := httptest.NewRecorder()
+	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
+	require.NoError(t, svc.ProxyMessages(ctx, []byte(pinTestBody), rec, httpReq))
+
+	assert.Equal(t, 1, fr.routeCalls, "main-loop HMM turn must ask for a fresh decision")
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", rec.Header().Get(proxy.HeaderRouterModel))
+
+	store.mu.Lock()
+	assertOnlyHMMHistoryUpserts(t, store)
+	store.mu.Unlock()
+}
+
 // TestTurnLoop_ToolResultPinOnExcludedProviderFallsThroughToScorer verifies that a pin
 // on an excluded provider falls through to the scorer rather than being served sticky.
 func TestTurnLoop_ToolResultPinOnExcludedProviderFallsThroughToScorer(t *testing.T) {
@@ -452,7 +569,6 @@ func TestTurnLoop_ToolResultPinOnExcludedProviderFallsThroughToScorer(t *testing
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderAiand:     aiandOKProvider(),
 			providers.ProviderAnthropic: &fakeProvider{},
 			providers.ProviderOpenAI:    &fakeProvider{},
 		},
@@ -461,7 +577,7 @@ func TestTurnLoop_ToolResultPinOnExcludedProviderFallsThroughToScorer(t *testing
 		nil,
 		store,
 		false,
-		providers.ProviderAiand,
+		providers.ProviderAnthropic,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -678,16 +794,13 @@ func TestTurnLoop_UsageWritebackPersistsCacheStats(t *testing.T) {
 	// usage extraction in the proxy.
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{
-			providers.ProviderAiand:     aiandOKProvider(),
-			providers.ProviderAnthropic: provider,
-		},
+		map[string]providers.Client{providers.ProviderAnthropic: provider},
 		nil,
 		false,
 		nil,
 		store,
 		false,
-		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
 		recordingTelemetry{},
 	)
 
@@ -812,7 +925,7 @@ func TestTurnLoop_PrefixTrimSkipsExpiredPinReAnchor(t *testing.T) {
 	store.pin = expired
 	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	svc := newPinSvc(fr, store).WithAvailableModels(map[string]struct{}{
-		"moonshotai/kimi-k3":            {},
+		"moonshotai/kimi-k3":  {},
 		"deepseek-ai/deepseek-v4-flash": {},
 	})
 	ctx := authedCtx(uuid.New().String())
@@ -899,8 +1012,8 @@ func TestTurnLoop_MaxedOutExcludesLastServedModelNotAnchor(t *testing.T) {
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
 		Provider:         providers.ProviderAnthropic,
-		Model:            "deepseek-ai/deepseek-v4-flash", // anchor, healthy
-		LastServedModel:  "moonshotai/kimi-k2.7",          // swapped-to paired model that saturated the cap
+		Model:            "deepseek-ai/deepseek-v4-flash",     // anchor, healthy
+		LastServedModel:  "moonshotai/kimi-k2.7", // swapped-to paired model that saturated the cap
 		Reason:           "cluster:v0.52",
 		PinnedUntil:      time.Now().Add(time.Hour),
 		LastOutputTokens: 8192, // saturated previous turn

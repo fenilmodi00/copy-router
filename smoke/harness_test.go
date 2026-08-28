@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tidwall/sjson"
 )
 
 // Config is the runtime configuration read from the environment in TestMain.
@@ -30,8 +32,9 @@ type Config struct {
 	BaseURL string
 	// RouterKey is the rk_... key the orchestrator seeded. Required.
 	RouterKey string
-	// PinModel is forced via x-weave-force-model so decisions land on aiand
-	// deterministically and cheaply (default deepseek-ai/deepseek-v4-flash).
+	// PinModel is forced via the inbound `model` field (routing intent) so
+	// decisions land on aiand deterministically and cheaply
+	// (default deepseek-ai/deepseek-v4-flash).
 	PinModel string
 	// OpenAIPinModel is the model forced for OpenAI-path scenarios
 	// (default openai/gpt-oss-120b — served via aiand).
@@ -51,7 +54,8 @@ var cfg Config
 // anthropicVersion is the API version header Claude Code sends.
 const anthropicVersion = "2023-06-01"
 
-// forceModelHeader pins the served model (headless equivalent of /force-model).
+// forceModelHeader pins the served model via the fallback path (headless
+// equivalent of /force-model, now secondary to the inbound `model` field).
 // Must match internal/proxy/force_model.go:ForceModelHeader.
 const forceModelHeader = "x-weave-force-model"
 
@@ -168,32 +172,39 @@ type anthropicError struct {
 	Message string `json:"message"`
 }
 
-// call POSTs a request body to /v1/messages, pinning cfg.PinModel (Anthropic),
-// and returns the parsed response. See callModel to pin a different model
-// (e.g. a gpt-5.x model for the OpenAI Responses-API path).
+// call POSTs a request body to /v1/messages, pinning cfg.PinModel via the
+// inbound `model` field (the primary routing-intent channel, equivalent to
+// /force-model). See callModel to pin a different model (e.g. a gpt-5.x
+// model for the OpenAI Responses-API path).
 func call(t *testing.T, body []byte) response {
 	t.Helper()
 	return callModel(t, body, cfg.PinModel)
 }
 
-// callModel posts to /v1/messages pinning model via x-weave-force-model, skipping
-// the pin for /force-model command bodies. Retries once on 5xx/529; parses SSE
-// when stream:true, JSON otherwise.
+// callModel posts to /v1/messages, pinning model via the inbound `model`
+// field (rewritten onto the body unless already present), skipping the rewrite
+// for /force-model command bodies (those must route through the command
+// handler, not re-pin). Retries once on 5xx/529; parses SSE when stream:true,
+// JSON otherwise.
 func callModel(t *testing.T, body []byte, model string) response {
 	t.Helper()
 	return callModelWithHeaders(t, body, model, nil)
 }
 
-// callModelWithHeaders is callModel plus extra request headers, for scenarios
-// that drive a router header rather than just the model pin.
+// callModelWithHeaders is callModel plus extra request headers. The extra map
+// may include forceModelHeader to exercise precedence (the model field must
+// beat the header).
 func callModelWithHeaders(t *testing.T, body []byte, model string, extra map[string]string) response {
 	t.Helper()
+	if !isForceModelCommand(body) {
+		body = applyModelField(body, model)
+	}
 	streaming := jsonBool(body, "stream")
 
 	var resp response
 	var err error
 	for attempt := 0; attempt < 2; attempt++ {
-		resp, err = doCall(body, streaming, model, extra)
+		resp, err = doCall(body, streaming, extra)
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
@@ -210,7 +221,82 @@ func callModelWithHeaders(t *testing.T, body []byte, model string, extra map[str
 	return resp
 }
 
-func doCall(body []byte, streaming bool, model string, extra map[string]string) (response, error) {
+// callHeader pins via the x-weave-force-model header (the fallback/COMpat
+// path). The body's model field must be "auto" or an unroutable default so the
+// header is the only routing intent on the request.
+func callHeader(t *testing.T, body []byte, model string) response {
+	t.Helper()
+	return callHeaderWithExtra(t, body, model, nil)
+}
+
+// callHeaderWithExtra is callHeader plus extra request headers.
+func callHeaderWithExtra(t *testing.T, body []byte, model string, extra map[string]string) response {
+	t.Helper()
+	streaming := jsonBool(body, "stream")
+
+	var resp response
+	var err error
+	for attempt := 0; attempt < 2; attempt++ {
+		resp, err = doCall(body, streaming, withHeader(extra, forceModelHeader, model))
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		// Retry only on transient upstream failures.
+		if resp.status == 529 || (resp.status >= 500 && resp.status <= 599) {
+			if attempt == 0 {
+				t.Logf("transient status %d, retrying once", resp.status)
+				time.Sleep(2 * time.Second)
+				continue
+			}
+		}
+		break
+	}
+	return resp
+}
+
+// withHeader clones extra and sets key=val on the clone.
+func withHeader(extra map[string]string, key, val string) map[string]string {
+	out := make(map[string]string, len(extra)+1)
+	for k, v := range extra {
+		out[k] = v
+	}
+	out[key] = val
+	return out
+}
+
+// applyModelField rewrites the body's model field so the request carries its
+// routing intent in-band (same-turn force, exactly like the header/command).
+// The router rewrites the outbound model to its decision, so the inbound value
+// never reaches the upstream body and cassette keys are unaffected.
+func applyModelField(body []byte, model string) []byte {
+	if model == "" || jsonStringField(body, "model") == model {
+		return body
+	}
+	out, err := sjson.SetBytes(body, "model", model)
+	if err != nil {
+		return body
+	}
+	return out
+}
+
+// jsonStringField reads a top-level string field without a full struct.
+func jsonStringField(body []byte, field string) string {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(body, &m) != nil {
+		return ""
+	}
+	raw, ok := m[field]
+	if !ok {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) != nil {
+		return ""
+	}
+	return s
+}
+
+func doCall(body []byte, streaming bool, extra map[string]string) (response, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
@@ -221,11 +307,6 @@ func doCall(body []byte, streaming bool, model string, extra map[string]string) 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.RouterKey)
 	req.Header.Set("anthropic-version", anthropicVersion)
-	// Pin the served model unless this body is itself a force-model command
-	// (those must route through the command handler, not re-pin).
-	if !isForceModelCommand(body) {
-		req.Header.Set(forceModelHeader, model)
-	}
 	for k, v := range extra {
 		req.Header.Set(k, v)
 	}

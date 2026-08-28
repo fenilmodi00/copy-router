@@ -184,6 +184,6 @@ func TestCatalogModelsHandler_ScopeCatalogReturnsFullCatalog(t *testing.T) {
 		require.False(t, dup, "duplicate catalog id %s", m.Model)
 		seen[m.Model] = struct{}{}
 	}
-	_, hasOpus := seen["claude-opus-5"]
+	_, hasOpus := seen["moonshotai/kimi-k3"]
 	require.True(t, hasOpus, "catalog must include a known Models row")
 }

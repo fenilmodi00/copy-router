@@ -16,7 +16,10 @@ import (
 )
 
 // escalateModel is the strong model a looping cheap/mid session is rescued onto.
-const escalateModel = "z-ai/glm-5.2"
+// zai-org/glm-5.2 is the canonical catalog id (the legacy alias z-ai/glm-5.2
+// is preserved in catalog.aliases). The escalation pin stores the canonical
+// id so future resolution stays on the live wire name.
+const escalateModel = "zai-org/glm-5.2"
 
 // LoopEscalationStore persists cyclic-loop detections (one row per
 // session+role); CountLoopEscalationEvents enforces the once-per-session budget.

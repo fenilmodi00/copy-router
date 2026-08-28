@@ -928,7 +928,9 @@ func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
 // Model exclusion flows from installation context or env override into
 // the router.Request that the scorer consumes. Env override wins.
 func TestService_ExcludedModelsThroughRequest(t *testing.T) {
-	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hi"}]}`)
+	// model="auto": the test exercises exclusion-list plumbing into the
+	// scorer's router.Request, not force-from-body semantics.
+	body := []byte(`{"model":"auto","messages":[{"role":"user","content":"hi"}]}`)
 	providerMap := map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}}
 
 	t.Run("no override and no installation list → nil", func(t *testing.T) {

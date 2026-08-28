@@ -24,6 +24,15 @@ func init() {
 			indexUpstreamID(b.UpstreamID, i)
 		}
 	}
+	for alias, canonical := range aliases {
+		i, ok := byID[canonical]
+		if !ok {
+			continue
+		}
+		if _, exists := byID[alias]; !exists {
+			byID[alias] = i
+		}
+	}
 }
 
 func indexUpstreamID(upstreamID string, i int) {
@@ -353,7 +362,7 @@ const DefaultContextWindow = 128_000
 
 // ContextWindowFor returns the context window in tokens for the given model.
 // Returns DefaultContextWindow when the model is absent or has no ContextWindow set.
-// Accepts either a catalog ID (e.g. "z-ai/glm-5.2") or an upstream API ID stored
+// Accepts either a catalog ID (e.g. "zai-org/glm-5.2") or an upstream API ID stored
 // as a registry model field (e.g. "zai-org/glm-5.2"), so the context-window
 // scoring term sees the true window regardless of which ID a strategy artifact
 // recorded.
@@ -388,7 +397,10 @@ func ContextWindowForBinding(modelID, provider string) int {
 
 // ToolUseLowSet returns model IDs with ToolUseLow quality. The cluster scorer
 // excludes these when req.HasTools, falling back to the unfiltered pool if
-// that would empty the eligible set.
+// that would empty the eligible set. Each set entry's aliases (catalog.aliases)
+// are folded in too, so a frozen training artifact whose model field carries
+// a legacy alias name (e.g. z-ai/glm-5.2 instead of the canonical zai-org/glm-5.2)
+// still matches the exclusion set the scorer compares against.
 func ToolUseLowSet() map[string]struct{} {
 	out := make(map[string]struct{}, len(Models))
 	for _, m := range Models {
@@ -396,6 +408,7 @@ func ToolUseLowSet() map[string]struct{} {
 			out[m.ID] = struct{}{}
 		}
 	}
+	foldAliasesInto(out)
 	return out
 }
 
@@ -410,6 +423,7 @@ func AgenticLowSet() map[string]struct{} {
 			out[m.ID] = struct{}{}
 		}
 	}
+	foldAliasesInto(out)
 	return out
 }
 
@@ -423,7 +437,22 @@ func ImageUnsupportedSet() map[string]struct{} {
 			out[m.ID] = struct{}{}
 		}
 	}
+	foldAliasesInto(out)
 	return out
+}
+
+// foldAliasesInto adds each alias in catalog.aliases whose canonical id is
+// already a key in out, so derived exclusion sets (ToolUseLowSet / AgenticLowSet
+// / ImageUnsupportedSet) match legacy-named frozen-artifact candidates too.
+func foldAliasesInto(out map[string]struct{}) {
+	for alias, canonical := range aliases {
+		if _, ok := out[canonical]; !ok {
+			continue
+		}
+		if _, exists := out[alias]; !exists {
+			out[alias] = struct{}{}
+		}
+	}
 }
 
 // AcceptsImages reports whether the model accepts image content. Unknown

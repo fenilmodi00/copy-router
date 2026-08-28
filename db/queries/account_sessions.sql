@@ -1,8 +1,10 @@
 -- Mints a new session row for an account. token_hash is the SHA-256 of the
 -- opaque cookie value; token_prefix/token_suffix are the safe 8+4 display parts.
+-- installation_id is the tenant row resolved at login.
 -- name: InsertAccountSession :one
 INSERT INTO router.account_sessions (
     account_id,
+    installation_id,
     token_hash,
     token_prefix,
     token_suffix,
@@ -11,6 +13,7 @@ INSERT INTO router.account_sessions (
 )
 VALUES (
     @account_id::varchar,
+    sqlc.narg('installation_id')::varchar,
     @token_hash::varchar,
     @token_prefix::varchar,
     @token_suffix::varchar,

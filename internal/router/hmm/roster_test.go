@@ -17,7 +17,7 @@ func TestDeployedModelsForRosterIDs_MapsRosterSlugsToCatalogEntries(t *testing.T
 		"openai/gpt-oss-120b",
 		"deepseek-ai/deepseek-v4-flash",
 		"moonshotai/kimi-k2.7-code",
-		"z-ai/glm-5.2",
+		"zai-org/glm-5.2",
 		"google/gemma-4-31b-it",
 		"not/a-real-roster-id",
 	})
@@ -30,7 +30,7 @@ func TestDeployedModelsForRosterIDs_MapsRosterSlugsToCatalogEntries(t *testing.T
 	assert.Equal(t, providers.ProviderAiand, byModel["openai/gpt-oss-120b"])
 	assert.Equal(t, providers.ProviderAiand, byModel["deepseek-ai/deepseek-v4-flash"])
 	assert.Equal(t, providers.ProviderAiand, byModel["moonshotai/kimi-k2.7"])
-	assert.Equal(t, providers.ProviderAiand, byModel["z-ai/glm-5.2"])
+	assert.Equal(t, providers.ProviderAiand, byModel["zai-org/glm-5.2"])
 	assert.Equal(t, providers.ProviderAiand, byModel["google/gemma-4-31b-it"])
 	assert.NotContains(t, byModel, "not/a-real-roster-id")
 }

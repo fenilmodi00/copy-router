@@ -6,7 +6,7 @@ export interface ModelPricing {
 	outputUsdPerMillion: number;
 }
 
-export const PRICING_VERSION = "catalog-sha256:50d0f712b968277a";
+export const PRICING_VERSION = "catalog-sha256:ee9828a2dc33483d";
 
 export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = Object.freeze({
 	"deepseek-ai/deepseek-v4-flash": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.25 },
@@ -17,5 +17,5 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = Object.free
 	"motif-technologies/motif-3": { inputUsdPerMillion: 0.5, outputUsdPerMillion: 2 },
 	"openai/gpt-oss-120b": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 },
 	"qwen/qwen3.6-27b": { inputUsdPerMillion: 0.32, outputUsdPerMillion: 3.2 },
-	"z-ai/glm-5.2": { inputUsdPerMillion: 1, outputUsdPerMillion: 4 },
+	"zai-org/glm-5.2": { inputUsdPerMillion: 1, outputUsdPerMillion: 4 },
 });

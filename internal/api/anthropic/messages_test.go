@@ -108,7 +108,10 @@ func (f *fakeProviderClient) Passthrough(_ context.Context, _ providers.Prepared
 }
 
 // max_tokens > 256 so DetectFromEnvelope treats this as a MainLoop turn, not a probe/classifier.
-const validAnthropicBody = `{"model":"claude-sonnet-4-5","messages":[{"role":"user","content":"hi"}],"max_tokens":4096}`
+// model=auto: the model field now carries force intent, and `claude-sonnet-4-5` is a
+// client-passthrough name, not a catalog entry, so fixtures that just route normally
+// must opt out of forcing explicitly.
+const validAnthropicBody = `{"model":"auto","messages":[{"role":"user","content":"hi"}],"max_tokens":4096}`
 
 // newTestService wires a proxy.Service with a fake router and optional fake provider, no real I/O.
 func newTestService(r router.Router, clientName string, client providers.Client) *proxy.Service {
@@ -401,6 +404,24 @@ func TestRouteHandler_HappyPathReturnsDecision(t *testing.T) {
 	assert.Equal(t, "claude-haiku-4-5", got["model"])
 	assert.Equal(t, providers.ProviderAnthropic, got["provider"])
 	assert.Equal(t, "cheap_and_cheerful", got["reason"])
+}
+
+// Client model aliases that chat accepts without forcing (e.g. dated Claude
+// sonnet ids) must not 502 on /v1/route — route preview leaves ForceModel
+// empty and lets the cluster scorer decide, matching /v1/chat/completions.
+func TestRouteHandler_ClientModelAliasRoutesLikeChat(t *testing.T) {
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k2.7", Reason: "cluster_pick"}
+	var got router.Request
+	svc := newTestService(&fakeRouter{decision: decision, got: &got}, "", nil)
+	engine := routeEngine(svc)
+
+	body := []byte(`{"model":"claude-sonnet-4-20250514","messages":[{"role":"user","content":"hi"}],"max_tokens":4096}`)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/route", bytes.NewReader(body)))
+
+	require.Equal(t, http.StatusOK, rec.Code, "client alias must not fail route preview: %s", rec.Body.String())
+	assert.Equal(t, "", got.ForceModel, "unknown client alias must not force")
+	assert.Equal(t, "claude-sonnet-4-20250514", got.RequestedModel)
 }
 
 func TestRouteHandler_ForwardsAuthorizationForProviderEligibility(t *testing.T) {

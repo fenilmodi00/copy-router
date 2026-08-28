@@ -45,7 +45,7 @@ describe("aggregateModelTotals", () => {
       },
       {
         bucket: "2026-08-27T01:00:00Z",
-        decision_model: "z-ai/glm-5.2",
+        decision_model: "zai-org/glm-5.2",
         request_count: 1,
         total_tokens: 200,
         actual_cost_usd: 0.2,
@@ -60,8 +60,8 @@ describe("aggregateModelTotals", () => {
     });
     expect(totals[0]!.costUsd).toBeCloseTo(0.15, 10);
     expect(totals[1]).toEqual({
-      id: "z-ai/glm-5.2",
-      label: "z-ai/glm-5.2",
+      id: "zai-org/glm-5.2",
+      label: "zai-org/glm-5.2",
       tokens: 200,
       costUsd: 0.2,
       requests: 1,

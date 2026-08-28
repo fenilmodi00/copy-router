@@ -74,6 +74,7 @@ INSERT INTO router.model_router_request_telemetry (
     ttft_ms,
     cache_creation_tokens,
     cache_read_tokens,
+    semantic_cache_hit,
     device_id,
     session_id,
     router_user_id,
@@ -162,6 +163,7 @@ INSERT INTO router.model_router_request_telemetry (
     sqlc.narg('ttft_ms')::bigint,
     sqlc.narg('cache_creation_tokens')::int,
     sqlc.narg('cache_read_tokens')::int,
+    sqlc.narg('semantic_cache_hit')::boolean,
     sqlc.narg('device_id')::varchar,
     sqlc.narg('session_id')::varchar,
     sqlc.narg('router_user_id')::uuid,
@@ -241,7 +243,8 @@ SELECT
         (actual_input_cost_usd + actual_output_cost_usd)
     ), 0)::bigint                                             AS total_savings_usd,
     COALESCE(SUM(cache_creation_tokens), 0)::bigint           AS cache_write_tokens,
-    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens
+    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens,
+    COALESCE(COUNT(*) FILTER (WHERE semantic_cache_hit IS TRUE), 0)::bigint AS semantic_cache_hits
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= @from_time::timestamptz
@@ -310,7 +313,8 @@ SELECT
         (actual_input_cost_usd + actual_output_cost_usd)
     ), 0)::bigint                                             AS total_savings_usd,
     COALESCE(SUM(cache_creation_tokens), 0)::bigint           AS cache_write_tokens,
-    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens
+    COALESCE(SUM(cache_read_tokens), 0)::bigint               AS cache_read_tokens,
+    COALESCE(COUNT(*) FILTER (WHERE semantic_cache_hit IS TRUE), 0)::bigint AS semantic_cache_hits
 FROM router.model_router_request_telemetry
 WHERE installation_id = @installation_id::uuid
   AND span_type = 'router.upstream'

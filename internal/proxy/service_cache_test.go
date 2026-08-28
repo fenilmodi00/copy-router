@@ -181,9 +181,8 @@ func TestService_Cache_MissingExternalIDBypasses(t *testing.T) {
 
 // TestService_Cache_HitOmitsFeedbackLink guards two properties of the
 // semantic-cache hit path: (1) the miss response carries a feedback link, and
-// (2) the cache hit carries none — a cache hit writes no telemetry row, so its
-// feedback page would have no routing context, and replaying the cached
-// request's link would attribute a new client's rating to the wrong request_id.
+// (2) the cache hit carries none — replaying the cached request's link would
+// attribute a new client's rating to the wrong request_id.
 func TestService_Cache_HitOmitsFeedbackLink(t *testing.T) {
 	emb := embeddingFixture(7)
 	provider := &fakeProvider{
@@ -211,7 +210,42 @@ func TestService_Cache_HitOmitsFeedbackLink(t *testing.T) {
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec2, httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))))
 	require.Len(t, provider.proxyBodies, 1, "second call must be a cache hit")
 	require.Equal(t, proxy.RouterCacheHit, rec2.Header().Get(proxy.HeaderRouterCache))
-	assert.Empty(t, rec2.Header().Get(proxy.HeaderRouterFeedbackURL), "cache hit must not emit a feedback link (no telemetry to back it, and never replay the cached one)")
+	assert.Empty(t, rec2.Header().Get(proxy.HeaderRouterFeedbackURL), "cache hit must not emit a feedback link (never replay the cached one)")
+}
+
+func TestService_Cache_HitRecordsSemanticCacheTelemetry(t *testing.T) {
+	emb := embeddingFixture(3)
+	provider := &fakeProvider{
+		proxyResponse: func(w http.ResponseWriter) {
+			_, _ = w.Write([]byte(`{"id":"miss","content":"hi"}`))
+		},
+	}
+	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0, 1})}
+	c := cache.New(cache.DefaultConfig())
+	tel := newCaptureTelemetry()
+	instID := uuid.New().String()
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", tel).
+		WithFeedback(nil, feedback.NewSigner("cache-secret", time.Hour), "https://router.example.com")
+
+	ctx := context.WithValue(proxyContextWithExternalID(t, "tenant-telemetry"), proxy.InstallationIDContextKey{}, instID)
+	body := anthropicBody("telemetry ping", false)
+
+	rec1 := httptest.NewRecorder()
+	require.NoError(t, svc.ProxyMessages(ctx, body, rec1, httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))))
+	require.Len(t, provider.proxyBodies, 1)
+
+	rec2 := httptest.NewRecorder()
+	require.NoError(t, svc.ProxyMessages(ctx, body, rec2, httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))))
+	require.Equal(t, proxy.RouterCacheHit, rec2.Header().Get(proxy.HeaderRouterCache))
+
+	require.Eventually(t, func() bool {
+		return tel.semanticCacheHitRow() != nil
+	}, 3*time.Second, 10*time.Millisecond, "cache hit must emit telemetry with semantic_cache_hit")
+
+	hitRow := tel.semanticCacheHitRow()
+	require.NotNil(t, hitRow)
+	assert.Equal(t, instID, hitRow.InstallationID)
+	assert.Equal(t, "router.upstream", hitRow.SpanType)
 }
 
 func TestService_Cache_DisabledByNilCache(t *testing.T) {

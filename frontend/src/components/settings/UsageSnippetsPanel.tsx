@@ -80,7 +80,7 @@ export function UsageSnippetsPanel() {
       <Text className="text-2xs text-muted-foreground">
         {mode === "auto"
           ? "The router picks the model for each request."
-          : "x-weave-force-model pins the session until cleared."}
+          : "The catalog id in the model field forces that exact model."}
       </Text>
     </div>
   );

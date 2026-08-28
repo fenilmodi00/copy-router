@@ -20,13 +20,13 @@ import (
 const hmmPinStickyTestFallbackReason = "arm-selector unavailable for 'high': arm selector requires " +
 	"at least 2 trained eligible arm(s) in cluster 'high'; " +
 	"eligible=['anthropic/moonshotai/kimi-k3', 'openai/gpt-oss-120b']; " +
-	"legacy pairwise arm 'z-ai/glm-5.2' among 2/5 eligible [explored] " +
+	"legacy pairwise arm 'zai-org/glm-5.2' among 2/5 eligible [explored] " +
 	hmmArmSelectorUnavailableSentinel
 
 // TestStickPinOnArmSelectorUnavailable exercises the pure predicate against the full stick/no-stick matrix.
 func TestStickPinOnArmSelectorUnavailable(t *testing.T) {
 	const pinnedModel = "moonshotai/kimi-k3"                   // catalog.TierHigh
-	const sameTierFresh = "z-ai/glm-5.2"                       // catalog.TierHigh
+	const sameTierFresh = "zai-org/glm-5.2"                       // catalog.TierHigh
 	const differentTierFresh = "deepseek-ai/deepseek-v4-flash" // catalog.TierLow — different tier, but the legacy bandit draws within one cluster, not within one catalog tier, so tier is not what gates this case.
 	const pinnedGroup = "high"
 	const otherGroup = "low"
@@ -168,7 +168,7 @@ func (r *hmmPinStickyTestRouter) Route(_ context.Context, _ router.Request) (rou
 func TestHMMPinStickyOnArmSelectorUnavailableWiredIntoTurnLoop(t *testing.T) {
 	strategy := router.Strategy("hmm-pin-sticky-wiring-test")
 	const pinnedModel = "moonshotai/kimi-k3"
-	const sameTierFresh = "z-ai/glm-5.2"
+	const sameTierFresh = "zai-org/glm-5.2"
 	const pinnedGroup = "high"
 	const otherGroup = "low"
 

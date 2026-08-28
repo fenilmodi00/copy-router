@@ -110,7 +110,7 @@ func TestResolveBinding_V076RegistryIDs(t *testing.T) {
 func TestTierFor_KnownAndUnknown(t *testing.T) {
 	assert.Equal(t, TierLow, TierFor("deepseek-ai/deepseek-v4-flash"))
 	assert.Equal(t, TierMid, TierFor("deepseek-ai/deepseek-v4-pro"))
-	assert.Equal(t, TierHigh, TierFor("z-ai/glm-5.2"))
+	assert.Equal(t, TierHigh, TierFor("zai-org/glm-5.2"))
 	assert.Equal(t, TierHigh, TierFor("moonshotai/kimi-k3"))
 	assert.Equal(t, TierUnknown, TierFor("definitely-not-a-model"))
 }
@@ -123,7 +123,11 @@ func TestByIDOrUpstream_MapsAiandRegistryIDs(t *testing.T) {
 	}{
 		{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
 		{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
-		{"zai-org/glm-5.2", "z-ai/glm-5.2", "zai-org/glm-5.2"},
+		{"zai-org/glm-5.2", "zai-org/glm-5.2", "zai-org/glm-5.2"},
+		// Legacy alias z-ai/glm-5.2 (frozen v0.69–v0.74 + candidate-k12 artifacts)
+		// resolves to the canonical zai-org/glm-5.2 row; dispatch keeps the ai&
+		// wire name on the binding.
+		{"z-ai/glm-5.2", "zai-org/glm-5.2", "zai-org/glm-5.2"},
 		{"moonshotai/kimi-k2.7-code", "moonshotai/kimi-k2.7", "moonshotai/kimi-k2.7-code"},
 	}
 	for _, tt := range tests {
@@ -140,7 +144,9 @@ func TestByIDOrUpstream_MapsAiandRegistryIDs(t *testing.T) {
 
 func TestContextWindowFor_ResolvesUpstreamRegistryIDs(t *testing.T) {
 	assert.Equal(t, 1_048_576, ContextWindowFor("zai-org/glm-5.2"),
-		"upstream ID zai-org/glm-5.2 must resolve to z-ai/glm-5.2's 1M window")
+		"canon id zai-org/glm-5.2 resolves to its own 1M window")
+	assert.Equal(t, 1_048_576, ContextWindowFor("z-ai/glm-5.2"),
+		"legacy id z-ai/glm-5.2 must resolve to the same 1M window via the alias")
 	assert.Equal(t, 1_048_576, ContextWindowFor("deepseek-ai/deepseek-v4-flash"),
 		"upstream ID deepseek-ai/deepseek-v4-flash must resolve to deepseek-ai/deepseek-v4-flash's 1M window")
 	assert.Equal(t, 262_144, ContextWindowFor("moonshotai/kimi-k2.7-code"),
@@ -201,7 +207,7 @@ func TestCapabilitiesFor_UsesCatalogReasoningEfforts(t *testing.T) {
 }
 
 func TestReasoningEffortsFor(t *testing.T) {
-	assert.Equal(t, []string{EffortNone, EffortHigh, EffortMax}, ReasoningEffortsFor("z-ai/glm-5.2"))
+	assert.Equal(t, []string{EffortNone, EffortHigh, EffortMax}, ReasoningEffortsFor("zai-org/glm-5.2"))
 	assert.Nil(t, ReasoningEffortsFor("definitely-not-a-model"))
 }
 

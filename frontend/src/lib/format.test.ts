@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatContext, formatNumber, formatUSD, toNumber } from "./format";
+import { formatAverage, formatContext, formatNumber, formatSavingsUSD, formatUSD, toNumber } from "./format";
 
 describe("formatUSD", () => {
   it("renders zero as $0.00", () => {
@@ -14,6 +14,29 @@ describe("formatUSD", () => {
   it("rounds to cents above $0.001", () => {
     expect(formatUSD(0.1234)).toBe("$0.12");
     expect(formatUSD(12.345)).toBe("$12.35");
+  });
+});
+
+describe("formatSavingsUSD", () => {
+  it("uses a sub-cent floor instead of rounding to $0.00", () => {
+    expect(formatSavingsUSD(0.004788)).toBe("<$0.01");
+  });
+  it("shows three decimals between half-cent and one cent", () => {
+    expect(formatSavingsUSD(0.008)).toBe("$0.008");
+  });
+  it("delegates to formatUSD at or above one cent", () => {
+    expect(formatSavingsUSD(0.04)).toBe("$0.04");
+  });
+});
+
+describe("formatAverage", () => {
+  it("rounds to at most two decimal places", () => {
+    expect(formatAverage(72.91338582677166)).toBe("72.91");
+    expect(formatAverage(100)).toBe("100");
+    expect(formatAverage(1.5)).toBe("1.5");
+  });
+  it("renders NaN as an em dash", () => {
+    expect(formatAverage(NaN)).toBe("—");
   });
 });
 

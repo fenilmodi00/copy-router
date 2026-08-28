@@ -13,20 +13,21 @@ import (
 const ctxKeyAccount = "router_account"
 
 // WithAccountCookie authenticates an account session cookie, resolves the
-// account's installation, and stashes BOTH on ctx so the existing per-installation
-// admin handlers (metrics scoping, keys, BYOK, config) work unchanged. Missing or
-// invalid cookies are 401 — the dashboard's fetch layer bounces to login.
+// account's installation from the cached session row, and stashes BOTH on ctx
+// so the existing per-installation admin handlers (metrics scoping, keys, BYOK,
+// config) work unchanged. Missing or invalid cookies are 401 — the dashboard's
+// fetch layer bounces to login.
 //
 // This is the self-serve-mode counterpart to WithAdminOnly: an account cookie is
 // a dashboard identity, never a data-plane credential.
 func WithAccountCookie(svc *auth.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		acct := tryAccountCookie(c, svc)
+		acct, session := tryAccountCookieDetails(c, svc)
 		if acct == nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "account_session_required"})
 			return
 		}
-		inst, err := svc.EnsureAccountInstallation(c.Request.Context(), acct)
+		inst, err := svc.InstallationForAccountSession(c.Request.Context(), acct, session)
 		if err != nil {
 			observability.FromGin(c).Error("Failed to resolve account installation", "err", err, "account_id", acct.ID)
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "account_unavailable"})
@@ -41,19 +42,24 @@ func WithAccountCookie(svc *auth.Service) gin.HandlerFunc {
 // tryAccountCookie returns the resolved account for a valid session cookie, or
 // nil when the cookie is absent, login is disabled, or the session is invalid.
 func tryAccountCookie(c *gin.Context, svc *auth.Service) *auth.Account {
+	acct, _ := tryAccountCookieDetails(c, svc)
+	return acct
+}
+
+func tryAccountCookieDetails(c *gin.Context, svc *auth.Service) (*auth.Account, *auth.LoginSession) {
 	if !svc.LoginEnabled() {
-		return nil
+		return nil, nil
 	}
 	cookie, err := c.Cookie(auth.LoginSessionCookieName)
 	if err != nil || cookie == "" {
-		return nil
+		return nil, nil
 	}
-	acct, err := svc.VerifyLoginSession(c.Request.Context(), strings.TrimSpace(cookie))
+	acct, session, err := svc.VerifyLoginSessionDetails(c.Request.Context(), strings.TrimSpace(cookie))
 	if err != nil {
 		observability.FromGin(c).Debug("Account session verify failed", "err", err)
-		return nil
+		return nil, nil
 	}
-	return acct
+	return acct, session
 }
 
 // AccountFrom retrieves the account set by WithAccountCookie. Returns nil for

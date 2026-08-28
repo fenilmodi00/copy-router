@@ -15,9 +15,9 @@ import (
 	"workweave/router/internal/auth"
 )
 
-// DefaultBaseURL is aiand's API root. Note: the OpenAI-compatible inference
-// base URL (openaicompat.AiandBaseURL) already includes /v1; identity probing
-// uses the API root + /v1/models (key-auth), not /api/v1/me (JWT-only).
+// DefaultBaseURL is aiand's API root for the dashboard identity probe.
+// OpenAI-compatible inference uses openaicompat.AiandBaseURL (…/v1) via
+// AIAND_API_URL; wire AIAND_IDENTITY_URL when the probe root differs.
 const DefaultBaseURL = "https://api.aiand.com"
 
 // KeyVerifier validates an aiand sk- key by probing GET /v1/models.
@@ -29,22 +29,8 @@ const DefaultBaseURL = "https://api.aiand.com"
 // are org-scoped, so one org → one selfserve account (key rotation within
 // the same org reuses the same installation).
 type KeyVerifier struct {
-	Client  *http.Client
-	BaseURL string
-}
-
-// identityAPIRoot returns the aiand API root for the key-auth probe.
-// AIAND_API_URL is shared with OpenAI-compat inference, which already includes
-// /v1 (openaicompat.AiandBaseURL). Stripping a trailing /v1 keeps the probe at
-// GET {root}/v1/models instead of the broken /v1/v1/models that maps to
-// ErrKeyUnavailable → HTTP 503 key_validation_unavailable.
-func identityAPIRoot(baseURL string) string {
-	base := strings.TrimSuffix(strings.TrimSpace(baseURL), "/")
-	base = strings.TrimSuffix(base, "/v1")
-	if base == "" {
-		return DefaultBaseURL
-	}
-	return base
+	Client       *http.Client
+	IdentityURL  string
 }
 
 // Validate calls aiand's GET /v1/models with the key as a bearer token and
@@ -54,7 +40,10 @@ func (v *KeyVerifier) Validate(ctx context.Context, rawKey string) (*auth.AiandI
 	if v.Client == nil {
 		return nil, errors.New("aiand: nil http client")
 	}
-	base := identityAPIRoot(v.BaseURL)
+	base := strings.TrimSuffix(strings.TrimSpace(v.IdentityURL), "/")
+	if base == "" {
+		base = DefaultBaseURL
+	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/v1/models", nil)

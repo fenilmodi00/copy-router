@@ -80,7 +80,9 @@ type InsertTelemetryParams struct {
 	TTFTMs              *int64
 	CacheCreationTokens *int32
 	CacheReadTokens     *int32
-	DeviceID            string
+	// SemanticCacheHit marks turns served from the router semantic response cache.
+	SemanticCacheHit *bool
+	DeviceID         string
 	SessionID           string
 	RouterUserID        string
 	ClientApp           string
@@ -167,6 +169,7 @@ type TelemetrySummary struct {
 	TotalSavingsUSD       float64
 	CacheWriteTokens      int64
 	CacheReadTokens       int64
+	SemanticCacheHits     int64
 }
 
 // TelemetryBucket is one time-bucket entry for the cost savings chart; the

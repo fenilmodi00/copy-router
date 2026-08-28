@@ -17,7 +17,7 @@ const (
 	modelFlash   = "deepseek-ai/deepseek-v4-flash"
 	modelPro     = "deepseek-ai/deepseek-v4-pro"
 	modelKimi3   = "moonshotai/kimi-k3"
-	modelGlm     = "z-ai/glm-5.2"
+	modelGlm     = "zai-org/glm-5.2"
 	modelOss     = "openai/gpt-oss-120b"
 	modelUnknown = "fictional-foo-1.0"
 )

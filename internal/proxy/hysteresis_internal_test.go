@@ -17,12 +17,12 @@ func hysteresisDecision(model string, armScores map[string]float32) router.Decis
 }
 
 func TestEffortHysteresisHoldsSmallGapOnSameModel(t *testing.T) {
-	fresh := hysteresisDecision("z-ai/glm-5.2", map[string]float32{
-		"anthropic/z-ai/glm-5.2:low":  4.0,
-		"anthropic/z-ai/glm-5.2:high": 4.5,
+	fresh := hysteresisDecision("zai-org/glm-5.2", map[string]float32{
+		"anthropic/zai-org/glm-5.2:low":  4.0,
+		"anthropic/zai-org/glm-5.2:high": 4.5,
 	})
 
-	got := effortHysteresisHold(fresh, "z-ai/glm-5.2:low", "z-ai/glm-5.2", "high")
+	got := effortHysteresisHold(fresh, "zai-org/glm-5.2:low", "zai-org/glm-5.2", "high")
 
 	if got != "low" {
 		t.Fatalf("expected incumbent effort held, got %q", got)
@@ -30,12 +30,12 @@ func TestEffortHysteresisHoldsSmallGapOnSameModel(t *testing.T) {
 }
 
 func TestEffortHysteresisAllowsGapAboveThreshold(t *testing.T) {
-	fresh := hysteresisDecision("z-ai/glm-5.2", map[string]float32{
-		"anthropic/z-ai/glm-5.2:low":  4.0,
-		"anthropic/z-ai/glm-5.2:high": 6.0,
+	fresh := hysteresisDecision("zai-org/glm-5.2", map[string]float32{
+		"anthropic/zai-org/glm-5.2:low":  4.0,
+		"anthropic/zai-org/glm-5.2:high": 6.0,
 	})
 
-	got := effortHysteresisHold(fresh, "z-ai/glm-5.2:low", "z-ai/glm-5.2", "high")
+	got := effortHysteresisHold(fresh, "zai-org/glm-5.2:low", "zai-org/glm-5.2", "high")
 
 	if got != "" {
 		t.Fatalf("expected switch allowed, got %q", got)
@@ -43,12 +43,12 @@ func TestEffortHysteresisAllowsGapAboveThreshold(t *testing.T) {
 }
 
 func TestEffortHysteresisAllowsCrossModelSwitch(t *testing.T) {
-	fresh := hysteresisDecision("z-ai/glm-5.2", map[string]float32{
-		"anthropic/z-ai/glm-5.2:low":  4.0,
-		"anthropic/z-ai/glm-5.2:high": 4.5,
+	fresh := hysteresisDecision("zai-org/glm-5.2", map[string]float32{
+		"anthropic/zai-org/glm-5.2:low":  4.0,
+		"anthropic/zai-org/glm-5.2:high": 4.5,
 	})
 
-	got := effortHysteresisHold(fresh, "moonshotai/kimi-k3:low", "z-ai/glm-5.2", "high")
+	got := effortHysteresisHold(fresh, "moonshotai/kimi-k3:low", "zai-org/glm-5.2", "high")
 
 	if got != "" {
 		t.Fatalf("expected cross-model switch allowed, got %q", got)
@@ -56,9 +56,9 @@ func TestEffortHysteresisAllowsCrossModelSwitch(t *testing.T) {
 }
 
 func TestEffortHysteresisAllowsStayOnModelTheFreshArmDoesNotDescribe(t *testing.T) {
-	fresh := hysteresisDecision("z-ai/glm-5.2", map[string]float32{
-		"anthropic/z-ai/glm-5.2:low":  4.0,
-		"anthropic/z-ai/glm-5.2:high": 4.5,
+	fresh := hysteresisDecision("zai-org/glm-5.2", map[string]float32{
+		"anthropic/zai-org/glm-5.2:low":  4.0,
+		"anthropic/zai-org/glm-5.2:high": 4.5,
 	})
 
 	got := effortHysteresisHold(fresh, "moonshotai/kimi-k3:low", "moonshotai/kimi-k3", "high")
@@ -69,9 +69,9 @@ func TestEffortHysteresisAllowsStayOnModelTheFreshArmDoesNotDescribe(t *testing.
 }
 
 func TestEffortHysteresisPassesThroughWithoutArmScores(t *testing.T) {
-	fresh := hysteresisDecision("z-ai/glm-5.2", nil)
+	fresh := hysteresisDecision("zai-org/glm-5.2", nil)
 
-	got := effortHysteresisHold(fresh, "z-ai/glm-5.2:low", "z-ai/glm-5.2", "high")
+	got := effortHysteresisHold(fresh, "zai-org/glm-5.2:low", "zai-org/glm-5.2", "high")
 
 	if got != "" {
 		t.Fatalf("expected pass-through on a pre-B1 sidecar, got %q", got)
@@ -79,12 +79,12 @@ func TestEffortHysteresisPassesThroughWithoutArmScores(t *testing.T) {
 }
 
 func TestEffortHysteresisPassesThroughOnBarePin(t *testing.T) {
-	fresh := hysteresisDecision("z-ai/glm-5.2", map[string]float32{
-		"anthropic/z-ai/glm-5.2:low":  4.0,
-		"anthropic/z-ai/glm-5.2:high": 4.5,
+	fresh := hysteresisDecision("zai-org/glm-5.2", map[string]float32{
+		"anthropic/zai-org/glm-5.2:low":  4.0,
+		"anthropic/zai-org/glm-5.2:high": 4.5,
 	})
 
-	got := effortHysteresisHold(fresh, "z-ai/glm-5.2", "z-ai/glm-5.2", "high")
+	got := effortHysteresisHold(fresh, "zai-org/glm-5.2", "zai-org/glm-5.2", "high")
 
 	if got != "" {
 		t.Fatalf("expected pre-effort bare pin to pass through, got %q", got)
@@ -92,11 +92,11 @@ func TestEffortHysteresisPassesThroughOnBarePin(t *testing.T) {
 }
 
 func TestEffortHysteresisPassesThroughWhenIncumbentArmUnscored(t *testing.T) {
-	fresh := hysteresisDecision("z-ai/glm-5.2", map[string]float32{
-		"anthropic/z-ai/glm-5.2:high": 4.5,
+	fresh := hysteresisDecision("zai-org/glm-5.2", map[string]float32{
+		"anthropic/zai-org/glm-5.2:high": 4.5,
 	})
 
-	got := effortHysteresisHold(fresh, "z-ai/glm-5.2:low", "z-ai/glm-5.2", "high")
+	got := effortHysteresisHold(fresh, "zai-org/glm-5.2:low", "zai-org/glm-5.2", "high")
 
 	if got != "" {
 		t.Fatalf("expected pass-through when the incumbent arm has no score, got %q", got)
@@ -104,12 +104,12 @@ func TestEffortHysteresisPassesThroughWhenIncumbentArmUnscored(t *testing.T) {
 }
 
 func TestEffortHysteresisHoldsWhenChallengerScoresWorse(t *testing.T) {
-	fresh := hysteresisDecision("z-ai/glm-5.2", map[string]float32{
-		"anthropic/z-ai/glm-5.2:low":  5.0,
-		"anthropic/z-ai/glm-5.2:high": 1.0,
+	fresh := hysteresisDecision("zai-org/glm-5.2", map[string]float32{
+		"anthropic/zai-org/glm-5.2:low":  5.0,
+		"anthropic/zai-org/glm-5.2:high": 1.0,
 	})
 
-	got := effortHysteresisHold(fresh, "z-ai/glm-5.2:low", "z-ai/glm-5.2", "high")
+	got := effortHysteresisHold(fresh, "zai-org/glm-5.2:low", "zai-org/glm-5.2", "high")
 
 	if got != "low" {
 		t.Fatalf("expected incumbent held against a worse challenger, got %q", got)
@@ -117,11 +117,11 @@ func TestEffortHysteresisHoldsWhenChallengerScoresWorse(t *testing.T) {
 }
 
 func TestEffortHysteresisPassesThroughOnUnchangedEffort(t *testing.T) {
-	fresh := hysteresisDecision("z-ai/glm-5.2", map[string]float32{
-		"anthropic/z-ai/glm-5.2:low": 4.0,
+	fresh := hysteresisDecision("zai-org/glm-5.2", map[string]float32{
+		"anthropic/zai-org/glm-5.2:low": 4.0,
 	})
 
-	got := effortHysteresisHold(fresh, "z-ai/glm-5.2:low", "z-ai/glm-5.2", "low")
+	got := effortHysteresisHold(fresh, "zai-org/glm-5.2:low", "zai-org/glm-5.2", "low")
 
 	if got != "" {
 		t.Fatalf("expected no hold when effort is unchanged, got %q", got)

@@ -17,11 +17,11 @@ Canonical model identity in the deploy catalog (open-weight rows such as `moonsh
 _Avoid_: Keeping Claude catalog rows so a harness can keep sending Claude names
 
 **UpstreamID**:
-Model ID the chosen provider binding sends on the wire to that upstream. May match the catalog ID or differ when the upstream’s published name diverges (example shape: catalog `z-ai/glm-5.2` vs upstream `zai-org/glm-5.2`).
+Model ID the chosen provider binding sends on the wire to that upstream. May match the catalog ID or differ when the upstream’s published name diverges (example shape: catalog `zai-org/glm-5.2` vs upstream `zai-org/glm-5.2`).
 _Avoid_: Treating every client-facing string as an upstream ID; inventing Claude upstream IDs for aiand
 
 **ClientModelAlias**:
-Client-supplied Claude-era (and short) model strings remapped onto existing aiand **CatalogModelID**s (Appendix F style). Examples only: `claude-fable-5` → `moonshotai/kimi-k3`; `claude-opus-5` / `claude-opus-4-8` → `z-ai/glm-5.2`; `claude-sonnet-5` → `moonshotai/kimi-k2.7`; `claude-sonnet-4-6` → `deepseek-ai/deepseek-v4-pro`; `claude-haiku-4-5` → `deepseek-ai/deepseek-v4-flash`. Aliases are remap inputs, not catalog rows.
+Client-supplied Claude-era (and short) model strings remapped onto existing aiand **CatalogModelID**s (Appendix F style). Examples only: `claude-fable-5` → `moonshotai/kimi-k3`; `claude-opus-5` / `claude-opus-4-8` → `zai-org/glm-5.2`; `claude-sonnet-5` → `moonshotai/kimi-k2.7`; `claude-sonnet-4-6` → `deepseek-ai/deepseek-v4-pro`; `claude-haiku-4-5` → `deepseek-ai/deepseek-v4-flash`. Aliases are remap inputs, not catalog rows.
 _Avoid_: Calling aliases “models in the catalog”; using aliases as a reason to retain Claude catalog entries
 
 **ClientHarness**:

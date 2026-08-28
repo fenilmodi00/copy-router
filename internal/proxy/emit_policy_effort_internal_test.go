@@ -10,7 +10,7 @@ import (
 )
 
 func TestApplyPolicyEffortToEmit_WiresResolvedEffortToBothFields(t *testing.T) {
-	opts := translate.EmitOptions{Capabilities: catalog.CapabilitiesFor("z-ai/glm-5.2")}
+	opts := translate.EmitOptions{Capabilities: catalog.CapabilitiesFor("zai-org/glm-5.2")}
 
 	applyPolicyEffortToEmit(&opts, "high")
 
@@ -20,7 +20,7 @@ func TestApplyPolicyEffortToEmit_WiresResolvedEffortToBothFields(t *testing.T) {
 }
 
 func TestApplyPolicyEffortToEmit_NoOpWhenEmpty(t *testing.T) {
-	opts := translate.EmitOptions{Capabilities: catalog.CapabilitiesFor("z-ai/glm-5.2")}
+	opts := translate.EmitOptions{Capabilities: catalog.CapabilitiesFor("zai-org/glm-5.2")}
 
 	applyPolicyEffortToEmit(&opts, "")
 
@@ -29,7 +29,7 @@ func TestApplyPolicyEffortToEmit_NoOpWhenEmpty(t *testing.T) {
 }
 
 func TestApplyPolicyEffortToEmit_CapsUnsupportedLevels(t *testing.T) {
-	opts := translate.EmitOptions{Capabilities: catalog.CapabilitiesFor("z-ai/glm-5.2")}
+	opts := translate.EmitOptions{Capabilities: catalog.CapabilitiesFor("zai-org/glm-5.2")}
 
 	applyPolicyEffortToEmit(&opts, "xhigh")
 

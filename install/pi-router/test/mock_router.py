@@ -20,8 +20,10 @@ never logged in full -- only presence + last 4 chars.
 
 The mock also implements the router's synthetic /force-model acknowledgement
 and a small test-only alias map, allowing an interactive Pi smoke test without
-provider spend. Command responses intentionally omit x-router-* headers just as
-the real router does.
+provider spend. The request body's `model` field is treated as routing intent
+too (a resolvable value forces that model; "auto" routes normally), matching
+the real router's field-driven mode for headless clients. Command responses
+intentionally omit x-router-* headers just as the real router does.
 
 Env:
   MOCK_PORT          listen port                       (default 8899)
@@ -69,6 +71,27 @@ FORCE_MODEL_ALIASES = {
     "opus": "claude-opus-4-8",
     "sonnet": "claude-sonnet-4-6",
 }
+
+
+def resolve_model_field(model: str) -> str | None:
+    """Resolve a request-body `model` field as routing intent.
+
+    Mirrors the real router's inbound `model` field: a resolvable value forces
+    that model, "auto" (and "" when the client left the field unset) means
+    normal routing. Unresolvable values fall through to normal routing — the
+    mock is deliberately lenient where the real router would 400, so a typo in
+    a test harness never silently undeterministic a run. `weave/<model>` is the
+    router's own "route me" naming pi uses (e.g. `--model weave/claude-sonnet-4-6`),
+    treated as normal routing, never a pin.
+    """
+    if not model:
+        return None
+    if model == "auto":
+        return None
+    if model.startswith("weave/"):
+        return None
+    stripped = model.rsplit(":", 1)[0]  # drop a ":<effort>" suffix
+    return FORCE_MODEL_ALIASES.get(stripped.lower(), stripped)
 
 
 def log_request(record: dict) -> None:
@@ -290,6 +313,17 @@ class Handler(BaseHTTPRequestHandler):
         stream = bool(body.get("stream"))
         user_id = metadata.get("user_id") or ""
         force_command = force_model_command(user_text) if not is_subagent else None
+        field_forced = resolve_model_field(body.get("model")) if not is_subagent else None
+
+        # The inbound `model` field is routing intent (primary), then the
+        # /force-model command, mirroring the real router's precedence. The
+        # field does not clear an existing pin: /unforce-model is the only
+        # way out, exactly like the real router's model="auto" never-clear rule.
+        intent = None
+        if force_command:
+            intent = force_command
+        elif field_forced:
+            intent = ("force", field_forced)
 
         want_dispatch = (
             DISPATCH_MARKER in user_text and not is_subagent and not tool_result_present
@@ -299,8 +333,8 @@ class Handler(BaseHTTPRequestHandler):
         routed_model = SUBAGENT_MODEL if is_subagent else forced_model or MAIN_MODEL
 
         route_headers = True
-        if force_command:
-            action, model = force_command
+        if intent:
+            action, model = intent
             route_headers = False
             routed_model = "weave-router"
             if action == "clear":
@@ -354,6 +388,7 @@ class Handler(BaseHTTPRequestHandler):
                 "user_text": user_text[:60],
                 "served": served,
                 "forced_model": forced_model,
+                "field_forced": field_forced,
             }
         )
 

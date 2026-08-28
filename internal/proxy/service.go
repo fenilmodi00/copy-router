@@ -1587,10 +1587,16 @@ func (s *Service) WithSubAgentOverride(provider, model string) *Service {
 	return s
 }
 
-// baselineFor returns requested if it has a pricing entry, otherwise the
-// configured defaultBaselineModel (which may be "").
+// baselineFor returns the cost-comparison baseline for requested: a priced
+// client alias or catalog ID when recognized, otherwise the configured
+// defaultBaselineModel (which may be "").
 func (s *Service) baselineFor(requested string) string {
 	if requested != "" {
+		if canonical, _, ok := resolveForceModel(requested); ok {
+			if _, priceOk := catalog.PrimaryPriceFor(canonical); priceOk {
+				return canonical
+			}
+		}
 		if _, ok := catalog.PrimaryPriceFor(requested); ok {
 			return requested
 		}
@@ -1869,10 +1875,23 @@ func cloneCacheHeaders(h http.Header) http.Header {
 	return out
 }
 
+// cacheMetadataFor returns embedding/cluster metadata for semantic-cache keying.
+// Pin-served decisions drop Metadata, but routeRes.Fresh on the same turn still
+// carries the prompt embedding the cache matches on.
+func cacheMetadataFor(decision router.Decision, routeRes turnLoopResult) *router.RoutingMetadata {
+	if decision.Metadata != nil {
+		return decision.Metadata
+	}
+	if routeRes.Fresh.Metadata != nil {
+		return routeRes.Fresh.Metadata
+	}
+	return nil
+}
+
 // writeCachedResponse emits a stored CachedResponse. x-router-* headers come
 // from the live decision so the client sees an accurate routing trace. No
-// feedback link is set: a cache hit writes no telemetry row, so its feedback
-// page would have no routing context to show.
+// feedback link is set: replaying the cached request's link would attribute a
+// new client's rating to the wrong request_id.
 func (s *Service) writeCachedResponse(w http.ResponseWriter, resp cache.CachedResponse, decision router.Decision) {
 	for k, vs := range resp.Headers {
 		for _, v := range vs {
@@ -1891,6 +1910,46 @@ func (s *Service) writeCachedResponse(w http.ResponseWriter, resp cache.CachedRe
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+// fireSemanticCacheHitTelemetry records a minimal upstream-span row so the
+// dashboard can count semantic-cache hits. Full upstream usage is absent on
+// this path by design.
+func (s *Service) fireSemanticCacheHitTelemetry(
+	ctx context.Context,
+	installationID uuid.UUID,
+	apiKeyID, requestID string,
+	feats translate.RoutingFeatures,
+	decision router.Decision,
+	routeRes turnLoopResult,
+	sessionKey [16]byte,
+	requestStart time.Time,
+	routeMs int64,
+) {
+	if s.telemetry == nil || installationID == uuid.Nil {
+		return
+	}
+	semHit := true
+	s.fireTelemetry(InsertTelemetryParams{
+		InstallationID:       installationID.String(),
+		APIKeyID:             apiKeyID,
+		RequestID:            requestID,
+		SpanType:             "router.upstream",
+		Timestamp:            time.Now(),
+		RequestedModel:       feats.Model,
+		DecisionModel:        decision.Model,
+		DecisionProvider:     decision.Provider,
+		DecisionReason:       decision.Reason,
+		EstimatedInputTokens: int32(feats.Tokens),
+		StickyHit:            routeRes.StickyHit,
+		RouteLatencyMs:       routeMs,
+		TotalLatencyMs:       time.Since(requestStart).Milliseconds(),
+		SemanticCacheHit:     &semHit,
+		TurnType:             string(routeRes.TurnType),
+		SessionKey:           sessionKey[:],
+		Role:                 routeRes.PinRole,
+		RouterUserID:         auth.UserIDFrom(ctx),
+	})
 }
 
 // EmbedOnlyUserMessageContextKey is the context key for the per-request embed flag override.
@@ -2630,19 +2689,20 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		}
 	}
 
-	// Honor the x-weave-force-model header (headless equivalent of /force-model).
-	// Writes the user-forced pin and falls through to normal routing, which picks
-	// the pin up and serves the requested model on this same turn.
+	// Honor force intent from the model field and x-weave-force-model header
+	// (headless / playground equivalent of /force-model). Tool-result slash
+	// commands take precedence; otherwise applyForceModel merges body + header.
 	forceModel := agentForceModel
 	forceCluster := ""
 	if !agentShadowMode {
-		headerForceModel, forceErr := s.applyForceModelHeader(ctx, r, env, installationID, sessionKey)
-		if forceErr != nil {
-			return forceErr
+		if forceModel == "" {
+			resolved, forceErr := s.applyForceModel(ctx, r, env, installationID, sessionKey)
+			if forceErr != nil {
+				return forceErr
+			}
+			forceModel = resolved
 		}
-		if headerForceModel != "" {
-			forceModel = headerForceModel
-		}
+		var forceErr error
 		forceCluster, forceErr = applyForceClusterHeader(ctx, r)
 		if forceErr != nil {
 			return forceErr
@@ -2945,10 +3005,12 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	// Subscription-only turns are excluded (like the OpenAI path): the mode is an
 	// unfoldable routing signal absent from the cache key, so a stored body would
 	// bypass the exhausted-sub 402 guard and the depleted-credits warning below.
-	cacheEligible := s.semanticCacheAllowed(ctx) && s.semanticCache != nil && !env.Stream() && decision.Metadata != nil && externalID != "" && !bypassEval && !compactionHandoverRan && !billing.SubscriptionOnlyFromContext(ctx) && len(s.subsidyFactors(ctx, r.Header)) == 0
+	cacheMeta := cacheMetadataFor(decision, routeRes)
+	cacheEligible := s.semanticCacheAllowed(ctx) && s.semanticCache != nil && !env.Stream() && cacheMeta != nil && externalID != "" && !bypassEval && !compactionHandoverRan && !billing.SubscriptionOnlyFromContext(ctx) && len(s.subsidyFactors(ctx, r.Header)) == 0
 	if cacheEligible {
-		if resp, hit := s.semanticCache.Lookup(externalID, cache.FormatAnthropic, decision.Metadata.Embedding, decision.Metadata.ClusterIDs, decision.Metadata.ClusterRouterVersion, decision.Metadata.EffectiveKnobsHash); hit {
+		if resp, hit := s.semanticCache.Lookup(externalID, cache.FormatAnthropic, cacheMeta.Embedding, cacheMeta.ClusterIDs, cacheMeta.ClusterRouterVersion, cacheMeta.EffectiveKnobsHash); hit {
 			s.writeCachedResponse(w, resp, decision)
+			s.fireSemanticCacheHitTelemetry(ctx, installationID, apiKeyID, requestID, feats, decision, routeRes, sessionKey, requestStart, routeMs)
 			otel.Record(ctx, otel.Span{
 				Name:  "router.cache_hit",
 				Start: requestStart,
@@ -3614,7 +3676,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 				Headers:    cloneCacheHeaders(w.Header()),
 				Body:       body,
 			}
-			s.semanticCache.Store(externalID, cache.FormatAnthropic, decision.Metadata.Embedding, decision.Metadata.ClusterIDs[0], storeResp, decision.Metadata.ClusterRouterVersion, decision.Metadata.EffectiveKnobsHash)
+			s.semanticCache.Store(externalID, cache.FormatAnthropic, cacheMeta.Embedding, cacheMeta.ClusterIDs[0], storeResp, cacheMeta.ClusterRouterVersion, cacheMeta.EffectiveKnobsHash)
 		}
 	}
 
@@ -5062,16 +5124,16 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 		}
 	}
 
-	// Honor the x-weave-force-model header (headless equivalent of /force-model).
-	// Writes the user-forced pin and falls through to normal routing, which picks
-	// the pin up and serves the requested model on this same turn.
+	// Honor force intent from the model field and x-weave-force-model header.
+	// Tool-result slash commands take precedence; otherwise applyForceModel
+	// merges body + header and writes the session pin for this turn.
 	forceModel := agentForceModel
-	headerForceModel, forceErr := s.applyForceModelHeader(ctx, r, env, installationID, sessionKey)
-	if forceErr != nil {
-		return forceErr
-	}
-	if headerForceModel != "" {
-		forceModel = headerForceModel
+	if forceModel == "" {
+		resolved, forceErr := s.applyForceModel(ctx, r, env, installationID, sessionKey)
+		if forceErr != nil {
+			return forceErr
+		}
+		forceModel = resolved
 	}
 	forceCluster, forceErr := applyForceClusterHeader(ctx, r)
 	if forceErr != nil {
@@ -5227,10 +5289,12 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 
 	// See the ProxyMessages cache-eligibility note: subsidized requests bypass the
 	// semantic cache (the key doesn't capture headroom-dependent model choice).
-	cacheEligible := s.semanticCacheAllowed(ctx) && s.semanticCache != nil && !env.Stream() && decision.Metadata != nil && externalID != "" && !bypassEval && !responsesPassthrough && !billing.SubscriptionOnlyFromContext(ctx) && len(s.subsidyFactors(ctx, r.Header)) == 0
+	cacheMeta := cacheMetadataFor(decision, routeRes)
+	cacheEligible := s.semanticCacheAllowed(ctx) && s.semanticCache != nil && !env.Stream() && cacheMeta != nil && externalID != "" && !bypassEval && !responsesPassthrough && !billing.SubscriptionOnlyFromContext(ctx) && len(s.subsidyFactors(ctx, r.Header)) == 0
 	if cacheEligible {
-		if resp, hit := s.semanticCache.Lookup(externalID, cache.FormatOpenAI, decision.Metadata.Embedding, decision.Metadata.ClusterIDs, decision.Metadata.ClusterRouterVersion, decision.Metadata.EffectiveKnobsHash); hit {
+		if resp, hit := s.semanticCache.Lookup(externalID, cache.FormatOpenAI, cacheMeta.Embedding, cacheMeta.ClusterIDs, cacheMeta.ClusterRouterVersion, cacheMeta.EffectiveKnobsHash); hit {
 			s.writeCachedResponse(w, resp, decision)
+			s.fireSemanticCacheHitTelemetry(ctx, installationID, apiKeyID, requestID, feats, decision, routeRes, sessionKey, requestStart, routeMs)
 			otel.Record(ctx, otel.Span{
 				Name:  "router.cache_hit",
 				Start: requestStart,
@@ -5564,7 +5628,7 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 				Headers:    cloneCacheHeaders(w.Header()),
 				Body:       body,
 			}
-			s.semanticCache.Store(externalID, cache.FormatOpenAI, decision.Metadata.Embedding, decision.Metadata.ClusterIDs[0], storeResp, decision.Metadata.ClusterRouterVersion, decision.Metadata.EffectiveKnobsHash)
+			s.semanticCache.Store(externalID, cache.FormatOpenAI, cacheMeta.Embedding, cacheMeta.ClusterIDs[0], storeResp, cacheMeta.ClusterRouterVersion, cacheMeta.EffectiveKnobsHash)
 		}
 	}
 
