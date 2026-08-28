@@ -97,7 +97,9 @@ make full-setup
 
 The router is up at <http://localhost:8080>, the dashboard at
 <http://localhost:8080/ui/> (password: `admin`), and your `rk_...` key
-prints in the logs.
+prints in the logs. Open **Playground** at <http://localhost:8080/ui/playground>
+to preview routing decisions and send test chat turns (selfhosted/selfserve
+only).
 
 ```bash
 # Lead surface: OpenAI Chat Completions (catalog IDs)
@@ -128,6 +130,13 @@ curl -sS http://localhost:8080/v1/messages \
 
 # Peek at the routing decision without proxying
 curl -sS http://localhost:8080/v1/route -H "Authorization: Bearer rk_..." -d '...'
+
+# Dashboard playground: preview a routing decision (admin cookie, not rk_)
+curl -sS -c jar -X POST http://localhost:8080/admin/v1/auth/login \
+  -H 'content-type: application/json' -d '{"password":"admin"}'
+curl -sS -b jar -X POST http://localhost:8080/admin/v1/playground/route \
+  -H 'content-type: application/json' \
+  -d '{"model":"auto","messages":[{"role":"user","content":"hi"}]}'
 ```
 
 The `model` field is routing intent: `model="auto"` (the default) routes

@@ -1,6 +1,7 @@
 package admin_test
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 
 	"workweave/router/internal/api/admin"
 	"workweave/router/internal/auth"
+	"workweave/router/internal/providers"
+	"workweave/router/internal/proxy"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -144,4 +147,47 @@ func TestAiandCatalogHandler_ConcurrentCallsSharedCache(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return calls.Load() == 1
 	}, 2*time.Second, 10*time.Millisecond)
+}
+
+func TestAiandCatalogHandler_UsesInstallationBYOKWithoutDeploymentKey(t *testing.T) {
+	var calls atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if got := r.Header.Get("Authorization"); got != "Bearer sk-user-byok" {
+			t.Errorf("expected Bearer sk-user-byok, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, aiandModelsFixture)
+	}))
+	t.Cleanup(srv.Close)
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	inst := &auth.Installation{ID: "inst-user-1"}
+	engine.GET("/admin/v1/aiand/models",
+		func(c *gin.Context) {
+			c.Set("router_installation", inst)
+			keys := []*auth.ExternalAPIKey{{
+				ID: "ek-1", Provider: providers.ProviderAiand, Plaintext: []byte("sk-user-byok"),
+			}}
+			ctx := context.WithValue(c.Request.Context(), proxy.ExternalAPIKeysContextKey{}, keys)
+			c.Request = c.Request.WithContext(ctx)
+		},
+		admin.AiandCatalogHandler("", srv.URL+"/v1", srv.Client(), func() time.Time { return time.Unix(1_700_000_000, 0) }),
+	)
+
+	rec := aiandCatalogGET(engine)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, int64(1), calls.Load())
+}
+
+func TestAiandCatalogHandler_NoCredentialIs401(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/admin/v1/aiand/models",
+		admin.AiandCatalogHandler("", "https://example.invalid/v1", nil, time.Now),
+	)
+	rec := aiandCatalogGET(engine)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Contains(t, rec.Body.String(), "aiand_key_required")
 }

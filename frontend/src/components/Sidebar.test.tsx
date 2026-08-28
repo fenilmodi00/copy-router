@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { logout, accountLogout, replace, loginSession } = vi.hoisted(() => ({
+const { logout, accountLogout, replace, loginSession, pathname } = vi.hoisted(() => ({
   logout: vi.fn().mockResolvedValue({ ok: true }),
   accountLogout: vi.fn().mockResolvedValue({ ok: true }),
   replace: vi.fn(),
@@ -9,6 +9,7 @@ const { logout, accountLogout, replace, loginSession } = vi.hoisted(() => ({
     state: "authed" as const,
     surface: null as "account" | "admin" | null,
   },
+  pathname: { value: "/dashboard" },
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -21,7 +22,7 @@ vi.mock("@/lib/use-login-session-gate", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, push: vi.fn() }),
-  usePathname: () => "/dashboard",
+  usePathname: () => pathname.value,
 }));
 
 vi.mock("@/components/Logo", () => ({
@@ -62,5 +63,28 @@ describe("Sidebar sign-out", () => {
     await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
     expect(accountLogout).not.toHaveBeenCalled();
     expect(replace).toHaveBeenCalledWith("/login");
+  });
+});
+
+describe("Sidebar navigation", () => {
+  beforeEach(() => {
+    pathname.value = "/dashboard";
+  });
+
+  it("renders the Playground nav item", () => {
+    render(<Sidebar />);
+    expect(screen.getByRole("link", { name: "Playground" })).toHaveAttribute(
+      "href",
+      "/playground",
+    );
+  });
+
+  it("marks Playground active on /playground", () => {
+    pathname.value = "/playground";
+    render(<Sidebar />);
+    expect(screen.getByRole("link", { name: "Playground" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 });

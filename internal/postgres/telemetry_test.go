@@ -70,7 +70,7 @@ func TestTelemetrySummaryCarriesCacheWriteRead(t *testing.T) {
 		CacheWriteTokens:      12_345,
 		CacheReadTokens:       67_890,
 	}
-	got := summaryFromRow(row)
+	got := summaryFromRow(row, nil)
 	assert.Equal(t, int64(12_345), got.CacheWriteTokens)
 	assert.Equal(t, int64(67_890), got.CacheReadTokens)
 }

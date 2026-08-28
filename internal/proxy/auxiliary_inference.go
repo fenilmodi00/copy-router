@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
+
 	"workweave/router/internal/auth"
 	"workweave/router/internal/billing"
 	"workweave/router/internal/router/catalog"
 	"workweave/router/internal/router/handover"
-
-	"github.com/google/uuid"
 )
 
 // SpanTypeAuxiliaryInference marks a telemetry row for a router-originated

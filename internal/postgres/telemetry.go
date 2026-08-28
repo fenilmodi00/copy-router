@@ -33,6 +33,16 @@ func int64PtrFromUSD(usd *float64) *int64 {
 	return &v
 }
 
+// float64PtrOrNil returns a pointer to v when it is non-zero, else nil.
+// Used for nullable float64 telemetry columns where 0.00 is a valid value but
+// the value may be absent on certain lanes (e.g. auxiliary inference).
+func float64PtrOrNil(v float64) *float64 {
+	if v == 0 {
+		return nil
+	}
+	return &v
+}
+
 // TelemetryRepo implements proxy.TelemetryRepository via SQLC.
 type TelemetryRepo struct {
 	tx sqlc.DBTX
@@ -339,15 +349,25 @@ func (r *TelemetryRepo) GetTelemetrySummary(ctx context.Context, installationID 
 		return proxy.TelemetrySummary{}, err
 	}
 	q := sqlc.New(r.tx)
+	fromTs := pgtype.Timestamptz{Time: from, Valid: true}
+	toTs := pgtype.Timestamptz{Time: to, Valid: true}
 	row, err := q.GetTelemetrySummary(ctx, sqlc.GetTelemetrySummaryParams{
 		InstallationID: id,
-		FromTime:       pgtype.Timestamptz{Time: from, Valid: true},
-		ToTime:         pgtype.Timestamptz{Time: to, Valid: true},
+		FromTime:       fromTs,
+		ToTime:         toTs,
 	})
 	if err != nil {
 		return proxy.TelemetrySummary{}, err
 	}
-	return summaryFromRow(row), nil
+	rollupRows, err := q.GetTelemetryCacheReadRollup(ctx, sqlc.GetTelemetryCacheReadRollupParams{
+		InstallationID: id,
+		FromTime:       fromTs,
+		ToTime:         toTs,
+	})
+	if err != nil {
+		return proxy.TelemetrySummary{}, err
+	}
+	return summaryFromRow(row, rollupRows), nil
 }
 
 func (r *TelemetryRepo) GetTelemetryTimeseries(ctx context.Context, installationID string, from, to time.Time, granularity string) ([]proxy.TelemetryBucket, error) {
@@ -399,18 +419,27 @@ func (r *TelemetryRepo) GetTelemetryTimeseries(ctx context.Context, installation
 // GetTelemetrySummaryAll aggregates across every installation for the admin dashboard.
 func (r *TelemetryRepo) GetTelemetrySummaryAll(ctx context.Context, from, to time.Time) (proxy.TelemetrySummary, error) {
 	q := sqlc.New(r.tx)
+	fromTs := pgtype.Timestamptz{Time: from, Valid: true}
+	toTs := pgtype.Timestamptz{Time: to, Valid: true}
 	row, err := q.GetTelemetrySummaryAll(ctx, sqlc.GetTelemetrySummaryAllParams{
-		FromTime: pgtype.Timestamptz{Time: from, Valid: true},
-		ToTime:   pgtype.Timestamptz{Time: to, Valid: true},
+		FromTime: fromTs,
+		ToTime:   toTs,
 	})
 	if err != nil {
 		return proxy.TelemetrySummary{}, err
 	}
-	return summaryFromAllRow(row), nil
+	rollupRows, err := q.GetTelemetryCacheReadRollupAll(ctx, sqlc.GetTelemetryCacheReadRollupAllParams{
+		FromTime: fromTs,
+		ToTime:   toTs,
+	})
+	if err != nil {
+		return proxy.TelemetrySummary{}, err
+	}
+	return summaryFromAllRow(row, rollupRows), nil
 }
 
 // summaryFromRow converts the SQLC summary row to the proxy domain value.
-func summaryFromRow(row sqlc.GetTelemetrySummaryRow) proxy.TelemetrySummary {
+func summaryFromRow(row sqlc.GetTelemetrySummaryRow, rollupRows []sqlc.GetTelemetryCacheReadRollupRow) proxy.TelemetrySummary {
 	return summaryFromValues(
 		row.RequestCount,
 		row.TotalTokens,
@@ -419,6 +448,7 @@ func summaryFromRow(row sqlc.GetTelemetrySummaryRow) proxy.TelemetrySummary {
 		row.TotalSavingsUsd,
 		row.CacheWriteTokens,
 		row.CacheReadTokens,
+		cacheInputSavingsFromRollupRows(rollupRows),
 		row.SemanticCacheHits,
 	)
 }
@@ -426,7 +456,7 @@ func summaryFromRow(row sqlc.GetTelemetrySummaryRow) proxy.TelemetrySummary {
 // summaryFromAllRow converts the SQLC cross-installation summary row to the
 // proxy domain value. The {all, per-installation} queries emit isomorphic but
 // distinctly named row types, so both delegate to summaryFromValues.
-func summaryFromAllRow(row sqlc.GetTelemetrySummaryAllRow) proxy.TelemetrySummary {
+func summaryFromAllRow(row sqlc.GetTelemetrySummaryAllRow, rollupRows []sqlc.GetTelemetryCacheReadRollupAllRow) proxy.TelemetrySummary {
 	return summaryFromValues(
 		row.RequestCount,
 		row.TotalTokens,
@@ -435,11 +465,36 @@ func summaryFromAllRow(row sqlc.GetTelemetrySummaryAllRow) proxy.TelemetrySummar
 		row.TotalSavingsUsd,
 		row.CacheWriteTokens,
 		row.CacheReadTokens,
+		cacheInputSavingsFromRollupAllRows(rollupRows),
 		row.SemanticCacheHits,
 	)
 }
 
-func summaryFromValues(requestCount, totalTokens, totalRequestedCostUsd, totalActualCostUsd, totalSavingsUsd, cacheWriteTokens, cacheReadTokens, semanticCacheHits int64) proxy.TelemetrySummary {
+func cacheInputSavingsFromRollupRows(rows []sqlc.GetTelemetryCacheReadRollupRow) proxy.CacheInputSavingsUSD {
+	rollups := make([]proxy.CacheReadRollup, 0, len(rows))
+	for _, row := range rows {
+		rollups = append(rollups, proxy.CacheReadRollup{
+			DecisionModel:    derefString(row.DecisionModel),
+			DecisionProvider: derefString(row.DecisionProvider),
+			CacheReadTokens:  row.CacheReadTokens,
+		})
+	}
+	return proxy.SumCacheInputSavings(rollups)
+}
+
+func cacheInputSavingsFromRollupAllRows(rows []sqlc.GetTelemetryCacheReadRollupAllRow) proxy.CacheInputSavingsUSD {
+	rollups := make([]proxy.CacheReadRollup, 0, len(rows))
+	for _, row := range rows {
+		rollups = append(rollups, proxy.CacheReadRollup{
+			DecisionModel:    derefString(row.DecisionModel),
+			DecisionProvider: derefString(row.DecisionProvider),
+			CacheReadTokens:  row.CacheReadTokens,
+		})
+	}
+	return proxy.SumCacheInputSavings(rollups)
+}
+
+func summaryFromValues(requestCount, totalTokens, totalRequestedCostUsd, totalActualCostUsd, totalSavingsUsd, cacheWriteTokens, cacheReadTokens int64, cacheInputSavingsUsd proxy.CacheInputSavingsUSD, semanticCacheHits int64) proxy.TelemetrySummary {
 	return proxy.TelemetrySummary{
 		RequestCount:          requestCount,
 		TotalTokens:           totalTokens,
@@ -448,6 +503,7 @@ func summaryFromValues(requestCount, totalTokens, totalRequestedCostUsd, totalAc
 		TotalSavingsUSD:       microsToUSD(totalSavingsUsd),
 		CacheWriteTokens:      cacheWriteTokens,
 		CacheReadTokens:       cacheReadTokens,
+		CacheInputSavingsUSD:  cacheInputSavingsUsd,
 		SemanticCacheHits:     semanticCacheHits,
 	}
 }

@@ -15,6 +15,103 @@ import (
 	"workweave/router/internal/translate"
 )
 
+// openAIRoutingRequest parses an OpenAI Chat Completions body into a router.Request
+// using the same normalization the dispatch path applies (strip routing marker,
+// canonicalize context-window variant tags, strip feedback footer, resolve force-model
+// from model field + x-weave-force-model header). Never writes a session pin.
+func (s *Service) openAIRoutingRequest(ctx context.Context, body []byte, headers http.Header) (router.Request, error) {
+	log := observability.FromContext(ctx)
+	cleanBody, err := stripRoutingMarkerFromMessages(body)
+	if err != nil {
+		return router.Request{}, fmt.Errorf("strip routing marker: %w", err)
+	}
+	if withoutFooter, footerErr := translate.StripFeedbackFooterFromMessages(cleanBody); footerErr != nil {
+		log.Error("Failed to strip feedback footer from OpenAI route preview", "err", footerErr)
+	} else {
+		cleanBody = withoutFooter
+	}
+	if canonical, _, modelErr := translate.CanonicalizeModelInBody(cleanBody); modelErr != nil {
+		log.Error("Failed to canonicalize model for OpenAI route preview", "err", modelErr)
+	} else {
+		cleanBody = canonical
+	}
+
+	env, err := translate.ParseOpenAI(cleanBody)
+	if err != nil {
+		return router.Request{}, fmt.Errorf("parse request: %w", err)
+	}
+	previewForceModel, err := previewForceModelFromRequest(headers, env)
+	if err != nil {
+		return router.Request{}, err
+	}
+	embedOnlyUser := s.ResolveEmbedOnlyUserMessage(ctx)
+	features := env.RoutingFeatures(embedOnlyUser)
+	promptText := features.PromptText
+	if embedOnlyUser && features.OnlyUserMessageText != "" {
+		promptText = features.OnlyUserMessageText
+	}
+
+	enabledProviders := s.enabledProvidersForRequest(ctx, providers.ProviderOpenAI, headers)
+	if billing.SubscriptionOnlyFromContext(ctx) {
+		enabledProviders = restrictToSubscriptionProviders(ctx, headers, enabledProviders)
+	}
+	outputReserve := contextWindowOutputReserve
+	if features.MaxTokens > outputReserve {
+		outputReserve = features.MaxTokens
+	}
+	excluded := s.excludeCodexOAuthOnlyModels(ctx, headers, enabledProviders, s.excludedModelsForRequest(ctx))
+	excluded, _ = excludeContextOverflowModels(
+		env.ContextOverflowTokenEstimate(),
+		env.SignatureTokenSavings(),
+		outputReserve,
+		enabledProviders,
+		excluded,
+		s.availableModels,
+	)
+
+	organizationID, _ := ctx.Value(ExternalIDContextKey{}).(string)
+	installationID := ""
+	if id := installationIDFromContext(ctx); id != uuid.Nil {
+		installationID = id.String()
+	}
+	return router.Request{
+		RequestedModel:               features.Model,
+		ForceModel:                   previewForceModel,
+		EstimatedInputTokens:         features.Tokens,
+		HasTools:                     features.HasTools,
+		HasImages:                    features.HasImages,
+		TranslationRequirements:      env.TranslationRequirements(router.EndpointOpenAIChat),
+		ReasoningConfigurationSHA256: env.ReasoningConfigurationSHA256(),
+		ToolConfigurationSHA256:      env.ToolConfigurationSHA256(),
+		PromptText:                   promptText,
+		ConversationMessages:         conversationMessagesForRouting(env),
+		AvailableTools:               availableToolsForRouting(env),
+		OrganizationID:               organizationID,
+		InstallationID:               installationID,
+		ClientSessionID:              env.ClientSessionID(),
+		EnabledProviders:             enabledProviders,
+		CustomBindings:               s.customBindingsForRequest(ctx),
+		ExcludedModels:               excluded,
+		AllowedModels:                allowedModelsForRequest(ctx),
+		PreferredModels:              s.preferredModelsForRequest(ctx),
+		RoutingKnobs:                 routingKnobsForRequest(ctx),
+	}, nil
+}
+
+// PreviewOpenAIRoute parses an OpenAI Chat Completions body and returns the
+// routing decision without dispatching (playground route preview).
+func (s *Service) PreviewOpenAIRoute(ctx context.Context, body []byte, headers http.Header) (router.Decision, error) {
+	req, err := s.openAIRoutingRequest(ctx, body, headers)
+	if err != nil {
+		return router.Decision{}, err
+	}
+	return s.Route(ctx, req)
+}
+
+// anthropicRoutingRequest parses an Anthropic Messages body into a router.Request
+// using the same normalization the dispatch path applies (strip routing marker,
+// strip feedback footer, canonicalize context-window variant tags, resolve force-model
+// from model field + x-weave-force-model header). Never writes a session pin.
 func (s *Service) anthropicRoutingRequest(ctx context.Context, body []byte, headers http.Header) (router.Request, error) {
 	log := observability.FromContext(ctx)
 	cleanBody, err := stripRoutingMarkerFromMessages(body)

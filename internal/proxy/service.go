@@ -3005,31 +3005,12 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	// Subscription-only turns are excluded (like the OpenAI path): the mode is an
 	// unfoldable routing signal absent from the cache key, so a stored body would
 	// bypass the exhausted-sub 402 guard and the depleted-credits warning below.
+	if s.tryServeSemanticCacheHit(ctx, w, cache.FormatAnthropic, feats, decision, routeRes, sessionKey, requestStart, routeMs, externalID, env.Stream(), compactionHandoverRan, r, bypassEval, routeRes.UsageBypass) {
+		return nil
+	}
+
 	cacheMeta := cacheMetadataFor(decision, routeRes)
 	cacheEligible := s.semanticCacheAllowed(ctx) && s.semanticCache != nil && !env.Stream() && cacheMeta != nil && externalID != "" && !bypassEval && !compactionHandoverRan && !billing.SubscriptionOnlyFromContext(ctx) && len(s.subsidyFactors(ctx, r.Header)) == 0
-	if cacheEligible {
-		if resp, hit := s.semanticCache.Lookup(externalID, cache.FormatAnthropic, cacheMeta.Embedding, cacheMeta.ClusterIDs, cacheMeta.ClusterRouterVersion, cacheMeta.EffectiveKnobsHash); hit {
-			s.writeCachedResponse(w, resp, decision)
-			s.fireSemanticCacheHitTelemetry(ctx, installationID, apiKeyID, requestID, feats, decision, routeRes, sessionKey, requestStart, routeMs)
-			otel.Record(ctx, otel.Span{
-				Name:  "router.cache_hit",
-				Start: requestStart,
-				End:   time.Now(),
-				Attrs: otel.NewAttrBuilder(7).
-					String("request_id", requestID).
-					String("external_id", externalID).
-					String("decision.model", decision.Model).
-					String("decision.provider", decision.Provider).
-					Bool("cache.hit", true).
-					String("cache.format", string(cache.FormatAnthropic)).
-					Int64("latency.total_ms", time.Since(requestStart).Milliseconds()).
-					Build(),
-			})
-			otel.Flush(ctx)
-			log.Info("ProxyMessages cache hit", "requested_model", feats.Model, "baseline_model", s.baselineFor(feats.Model), "decision_model", decision.Model, "decision_provider", decision.Provider, "external_id", externalID, "total_ms", time.Since(requestStart).Milliseconds())
-			return nil
-		}
-	}
 
 	w.Header().Set(HeaderRouterDecision, decision.Reason)
 	w.Header().Set(HeaderRouterProvider, decision.Provider)
@@ -4874,7 +4855,7 @@ func (s *Service) fireTelemetry(p InsertTelemetryParams) {
 	log := observability.Get().With("request_id", p.RequestID)
 	observability.SafeGo(log, 5*time.Second, "fireTelemetry", func(ctx context.Context) {
 		if err := s.telemetry.InsertRequestTelemetry(ctx, p); err != nil {
-			log.Debug("Telemetry insert failed", "err", err)
+			log.Warn("Telemetry insert failed", "err", err, "installation_id", p.InstallationID, "request_id", p.RequestID)
 		}
 	})
 }
@@ -5289,31 +5270,12 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 
 	// See the ProxyMessages cache-eligibility note: subsidized requests bypass the
 	// semantic cache (the key doesn't capture headroom-dependent model choice).
+	if s.tryServeSemanticCacheHit(ctx, w, cache.FormatOpenAI, feats, decision, routeRes, sessionKey, requestStart, routeMs, externalID, env.Stream(), responsesPassthrough, r, bypassEval, false) {
+		return nil
+	}
+
 	cacheMeta := cacheMetadataFor(decision, routeRes)
 	cacheEligible := s.semanticCacheAllowed(ctx) && s.semanticCache != nil && !env.Stream() && cacheMeta != nil && externalID != "" && !bypassEval && !responsesPassthrough && !billing.SubscriptionOnlyFromContext(ctx) && len(s.subsidyFactors(ctx, r.Header)) == 0
-	if cacheEligible {
-		if resp, hit := s.semanticCache.Lookup(externalID, cache.FormatOpenAI, cacheMeta.Embedding, cacheMeta.ClusterIDs, cacheMeta.ClusterRouterVersion, cacheMeta.EffectiveKnobsHash); hit {
-			s.writeCachedResponse(w, resp, decision)
-			s.fireSemanticCacheHitTelemetry(ctx, installationID, apiKeyID, requestID, feats, decision, routeRes, sessionKey, requestStart, routeMs)
-			otel.Record(ctx, otel.Span{
-				Name:  "router.cache_hit",
-				Start: requestStart,
-				End:   time.Now(),
-				Attrs: otel.NewAttrBuilder(7).
-					String("request_id", requestID).
-					String("external_id", externalID).
-					String("decision.model", decision.Model).
-					String("decision.provider", decision.Provider).
-					Bool("cache.hit", true).
-					String("cache.format", string(cache.FormatOpenAI)).
-					Int64("latency.total_ms", time.Since(requestStart).Milliseconds()).
-					Build(),
-			})
-			otel.Flush(ctx)
-			log.Info("ProxyOpenAIChatCompletion cache hit", "requested_model", feats.Model, "baseline_model", s.baselineFor(feats.Model), "decision_model", decision.Model, "decision_provider", decision.Provider, "external_id", externalID, "total_ms", time.Since(requestStart).Milliseconds())
-			return nil
-		}
-	}
 
 	if _, err := s.provider(decision.Provider); err != nil {
 		return err
@@ -5478,6 +5440,7 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 		marker = ""
 	}
 	_, isResponses := w.(*translate.ResponsesWriter)
+	maybeEmitOpenAIRoutingMetadata(ctx, s, sink, env.Stream(), responsesPassthrough, isResponses, decision, requestID, body, feats.Tokens, feats.MaxTokens)
 	// makeMarkerSink wraps sink with an OpenAIRoutingMarkerWriter emitting the
 	// marker chunk + HTTP 200 eagerly (skipped for /v1/responses). Called per
 	// attempt so retries re-emit into a fresh preludeBuffer state.
@@ -5714,11 +5677,10 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	// See ProxyMessages for the two-strike provider-disable rationale.
 	s.maybeDisableProviderAfterOverload(ctx, stickyHit, proxyErr, finalProvider, decision.Reason, installationIDFromContext(ctx), routeRes.SessionKey, stickyStateRole(routeRes), routeRes.PinRole)
 
-	installationIDOAI, _ := ctx.Value(InstallationIDContextKey{}).(string)
-	if installationIDOAI != "" {
+	if installationID != uuid.Nil {
 		credentialKeyPrefix, credentialKeySuffix, credSource := s.credentialKeyParts(ctx)
 		telOAI := InsertTelemetryParams{
-			InstallationID:         installationIDOAI,
+			InstallationID:         installationID.String(),
 			APIKeyID:               apiKeyIDFromContext(ctx),
 			RequestID:              requestID,
 			SpanType:               "router.upstream",

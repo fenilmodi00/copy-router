@@ -267,7 +267,7 @@ func UpstreamIDFor(catalogID, bindingID string) string {
 
 // PriceFor returns the per-(provider, model) pricing.
 func PriceFor(provider, id string) (Pricing, bool) {
-	m, ok := ByID(id)
+	m, ok := ByIDOrUpstream(id)
 	if !ok {
 		return Pricing{}, false
 	}
@@ -282,7 +282,7 @@ func PriceFor(provider, id string) (Pricing, bool) {
 // PrimaryPriceFor returns the pricing of the model's first (primary) binding,
 // for call sites that don't thread a specific provider through.
 func PrimaryPriceFor(id string) (Pricing, bool) {
-	m, ok := ByID(id)
+	m, ok := ByIDOrUpstream(id)
 	if !ok {
 		return Pricing{}, false
 	}
@@ -499,4 +499,46 @@ func ValidateDeployed(deployed []string) error {
 	}
 	sort.Strings(missing)
 	return fmt.Errorf("catalog: deployed models missing or unconfigured — add or fix them in internal/router/catalog/catalog.go: %s", strings.Join(missing, ", "))
+}
+
+// CanonicalModel normalizes a model ID to its canonical form.
+//
+// If the id is a canonical catalog ID (zai-org/glm-5.2), it passes through
+// unchanged. If the id is a known legacy alias (z-ai/glm-5.2), it returns the
+// canonical catalog ID. If the id is a catalog ID's upstream binding value, it
+// also passes through unchanged (it's already a valid wire name). For any
+// unrecognized id, it passes through unchanged — no DB backfill, no error.
+//
+// Legacy aliases are registered in catalog.go so frozen training artifacts,
+// stored session pins, and archived client integrations stay resolvable to the
+// same Model row without ever leaking into dispatch wire names (byUpstreamID
+// never gains aliases, so AvailableBindings/EnumerateBindings never hand a
+// legacy name to dispatch).
+func CanonicalModel(id string) string {
+	// Fast path: id resolves to a catalog model (canonical or alias). Return the
+	// model's actual ID, which is the canonical name for both.
+	if i, ok := byID[id]; ok {
+		return Models[i].ID
+	}
+	// If id matches an upstream binding, it's a valid wire name as-is.
+	if _, ok := byUpstreamID[id]; ok {
+		return id
+	}
+	// Lowercase fallback for byUpstreamID (e.g. "ZAI-ORG/GLM-5.2").
+	lower := strings.ToLower(id)
+	if lower != id {
+		if _, ok := byUpstreamID[lower]; ok {
+			return id
+		}
+		if canonical, ok := aliases[lower]; ok {
+			return canonical
+		}
+	}
+	// Alias lookup: legacy z-ai/glm-5.2 -> zai-org/glm-5.2.
+	if canonical, ok := aliases[id]; ok {
+		return canonical
+	}
+	// Unknown id passes through unchanged — read-time canonicalization only,
+	// never rewrite or error.
+	return id
 }

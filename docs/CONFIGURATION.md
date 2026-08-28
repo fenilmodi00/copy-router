@@ -14,6 +14,7 @@ This page is the exhaustive reference; the [README](../README.md) has the
   - [Workload identity federation](#workload-identity-federation)
 - [Postgres](#postgres)
 - [Server](#server)
+  - [Playground (`/ui/playground`)](#playground-uiplayground)
   - [Self-service mode (`ROUTER_DEPLOYMENT_MODE=selfserve`)](#self-service-mode-router_deployment_modeselfserve)
 - [Routing](#routing)
 - [Provider and model exclusions](#provider-and-model-exclusions)
@@ -359,6 +360,68 @@ Step-by-step: [HOST_WSL_SUPABASE.md](HOST_WSL_SUPABASE.md).
 | `ROUTER_DEPLOYMENT_MODE` | `selfhosted` | `selfhosted` mounts `/ui/*` and `/admin/v1/*`. `managed` skips both (for SaaS deployments with a separate admin UI). `selfserve` mounts a self-service dashboard plane instead. |
 | `ROUTER_ADMIN_PASSWORD`  | `admin`      | Dashboard password. Defaults to `admin` with a startup warning when unset — **set this for any internet-facing deployment**. Not used in `selfserve` mode (see below). |
 
+### Playground (`/ui/playground`)
+
+The dashboard **Playground** (`/ui/playground`) is an interactive routing lab
+available in `selfhosted` and `selfserve` modes only — it is **not** mounted in
+`managed` deployments. Use it to preview routing decisions and send test chat
+turns without leaving the dashboard.
+
+**Auth.** Both playground endpoints live on the `/admin/v1/*` data plane and
+require the same credentials as other dashboard mutations: an admin session
+cookie (`selfhosted`) or account session cookie (`selfserve`). They do **not**
+accept an `rk_` bearer alone.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /admin/v1/playground/route` | Decision-only preview — no upstream call. |
+| `POST /admin/v1/playground/chat` | Full chat dispatch through `ProxyOpenAIChatCompletion`. |
+
+**Request shape (both endpoints).** OpenAI Chat Completions JSON:
+`{"model":"auto","messages":[{"role":"user","content":"…"}]}`. Optional
+`stream:true` on chat. Force-model precedence matches the product surface:
+`model` field > `x-weave-force-model` header; `model:"auto"` or `model:null`
+routes normally. Send `X-Playground-Session: <id>` on chat to pin a stable
+per-browser session (`client_app="playground"`).
+
+**Route preview response (200).** Six keys plus additive cache savings:
+
+```json
+{
+  "model": "moonshotai/kimi-k2.7",
+  "provider": "aiand",
+  "reason": "cluster",
+  "requested_cost_usd": 0.0012,
+  "actual_cost_usd": 0.0008,
+  "cache_savings_usd": 0.0001,
+  "id": "<request_id>"
+}
+```
+
+No `embeddings`, `metadata`, `prompt`, or other scorer internals are returned.
+
+**Chat response.** Streaming (`stream:true`): `Content-Type: text/event-stream`,
+upstream `data:` frames forwarded verbatim, terminated with `data: [DONE]`.
+Non-streaming: pass-through JSON from the upstream. Mid-stream failures append
+one final `data: {"type":"api_error",…,"code":"upstream_interrupted"}` event.
+
+**Error envelope.** Failures use OpenAI-shaped JSON:
+
+```json
+{"error":{"message":"…","type":"invalid_request_error|api_error","param":null,"code":"rate_limit|insufficient_credits|provider_error|unavailable|routing_failed|…"}}
+```
+
+HTTP status mirrors the classification. `429` responses include `Retry-After`
+(default `"1"` when the upstream omits it). `402` maps to
+`code:"insufficient_credits"`; `503` maps to `code:"unavailable"`.
+
+**Metrics.** Dashboard cost summaries include additive
+`cache_input_savings_usd` on `GET /admin/v1/metrics/summary` (prompt-cache read
+savings aggregated from telemetry).
+
+**Smoke script.** `scripts/playground_smoke.sh` exercises login, route preview,
+and a classified chat error against a local `selfhosted` router.
+
 ### Self-service mode (`ROUTER_DEPLOYMENT_MODE=selfserve`)
 
 `selfserve` lets any user log into their own dashboard with their aiand `sk-`
@@ -403,8 +466,10 @@ returns 401.
 
 The probe validates an arbitrary user `sk-` key as a bearer token against
 `/v1/models` — it never uses the deployment's own `AIAND_API_KEY`, so a
-self-serve login can't spend platform budget. Responses map to the login
-outcomes: `200` → authenticated (identity stored), `401`/`403` → `invalid_key`,
+self-serve login can't spend platform budget. The same user key is stored as
+installation BYOK and is what powers `GET /admin/v1/aiand/models` (Models page)
+and the Playground — **`AIAND_API_KEY` is not required in env for those
+surfaces in `selfserve`**. Responses map to the login outcomes: `200` → authenticated (identity stored), `401`/`403` → `invalid_key`,
 `402` → `insufficient_credits`, `429` → rate-limited, anything else (including
 a network failure) → `503 key_validation_unavailable`. Failed logins are
 rate-limited per source IP (5 failures / 5 minutes).

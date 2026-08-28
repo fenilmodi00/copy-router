@@ -11,6 +11,7 @@ Root guide for AI agents in the `router/` subproject. Covers cross-cutting desig
 - **Design Patterns** (GoF)
 - **CLEAN architecture** (Martin) — especially dependency inversion
 - **DRY**
+- **Ponytail** — write the least code that works. YAGNI, stdlib first, one line before many. Skills: `ponytail`, `ponytail-review`, `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help` in `.agents/skills/ponytail*/`
 - **Small expert team** — explicit composition, readable wiring; reject DI containers, reflection, framework magic
 - **Concise comments, sparingly** — default to none. Only when *why* is non-obvious (hidden constraint, subtle invariant, workaround, surprising behavior). Never rehash code, never reference current task/PR/caller, no multi-paragraph. If removing wouldn't confuse, don't write.
 - **Non-tautological tests** — every test must assert behavior that breaks if prod code deleted.

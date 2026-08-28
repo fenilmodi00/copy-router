@@ -180,6 +180,7 @@ const (
 	ClientAppCursor     = "cursor"
 	ClientAppGeminiCLI  = "gemini-cli"
 	ClientAppOpencode   = "opencode"
+	ClientAppPlayground = "playground"
 )
 
 // clientAppAliases maps the raw X-App values some clients send to their

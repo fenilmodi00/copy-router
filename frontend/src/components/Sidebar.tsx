@@ -7,7 +7,7 @@ import { Appearance } from "@/components/types";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useLoginSession } from "@/lib/use-login-session-gate";
-import { BarChart2, KeyRound, Layers, LogOut, SlidersHorizontal } from "lucide-react";
+import { BarChart2, KeyRound, Layers, LogOut, MessageSquare, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode } from "react";
@@ -24,6 +24,7 @@ interface NavItem {
 const PRIMARY_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: <BarChart2 size={16} /> },
   { href: "/models", label: "Models", icon: <Layers size={16} /> },
+  { href: "/playground", label: "Playground", icon: <MessageSquare size={16} /> },
   { href: "/settings", label: "API keys", icon: <KeyRound size={16} />, exact: true },
   { href: "/settings/models", label: "Routing", icon: <SlidersHorizontal size={16} /> },
 ];

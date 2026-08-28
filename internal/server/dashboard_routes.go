@@ -30,9 +30,8 @@ type Services struct {
 	HMMRosterSource  policy.RosterSource
 	Analytics        *analytics.Service
 	// AiandCatalogHandler, when non-nil, mounts GET /admin/v1/aiand/models.
-	// nil means AIAND_API_KEY was absent at boot — fail-closed: no route is
-	// registered so the dashboard hides the Models section instead of
-	// erroring per request.
+	// nil means no catalog route (self-hosted without AIAND_API_KEY).
+	// Self-serve always wires a handler that uses per-user BYOK keys.
 	AiandCatalogHandler gin.HandlerFunc
 }
 
@@ -83,14 +82,14 @@ func dashboardRoutes(s Services) []dashboardRoute {
 	return []dashboardRoute{
 		// Metrics — read-only; dashboard cookie OR rk_ bearer (selfhosted),
 		// account cookie (selfserve). Per-installation scoping inside handlers.
-		{method: "GET", path: "/metrics/summary", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.MetricsSummaryHandler(s.Proxy)},
-		{method: "GET", path: "/metrics/timeseries", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.MetricsTimeseriesHandler(s.Proxy)},
-		{method: "GET", path: "/metrics/details", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.MetricsDetailsHandler(s.Proxy)},
-		{method: "GET", path: "/metrics/model-breakdown", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.MetricsModelBreakdownHandler(s.Proxy)},
+		{method: "GET", path: "/metrics/summary", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.MetricsSummaryHandler(s.Proxy, s.Auth)},
+		{method: "GET", path: "/metrics/timeseries", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.MetricsTimeseriesHandler(s.Proxy, s.Auth)},
+		{method: "GET", path: "/metrics/details", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.MetricsDetailsHandler(s.Proxy, s.Auth)},
+		{method: "GET", path: "/metrics/model-breakdown", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.MetricsModelBreakdownHandler(s.Proxy, s.Auth)},
 
 		// Live ai& catalog for the Models section; display source-of-truth
-		// only (the routing catalog is untouched). Registered only when the
-		// boot-time AIAND_API_KEY is set — fail-closed: absent key means no route.
+		// only (the routing catalog is untouched). Mounts when a handler is
+		// wired (deployment key and/or self-serve per-user BYOK).
 		{method: "GET", path: "/aiand/models", section: sectionMetrics, needs: needsAiandCatalog, modes: modeSelfHosted | modeSelfServe, handler: s.AiandCatalogHandler},
 
 		// API keys — installation-scoped via resolveInstallation.
@@ -129,6 +128,11 @@ func dashboardRoutes(s Services) []dashboardRoute {
 		{method: "PUT", path: "/allowed-models", section: sectionMgmt, needs: needsDeployedModels, modes: modeSelfHosted | modeSelfServe, handler: admin.UpdateAllowedModelsHandler(s.Auth, s.DeployedModels, s.Proxy)},
 		{method: "GET", path: "/excluded-providers", section: sectionMgmt, needs: needsDeployedModels, modes: modeSelfHosted | modeSelfServe, handler: admin.GetExcludedProvidersHandler(s.Auth, s.DeployedModels, s.Proxy)},
 		{method: "PUT", path: "/excluded-providers", section: sectionMgmt, needs: needsDeployedModels, modes: modeSelfHosted | modeSelfServe, handler: admin.UpdateExcludedProvidersHandler(s.Auth, s.DeployedModels, s.Proxy)},
+
+		// Playground preview — returns a decision payload with requested/actual cost + id.
+		// cache_savings_usd is 0 for non-cached decisions. Mounts in both admin modes.
+		{method: "POST", path: "/playground/route", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.PlaygroundRouteHandler(s.Proxy, s.Auth)},
+		{method: "POST", path: "/playground/chat", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.PlaygroundChatHandler(s.Proxy, s.Auth)},
 	}
 }
 
@@ -170,12 +174,17 @@ func mountDashboardRoutes(engine *gin.Engine, s Services, mode DeploymentMode, b
 	switch mode {
 	case DeploymentModeSelfHosted:
 		metrics := engine.Group("/admin/v1", middleware.WithTimeout(adminTimeout), middleware.WithAdminOrAuth(s.Auth, byokRequiresOptIn))
+		playgroundChat := engine.Group("/admin/v1", middleware.WithTimeout(playgroundChatTimeout), middleware.WithAdminOrAuth(s.Auth, byokRequiresOptIn))
 		mgmt := engine.Group("/admin/v1", middleware.WithTimeout(adminTimeout), middleware.WithAdminOnly(s.Auth))
 		for _, r := range routes {
 			if r.modes&modeBit == 0 {
 				continue
 			}
 			if !routeNeeds(s, r.needs) {
+				continue
+			}
+			if r.path == "/playground/chat" {
+				playgroundChat.Handle(r.method, r.path, r.handler)
 				continue
 			}
 			if r.section == sectionMetrics {
@@ -186,11 +195,16 @@ func mountDashboardRoutes(engine *gin.Engine, s Services, mode DeploymentMode, b
 		}
 	case DeploymentModeSelfServe:
 		accountAuthed := engine.Group("/admin/v1", middleware.WithTimeout(adminTimeout), middleware.WithAccountCookie(s.Auth))
+		playgroundChat := engine.Group("/admin/v1", middleware.WithTimeout(playgroundChatTimeout), middleware.WithAccountCookie(s.Auth))
 		for _, r := range routes {
 			if r.modes&modeBit == 0 {
 				continue
 			}
 			if !routeNeeds(s, r.needs) {
+				continue
+			}
+			if r.path == "/playground/chat" {
+				playgroundChat.Handle(r.method, r.path, r.handler)
 				continue
 			}
 			accountAuthed.Handle(r.method, r.path, r.handler)

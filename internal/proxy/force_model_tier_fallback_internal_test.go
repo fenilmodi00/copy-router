@@ -293,7 +293,7 @@ func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 	key := DeriveSessionKey(env, "key-1")
 	headerReq, err := http.NewRequest(http.MethodPost, "/v1/messages", nil)
 	require.NoError(t, err)
-	headerReq.Header.Set(ForceModelHeader, "opus")
+	headerReq.Header.Set(ForceModelHeader, "moonshotai/kimi-k3")
 	_, forceErr := svc.applyForceModelHeader(context.Background(), headerReq, env, uuid.New(), key)
 	require.NoError(t, forceErr)
 
@@ -303,7 +303,7 @@ func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "zai-org/glm-5.2", res.Decision.Model,
+	assert.Equal(t, "moonshotai/kimi-k3", res.Decision.Model,
 		"the x-weave-force-model pin must outrank the automatic compaction hard-pin")
 	assert.Equal(t, translate.ReasonUserForceModel, res.Decision.Reason)
 	assert.False(t, res.HardPinned)

@@ -32,6 +32,9 @@ const (
 	passthroughTimeout    = 10 * time.Second
 	routeTimeout          = 5 * time.Second
 	adminTimeout          = 10 * time.Second
+	// playgroundChatTimeout bounds streaming inference from the dashboard
+	// playground. Must exceed typical first-token latency for routed models.
+	playgroundChatTimeout = 120 * time.Second
 	// catalogModelsTimeout bounds GET /v1/router/models; must exceed the HMM
 	// sidecar client budget (policyclient.DefaultTimeout) or a cold cache 503s.
 	catalogModelsTimeout = policyclient.DefaultTimeout * 2
@@ -80,8 +83,8 @@ const (
 //
 // AiandCatalogHandler, when non-nil, mounts the live ai& model catalog
 // (GET /admin/v1/aiand/models) inside the dashboard metrics group. nil means
-// AIAND_API_KEY was absent at boot — fail-closed: no route is registered so the
-// dashboard hides the Models section instead of erroring per request.
+// no catalog route (self-hosted without AIAND_API_KEY). Self-serve always
+// wires a handler that authenticates upstream with each user's BYOK key.
 func Register(engine *gin.Engine, s Services, mode DeploymentMode) {
 	// Managed mode: BYOK is opt-in per installation (see WithAuth).
 	byokRequiresOptIn := mode == DeploymentModeManaged

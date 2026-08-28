@@ -70,17 +70,51 @@ export interface MetricsSummary {
   // change); absent on older routers, so consumers guard with `?? 0`.
   cache_write_tokens?: number;
   cache_read_tokens?: number;
+  semantic_cache_hits?: number;
+  cache_input_savings_usd?: number;
 }
 
 export interface TimeseriesBucket {
   bucket: string;
   requested_cost_usd: number;
   actual_cost_usd: number;
-  // Present once the backend emits per-bucket token/request sums (additive
-  // change); absent on older routers, so consumers guard with `?? 0`. These
-  // feed the dashboard's Tokens / Requests sparklines.
+// Present once the backend emits per-bucket token/request sums (additive
+// change); absent on older routers, so consumers guard with `?? 0`. These
+// feed the dashboard's Tokens / Requests sparklines.
   request_count?: number;
   total_tokens?: number;
+}
+
+export interface PlaygroundRouteResponse {
+  model: string;
+  provider: string;
+  reason: string;
+  requested_cost_usd: number;
+  actual_cost_usd: number;
+  id: string;
+  cache_savings_usd?: number;
+}
+
+export type PlaygroundDecision = {
+  model: string;
+  provider: string;
+  reason: string;
+  requestedCostUsd: number;
+  actualCostUsd: number;
+  id: string;
+  cacheSavingsUsd: number;
+};
+
+export function mapPlaygroundRouteResponse(r: PlaygroundRouteResponse): PlaygroundDecision {
+  return {
+    model: r.model,
+    provider: r.provider,
+    reason: r.reason,
+    requestedCostUsd: r.requested_cost_usd,
+    actualCostUsd: r.actual_cost_usd,
+    id: r.id,
+    cacheSavingsUsd: r.cache_savings_usd ?? 0,
+  };
 }
 
 export interface MetricsTimeseries {
@@ -317,5 +351,31 @@ export const api = {
         method: "PUT",
         body: JSON.stringify({ reset: true }),
       }),
+  },
+  playground: {
+    route: (body: unknown) => request<PlaygroundRouteResponse>("/playground/route", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+    chat: (
+      body: unknown,
+      opts?: { signal?: AbortSignal; forceModel?: string | null; sessionID?: string },
+    ) => {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (opts?.forceModel) {
+        headers["x-weave-force-model"] = opts.forceModel;
+      }
+      if (opts?.sessionID) {
+        headers["X-Playground-Session"] = opts.sessionID;
+      }
+      headers["X-Weave-Routing-Marker"] = "off";
+      return fetch(`${BASE}/playground/chat`, {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: JSON.stringify(body),
+        signal: opts?.signal,
+      });
+    },
   },
 };

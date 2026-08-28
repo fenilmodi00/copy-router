@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
+
+	"workweave/router/internal/observability"
+	"workweave/router/internal/providers"
 )
 
 // AiandIdentity is the identity returned by validating an aiand sk- key.
@@ -135,6 +138,9 @@ func (s *Service) LoginWithKey(ctx context.Context, rawKey string) (*Account, *I
 
 	installation, err := s.EnsureAccountInstallation(ctx, account)
 	if err != nil {
+		return nil, nil, "", time.Time{}, err
+	}
+	if err := s.storeLoginAiandKey(ctx, installation.ID, rawKey); err != nil {
 		return nil, nil, "", time.Time{}, err
 	}
 
@@ -269,6 +275,23 @@ func AccountFromContext(ctx context.Context) *Account {
 		return nil
 	}
 	return v
+}
+
+// storeLoginAiandKey persists the presented aiand sk- key as the installation's
+// aiand BYOK credential so dashboard inference (playground, etc.) bills the
+// signed-in user instead of the deployment key.
+func (s *Service) storeLoginAiandKey(ctx context.Context, installationID, rawKey string) error {
+	if s.externalKeys == nil || installationID == "" || rawKey == "" {
+		return nil
+	}
+	_, err := s.UpsertExternalAPIKey(ctx, installationID, UpsertExternalAPIKeyParams{
+		Provider: providers.ProviderAiand,
+		RawKey:   rawKey,
+	})
+	if err != nil {
+		observability.FromContext(ctx).Error("Failed to store login aiand key", "installation_id", installationID, "err", err)
+	}
+	return err
 }
 
 // generateLoginSessionToken returns a rejection-sampled 32-char base62 token.

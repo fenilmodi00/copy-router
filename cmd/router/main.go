@@ -184,10 +184,18 @@ func main() {
 			func(key, baseURL string) providers.Client {
 				return openaiCompatProvider.NewClientWithModelIDMap(key, baseURL, upstreamIDsForProvider(providers.ProviderAiand))
 			})
-		if key := config.GetOr("AIAND_API_KEY", ""); key != "" {
-			aiandCatalogHandler = admin.AiandCatalogHandler(key, aiandBaseURL,
+		deploymentAiandKey := config.GetOr("AIAND_API_KEY", "")
+		// Self-serve mounts the catalog route even without a deployment key:
+		// each signed-in user supplies their own aiand BYOK credential from
+		// login. Self-hosted still uses AIAND_API_KEY when set.
+		if deploymentAiandKey != "" || deploymentMode == server.DeploymentModeSelfServe {
+			aiandCatalogHandler = admin.AiandCatalogHandler(deploymentAiandKey, aiandBaseURL,
 				&http.Client{Timeout: aiandCatalogBudget}, time.Now)
-			logger.Info("ai& catalog endpoint enabled", "base_url", aiandBaseURL)
+			if deploymentAiandKey != "" {
+				logger.Info("ai& catalog endpoint enabled", "base_url", aiandBaseURL)
+			} else {
+				logger.Info("ai& catalog endpoint enabled (per-user BYOK keys)", "base_url", aiandBaseURL)
+			}
 		} else {
 			logger.Info("ai& catalog endpoint disabled (AIAND_API_KEY not set)")
 		}
@@ -243,9 +251,9 @@ func main() {
 
 	// Self-serve mode: the dashboard is secured by an aiand-key login instead
 	// of the operator password. Each aiand user gets their own installation
-	// (account id = installation external_id). AIAND_API_KEY is the DEPLOYMENT's
-	// key for the catalog; the LOGIN probe validates arbitrary user keys against
-	// aiand's public /api/v1/me, so it never uses a deployment secret.
+	// (account id = installation external_id). The login probe validates user
+	// keys against aiand's identity API; Models + Playground bill the stored
+	// per-user BYOK key — AIAND_API_KEY is optional in selfserve.
 	if deploymentMode == server.DeploymentModeSelfServe {
 		if repo.Accounts == nil || repo.LoginSessions == nil {
 			logger.Error("Self-serve mode requires account SQLC repos; refusing to boot", "err", nil)

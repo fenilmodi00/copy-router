@@ -75,6 +75,7 @@ INSERT INTO router.model_router_request_telemetry (
     cache_creation_tokens,
     cache_read_tokens,
     semantic_cache_hit,
+    cache_input_savings_usd,
     device_id,
     session_id,
     router_user_id,
@@ -164,6 +165,7 @@ INSERT INTO router.model_router_request_telemetry (
     sqlc.narg('cache_creation_tokens')::int,
     sqlc.narg('cache_read_tokens')::int,
     sqlc.narg('semantic_cache_hit')::boolean,
+    sqlc.narg('cache_input_savings_usd')::double precision,
     sqlc.narg('device_id')::varchar,
     sqlc.narg('session_id')::varchar,
     sqlc.narg('router_user_id')::uuid,
@@ -250,6 +252,20 @@ WHERE span_type = 'router.upstream'
   AND timestamp >= @from_time::timestamptz
   AND timestamp < @to_time::timestamptz;
 
+-- Returns per-model cache_read token totals for read-time savings rollup.
+-- name: GetTelemetryCacheReadRollupAll :many
+SELECT
+    decision_model,
+    decision_provider,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint AS cache_read_tokens
+FROM router.model_router_request_telemetry
+WHERE span_type = 'router.upstream'
+  AND timestamp >= @from_time::timestamptz
+  AND timestamp < @to_time::timestamptz
+  AND cache_read_tokens IS NOT NULL
+  AND cache_read_tokens > 0
+GROUP BY decision_model, decision_provider;
+
 -- Per-hour token/cost buckets across every installation. Admin-only.
 -- name: GetTelemetryTimeseriesHourlyAll :many
 SELECT
@@ -276,7 +292,8 @@ SELECT
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
     COUNT(*)::bigint                                                               AS request_count,
     COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
-    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens,
+    COALESCE(SUM(cache_input_savings_usd), 0)::double precision                           AS cache_input_savings_usd
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= @from_time::timestamptz
@@ -320,6 +337,21 @@ WHERE installation_id = @installation_id::uuid
   AND span_type = 'router.upstream'
   AND timestamp >= @from_time::timestamptz
   AND timestamp < @to_time::timestamptz;
+
+-- Returns per-model cache_read token totals for one installation.
+-- name: GetTelemetryCacheReadRollup :many
+SELECT
+    decision_model,
+    decision_provider,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint AS cache_read_tokens
+FROM router.model_router_request_telemetry
+WHERE installation_id = @installation_id::uuid
+  AND span_type = 'router.upstream'
+  AND timestamp >= @from_time::timestamptz
+  AND timestamp < @to_time::timestamptz
+  AND cache_read_tokens IS NOT NULL
+  AND cache_read_tokens > 0
+GROUP BY decision_model, decision_provider;
 
 -- Returns per-hour token/cost buckets for the cost savings chart.
 -- name: GetTelemetryTimeseriesHourly :many

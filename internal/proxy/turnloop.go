@@ -1686,6 +1686,12 @@ func roleForTier(t catalog.Tier) string {
 // loadPin returns the stored pin and whether it may actively serve this turn.
 // Expired rows are misses for routing, but their history fields still protect
 // Anthropic emit from stale thinking-block signatures in the client transcript.
+//
+// Model fields (Model, PairedModel, LastServedModel) are canonicalized at read
+// time so frozen training artifacts whose model_registry.json carries the legacy
+// "z-ai/glm-5.2" name still resolve to the "zai-org/glm-5.2" row without the
+// legacy string leaking into a router.Decision.Model (which would send the wrong
+// wire name to ai&).
 func (s *Service) loadPin(ctx context.Context, sessionKey [sessionpin.SessionKeyLen]byte, role string) (sessionpin.Pin, bool) {
 	log := observability.FromContext(ctx)
 	log.Debug("loadPin called", "role", role, "session_key_hex", fmt.Sprintf("%x", sessionKey))
@@ -1700,7 +1706,40 @@ func (s *Service) loadPin(ctx context.Context, sessionKey [sessionpin.SessionKey
 	if !pin.PinnedUntil.After(time.Now()) {
 		return pin, false
 	}
-	return pin, true
+	return canonicalizePinModels(pin), true
+}
+
+// canonicalizePinModels returns a copy of pin with every model field normalized
+// to its canonical catalog form. Legacy aliases (e.g. z-ai/glm-5.2) are rewritten
+// to canonical (zai-org/glm-5.2); unknown ids pass through unchanged. No DB
+// backfill — this is read-time normalization so the legacy string never escapes
+// into a router.Decision.Model or an upstream wire name.
+func canonicalizePinModels(pin sessionpin.Pin) sessionpin.Pin {
+	return sessionpin.Pin{
+		SessionKey:     pin.SessionKey,
+		Role:           pin.Role,
+		InstallationID: pin.InstallationID,
+		Provider:       pin.Provider,
+		Model:          catalog.CanonicalModel(pin.Model),
+		PairedProvider: pin.PairedProvider,
+		PairedModel:    catalog.CanonicalModel(pin.PairedModel),
+		Reason:         pin.Reason,
+		PolicyGroup:    pin.PolicyGroup,
+		TurnCount:      pin.TurnCount,
+		PinnedUntil:    pin.PinnedUntil,
+		FirstPinnedAt:  pin.FirstPinnedAt,
+		LastSeenAt:     pin.LastSeenAt,
+		LastInputTokens: pin.LastInputTokens,
+		LastCachedReadTokens: pin.LastCachedReadTokens,
+		LastCachedWriteTokens: pin.LastCachedWriteTokens,
+		LastOutputTokens: pin.LastOutputTokens,
+		LastTurnEndedAt: pin.LastTurnEndedAt,
+		ConsecutiveUpstreamErrors: pin.ConsecutiveUpstreamErrors,
+		LastServedModel: catalog.CanonicalModel(pin.LastServedModel),
+		HasEverSwitched: pin.HasEverSwitched,
+		ConsecutiveOverloadErrors: pin.ConsecutiveOverloadErrors,
+		DisabledProviders: pin.DisabledProviders,
+	}
 }
 
 func (s *Service) loadHMMHistory(ctx context.Context, sessionKey [sessionpin.SessionKeyLen]byte, role string) sessionpin.Pin {
@@ -1713,7 +1752,7 @@ func (s *Service) loadHMMHistory(ctx context.Context, sessionKey [sessionpin.Ses
 	if !found {
 		return sessionpin.Pin{}
 	}
-	return pin
+	return canonicalizePinModels(pin)
 }
 
 func switchHistoryFromPins(activePin, hmmHistory sessionpin.Pin) (string, bool) {

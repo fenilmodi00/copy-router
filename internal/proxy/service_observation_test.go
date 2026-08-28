@@ -594,6 +594,39 @@ func TestProxyMessages_PersistsSessionKeyAndRole(t *testing.T) {
 	assert.Equal(t, "default_high", row.Role, "role must be the requested model's pin role (opus-4-7 = TierHigh)")
 }
 
+func TestProxyOpenAIChatCompletion_PlaygroundTelemetry(t *testing.T) {
+	const installID = "11111111-1111-1111-1111-111111111111"
+	decision := router.Decision{
+		Provider: providers.ProviderAiand,
+		Model:    "deepseek-ai/deepseek-v4-flash",
+		Reason:   "cluster:test",
+	}
+	telem := newCaptureTelemetry()
+	svc := proxy.NewService(
+		&fakeRouter{decision: decision},
+		map[string]providers.Client{providers.ProviderAiand: aiandChatOKProvider()},
+		nil, false, nil, nil, false,
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", telem,
+	)
+
+	ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, installID)
+	ctx = context.WithValue(ctx, proxy.APIKeyIDContextKey{}, "playground-key-id")
+	ctx = context.WithValue(ctx, proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppPlayground})
+	ctx = proxy.WithRespondRoutingMetadata(ctx)
+
+	rec := httptest.NewRecorder()
+	body := []byte(`{"model":"auto","messages":[{"role":"user","content":"hello"}],"stream":true}`)
+	httpReq := httptest.NewRequest(http.MethodPost, "/admin/v1/playground/chat", strings.NewReader(""))
+	require.NoError(t, svc.ProxyOpenAIChatCompletion(ctx, body, rec, httpReq))
+
+	row := telem.firstRow(t)
+	assert.Equal(t, installID, row.InstallationID)
+	assert.Equal(t, "playground-key-id", row.APIKeyID)
+	assert.Equal(t, proxy.ClientAppPlayground, row.ClientApp)
+	assert.Equal(t, decision.Model, row.DecisionModel)
+	assert.Contains(t, rec.Body.String(), "event: routing_metadata")
+}
+
 // TestNormalizeRolloutID covers the bound: oversized ids are rejected (not
 // truncated) so a stored id always joins back to a real rollout.
 func TestNormalizeRolloutID(t *testing.T) {

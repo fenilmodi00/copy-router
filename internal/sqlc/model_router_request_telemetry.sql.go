@@ -463,6 +463,125 @@ func (q *Queries) GetTelemetryBySessionDesc(ctx context.Context, arg GetTelemetr
 	return i, err
 }
 
+const getTelemetryCacheReadRollup = `-- name: GetTelemetryCacheReadRollup :many
+SELECT
+    decision_model,
+    decision_provider,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint AS cache_read_tokens
+FROM router.model_router_request_telemetry
+WHERE installation_id = $1::uuid
+  AND span_type = 'router.upstream'
+  AND timestamp >= $2::timestamptz
+  AND timestamp < $3::timestamptz
+  AND cache_read_tokens IS NOT NULL
+  AND cache_read_tokens > 0
+GROUP BY decision_model, decision_provider
+`
+
+type GetTelemetryCacheReadRollupParams struct {
+	InstallationID uuid.UUID
+	FromTime       pgtype.Timestamptz
+	ToTime         pgtype.Timestamptz
+}
+
+type GetTelemetryCacheReadRollupRow struct {
+	DecisionModel    *string
+	DecisionProvider *string
+	CacheReadTokens  int64
+}
+
+// Returns per-model cache_read token totals for one installation.
+//
+//	SELECT
+//	    decision_model,
+//	    decision_provider,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint AS cache_read_tokens
+//	FROM router.model_router_request_telemetry
+//	WHERE installation_id = $1::uuid
+//	  AND span_type = 'router.upstream'
+//	  AND timestamp >= $2::timestamptz
+//	  AND timestamp < $3::timestamptz
+//	  AND cache_read_tokens IS NOT NULL
+//	  AND cache_read_tokens > 0
+//	GROUP BY decision_model, decision_provider
+func (q *Queries) GetTelemetryCacheReadRollup(ctx context.Context, arg GetTelemetryCacheReadRollupParams) ([]GetTelemetryCacheReadRollupRow, error) {
+	rows, err := q.db.Query(ctx, getTelemetryCacheReadRollup, arg.InstallationID, arg.FromTime, arg.ToTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTelemetryCacheReadRollupRow
+	for rows.Next() {
+		var i GetTelemetryCacheReadRollupRow
+		if err := rows.Scan(&i.DecisionModel, &i.DecisionProvider, &i.CacheReadTokens); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTelemetryCacheReadRollupAll = `-- name: GetTelemetryCacheReadRollupAll :many
+SELECT
+    decision_model,
+    decision_provider,
+    COALESCE(SUM(cache_read_tokens), 0)::bigint AS cache_read_tokens
+FROM router.model_router_request_telemetry
+WHERE span_type = 'router.upstream'
+  AND timestamp >= $1::timestamptz
+  AND timestamp < $2::timestamptz
+  AND cache_read_tokens IS NOT NULL
+  AND cache_read_tokens > 0
+GROUP BY decision_model, decision_provider
+`
+
+type GetTelemetryCacheReadRollupAllParams struct {
+	FromTime pgtype.Timestamptz
+	ToTime   pgtype.Timestamptz
+}
+
+type GetTelemetryCacheReadRollupAllRow struct {
+	DecisionModel    *string
+	DecisionProvider *string
+	CacheReadTokens  int64
+}
+
+// Returns per-model cache_read token totals for read-time savings rollup.
+//
+//	SELECT
+//	    decision_model,
+//	    decision_provider,
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint AS cache_read_tokens
+//	FROM router.model_router_request_telemetry
+//	WHERE span_type = 'router.upstream'
+//	  AND timestamp >= $1::timestamptz
+//	  AND timestamp < $2::timestamptz
+//	  AND cache_read_tokens IS NOT NULL
+//	  AND cache_read_tokens > 0
+//	GROUP BY decision_model, decision_provider
+func (q *Queries) GetTelemetryCacheReadRollupAll(ctx context.Context, arg GetTelemetryCacheReadRollupAllParams) ([]GetTelemetryCacheReadRollupAllRow, error) {
+	rows, err := q.db.Query(ctx, getTelemetryCacheReadRollupAll, arg.FromTime, arg.ToTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTelemetryCacheReadRollupAllRow
+	for rows.Next() {
+		var i GetTelemetryCacheReadRollupAllRow
+		if err := rows.Scan(&i.DecisionModel, &i.DecisionProvider, &i.CacheReadTokens); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTelemetryModelBreakdownDaily = `-- name: GetTelemetryModelBreakdownDaily :many
 SELECT
     date_trunc('day', timestamp)::timestamptz                                AS bucket,
@@ -1437,7 +1556,8 @@ SELECT
     COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
     COUNT(*)::bigint                                                               AS request_count,
     COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
-    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
+    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens,
+    COALESCE(SUM(cache_input_savings_usd), 0)::double precision                           AS cache_input_savings_usd
 FROM router.model_router_request_telemetry
 WHERE span_type = 'router.upstream'
   AND timestamp >= $1::timestamptz
@@ -1452,13 +1572,14 @@ type GetTelemetryTimeseriesDailyAllParams struct {
 }
 
 type GetTelemetryTimeseriesDailyAllRow struct {
-	Bucket           pgtype.Timestamptz
-	RequestedCostUsd int64
-	ActualCostUsd    int64
-	TotalTokens      int64
-	RequestCount     int64
-	CacheWriteTokens int64
-	CacheReadTokens  int64
+	Bucket               pgtype.Timestamptz
+	RequestedCostUsd     int64
+	ActualCostUsd        int64
+	TotalTokens          int64
+	RequestCount         int64
+	CacheWriteTokens     int64
+	CacheReadTokens      int64
+	CacheInputSavingsUsd float64
 }
 
 // Per-day token/cost buckets across every installation. Admin-only.
@@ -1470,7 +1591,8 @@ type GetTelemetryTimeseriesDailyAllRow struct {
 //	    COALESCE(SUM(input_tokens + output_tokens), 0)::bigint                          AS total_tokens,
 //	    COUNT(*)::bigint                                                               AS request_count,
 //	    COALESCE(SUM(cache_creation_tokens), 0)::bigint                                AS cache_write_tokens,
-//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens
+//	    COALESCE(SUM(cache_read_tokens), 0)::bigint                                    AS cache_read_tokens,
+//	    COALESCE(SUM(cache_input_savings_usd), 0)::double precision                           AS cache_input_savings_usd
 //	FROM router.model_router_request_telemetry
 //	WHERE span_type = 'router.upstream'
 //	  AND timestamp >= $1::timestamptz
@@ -1494,6 +1616,7 @@ func (q *Queries) GetTelemetryTimeseriesDailyAll(ctx context.Context, arg GetTel
 			&i.RequestCount,
 			&i.CacheWriteTokens,
 			&i.CacheReadTokens,
+			&i.CacheInputSavingsUsd,
 		); err != nil {
 			return nil, err
 		}
@@ -1862,6 +1985,7 @@ INSERT INTO router.model_router_request_telemetry (
     cache_creation_tokens,
     cache_read_tokens,
     semantic_cache_hit,
+    cache_input_savings_usd,
     device_id,
     session_id,
     router_user_id,
@@ -1951,49 +2075,50 @@ INSERT INTO router.model_router_request_telemetry (
     $43::int,
     $44::int,
     $45::boolean,
-    $46::varchar,
+    $46::double precision,
     $47::varchar,
-    $48::uuid,
-    $49::text,
-    $50::varchar,
+    $48::varchar,
+    $49::uuid,
+    $50::text,
     $51::varchar,
-    $52::text,
+    $52::varchar,
     $53::text,
-    $54::int,
+    $54::text,
     $55::int,
-    $56::boolean,
+    $56::int,
     $57::boolean,
-    $58::bytea,
-    $59::varchar,
+    $58::boolean,
+    $59::bytea,
     $60::varchar,
-    $61::jsonb,
-    $62::bigint,
-    $63::int,
-    $64::varchar,
+    $61::varchar,
+    $62::jsonb,
+    $63::bigint,
+    $64::int,
     $65::varchar,
     $66::varchar,
-    $67::jsonb,
-    $68::varchar,
+    $67::varchar,
+    $68::jsonb,
     $69::varchar,
     $70::varchar,
     $71::varchar,
-    $72::bigint,
+    $72::varchar,
     $73::bigint,
-    $74::boolean,
-    $75::varchar,
-    $76::bigint,
-    $77::varchar,
-    $78::boolean,
-    $79::varchar,
+    $74::bigint,
+    $75::boolean,
+    $76::varchar,
+    $77::bigint,
+    $78::varchar,
+    $79::boolean,
     $80::varchar,
     $81::varchar,
-    $82::bigint,
+    $82::varchar,
     $83::bigint,
-    $84::boolean,
-    $85::varchar,
-    $86::bigint,
-    $87::double precision,
-    $88::double precision
+    $84::bigint,
+    $85::boolean,
+    $86::varchar,
+    $87::bigint,
+    $88::double precision,
+    $89::double precision
 )
 ON CONFLICT (installation_id, request_id, span_type) DO NOTHING
 `
@@ -2044,6 +2169,7 @@ type InsertRequestTelemetryParams struct {
 	CacheCreationTokens                      *int32
 	CacheReadTokens                          *int32
 	SemanticCacheHit                         *bool
+	CacheInputSavingsUsd                     *float64
 	DeviceID                                 *string
 	SessionID                                *string
 	RouterUserID                             pgtype.UUID
@@ -2166,6 +2292,7 @@ type InsertRequestTelemetryParams struct {
 //	    cache_creation_tokens,
 //	    cache_read_tokens,
 //	    semantic_cache_hit,
+//	    cache_input_savings_usd,
 //	    device_id,
 //	    session_id,
 //	    router_user_id,
@@ -2255,49 +2382,50 @@ type InsertRequestTelemetryParams struct {
 //	    $43::int,
 //	    $44::int,
 //	    $45::boolean,
-//	    $46::varchar,
+//	    $46::double precision,
 //	    $47::varchar,
-//	    $48::uuid,
-//	    $49::text,
-//	    $50::varchar,
+//	    $48::varchar,
+//	    $49::uuid,
+//	    $50::text,
 //	    $51::varchar,
-//	    $52::text,
+//	    $52::varchar,
 //	    $53::text,
-//	    $54::int,
+//	    $54::text,
 //	    $55::int,
-//	    $56::boolean,
+//	    $56::int,
 //	    $57::boolean,
-//	    $58::bytea,
-//	    $59::varchar,
+//	    $58::boolean,
+//	    $59::bytea,
 //	    $60::varchar,
-//	    $61::jsonb,
-//	    $62::bigint,
-//	    $63::int,
-//	    $64::varchar,
+//	    $61::varchar,
+//	    $62::jsonb,
+//	    $63::bigint,
+//	    $64::int,
 //	    $65::varchar,
 //	    $66::varchar,
-//	    $67::jsonb,
-//	    $68::varchar,
+//	    $67::varchar,
+//	    $68::jsonb,
 //	    $69::varchar,
 //	    $70::varchar,
 //	    $71::varchar,
-//	    $72::bigint,
+//	    $72::varchar,
 //	    $73::bigint,
-//	    $74::boolean,
-//	    $75::varchar,
-//	    $76::bigint,
-//	    $77::varchar,
-//	    $78::boolean,
-//	    $79::varchar,
+//	    $74::bigint,
+//	    $75::boolean,
+//	    $76::varchar,
+//	    $77::bigint,
+//	    $78::varchar,
+//	    $79::boolean,
 //	    $80::varchar,
 //	    $81::varchar,
-//	    $82::bigint,
+//	    $82::varchar,
 //	    $83::bigint,
-//	    $84::boolean,
-//	    $85::varchar,
-//	    $86::bigint,
-//	    $87::double precision,
-//	    $88::double precision
+//	    $84::bigint,
+//	    $85::boolean,
+//	    $86::varchar,
+//	    $87::bigint,
+//	    $88::double precision,
+//	    $89::double precision
 //	)
 //	ON CONFLICT (installation_id, request_id, span_type) DO NOTHING
 func (q *Queries) InsertRequestTelemetry(ctx context.Context, arg InsertRequestTelemetryParams) error {
@@ -2347,6 +2475,7 @@ func (q *Queries) InsertRequestTelemetry(ctx context.Context, arg InsertRequestT
 		arg.CacheCreationTokens,
 		arg.CacheReadTokens,
 		arg.SemanticCacheHit,
+		arg.CacheInputSavingsUsd,
 		arg.DeviceID,
 		arg.SessionID,
 		arg.RouterUserID,

@@ -169,6 +169,7 @@ type TelemetrySummary struct {
 	TotalSavingsUSD       float64
 	CacheWriteTokens      int64
 	CacheReadTokens       int64
+	CacheInputSavingsUSD  CacheInputSavingsUSD
 	SemanticCacheHits     int64
 }
 
@@ -209,6 +210,7 @@ type TelemetryRow struct {
 	OutputTokens        int32
 	CacheCreationTokens *int32
 	CacheReadTokens     *int32
+	CacheInputSavingsUSD CacheInputSavingsUSD
 	RequestedCostUSD    float64
 	ActualCostUSD       float64
 	TotalLatencyMs      int64

@@ -47,134 +47,24 @@ func (e *ForcedModelUnknownError) Error() string {
 // Unwrap ties the typed error to ErrForcedModelUnknown for errors.Is.
 func (e *ForcedModelUnknownError) Unwrap() error { return ErrForcedModelUnknown }
 
-var forceModelAliases = map[string]string{
-	// Anthropic-family client aliases → aiand catalog IDs (Appendix F).
-	// GLM-5.2's canonical catalog id is zai-org/glm-5.2 (ai&'s served name);
-	// z-ai/glm-5.2 is the historical pre-rename string and stays a recognized
-	// alias through catalog.aliases, so it keeps resolving either way. The
-	// explicit z-ai/glm-5.2 entry below documents the legacy→canonical hop
-	// for force-model specifically.
-	"anthropic":         "zai-org/glm-5.2",
-	"claude":            "zai-org/glm-5.2",
-	"opus":              "zai-org/glm-5.2",
-	"claude-opus":       "zai-org/glm-5.2",
-	"claude-opus-5":     "zai-org/glm-5.2",
-	"opus-5":            "zai-org/glm-5.2",
-	"opus-5.0":          "zai-org/glm-5.2",
-	"opus5":             "zai-org/glm-5.2",
-	"claude-5":          "zai-org/glm-5.2",
-	"claude-opus-4-8":   "zai-org/glm-5.2",
-	"opus-4-8":          "zai-org/glm-5.2",
-	"opus-4.8":          "zai-org/glm-5.2",
-	"claude-4-8":        "zai-org/glm-5.2",
-	"claude-4.8":        "zai-org/glm-5.2",
-	"claude-opus-4-7":   "zai-org/glm-5.2",
-	"claude-opus-4-6":   "zai-org/glm-5.2",
-	"z-ai/glm-5.2":      "zai-org/glm-5.2",
-	"fable":             "moonshotai/kimi-k3",
-	"fable-5":           "moonshotai/kimi-k3",
-	"fable5":            "moonshotai/kimi-k3",
-	"claude-fable":      "moonshotai/kimi-k3",
-	"claude-fable-5":    "moonshotai/kimi-k3",
-	"sonnet":            "moonshotai/kimi-k2.7",
-	"claude-sonnet":     "moonshotai/kimi-k2.7",
-	"claude-sonnet-5":   "moonshotai/kimi-k2.7",
-	"sonnet-5":          "moonshotai/kimi-k2.7",
-	"claude-sonnet-4-6": "deepseek-ai/deepseek-v4-pro",
-	"sonnet-4-6":        "deepseek-ai/deepseek-v4-pro",
-	"sonnet-4.6":        "deepseek-ai/deepseek-v4-pro",
-	"haiku":             "deepseek-ai/deepseek-v4-flash",
-	"claude-haiku":      "deepseek-ai/deepseek-v4-flash",
-	"claude-haiku-4-5":  "deepseek-ai/deepseek-v4-flash",
-	"haiku-4-5":         "deepseek-ai/deepseek-v4-flash",
-	"haiku-4.5":         "deepseek-ai/deepseek-v4-flash",
-	// GPT / OpenAI family → gpt-oss on aiand.
-	"gpt":           "openai/gpt-oss-120b",
-	"openai":        "openai/gpt-oss-120b",
-	"gpt-5.6":       "openai/gpt-oss-120b",
-	"gpt-5-6":       "openai/gpt-oss-120b",
-	"sol":           "openai/gpt-oss-120b",
-	"gpt-5-6-sol":   "openai/gpt-oss-120b",
-	"terra":         "openai/gpt-oss-120b",
-	"gpt-5-6-terra": "openai/gpt-oss-120b",
-	"luna":          "openai/gpt-oss-120b",
-	"gpt-5-6-luna":  "openai/gpt-oss-120b",
-	"gpt-5-5":       "openai/gpt-oss-120b",
-	"gpt-5-5-pro":   "openai/gpt-oss-120b",
-	"gpt-5-5-mini":  "openai/gpt-oss-120b",
-	"gpt-5-5-nano":  "openai/gpt-oss-120b",
-	"gpt-5-4":       "openai/gpt-oss-120b",
-	"gpt-5-4-pro":   "openai/gpt-oss-120b",
-	"gpt-5-4-mini":  "openai/gpt-oss-120b",
-	"gpt-5-4-nano":  "openai/gpt-oss-120b",
-	// Grok / xAI → kimi-k2.7.
-	"grok":     "moonshotai/kimi-k2.7",
-	"grok-4.5": "moonshotai/kimi-k2.7",
-	"grok4.5":  "moonshotai/kimi-k2.7",
-	"xai":      "moonshotai/kimi-k2.7",
-	"grok-4.6": "moonshotai/kimi-k2.7",
-	"grok4.6":  "moonshotai/kimi-k2.7",
-	"grok-max": "moonshotai/kimi-k2.7",
-	// Google / Gemini → gemma.
-	"google":                "google/gemma-4-31b-it",
-	"gemini":                "google/gemma-4-31b-it",
-	"gemini-pro":            "google/gemma-4-31b-it",
-	"gemini-flash":          "google/gemma-4-31b-it",
-	"gemini-3-6-flash":      "google/gemma-4-31b-it",
-	"gemini-3-5-flash-lite": "google/gemma-4-31b-it",
-	"gemini-3-7-flash":      "google/gemma-4-31b-it",
-	"deepseek":              "deepseek-ai/deepseek-v4-flash",
-	"deepseek-pro":          "deepseek-ai/deepseek-v4-pro",
-	"deepseek-flash":        "deepseek-ai/deepseek-v4-flash",
-	"qwen":                  "qwen/qwen3.6-27b",
-	"qwen-coder":            "qwen/qwen3.6-27b",
-	"qwen3.7-plus":          "qwen/qwen3.6-27b",
-	"qwen-max":              "qwen/qwen3.6-27b",
-	"qwen3.8-max":           "qwen/qwen3.6-27b",
-	"qwen3.8":               "qwen/qwen3.6-27b",
-	"qwen/qwen-3.8-max":     "qwen/qwen3.6-27b",
-	"qwen-3.8-max":          "qwen/qwen3.6-27b",
-	"qwen-3.8":              "qwen/qwen3.6-27b",
-	// Generic kimi alias stays on 2.7; k3 needs an explicit pin.
-	"kimi":         "moonshotai/kimi-k2.7",
-	"kimi-k3":      "moonshotai/kimi-k3",
-	"kimi-k2.7":    "moonshotai/kimi-k2.7",
-	"kimi-k2.6":    "moonshotai/kimi-k2.7",
-	"glm":          "zai-org/glm-5.2",
-	"zai":          "zai-org/glm-5.2",
-	"z-ai":         "zai-org/glm-5.2",
-	"glm-5.2":      "zai-org/glm-5.2",
-	"glm-5.1":      "zai-org/glm-5.2",
-	"glm-5":        "zai-org/glm-5.2",
-	"minimax":      "deepseek-ai/deepseek-v4-flash",
-	"minimax-m3":   "deepseek-ai/deepseek-v4-flash",
-	"minimax-m2.7": "deepseek-ai/deepseek-v4-flash",
-	"mistral":      "deepseek-ai/deepseek-v4-flash",
-	"aiand":        "deepseek-ai/deepseek-v4-flash",
-}
+// forceModelAliases was deleted — vendor-family mappings were speculative
+// and unsupported by the catalog. Unknown names fall through to prefix-based
+// resolution in resolveForceModelWithEffort. Clients pinning a known catalog
+// model use its full ID; partial vendor names go through the cluster scorer.
+// ponytail: add back if a measurable caller base sends "claude" expecting
+// zai-org/glm-5.2 and the unknown-model rejection becomes a problem.
 
-// resolveForceModel is the legacy two-return surface. New pin-and-effort
-// callers use resolveForceModelWithEffort.
-func resolveForceModel(model string) (canonicalID, provider string, known bool) {
-	canon, prov, kn, _ := resolveForceModelWithEffort(model)
-	return canon, prov, kn
-}
-
-// resolveForceModelWithEffort is like resolveForceModel but also strips a
-// `:level` suffix. `known` is true only for catalog matches; known=false +
-// effort!="" lets callers surface "model not found" without losing the effort.
+// resolveForceModelWithEffort strips a `:level` suffix and resolves the model
+// to its canonical catalog ID. `known` is true only for exact catalog matches;
+// known=false returns the implied provider from prefix hints (claude-*, gpt-*,
+// gemini-*, /vendor/id) without pinning.
 //
 // Matching is exact: no prefix, substring, or nearest-match fallback.
-// Approximate matching silently served the wrong model; an unrecognized
-// name must fail loudly instead.
 func resolveForceModelWithEffort(model string) (canonicalID, provider string, known bool, effort string) {
 	effortLevel, stripped := stripEffortSuffix(model)
-	model = stripped
-	model = strings.ToLower(strings.TrimSpace(model))
+	model = strings.ToLower(strings.TrimSpace(stripped))
 	effort = effortLevel
-	// Prefer an exact catalog / upstream hit on the full string before the
-	// openai/ native-prefix strip — aiand catalog IDs like openai/gpt-oss-120b
-	// must not be misread as OpenAI-native names.
+	// Prefer an exact catalog / upstream hit before the openai/ prefix strip.
 	if m, ok := catalog.ByIDOrUpstream(model); ok && len(m.Providers) > 0 {
 		return m.ID, m.Providers[0].Provider, true, effort
 	}
@@ -185,18 +75,7 @@ func resolveForceModelWithEffort(model string) (canonicalID, provider string, kn
 		unknownID = nativeID
 		requiredProvider = providers.ProviderOpenAI
 	}
-	if alias, ok := forceModelAliases[model]; ok {
-		model = alias
-		// Aliases retarget onto the aiand catalog; the openai/ native-prefix
-		// constraint only applies to unresolved OpenAI-native names.
-		requiredProvider = ""
-		unknownID = model
-	} else if canonical, ok := bareCatalogNames[model]; ok {
-		model = canonical
-	}
-	// Accept catalog IDs and provider UpstreamIDs (what /v1/router/models lists
-	// for ai& deploys). Upstream wire names stay on the binding; we only map
-	// them back to the catalog row for pinning/dispatch.
+	// Second try after stripping openai/ prefix.
 	if m, ok := catalog.ByIDOrUpstream(model); ok && len(m.Providers) > 0 && (requiredProvider == "" || m.Providers[0].Provider == requiredProvider) {
 		return m.ID, m.Providers[0].Provider, true, effort
 	}
@@ -219,32 +98,11 @@ func resolveForceModelWithEffort(model string) (canonicalID, provider string, kn
 	}
 }
 
-// bareCatalogNames maps a slash-form model's bare tail to its canonical
-// ID ("qwen3-coder" -> "qwen/qwen3-coder") for vendor-prefix-optional lookup.
-// Tails that are ambiguous, match a full catalog ID, or duplicate an alias
-// are excluded; TestBareCatalogNames_Unambiguous asserts the invariant.
-var bareCatalogNames = func() map[string]string {
-	owners := make(map[string][]string)
-	for _, m := range catalog.Models {
-		if _, tail, ok := strings.Cut(m.ID, "/"); ok && len(m.Providers) > 0 {
-			owners[tail] = append(owners[tail], m.ID)
-		}
-	}
-	out := make(map[string]string, len(owners))
-	for tail, ids := range owners {
-		if len(ids) > 1 {
-			continue
-		}
-		if _, isFullID := catalog.ByID(tail); isFullID {
-			continue
-		}
-		if _, aliased := forceModelAliases[tail]; aliased {
-			continue
-		}
-		out[tail] = ids[0]
-	}
-	return out
-}()
+// resolveForceModel is the legacy two-return surface kept for backward compat.
+func resolveForceModel(model string) (canonicalID, provider string, known bool) {
+	canon, prov, kn, _ := resolveForceModelWithEffort(model)
+	return canon, prov, kn
+}
 
 // stripEffortSuffix splits a `:level` suffix off model, canonicalizes it via
 // CanonicalizeEffort, and returns ("", model) when no recognized suffix found.
@@ -312,8 +170,7 @@ func (s *Service) setForceModelPin(
 }
 
 // previewForceModelFromRequest resolves force intent for decision-only route
-// endpoints (/v1/route, playground preview). Mirrors applyForceModel's
-// rawForceModelFromRequest + resolve path: only resolvable model fields or
+// endpoints (/v1/route, playground preview). Only resolvable model fields or
 // x-weave-force-model force; unknown client passthrough names (e.g.
 // claude-sonnet-4-20250514) leave ForceModel empty so cluster routing proceeds.
 // Resolve-only — never writes a pin.
@@ -345,17 +202,6 @@ func rawForceModelFromHeaders(headers http.Header, env *translate.RequestEnvelop
 		return ""
 	}
 	return strings.TrimSpace(headers.Get(ForceModelHeader))
-}
-
-// rawForceModelFromRequest picks the raw force-model string from the inbound
-// model field and x-weave-force-model header. A catalog-resolvable, non-auto
-// model field wins over a conflicting header; model=auto, empty, or unknown
-// defers to the header.
-func rawForceModelFromRequest(r *http.Request, env *translate.RequestEnvelope) string {
-	if r == nil {
-		return rawForceModelFromHeaders(nil, env)
-	}
-	return rawForceModelFromHeaders(r.Header, env)
 }
 
 // mergeForceEffortKnobs stashes effortLevel on the request context as
@@ -438,7 +284,7 @@ func (s *Service) applyForceModel(
 	installationID uuid.UUID,
 	sessionKey [sessionpin.SessionKeyLen]byte,
 ) (string, error) {
-	raw := rawForceModelFromRequest(r, env)
+	raw := rawForceModelFromHeaders(r.Header, env)
 	if raw == "" {
 		return "", nil
 	}

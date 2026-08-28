@@ -10,7 +10,11 @@ import (
 	"sync"
 	"time"
 
+	"workweave/router/internal/auth"
 	"workweave/router/internal/observability"
+	"workweave/router/internal/providers"
+	"workweave/router/internal/proxy"
+	"workweave/router/internal/server/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -43,67 +47,98 @@ type aiandCatalogResponse struct {
 // aiandCatalogTTL bounds how long a cached upstream payload is served.
 const aiandCatalogTTL = 60 * time.Second
 
-// aiandCatalogCache is the in-process 60-second single-slot cache. A second
-// call inside the window is served from payload without a new upstream
-// request. Callers never observe a partial refresh: the fetch happens under
-// mu, so concurrent callers block until the single refresh completes.
-type aiandCatalogCache struct {
-	mu        sync.Mutex
+// aiandCatalogSlot is one cached upstream payload for a single credential.
+type aiandCatalogSlot struct {
 	payload   []byte
 	count     int
 	fetchedAt time.Time
-	now       func() time.Time
 }
 
-// newAiandCatalogCache constructs a cache that compares time via now.
-func newAiandCatalogCache(now func() time.Time) *aiandCatalogCache {
-	return &aiandCatalogCache{now: now}
+// aiandCatalogCacheSet holds per-credential 60-second caches. Self-serve users
+// each authenticate with their own aiand BYOK key, so a single global slot
+// would either leak one user's catalog to another or thrash on every request.
+type aiandCatalogCacheSet struct {
+	mu    sync.Mutex
+	slots map[string]*aiandCatalogSlot
+	now   func() time.Time
 }
 
-// Get returns the cached payload. When the cache is empty or stale (older
-// than aiandCatalogTTL), it calls fetch (which is given a bounded context) and
-// stores the result. The int return is the data[] count so the handler can
-// distinguish legitimately-empty (data:[] -> 200 with payload) from a failed
-// fetch (error -> 502). A fetch error leaves the cache intact; on a stale
-// entry the prior payload is still served so a transient upstream blip does
-// not blank the dashboard.
-func (c *aiandCatalogCache) Get(ctx context.Context, fetch func(context.Context) ([]byte, error)) ([]byte, int, error) {
+// newAiandCatalogCacheSet constructs a cache set that compares time via now.
+func newAiandCatalogCacheSet(now func() time.Time) *aiandCatalogCacheSet {
+	return &aiandCatalogCacheSet{slots: make(map[string]*aiandCatalogSlot), now: now}
+}
+
+// Get returns the cached payload for cacheKey. When the slot is empty or stale
+// (older than aiandCatalogTTL), it calls fetch and stores the result.
+func (c *aiandCatalogCacheSet) Get(cacheKey string, ctx context.Context, fetch func(context.Context) ([]byte, error)) ([]byte, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.payload != nil && c.now().Sub(c.fetchedAt) < aiandCatalogTTL {
-		return c.payload, c.count, nil
+	slot := c.slots[cacheKey]
+	if slot != nil && slot.payload != nil && c.now().Sub(slot.fetchedAt) < aiandCatalogTTL {
+		return slot.payload, slot.count, nil
 	}
 	payload, err := fetch(ctx)
 	if err != nil {
-		if c.payload != nil {
-			return c.payload, c.count, nil
+		if slot != nil && slot.payload != nil {
+			return slot.payload, slot.count, nil
 		}
 		return nil, 0, err
 	}
-	c.payload = payload
 	var resp aiandCatalogResponse
 	if err := json.Unmarshal(payload, &resp); err != nil {
 		return nil, 0, err
 	}
-	c.count = len(resp.Data)
-	c.fetchedAt = c.now()
-	return payload, c.count, nil
+	if slot == nil {
+		slot = &aiandCatalogSlot{}
+		c.slots[cacheKey] = slot
+	}
+	slot.payload = payload
+	slot.count = len(resp.Data)
+	slot.fetchedAt = c.now()
+	return payload, slot.count, nil
+}
+
+// resolveAiandCatalogCredential picks the aiand API key for one catalog
+// request. Installation BYOK (stashed on ctx by dashboard auth middleware) wins
+// over the optional deployment AIAND_API_KEY fallback.
+func resolveAiandCatalogCredential(ctx context.Context, c *gin.Context, deploymentKey string) (apiKey, cacheKey string, ok bool) {
+	if keys, _ := ctx.Value(proxy.ExternalAPIKeysContextKey{}).([]*auth.ExternalAPIKey); len(keys) > 0 {
+		for _, k := range keys {
+			if k != nil && k.Provider == providers.ProviderAiand && len(k.Plaintext) > 0 {
+				if inst := middleware.InstallationFrom(c); inst != nil && inst.ID != "" {
+					return string(k.Plaintext), inst.ID, true
+				}
+				return string(k.Plaintext), k.ID, true
+			}
+		}
+	}
+	if deploymentKey != "" {
+		return deploymentKey, "deployment", true
+	}
+	return "", "", false
 }
 
 // AiandCatalogHandler builds the authenticated GET /admin/v1/aiand/models
-// handler for a selfhosted dashboard. apiKey is the deployment's AIAND_API_KEY;
-// baseURL is the full upstream base (defaults to openaicompat.AiandBaseURL in
-// the composition root). It forwards ai&'s /v1/models response verbatim with a
-// 5-second per-request upstream budget, serving an in-process 60-second
-// single-slot cache. 502 on upstream failure; empty data[] is 200.
-func AiandCatalogHandler(apiKey, baseURL string, client *http.Client, now func() time.Time) gin.HandlerFunc {
-	cache := newAiandCatalogCache(now)
+// handler. deploymentKey is the optional boot-time AIAND_API_KEY fallback for
+// self-hosted installs; self-serve callers authenticate with their own aiand
+// BYOK key from the account session. baseURL is the full upstream base
+// (defaults to openaicompat.AiandBaseURL in the composition root). It forwards
+// ai&'s /v1/models response verbatim with a 5-second per-request upstream
+// budget and a 60-second per-credential cache. 401 when no credential is
+// available; 502 on upstream failure; empty data[] is 200.
+func AiandCatalogHandler(deploymentKey, baseURL string, client *http.Client, now func() time.Time) gin.HandlerFunc {
+	cache := newAiandCatalogCacheSet(now)
 	if client == nil {
 		client = http.DefaultClient
 	}
 	return func(c *gin.Context) {
 		log := observability.FromGin(c)
-		payload, _, err := cache.Get(c.Request.Context(), func(ctx context.Context) ([]byte, error) {
+		apiKey, cacheKey, ok := resolveAiandCatalogCredential(c.Request.Context(), c, deploymentKey)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "aiand_key_required"})
+			return
+		}
+		payload, _, err := cache.Get(cacheKey, c.Request.Context(), func(ctx context.Context) ([]byte, error) {
 			ctx, cancel := context.WithTimeout(ctx, AiandCatalogRequestBudget)
 			defer cancel()
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/models", nil)

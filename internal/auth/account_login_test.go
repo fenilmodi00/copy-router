@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"workweave/router/internal/providers"
 )
 
 // stubInstallRepo is the minimal InstallationRepository fake: it implements
@@ -50,9 +52,14 @@ func (f *fakeVerifier) Validate(ctx context.Context, rawKey string) (*AiandIdent
 
 func newLoginTestService(t *testing.T, repo *inMemoryAccountRepo) (*Service, *mutableClock, *stubInstallRepo) {
 	t.Helper()
+	return newLoginTestServiceWithExternal(t, repo, nil)
+}
+
+func newLoginTestServiceWithExternal(t *testing.T, repo *inMemoryAccountRepo, external ExternalAPIKeyRepository) (*Service, *mutableClock, *stubInstallRepo) {
+	t.Helper()
 	clock := &mutableClock{t: time.Date(2026, 4, 27, 12, 0, 0, 0, time.UTC)}
 	insts := &stubInstallRepo{byExternalID: map[string]*Installation{}}
-	svc := NewService(insts, nil, nil, nil, NoOpAPIKeyCache{}, nil, clock.now).
+	svc := NewService(insts, nil, external, nil, NoOpAPIKeyCache{}, nil, clock.now).
 		WithAccountRepos(repo, repo)
 	return svc, clock, insts
 }
@@ -74,6 +81,52 @@ func TestLoginWithKey_ValidKeyCreatesAccountAndInstallation(t *testing.T) {
 	assert.NotEmpty(t, token, "a successful login must mint a session token")
 	assert.Len(t, repo.accounts, 1)
 	assert.Len(t, insts.byExternalID, 1, "a first login must create exactly one installation")
+}
+
+type captureExternalKeyRepo struct {
+	lastProvider string
+	called       bool
+}
+
+func (r *captureExternalKeyRepo) Create(ctx context.Context, params CreateExternalAPIKeyParams) (*ExternalAPIKey, error) {
+	r.lastProvider = params.Provider
+	r.called = true
+	return &ExternalAPIKey{ID: "ek-test", Provider: params.Provider}, nil
+}
+
+func (r *captureExternalKeyRepo) GetForInstallation(ctx context.Context, installationID string) ([]*ExternalAPIKey, error) {
+	return nil, nil
+}
+
+func (r *captureExternalKeyRepo) SoftDeleteByProvider(ctx context.Context, installationID, provider string) error {
+	return nil
+}
+
+func (r *captureExternalKeyRepo) SoftDelete(ctx context.Context, installationID, id string) error {
+	return nil
+}
+
+func (r *captureExternalKeyRepo) UpdateModelAliases(ctx context.Context, installationID, id string, aliases map[string]string) (*ExternalAPIKey, error) {
+	return nil, nil
+}
+
+func (r *captureExternalKeyRepo) MarkUsed(ctx context.Context, id string) error {
+	return nil
+}
+
+func TestLoginWithKey_StoresAiandKeyForInstallation(t *testing.T) {
+	repo := newInMemoryAccountRepo()
+	ext := &captureExternalKeyRepo{}
+	svc, _, _ := newLoginTestServiceWithExternal(t, repo, ext)
+	svc.WithKeyVerifier(&fakeVerifier{identity: &AiandIdentity{
+		UserID:         "user-aiand-1",
+		OrganizationID: "org-1",
+	}})
+
+	_, _, _, _, err := svc.LoginWithKey(context.Background(), "sk-login-key")
+	require.NoError(t, err)
+	assert.True(t, ext.called)
+	assert.Equal(t, providers.ProviderAiand, ext.lastProvider)
 }
 
 func TestLoginWithKey_InvalidKeyIsRejected(t *testing.T) {

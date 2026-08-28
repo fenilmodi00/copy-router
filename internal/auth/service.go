@@ -278,6 +278,21 @@ func (s *Service) ListExternalAPIKeys(ctx context.Context, installationID string
 	return s.externalKeys.GetForInstallation(ctx, installationID)
 }
 
+// ResolvedExternalAPIKeysForInstallation returns BYOK keys with decrypted
+// credentials ready for upstream dispatch. Missing repo or lookup errors
+// yield nil — callers treat that as "no BYOK keys".
+func (s *Service) ResolvedExternalAPIKeysForInstallation(ctx context.Context, installationID string) []*ExternalAPIKey {
+	if s.externalKeys == nil || installationID == "" {
+		return nil
+	}
+	keys, err := s.externalKeys.GetForInstallation(ctx, installationID)
+	if err != nil {
+		observability.FromContext(ctx).Warn("Failed to fetch external API keys", "installation_id", installationID, "err", err)
+		return nil
+	}
+	return s.resolveUpstreamSecrets(ctx, keys)
+}
+
 // UpsertExternalAPIKeyParams carries one BYOK key's stored configuration plus
 // AllowedModels, the caller-supplied set the aliases are validated against.
 type UpsertExternalAPIKeyParams struct {

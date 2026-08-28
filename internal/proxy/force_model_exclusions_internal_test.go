@@ -52,7 +52,7 @@ func TestForceModelCommand_SessionStrikeOutDoesNotReject(t *testing.T) {
 	env := forceCommandEnv(t)
 	rec := httptest.NewRecorder()
 	require.NoError(t, svc.handleForceModelCommand(ctx, rec, env,
-		translate.ForceModelResult{Model: "opus"},
+		translate.ForceModelResult{Model: "zai-org/glm-5.2"},
 		uuid.New(), DeriveSessionKey(env, "key-1"), 10))
 
 	require.Len(t, store.upserts, 1,

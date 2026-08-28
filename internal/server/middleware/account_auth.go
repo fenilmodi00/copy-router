@@ -35,6 +35,9 @@ func WithAccountCookie(svc *auth.Service) gin.HandlerFunc {
 		}
 		c.Set(ctxKeyAccount, acct)
 		c.Set(ctxKeyInstallation, inst)
+		externalKeys := svc.ResolvedExternalAPIKeysForInstallation(c.Request.Context(), inst.ID)
+		ctx := BindInstallationContext(c.Request.Context(), svc, inst, externalKeys, true)
+		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}
 }

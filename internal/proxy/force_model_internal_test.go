@@ -4,12 +4,10 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"workweave/router/internal/providers"
 	"workweave/router/internal/router"
-	"workweave/router/internal/router/catalog"
 	"workweave/router/internal/router/sessionpin"
 	"workweave/router/internal/translate"
 
@@ -49,128 +47,16 @@ func TestResolveForceModel(t *testing.T) {
 			wantKnown:    true,
 		},
 		{
-			name:         "catalog qwen — bare suffix match",
+			name:         "bare suffix no longer resolves without alias",
 			input:        "qwen3.6-27b",
-			wantID:       "qwen/qwen3.6-27b",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias gpt",
-			input:        "gpt",
-			wantID:       "openai/gpt-oss-120b",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias gpt hyphen minor version",
-			input:        "gpt-5-5",
-			wantID:       "openai/gpt-oss-120b",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
+			wantID:       "qwen3.6-27b",
+			wantProvider: providers.ProviderAnthropic,
+			wantKnown:    false,
 		},
 		{
 			name:         "native openai prefix",
 			input:        "openai/gpt-oss-120b",
 			wantID:       "openai/gpt-oss-120b",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "native openai prefix with version alias",
-			input:        "openai/gpt-5.6",
-			wantID:       "openai/gpt-oss-120b",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "native openai prefix with model alias",
-			input:        "openai/luna",
-			wantID:       "openai/gpt-oss-120b",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "native openai prefix rejects cross-provider alias",
-			input:        "openai/claude",
-			wantID:       "zai-org/glm-5.2",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true, // alias retargets onto aiand catalog
-		},
-		{
-			name:         "alias claude",
-			input:        "claude",
-			wantID:       "zai-org/glm-5.2",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias opus",
-			input:        "opus",
-			wantID:       "zai-org/glm-5.2",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias opus dotted version",
-			input:        "opus-4.8",
-			wantID:       "zai-org/glm-5.2",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias claude-fable-5",
-			input:        "claude-fable-5",
-			wantID:       "moonshotai/kimi-k3",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias claude-opus-4-8",
-			input:        "claude-opus-4-8",
-			wantID:       "zai-org/glm-5.2",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias claude-opus-5",
-			input:        "claude-opus-5",
-			wantID:       "zai-org/glm-5.2",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias claude-sonnet-5",
-			input:        "claude-sonnet-5",
-			wantID:       "moonshotai/kimi-k2.7",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias claude-haiku-4-5",
-			input:        "claude-haiku-4-5",
-			wantID:       "deepseek-ai/deepseek-v4-flash",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias claude-sonnet-4-6",
-			input:        "claude-sonnet-4-6",
-			wantID:       "deepseek-ai/deepseek-v4-pro",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias mixed case and whitespace",
-			input:        "  Gemini  ",
-			wantID:       "google/gemma-4-31b-it",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias qwen",
-			input:        "qwen",
-			wantID:       "qwen/qwen3.6-27b",
 			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
@@ -182,25 +68,18 @@ func TestResolveForceModel(t *testing.T) {
 			wantKnown:    true,
 		},
 		{
-			name:         "dash spelling qwen/qwen-3.8-max",
-			input:        "qwen/qwen-3.8-max",
-			wantID:       "qwen/qwen3.6-27b",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
-			name:         "dash spelling qwen-3.8-max",
+			name:         "dash spelling no longer resolves without alias",
 			input:        "qwen-3.8-max",
-			wantID:       "qwen/qwen3.6-27b",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
+			wantID:       "qwen-3.8-max",
+			wantProvider: providers.ProviderAnthropic,
+			wantKnown:    false,
 		},
 		{
-			name:         "dash spelling qwen-3.8",
+			name:         "dash spelling no longer resolves without alias",
 			input:        "qwen-3.8",
-			wantID:       "qwen/qwen3.6-27b",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
+			wantID:       "qwen-3.8",
+			wantProvider: providers.ProviderAnthropic,
+			wantKnown:    false,
 		},
 		// Heuristic fallback: not in the catalog, so known is false.
 		{
@@ -282,8 +161,8 @@ func TestResolveForceModel(t *testing.T) {
 			wantKnown:    false,
 		},
 		{
-			name:         "xhigh-style alias strips effort",
-			input:        "claude-opus-5:xhigh",
+			name:         "xhigh effort strips from catalog model",
+			input:        "zai-org/glm-5.2:xhigh",
 			wantID:       "zai-org/glm-5.2",
 			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
@@ -300,61 +179,11 @@ func TestResolveForceModel(t *testing.T) {
 	}
 }
 
-// The bare-name table must stay unambiguous as models are added: a tail shared
-// by two models, or one that collides with a full ID or an alias, would make a
-// bare name resolve to an arbitrary winner — the silent-wrong-model failure
-// exact matching exists to prevent. Such tails are dropped, not guessed.
-func TestBareCatalogNames_Unambiguous(t *testing.T) {
-	tails := make(map[string][]string)
-	for _, m := range catalog.Models {
-		if _, tail, ok := strings.Cut(m.ID, "/"); ok && len(m.Providers) > 0 {
-			tails[tail] = append(tails[tail], m.ID)
-		}
-	}
 
-	for tail, owners := range tails {
-		mapped, listed := bareCatalogNames[tail]
-		_, isFullID := catalog.ByID(tail)
-		_, aliased := forceModelAliases[tail]
 
-		if len(owners) > 1 || isFullID || aliased {
-			assert.False(t, listed,
-				"ambiguous tail %q (owners=%v full_id=%v aliased=%v) must not be a bare name",
-				tail, owners, isFullID, aliased)
-			continue
-		}
-		require.True(t, listed, "unambiguous tail %q must be reachable without its vendor prefix", tail)
-		assert.Equal(t, owners[0], mapped)
-	}
 
-	// Every entry must name a real, servable model.
-	for tail, id := range bareCatalogNames {
-		m, ok := catalog.ByID(id)
-		require.True(t, ok, "bare name %q maps to unknown model %q", tail, id)
-		assert.NotEmpty(t, m.Providers, "bare name %q maps to unservable model %q", tail, id)
-	}
-}
 
-// An alias must win over a bare catalog name, so a deliberate alias can never
-// be shadowed by an incidental tail collision.
-func TestBareCatalogNames_AliasesTakePrecedence(t *testing.T) {
-	for alias := range forceModelAliases {
-		_, shadowed := bareCatalogNames[alias]
-		assert.False(t, shadowed, "alias %q must not also be a bare-name entry", alias)
-	}
-}
 
-// Family aliases (grok, xai) retarget to kimi-k2.7 on aiand.
-func TestResolveForceModel_GrokFamilyAlias(t *testing.T) {
-	for _, input := range []string{"grok", "xai"} {
-		t.Run(input, func(t *testing.T) {
-			gotID, gotProvider, gotKnown := resolveForceModel(input)
-			assert.Equal(t, "moonshotai/kimi-k2.7", gotID, "canonical id")
-			assert.Equal(t, providers.ProviderAiand, gotProvider, "provider")
-			assert.True(t, gotKnown, "known")
-		})
-	}
-}
 
 // An explicit :level suffix must survive resolution to its catalog model.
 func TestResolveForceModel_EffortSuffixPreserved(t *testing.T) {
@@ -410,7 +239,6 @@ func TestResolveRequestedModel_PrecedenceAndPin(t *testing.T) {
 		require.NoError(t, err)
 		return env
 	}
-	// Moonshotai kimi-k3 (alias "fable") is catalog-resolvable on aiand.
 	const kimiK3 = "moonshotai/kimi-k3"
 	tests := []struct {
 		name      string
@@ -439,40 +267,31 @@ func TestResolveRequestedModel_PrecedenceAndPin(t *testing.T) {
 			bodyModel: kimiK3,
 		},
 		{
-			name:      "alias model field forces canonical id",
+			name:      "unknown alias routes without forcing",
 			body:      `{"model":"fable","messages":[{"role":"user","content":"hi"}]}`,
-			wantID:    kimiK3,
-			wantRole:  sessionpin.DefaultRole,
-			bodyModel: "fable",
+			wantID:    "",
 		},
 		{
-			name:      "bare tail model field forces canonical id",
+			name:      "unknown bare tail routes without forcing",
 			body:      `{"model":"kimi-k3","messages":[{"role":"user","content":"hi"}]}`,
-			wantID:    kimiK3,
-			wantRole:  sessionpin.DefaultRole,
-			bodyModel: "kimi-k3",
+			wantID:    "",
 		},
 		{
 			name:      "model field beats conflicting header",
 			body:      `{"model":"` + kimiK3 + `","messages":[{"role":"user","content":"hi"}]}`,
-			header:    "opus",
 			wantID:    kimiK3,
 			wantRole:  sessionpin.DefaultRole + "_high",
 			bodyModel: kimiK3,
 		},
 		{
-			name:     "model auto defers to header",
-			body:     `{"model":"auto","messages":[{"role":"user","content":"hi"}]}`,
-			header:   "fable",
-			wantID:   kimiK3,
-			wantRole: sessionpin.DefaultRole,
+			name:   "unknown header routes without forcing",
+			body:   `{"model":"auto","messages":[{"role":"user","content":"hi"}]}`,
+			wantID: "",
 		},
 		{
-			name:     "model auto defers to header effort",
-			body:     `{"model":"auto","messages":[{"role":"user","content":"hi"}]}`,
-			header:   "fable:high",
-			wantID:   kimiK3,
-			wantRole: sessionpin.DefaultRole,
+			name:   "unknown header effort routes without forcing",
+			body:   `{"model":"auto","messages":[{"role":"user","content":"hi"}]}`,
+			wantID: "",
 		},
 		{
 			name:   "unknown model field routes without forcing",
@@ -536,7 +355,7 @@ func TestResolveRequestedModel_PrecedenceAndPin(t *testing.T) {
 func TestResolveRequestedModel_KeepsEnvModelByteForByte(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := &Service{pinStore: store}
-	body := []byte(`{"model":"fable[1m]","messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3[1m]","messages":[{"role":"user","content":"hi"}]}`)
 	env, err := translate.ParseAnthropic(body)
 	require.NoError(t, err)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
@@ -547,7 +366,7 @@ func TestResolveRequestedModel_KeepsEnvModelByteForByte(t *testing.T) {
 
 	// The resolver stripped [1m] only for its own lookup; the body itself is
 	// still the exact byte string the client sent.
-	assert.Equal(t, "fable[1m]", env.Model(), "env.Model() must not be rewritten")
+	assert.Equal(t, "moonshotai/kimi-k3[1m]", env.Model(), "env.Model() must not be rewritten")
 	assert.NotNil(t, httpReq.Header)
 }
 
@@ -613,7 +432,7 @@ func TestResolveRequestedModel_ExcludedModelFails(t *testing.T) {
 // force model without writing anything.
 func TestResolveRequestedModel_NoPinStoreStillResolves(t *testing.T) {
 	svc := &Service{}
-	env, err := translate.ParseAnthropic([]byte(`{"model":"fable","messages":[{"role":"user","content":"hi"}]}`))
+	env, err := translate.ParseAnthropic([]byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hi"}]}`))
 	require.NoError(t, err)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 	ctx := context.WithValue(context.Background(), InstallationIDContextKey{}, uuid.New().String())
@@ -649,24 +468,26 @@ func TestResolveForceModel_GLM52CanonicalAlias(t *testing.T) {
 			wantKnown: true,
 		},
 		{
-			name:      "claude alias resolves to canonical",
+			name:      "claude alias now unknown",
 			input:     "claude",
-			wantID:    "zai-org/glm-5.2",
-			wantKnown: true,
+			wantID:    "claude",
+			wantKnown: false,
 		},
 		{
-			name:      "opus alias resolves to canonical",
+			name:      "opus alias now unknown",
 			input:     "opus",
-			wantID:    "zai-org/glm-5.2",
-			wantKnown: true,
+			wantID:    "opus",
+			wantKnown: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotID, gotProvider, gotKnown := resolveForceModel(tt.input)
 			assert.Equal(t, tt.wantID, gotID, "canonical id")
-			assert.Equal(t, providers.ProviderAiand, gotProvider, "primary binding is aiand")
 			assert.Equal(t, tt.wantKnown, gotKnown, "known")
+			if tt.wantKnown {
+				assert.Equal(t, providers.ProviderAiand, gotProvider, "primary binding is aiand")
+			}
 		})
 	}
 }
