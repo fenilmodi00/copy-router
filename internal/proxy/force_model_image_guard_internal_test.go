@@ -18,13 +18,14 @@ import (
 
 // An agent returning a screenshot nests the image inside a tool_result rather
 // than putting it at the top level of the message content.
-const toolResultImageBody = `{"model":"google/gemma-4-31b-it","messages":[
+const toolResultImageBody = `{"model":"qwen/qwen3.8-27b","messages":[
+	{"role":"user","content":"look at this"},
 	{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"/tmp/shot.png"}}]},
 	{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":[
 		{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AAA"}}]}]}]}`
 
 const textOnlyForcedModel = "deepseek-ai/deepseek-v4-flash"
-const imageCapableModel = "google/gemma-4-31b-it"
+const imageCapableModel = "qwen/qwen3.8-27b"
 
 // Regression: a user-forced pin skipped every automatic capability gate, so an
 // image-bearing turn dispatched to a text-only model and the upstream rejected
@@ -88,8 +89,7 @@ func TestRunTurnLoop_ForcedTextOnlyModel_HonoredWithoutImages(t *testing.T) {
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(fr.available).
 		WithPlannerEnabled(false)
-
-	env, err := translate.ParseAnthropic([]byte(`{"model":"google/gemma-4-31b-it","messages":[{"role":"user","content":"plain text turn"}]}`))
+	env, err := translate.ParseAnthropic([]byte(`{"model":"qwen/qwen3.8-27b","messages":[{"role":"user","content":"plain text turn"}]}`))
 	require.NoError(t, err)
 	feats := env.RoutingFeatures(false)
 	require.False(t, feats.HasImages)

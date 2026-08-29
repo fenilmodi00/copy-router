@@ -19,7 +19,7 @@ func TestResolveDefaultBaselineModel(t *testing.T) {
 		}
 		os.Unsetenv("ROUTER_DEFAULT_BASELINE_MODEL")
 		t.Cleanup(require)
-		assert.Equal(t, "deepseek-ai/deepseek-v4-pro", resolveDefaultBaselineModel())
+		assert.Equal(t, "deepseek-ai/deepseek-v4-flash", resolveDefaultBaselineModel())
 	})
 
 	t.Run("explicit empty disables substitution", func(t *testing.T) {

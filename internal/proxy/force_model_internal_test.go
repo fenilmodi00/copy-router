@@ -33,37 +33,37 @@ func TestResolveForceModel(t *testing.T) {
 			wantKnown:    true,
 		},
 		{
-			name:         "catalog gemma",
-			input:        "google/gemma-4-31b-it",
-			wantID:       "google/gemma-4-31b-it",
-			wantProvider: providers.ProviderAiand,
-			wantKnown:    true,
-		},
-		{
 			name:         "catalog qwen",
-			input:        "qwen/qwen3.6-27b",
-			wantID:       "qwen/qwen3.6-27b",
+			input:        "qwen/qwen3.8-27b",
+			wantID:       "qwen/qwen3.8-27b",
 			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
 			name:         "bare suffix no longer resolves without alias",
-			input:        "qwen3.6-27b",
-			wantID:       "qwen3.6-27b",
+			input:        "qwen3.8-27b",
+			wantID:       "qwen3.8-27b",
 			wantProvider: providers.ProviderAnthropic,
 			wantKnown:    false,
 		},
 		{
 			name:         "native openai prefix",
-			input:        "openai/gpt-oss-120b",
-			wantID:       "openai/gpt-oss-120b",
+			input:        "deepseek-ai/deepseek-v4-flash",
+			wantID:       "deepseek-ai/deepseek-v4-flash",
 			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
 		{
-			name:         "canonical qwen/qwen3.6-27b with vendor prefix",
+			name:         "canonical qwen/qwen3.8-27b with vendor prefix",
+			input:        "qwen/qwen3.8-27b",
+			wantID:       "qwen/qwen3.8-27b",
+			wantProvider: providers.ProviderAiand,
+			wantKnown:    true,
+		},
+		{
+			name:         "retired qwen3.6 id resolves via catalog alias",
 			input:        "qwen/qwen3.6-27b",
-			wantID:       "qwen/qwen3.6-27b",
+			wantID:       "qwen/qwen3.8-27b",
 			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
@@ -162,8 +162,8 @@ func TestResolveForceModel(t *testing.T) {
 		},
 		{
 			name:         "xhigh effort strips from catalog model",
-			input:        "zai-org/glm-5.2:xhigh",
-			wantID:       "zai-org/glm-5.2",
+			input:        "zai-org/glm-5.3:xhigh",
+			wantID:       "zai-org/glm-5.3",
 			wantProvider: providers.ProviderAiand,
 			wantKnown:    true,
 		},
@@ -179,12 +179,6 @@ func TestResolveForceModel(t *testing.T) {
 	}
 }
 
-
-
-
-
-
-
 // An explicit :level suffix must survive resolution to its catalog model.
 func TestResolveForceModel_EffortSuffixPreserved(t *testing.T) {
 	gotID, _, gotKnown, gotEffort := resolveForceModelWithEffort("moonshotai/kimi-k2.7:high")
@@ -194,8 +188,7 @@ func TestResolveForceModel_EffortSuffixPreserved(t *testing.T) {
 
 	_, _, _, noneEffort := resolveForceModelWithEffort("deepseek-ai/deepseek-v4-flash:none")
 	assert.Equal(t, "none", noneEffort, ":none suffix must strip as effort none")
-
-	_, _, _, maxEffort := resolveForceModelWithEffort("zai-org/glm-5.2:max")
+	_, _, _, maxEffort := resolveForceModelWithEffort("zai-org/glm-5.3:max")
 	assert.Equal(t, "max", maxEffort)
 }
 
@@ -207,9 +200,9 @@ func TestResolveForceModel_AcceptsUpstreamRegistryIDs(t *testing.T) {
 		wantID string
 	}{
 		{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
-		{"zai-org/glm-5.2", "zai-org/glm-5.2"},
+		{"zai-org/glm-5.3", "zai-org/glm-5.3"},
 		// Legacy alias input resolves to the canonical row via catalog.aliases.
-		{"zai-org/glm-5.2", "zai-org/glm-5.2"},
+		{"z-ai/glm-5.2", "zai-org/glm-5.3"},
 		{"moonshotai/kimi-k2.7-code", "moonshotai/kimi-k2.7"},
 		{"moonshotai/kimi-k3", "moonshotai/kimi-k3"},
 		{"motif-technologies/motif-3", "motif-technologies/motif-3"},
@@ -267,14 +260,14 @@ func TestResolveRequestedModel_PrecedenceAndPin(t *testing.T) {
 			bodyModel: kimiK3,
 		},
 		{
-			name:      "unknown alias routes without forcing",
-			body:      `{"model":"fable","messages":[{"role":"user","content":"hi"}]}`,
-			wantID:    "",
+			name:   "unknown alias routes without forcing",
+			body:   `{"model":"fable","messages":[{"role":"user","content":"hi"}]}`,
+			wantID: "",
 		},
 		{
-			name:      "unknown bare tail routes without forcing",
-			body:      `{"model":"kimi-k3","messages":[{"role":"user","content":"hi"}]}`,
-			wantID:    "",
+			name:   "unknown bare tail routes without forcing",
+			body:   `{"model":"kimi-k3","messages":[{"role":"user","content":"hi"}]}`,
+			wantID: "",
 		},
 		{
 			name:      "model field beats conflicting header",
@@ -377,7 +370,7 @@ func TestResolveRequestedModel_KeepsEnvModelByteForByte(t *testing.T) {
 func TestResolveRequestedModel_EffortSuffixMergesOverride(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := &Service{pinStore: store}
-	env, err := translate.ParseAnthropic([]byte(`{"model":"zai-org/glm-5.2:high","messages":[{"role":"user","content":"hi"}]}`))
+	env, err := translate.ParseAnthropic([]byte(`{"model":"zai-org/glm-5.3:low","messages":[{"role":"user","content":"hi"}]}`))
 	require.NoError(t, err)
 
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
@@ -385,13 +378,13 @@ func TestResolveRequestedModel_EffortSuffixMergesOverride(t *testing.T) {
 	got, err := svc.applyForceModel(ctx, httpReq, env, uuid.New(), DeriveSessionKey(env, "key-1"))
 	require.NoError(t, err)
 
-	assert.Equal(t, "zai-org/glm-5.2", got, "canonical model, suffix stripped")
+	assert.Equal(t, "zai-org/glm-5.3", got, "canonical model, suffix stripped")
 	require.Len(t, store.upserts, 1)
-	assert.Equal(t, "zai-org/glm-5.2", store.upserts[0].Model, "pin stores canonical model, not the effort-qualified input")
+	assert.Equal(t, "zai-org/glm-5.3", store.upserts[0].Model, "pin stores canonical model, not the effort-qualified input")
 
 	knobs := router.RoutingKnobsFromContext(httpReq.Context())
 	require.NotNil(t, knobs, "effort knob must be merged onto the request context")
-	assert.Equal(t, "high", knobs.ForceEffort, ":high suffix becomes ForceEffort")
+	assert.Equal(t, "low", knobs.ForceEffort, ":low suffix becomes ForceEffort")
 }
 
 // TestResolveRequestedModel_ClaudeCodeContextStripsVariant guards the [1m]
@@ -443,12 +436,12 @@ func TestResolveRequestedModel_NoPinStoreStillResolves(t *testing.T) {
 	assert.Equal(t, "moonshotai/kimi-k3", got, "canonical force model returned without a pin store")
 }
 
-// TestResolveForceModel_GLM52CanonicalAlias pins the GLM-5.2 canonicalization
-// contract: zai-org/glm-5.2 is the canonical catalog id going forward, and
-// zai-org/glm-5.2 stays recognized as a backward-compat alias so stored session
-// pins and frozen training artifacts keep resolving. The legacy name must
-// resolve to the new canonical, never to itself.
-func TestResolveForceModel_GLM52CanonicalAlias(t *testing.T) {
+// TestResolveForceModel_GLM53CanonicalAlias pins the GLM canonicalization
+// contract: zai-org/glm-5.3 is the canonical catalog id going forward, and the
+// legacy GLM-5.2 spellings stay recognized as backward-compat aliases so stored
+// session pins and frozen training artifacts keep resolving. The legacy names
+// must resolve to the new canonical, never to themselves.
+func TestResolveForceModel_GLM53CanonicalAlias(t *testing.T) {
 	tests := []struct {
 		name      string
 		input     string
@@ -457,14 +450,20 @@ func TestResolveForceModel_GLM52CanonicalAlias(t *testing.T) {
 	}{
 		{
 			name:      "canonical id resolves to itself",
-			input:     "zai-org/glm-5.2",
-			wantID:    "zai-org/glm-5.2",
+			input:     "zai-org/glm-5.3",
+			wantID:    "zai-org/glm-5.3",
 			wantKnown: true,
 		},
 		{
-			name:      "legacy id resolves to canonical",
+			name:      "legacy zai-org spelling resolves to canonical",
 			input:     "zai-org/glm-5.2",
-			wantID:    "zai-org/glm-5.2",
+			wantID:    "zai-org/glm-5.3",
+			wantKnown: true,
+		},
+		{
+			name:      "legacy z-ai spelling resolves to canonical",
+			input:     "z-ai/glm-5.2",
+			wantID:    "zai-org/glm-5.3",
 			wantKnown: true,
 		},
 		{

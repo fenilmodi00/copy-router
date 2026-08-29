@@ -1189,7 +1189,6 @@ var modelMaxOutputTokens = map[string]int{
 	"qwen/qwen3-235b-a22b-2507":        16384,
 	"qwen/qwen3-next-80b-a3b-instruct": 16384,
 	"deepseek-ai/deepseek-v4-flash":    131072, // DeepSeek V4 documents 384K max output
-	"deepseek-ai/deepseek-v4-pro":      131072,
 	"minimax/minimax-m3":               131072, // 512K context, output up to the window
 	"minimax/minimax-m2.7":             65536,
 	"z-ai/glm-5":                       65536,

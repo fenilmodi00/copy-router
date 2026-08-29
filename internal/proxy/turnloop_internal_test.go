@@ -485,8 +485,8 @@ func TestNormalizeHMMStayPin_PreservesCatalogRoutableTerra(t *testing.T) {
 	).WithAvailableModels(catalog.RoutingTargetSet(availableProviders))
 	pin := sessionpin.Pin{
 		Provider:        providers.ProviderAiand,
-		Model:           "openai/gpt-oss-120b",
-		LastServedModel: "openai/gpt-oss-120b",
+		Model:           "qwen/qwen3.8-27b",
+		LastServedModel: "qwen/qwen3.8-27b",
 		LastTurnEndedAt: time.Now(),
 		PinnedUntil:     time.Now().Add(time.Hour),
 	}
@@ -494,7 +494,7 @@ func TestNormalizeHMMStayPin_PreservesCatalogRoutableTerra(t *testing.T) {
 	normalized, ok := svc.normalizeHMMStayPin(router.Request{}, pin)
 
 	require.True(t, ok)
-	assert.Equal(t, "openai/gpt-oss-120b", normalized.Model)
+	assert.Equal(t, "qwen/qwen3.8-27b", normalized.Model)
 	assert.Equal(t, providers.ProviderAiand, normalized.Provider)
 }
 

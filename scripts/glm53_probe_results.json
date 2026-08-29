@@ -1,0 +1,878 @@
+{
+  "pass_rates": {
+    "zai-org/glm-5.3": {
+      "passed": 29,
+      "total": 29,
+      "errors": 1,
+      "rate": 1.0
+    },
+    "moonshotai/kimi-k3": {
+      "passed": 30,
+      "total": 30,
+      "errors": 0,
+      "rate": 1.0
+    },
+    "motif-technologies/motif-3": {
+      "passed": 30,
+      "total": 30,
+      "errors": 0,
+      "rate": 1.0
+    },
+    "deepseek-ai/deepseek-v4-flash": {
+      "passed": 30,
+      "total": 30,
+      "errors": 0,
+      "rate": 1.0
+    },
+    "qwen/qwen3.8-27b": {
+      "passed": 30,
+      "total": 30,
+      "errors": 0,
+      "rate": 1.0
+    }
+  },
+  "ratio_glm53_vs_k3": 1.0,
+  "ratio_glm53_vs_m3": 1.0,
+  "ratio_glm53_vs_flash": 1.0,
+  "recommended_q_glm53_on": 1.02,
+  "recommended_q_glm53_off": 0.97,
+  "recommended_q_qwen38_off": 0.92,
+  "go_no_go": "PASS",
+  "results": {
+    "probe_000": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 341,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 174,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 108,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 159,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 140,
+        "error": false
+      }
+    },
+    "probe_001": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 392,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 398,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 418,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 430,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 420,
+        "error": false
+      }
+    },
+    "probe_002": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 326,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 409,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 342,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 322,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 415,
+        "error": false
+      }
+    },
+    "probe_003": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 569,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 488,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 429,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 494,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 333,
+        "error": false
+      }
+    },
+    "probe_004": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 332,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 342,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 328,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 322,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 321,
+        "error": false
+      }
+    },
+    "probe_005": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 494,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 191,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 225,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 237,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 225,
+        "error": false
+      }
+    },
+    "probe_006": {
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 387,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 396,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 380,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 413,
+        "error": false
+      },
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 710,
+        "error": false
+      }
+    },
+    "probe_007": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 551,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 763,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 1085,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 887,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 767,
+        "error": false
+      }
+    },
+    "probe_008": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 298,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 280,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 316,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 286,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 238,
+        "error": false
+      }
+    },
+    "probe_009": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 305,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 305,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 322,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 337,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 335,
+        "error": false
+      }
+    },
+    "probe_010": {
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 502,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 562,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 548,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 517,
+        "error": false
+      },
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 453,
+        "error": false
+      }
+    },
+    "probe_011": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 296,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 302,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 300,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 315,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 304,
+        "error": false
+      }
+    },
+    "probe_012": {
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 612,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 1045,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 940,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 972,
+        "error": false
+      },
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 703,
+        "error": false
+      }
+    },
+    "probe_013": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 562,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 547,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 506,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 518,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 440,
+        "error": false
+      }
+    },
+    "probe_014": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 220,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 172,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 137,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 151,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 143,
+        "error": false
+      }
+    },
+    "probe_015": {
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 299,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 337,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 308,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 340,
+        "error": false
+      },
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 455,
+        "error": false
+      }
+    },
+    "probe_016": {
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 249,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 273,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 267,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 263,
+        "error": false
+      },
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 518,
+        "error": false
+      }
+    },
+    "probe_017": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 666,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 511,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 560,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 598,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 622,
+        "error": false
+      }
+    },
+    "probe_018": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 203,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 227,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 304,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 203,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 202,
+        "error": false
+      }
+    },
+    "probe_019": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 521,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 397,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 470,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 439,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 541,
+        "error": false
+      }
+    },
+    "probe_020": {
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 702,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 459,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 670,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 656,
+        "error": false
+      },
+      "zai-org/glm-5.3": {
+        "passed": false,
+        "response_length": 0,
+        "error": true
+      }
+    },
+    "probe_021": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 453,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 260,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 338,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 328,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 314,
+        "error": false
+      }
+    },
+    "probe_022": {
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 862,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 1146,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 1109,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 877,
+        "error": false
+      },
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 1409,
+        "error": false
+      }
+    },
+    "probe_023": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 1208,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 1936,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 1257,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 1980,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 1603,
+        "error": false
+      }
+    },
+    "probe_024": {
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 409,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 404,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 393,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 419,
+        "error": false
+      },
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 465,
+        "error": false
+      }
+    },
+    "probe_025": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 270,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 269,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 516,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 248,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 265,
+        "error": false
+      }
+    },
+    "probe_026": {
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 531,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 818,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 575,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 533,
+        "error": false
+      },
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 1328,
+        "error": false
+      }
+    },
+    "probe_027": {
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 306,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 322,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 334,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 324,
+        "error": false
+      },
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 450,
+        "error": false
+      }
+    },
+    "probe_028": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 674,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 671,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 814,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 764,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 632,
+        "error": false
+      }
+    },
+    "probe_029": {
+      "zai-org/glm-5.3": {
+        "passed": true,
+        "response_length": 637,
+        "error": false
+      },
+      "moonshotai/kimi-k3": {
+        "passed": true,
+        "response_length": 401,
+        "error": false
+      },
+      "motif-technologies/motif-3": {
+        "passed": true,
+        "response_length": 470,
+        "error": false
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "passed": true,
+        "response_length": 379,
+        "error": false
+      },
+      "qwen/qwen3.8-27b": {
+        "passed": true,
+        "response_length": 485,
+        "error": false
+      }
+    }
+  },
+  "n_prompts": 30,
+  "test_date": "2026-08-29",
+  "price_at_test_time": {
+    "zai-org/glm-5.3": {
+      "input_per_1m": 1.0,
+      "output_per_1m": 4.0,
+      "cached_input_per_1m": 0.3
+    },
+    "qwen/qwen3.8-27b": {
+      "input_per_1m": 0.4,
+      "output_per_1m": 3.0,
+      "cached_input_per_1m": 0.2
+    }
+  },
+  "error_rate": 0.006666666666666667,
+  "total_errors": 1,
+  "total_calls": 150,
+  "models_verified": [
+    "zai-org/glm-5.3",
+    "moonshotai/kimi-k3",
+    "motif-technologies/motif-3",
+    "deepseek-ai/deepseek-v4-flash",
+    "qwen/qwen3.8-27b"
+  ],
+  "probe_count": 30
+}

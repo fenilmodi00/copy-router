@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	shadowPinnedModel = "deepseek-ai/deepseek-v4-pro"
+	shadowPinnedModel = "motif-technologies/motif-3"
 	shadowFreshModel  = "moonshotai/kimi-k3"
 	shadowPinReason   = "hmm_policy(classifier 'high' (p=0.32))"
 )

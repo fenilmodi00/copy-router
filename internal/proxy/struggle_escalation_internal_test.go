@@ -19,7 +19,7 @@ import (
 
 const (
 	struggleLowModel  = "deepseek-ai/deepseek-v4-flash"
-	struggleMidModel  = "deepseek-ai/deepseek-v4-pro"
+	struggleMidModel  = "motif-technologies/motif-3"
 	struggleHighModel = "moonshotai/kimi-k3"
 )
 

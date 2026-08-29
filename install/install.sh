@@ -3229,25 +3229,19 @@ normalize_model() {
 prices='{
   "input": {
     "deepseek-ai/deepseek-v4-flash": 0.00015,
-    "deepseek-ai/deepseek-v4-pro":   0.001,
-    "google/gemma-4-31b-it":         0.0002,
     "moonshotai/kimi-k2.7":          0.00075,
     "moonshotai/kimi-k3":            0.003,
     "motif-technologies/motif-3":    0.0005,
-    "openai/gpt-oss-120b":           0.00015,
-    "qwen/qwen3.6-27b":              0.00032,
-    "zai-org/glm-5.2":               0.001
+    "qwen/qwen3.8-27b":              0.0004,
+    "zai-org/glm-5.3":               0.001
   },
   "output": {
     "deepseek-ai/deepseek-v4-flash": 0.00025,
-    "deepseek-ai/deepseek-v4-pro":   0.0025,
-    "google/gemma-4-31b-it":         0.0005,
     "moonshotai/kimi-k2.7":          0.0035,
     "moonshotai/kimi-k3":            0.0125,
     "motif-technologies/motif-3":    0.002,
-    "openai/gpt-oss-120b":           0.0006,
-    "qwen/qwen3.6-27b":              0.0032,
-    "zai-org/glm-5.2":               0.004
+    "qwen/qwen3.8-27b":              0.003,
+    "zai-org/glm-5.3":               0.004
   }
 }'
 # END_GENERATED_PRICES

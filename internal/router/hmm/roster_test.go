@@ -12,13 +12,14 @@ import (
 
 func TestDeployedModelsForRosterIDs_MapsRosterSlugsToCatalogEntries(t *testing.T) {
 	// Slash-form aiand catalog IDs are their own roster IDs, except kimi-k2.7
-	// which maps through the kimi-k2.7-code roster alias.
+	// which maps through the kimi-k2.7-code roster alias. Retired glm-5.2
+	// resolves through the catalog alias to its successor row.
 	got := hmm.DeployedModelsForRosterIDs([]string{
-		"openai/gpt-oss-120b",
+		"zai-org/glm-5.3",
 		"deepseek-ai/deepseek-v4-flash",
 		"moonshotai/kimi-k2.7-code",
 		"zai-org/glm-5.2",
-		"google/gemma-4-31b-it",
+		"qwen/qwen3.8-27b",
 		"not/a-real-roster-id",
 	})
 
@@ -27,23 +28,24 @@ func TestDeployedModelsForRosterIDs_MapsRosterSlugsToCatalogEntries(t *testing.T
 		byModel[e.Model] = e.Provider
 	}
 
-	assert.Equal(t, providers.ProviderAiand, byModel["openai/gpt-oss-120b"])
+	assert.Equal(t, providers.ProviderAiand, byModel["zai-org/glm-5.3"])
 	assert.Equal(t, providers.ProviderAiand, byModel["deepseek-ai/deepseek-v4-flash"])
 	assert.Equal(t, providers.ProviderAiand, byModel["moonshotai/kimi-k2.7"])
-	assert.Equal(t, providers.ProviderAiand, byModel["zai-org/glm-5.2"])
-	assert.Equal(t, providers.ProviderAiand, byModel["google/gemma-4-31b-it"])
+	assert.Equal(t, providers.ProviderAiand, byModel["qwen/qwen3.8-27b"])
+	assert.NotContains(t, byModel, "zai-org/glm-5.2",
+		"retired glm-5.2 must map to its canonical successor, not stay a row id")
 	assert.NotContains(t, byModel, "not/a-real-roster-id")
 }
 
 func TestDeployedModelsForRosterIDs_PreservesOrderAndDropsUnknown(t *testing.T) {
 	got := hmm.DeployedModelsForRosterIDs([]string{
-		"openai/gpt-oss-120b",
+		"qwen/qwen3.8-27b",
 		"not/a-real-roster-id",
-		"openai/gpt-oss-120b", // duplicate: only the first survives
+		"qwen/qwen3.8-27b", // duplicate: only the first survives
 	})
 
 	require.Len(t, got, 1)
-	assert.Equal(t, "openai/gpt-oss-120b", got[0].Model)
+	assert.Equal(t, "qwen/qwen3.8-27b", got[0].Model)
 	assert.Equal(t, providers.ProviderAiand, got[0].Provider)
 }
 

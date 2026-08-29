@@ -15,10 +15,10 @@ import (
 
 const (
 	modelFlash   = "deepseek-ai/deepseek-v4-flash"
-	modelPro     = "deepseek-ai/deepseek-v4-pro"
+	modelMotif   = "motif-technologies/motif-3"
 	modelKimi3   = "moonshotai/kimi-k3"
 	modelGlm     = "zai-org/glm-5.2"
-	modelOss     = "openai/gpt-oss-120b"
+	modelQwen    = "qwen/qwen3.8-27b"
 	modelUnknown = "fictional-foo-1.0"
 )
 
@@ -32,10 +32,10 @@ var defaultCfg = planner.EVConfig{
 // except pin_model_missing.
 var availableAll = map[string]struct{}{
 	modelFlash: {},
-	modelPro:   {},
+	modelMotif: {},
 	modelKimi3: {},
 	modelGlm:   {},
-	modelOss:   {},
+	modelQwen:  {},
 }
 
 // tierUpgradeCfg mirrors defaultCfg with the tier guard on.
@@ -264,7 +264,7 @@ func TestDecide(t *testing.T) {
 				Pin:                  pinWithUsage(modelKimi3),
 				Fresh:                router.Decision{Provider: providers.ProviderAiand, Model: modelFlash},
 				EstimatedInputTokens: 50_000,
-				AvailableModels:      map[string]struct{}{modelFlash: {}, modelPro: {}},
+				AvailableModels:      map[string]struct{}{modelFlash: {}, modelMotif: {}},
 			},
 			cfg:  defaultCfg,
 			want: planner.Decision{Outcome: planner.OutcomeSwitch, Reason: planner.ReasonPinModelMissing},
@@ -403,7 +403,7 @@ func TestDecide(t *testing.T) {
 		{
 			name: "tier_upgrade: downgrade does not trigger guard",
 			in: planner.Inputs{
-				Pin:                  pinWithUsage(modelPro),
+				Pin:                  pinWithUsage(modelMotif),
 				Fresh:                router.Decision{Provider: providers.ProviderAiand, Model: modelFlash},
 				EstimatedInputTokens: 1000,
 				AvailableModels:      availableAll,
@@ -411,7 +411,7 @@ func TestDecide(t *testing.T) {
 			cfg:                    tierUpgradeCfg,
 			want:                   planner.Decision{Outcome: planner.OutcomeStay, Reason: planner.ReasonEVNegative},
 			expectEVMath:           true,
-			wantExpectedSavingsUSD: 0.00051,
+			wantExpectedSavingsUSD: 0.00036,
 			wantEvictionCostUSD:    0.00007,
 		},
 		{

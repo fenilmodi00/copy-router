@@ -177,6 +177,7 @@ const (
 	EffortLow    = "low"
 	EffortMedium = "medium"
 	EffortHigh   = "high"
+	EffortXHigh  = "xhigh"
 	EffortMax    = "max"
 )
 
@@ -195,22 +196,15 @@ func (m Model) PrimaryProvider() string {
 // routing targets. Strategy artifacts own selection membership: legacy cluster
 // versions use their model_registry.json, while policy sidecars such as HMM
 // intersect catalog targets with their own roster. This catalog controls
-// pricing and dispatch for every strategy.
 var Models = []Model{
-	// aiand-only catalog for Build.io / v0.76 registry.
-	// Non-aiand bindings removed; registry upstream IDs resolve via ByIDOrUpstream.
-	// ReasoningEfforts mirrors live GET /v1/models reasoning_efforts (2026-08-25).
+	// aiand-only catalog for Build.io / v0.77 registry. Six-model roster:
+	// deepseek-v4-flash, kimi-k2.7, kimi-k3, motif-3, glm-5.3, qwen3.8-27b.
+	// ReasoningEfforts mirrors live GET /v1/models reasoning_efforts (2026-08-29).
 	{ID: "deepseek-ai/deepseek-v4-flash", Tier: TierLow, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, AgenticUse: AgenticLow,
 		ReasoningEfforts: []string{EffortNone, EffortHigh, EffortMax},
 		Providers: []ProviderBinding{
 			{Provider: providers.ProviderAiand, UpstreamID: "deepseek-ai/deepseek-v4-flash",
 				Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.250, CacheReadMultiplier: 0.08 / 0.150}},
-		}},
-	{ID: "deepseek-ai/deepseek-v4-pro", Tier: TierMid, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported,
-		ReasoningEfforts: []string{EffortNone, EffortHigh, EffortMax},
-		Providers: []ProviderBinding{
-			{Provider: providers.ProviderAiand, UpstreamID: "deepseek-ai/deepseek-v4-pro",
-				Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 2.500, CacheReadMultiplier: 0.25 / 1.000}},
 		}},
 	{ID: "moonshotai/kimi-k2.7", Tier: TierHigh, ContextWindow: 262_144, ImageInput: ImageInputUnsupported,
 		ReasoningEfforts: []string{EffortHigh},
@@ -224,41 +218,31 @@ var Models = []Model{
 			{Provider: providers.ProviderAiand, UpstreamID: "moonshotai/kimi-k3",
 				Price: Pricing{InputUSDPer1M: 3.000, OutputUSDPer1M: 12.500, CacheReadMultiplier: 0.50 / 3.000}},
 		}},
-	{ID: "openai/gpt-oss-120b", Tier: TierLow, ContextWindow: 131_072,
-		ReasoningEfforts: []string{EffortLow, EffortMedium, EffortHigh},
-		Providers: []ProviderBinding{
-			{Provider: providers.ProviderAiand, UpstreamID: "openai/gpt-oss-120b",
-				Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.600, CacheReadMultiplier: 0.08 / 0.150}},
-		}},
-	{ID: "qwen/qwen3.6-27b", Tier: TierLow, ContextWindow: 262_144,
-		ReasoningEfforts: []string{EffortNone, EffortHigh},
-		Providers: []ProviderBinding{
-			{Provider: providers.ProviderAiand, UpstreamID: "qwen/qwen3.6-27b",
-				Price: Pricing{InputUSDPer1M: 0.320, OutputUSDPer1M: 3.200, CacheReadMultiplier: 0.20 / 0.320}},
-		}},
-	{ID: "google/gemma-4-31b-it", Tier: TierLow, ContextWindow: 262_144,
-		ReasoningEfforts: []string{EffortNone, EffortHigh},
-		Providers: []ProviderBinding{
-			{Provider: providers.ProviderAiand, UpstreamID: "google/gemma-4-31b-it",
-				Price: Pricing{InputUSDPer1M: 0.200, OutputUSDPer1M: 0.500, CacheReadMultiplier: 0.05 / 0.200}},
-		}},
 	{ID: "motif-technologies/motif-3", Tier: TierMid, ContextWindow: 262_144,
 		ReasoningEfforts: []string{EffortLow, EffortMedium, EffortHigh},
 		Providers: []ProviderBinding{
 			{Provider: providers.ProviderAiand, UpstreamID: "motif-technologies/motif-3",
 				Price: Pricing{InputUSDPer1M: 0.500, OutputUSDPer1M: 2.000, CacheReadMultiplier: 0.20 / 0.500}},
 		}},
-	// GLM-5.2: canonical id is zai-org/glm-5.2, ai&'s served model name. The
-	// legacy z-ai/glm-5.2 string (frozen v0.69–v0.74 + candidate-k12 training
-	// artifacts, stored session pins, archived client integrations) stays
-	// resolvable via the aliases table in lookup.go. UpstreamID equals the
-	// catalog ID, so indexUpstreamID skips this binding (no rewrite needed;
-	// the catalog id is the wire id).
-	{ID: "zai-org/glm-5.2", Tier: TierHigh, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported,
-		ReasoningEfforts: []string{EffortNone, EffortHigh, EffortMax},
+	// GLM-5.3: canonical id is zai-org/glm-5.3, ai&'s served model name, same
+	// 743B MoE base as GLM-5.2 with better agentic benchmarks. Replaces GLM-5.2
+	// in the roster; the legacy names (z-ai/glm-5.2, zai-org/glm-5.2,
+	// z-ai/glm-5.3) stay resolvable via the aliases table below. Live menu is
+	// none/low/xhigh/max (2026-08-29) — medium and high are NOT served.
+	{ID: "zai-org/glm-5.3", Tier: TierHigh, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported,
+		ReasoningEfforts: []string{EffortNone, EffortLow, EffortXHigh, EffortMax},
 		Providers: []ProviderBinding{
-			{Provider: providers.ProviderAiand, UpstreamID: "zai-org/glm-5.2",
+			{Provider: providers.ProviderAiand, UpstreamID: "zai-org/glm-5.3",
 				Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 4.000, CacheReadMultiplier: 0.30 / 1.000}},
+		}},
+	// qwen3.8-27b: TierLow pool model with live vision/document/video support
+	// (no ImageInputUnsupported), so it stays eligible for image-bearing turns.
+	// Live menu is none/low/medium/xhigh (2026-08-29) — high and max NOT served.
+	{ID: "qwen/qwen3.8-27b", Tier: TierLow, ContextWindow: 262_144,
+		ReasoningEfforts: []string{EffortNone, EffortLow, EffortMedium, EffortXHigh},
+		Providers: []ProviderBinding{
+			{Provider: providers.ProviderAiand, UpstreamID: "qwen/qwen3.8-27b",
+				Price: Pricing{InputUSDPer1M: 0.400, OutputUSDPer1M: 3.000, CacheReadMultiplier: 0.20 / 0.400}},
 		}},
 }
 
@@ -273,5 +257,13 @@ var Models = []Model{
 // wire name. Add aliases here only when a model is renamed and the old name
 // still appears in committed frozen artifacts or live client state.
 var aliases = map[string]string{
-	"z-ai/glm-5.2": "zai-org/glm-5.2",
+	// GLM-5.3 succeeded GLM-5.2 (same 743B base, better post-training).
+	// Frozen v0.69–v0.76 training artifacts rank z-ai/glm-5.2 or
+	// zai-org/glm-5.2; stored session pins may carry either name plus the
+	// z-ai/glm-5.3 spelling — all resolve to the glm-5.3 row.
+	"z-ai/glm-5.2":    "zai-org/glm-5.3",
+	"zai-org/glm-5.2": "zai-org/glm-5.3",
+	"z-ai/glm-5.3":    "zai-org/glm-5.3",
+	// qwen3.8-27b succeeded qwen3.6-27b.
+	"qwen/qwen3.6-27b": "qwen/qwen3.8-27b",
 }

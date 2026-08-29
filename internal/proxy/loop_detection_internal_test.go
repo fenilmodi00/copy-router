@@ -244,7 +244,7 @@ func loopTestKey(seed byte) [sessionpin.SessionKeyLen]byte {
 var loopTestSig = translate.ToolCallSig{Name: "Read", InputHash: "abc123"}
 
 func TestHandleLoopEscalation_RecordsEventAndPins(t *testing.T) {
-	assert.Equal(t, "zai-org/glm-5.2", escalateModel)
+	assert.Equal(t, "zai-org/glm-5.3", escalateModel)
 	pins := newStubPinStore()
 	events := &recordingLoopStore{}
 	svc := newLoopEscalationSvc(pins, events)

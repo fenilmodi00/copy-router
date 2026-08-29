@@ -53,7 +53,7 @@ func TestBuildConfiguredPolicySidecarsOnboardsFutureStrategy(t *testing.T) {
 		`{"future-policy":"`+server.URL+`"}`,
 		"",
 		time.Second,
-		map[string]struct{}{"openai/gpt-oss-120b": {}},
+		map[string]struct{}{"qwen/qwen3.8-27b": {}},
 		map[string]struct{}{providers.ProviderAiand: {}},
 		server.Client(),
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -65,7 +65,7 @@ func TestBuildConfiguredPolicySidecarsOnboardsFutureStrategy(t *testing.T) {
 	assert.True(t, registrations[0].Capabilities.SupportsShadow)
 	decision, err := registrations[0].Router.Route(context.Background(), router.Request{})
 	require.NoError(t, err)
-	assert.Equal(t, "openai/gpt-oss-120b", decision.Model)
+	assert.Equal(t, "qwen/qwen3.8-27b", decision.Model)
 	assert.Equal(t, providers.ProviderAiand, decision.Provider)
 }
 

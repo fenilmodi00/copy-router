@@ -54,7 +54,7 @@ func TestRoutingMetadataPayloadCanonicalizesModel(t *testing.T) {
 		Provider: "aiand",
 		Reason:   "pin",
 	}, "req-1", []byte(`{"model":"auto","messages":[{"role":"user","content":"hello"}],"max_tokens":1024}`), 1, 1024)
-	assert.Equal(t, "zai-org/glm-5.2", payload.Model)
+	assert.Equal(t, "zai-org/glm-5.3", payload.Model)
 	assert.Equal(t, "pin", payload.Reason)
 	assert.Greater(t, payload.RequestedCostUSD, 0.0)
 	assert.Greater(t, payload.ActualCostUSD, 0.0)

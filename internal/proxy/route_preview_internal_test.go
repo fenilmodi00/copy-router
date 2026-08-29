@@ -19,10 +19,10 @@ func TestAnthropicRoutingRequest_ModelFieldForcesPreview(t *testing.T) {
 	svc := &Service{}
 	ctx := context.WithValue(context.Background(), InstallationIDContextKey{}, uuid.New().String())
 
-	req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"fable","messages":[{"role":"user","content":"hi"}]}`), nil)
+	req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"z-ai/glm-5.2","messages":[{"role":"user","content":"hi"}]}`), nil)
 	require.NoError(t, err)
-	assert.Equal(t, "moonshotai/kimi-k3", req.ForceModel, "alias 'fable' forces the canonical id in preview")
-	assert.Equal(t, "fable", req.RequestedModel, "requested model keeps the raw field; ForceModel carries the force")
+	assert.Equal(t, "zai-org/glm-5.3", req.ForceModel, "catalog alias 'z-ai/glm-5.2' forces the canonical id in preview")
+	assert.Equal(t, "z-ai/glm-5.2", req.RequestedModel, "requested model keeps the raw field; ForceModel carries the force")
 }
 
 func TestAnthropicRoutingRequest_AutoLeavesPreviewUnforced(t *testing.T) {
@@ -69,7 +69,7 @@ func TestOpenAIRoutingRequest_ModelFieldForcesPreview(t *testing.T) {
 
 	req, err := svc.openAIRoutingRequest(ctx, []byte(`{"model":"z-ai/glm-5.2:high","messages":[{"role":"user","content":"hi"}]}`), nil)
 	require.NoError(t, err)
-	assert.Equal(t, "zai-org/glm-5.2", req.ForceModel, "resolvable model with :level effort forces the canonical id in preview")
+	assert.Equal(t, "zai-org/glm-5.3", req.ForceModel, "resolvable model with :level effort forces the canonical id in preview")
 	assert.Equal(t, "z-ai/glm-5.2:high", req.RequestedModel, "requested model keeps the raw field with effort suffix")
 }
 
@@ -115,10 +115,10 @@ func TestAnthropicRoutingRequest_ForceModelCarriedInRequest(t *testing.T) {
 	ctx := context.WithValue(context.Background(), InstallationIDContextKey{}, uuid.New().String())
 	ctx = context.WithValue(ctx, ExternalIDContextKey{}, "org-1")
 
-	req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`), nil)
+	req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"deepseek-ai/deepseek-v4-flash","messages":[{"role":"user","content":"hi"}]}`), nil)
 	require.NoError(t, err)
-	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", req.ForceModel)
-	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", req.RequestedModel)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", req.ForceModel)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", req.RequestedModel)
 	assert.Equal(t, "org-1", req.OrganizationID)
 	assert.NotNil(t, req.TranslationRequirements, "TranslationRequirements must be populated for a preview request")
 }

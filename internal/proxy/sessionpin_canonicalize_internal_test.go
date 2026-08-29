@@ -11,7 +11,7 @@ import (
 )
 
 func TestLoadPin_CanonicalizesLegacyModel(t *testing.T) {
-	const canonical = "zai-org/glm-5.2"
+	const canonical = "zai-org/glm-5.3"
 	const legacy = "z-ai/glm-5.2"
 
 	var testKey [sessionpin.SessionKeyLen]byte
@@ -55,7 +55,7 @@ func TestLoadPin_CanonicalizesLegacyModel(t *testing.T) {
 }
 
 func TestLoadPin_PassesThroughCanonical(t *testing.T) {
-	const canonical = "zai-org/glm-5.2"
+	const canonical = "zai-org/glm-5.3"
 
 	var testKey [sessionpin.SessionKeyLen]byte
 	for i := range testKey {
@@ -95,7 +95,7 @@ func TestLoadPin_PassesThroughCanonical(t *testing.T) {
 }
 
 func TestLoadPin_LegacyPairedModelCanonicalized(t *testing.T) {
-	const canonical = "zai-org/glm-5.2"
+	const canonical = "zai-org/glm-5.3"
 	const legacy = "z-ai/glm-5.2"
 
 	var testKey [sessionpin.SessionKeyLen]byte
@@ -139,7 +139,7 @@ func TestLoadPin_LegacyPairedModelCanonicalized(t *testing.T) {
 }
 
 func TestLoadHMMHistory_CanonicalizesLegacyModel(t *testing.T) {
-	const canonical = "zai-org/glm-5.2"
+	const canonical = "zai-org/glm-5.3"
 	const legacy = "z-ai/glm-5.2"
 
 	var testKey [sessionpin.SessionKeyLen]byte

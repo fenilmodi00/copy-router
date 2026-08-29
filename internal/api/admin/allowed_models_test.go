@@ -44,7 +44,7 @@ func putAllowedModels(t *testing.T, routable admin.RoutableModelsSource, allowed
 func TestUpdateAllowedModelsHandler_RejectsAllowlistWithNoRoutableMember(t *testing.T) {
 	rec := putAllowedModels(t,
 		stubRoutableModels{models: map[string]struct{}{"claude-opus-4-7": {}}},
-		[]string{"zai-org/glm-5.2"},
+		[]string{"zai-org/glm-5.3"},
 	)
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)

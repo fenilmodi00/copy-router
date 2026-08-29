@@ -1,0 +1,52 @@
+{
+  "meta": {
+    "comment": "v0.60 — fork of v0.59 deployed-model set. Goal: fix v0.59 routing hard agentic coding to weak models (SWE-bench Pro 8.9% / SWE-Atlas QnA 4.4% vs direct opus 21-22%). Two changes vs v0.59: (1) merge 5,820 Tier 3 SWE-bench Verified Easy solve labels into training so coding clusters get real solve-rate signal; (2) proxy claude-opus-4-8's RouterArena profile from claude-opus-4-7 so opus-4-8 has a balanced easy-prompt baseline instead of a flat global-prior backfill that otherwise makes it win every cluster. score_normalization switched minmax->zscore so opus's absolute coding margin survives instead of collapsing to per-prompt 0/1 ties.",
+    "last_refreshed": "2026-06-03",
+    "parent": "v0.72",
+    "training_recipe": "k=16, alpha=0.80, shrinkage_k0=10, score_normalization=zscore, output_cost_ratio=0.25, speed_weight=0.08, per_model_verbosity=true, include_aa_labels (v0.56-keyed), aa_evidence_scale=3.0. Direct labels: routerarena_labels_combined.jsonl (236k rows) + Tier 3 SWE-bench Easy shards (tier3-full-20260527 + tier3-opus48-20260529, 5820 shards). measured_speed/verbosity from tier1_20260530.json. opus-4-8 proxies opus-4-7 RouterArena column + own swebench column."
+  },
+  "deployed_models": [
+    {
+      "model": "deepseek-ai/deepseek-v4-flash",
+      "provider": "aiand",
+      "bench_column": "routerarena_deepseek/deepseek-v4-flash",
+      "proxy": true,
+      "proxy_note": "v0.77 overlay: kept from v0.76."
+    },
+    {
+      "model": "zai-org/glm-5.3",
+      "provider": "aiand",
+      "bench_column": "routerarena_z-ai/glm-5.2",
+      "proxy": true,
+      "proxy_note": "GLM-5.3 replaces GLM-5.2 — per-cluster quality x1.02/0.97 of GLM-5.2 values (probe 30 prompts, 2026-08-29)."
+    },
+    {
+      "model": "moonshotai/kimi-k2.7-code",
+      "provider": "aiand",
+      "bench_column": "routerarena_moonshotai/kimi-k2.6",
+      "proxy": true,
+      "proxy_note": "v0.77 overlay: kept from v0.76."
+    },
+    {
+      "model": "moonshotai/kimi-k3",
+      "provider": "aiand",
+      "bench_column": "routerarena_moonshotai/kimi-k2.6",
+      "proxy": true,
+      "proxy_note": "kimi-k3 wins HARD_K3 {0,13} at 1.03x maxpool. Below tier leader elsewhere (0.97x)."
+    },
+    {
+      "model": "motif-technologies/motif-3",
+      "provider": "aiand",
+      "bench_column": "routerarena_z-ai/glm-5",
+      "proxy": true,
+      "proxy_note": "motif-3 wins MID_M3 at Q_M3_WIN x maxpool (30-prompt medium-coding probe). Below tier leader elsewhere (0.92x)."
+    },
+    {
+      "model": "qwen/qwen3.8-27b",
+      "provider": "aiand",
+      "bench_column": "routerarena_qwen/qwen3.6-27b",
+      "proxy": true,
+      "proxy_note": "qwen3.8-27b joins as a TierLow pool model — per-cluster quality x0.92 of pool max; never wins a cluster (probe 30 prompts, 2026-08-29)."
+    }
+  ]
+}

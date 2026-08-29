@@ -32,8 +32,10 @@ func (r *playgroundExternalKeyRepo) Create(context.Context, auth.CreateExternalA
 func (r *playgroundExternalKeyRepo) GetForInstallation(context.Context, string) ([]*auth.ExternalAPIKey, error) {
 	return r.keys, nil
 }
-func (r *playgroundExternalKeyRepo) SoftDeleteByProvider(context.Context, string, string) error { return nil }
-func (r *playgroundExternalKeyRepo) SoftDelete(context.Context, string, string) error           { return nil }
+func (r *playgroundExternalKeyRepo) SoftDeleteByProvider(context.Context, string, string) error {
+	return nil
+}
+func (r *playgroundExternalKeyRepo) SoftDelete(context.Context, string, string) error { return nil }
 func (r *playgroundExternalKeyRepo) UpdateModelAliases(context.Context, string, string, map[string]string) (*auth.ExternalAPIKey, error) {
 	return nil, nil
 }
@@ -104,42 +106,42 @@ func TestPlaygroundRoute_NoMetadataLeak(t *testing.T) {
 func TestPlaygroundRoute_ForceModelThroughHeader(t *testing.T) {
 	svc := playgroundSvc(&playgroundFakeRouter{decision: router.Decision{
 		Provider: providers.ProviderAiand,
-		Model:    "zai-org/glm-5.2",
+		Model:    "zai-org/glm-5.3",
 		Reason:   "forced",
 	}})
 	rec := playgroundRoutePOST(admin.PlaygroundRouteHandler(svc, &auth.Service{}),
 		`{"model":"auto","messages":[{"role":"user","content":"hi"}]}`,
-		map[string]string{"x-weave-force-model": "zai-org/glm-5.2"})
+		map[string]string{"x-weave-force-model": "zai-org/glm-5.3"})
 	require.Equal(t, http.StatusOK, rec.Code)
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, "zai-org/glm-5.2", resp["model"])
+	assert.Equal(t, "zai-org/glm-5.3", resp["model"])
 }
 
 func TestPlaygroundRoute_ModelFieldBeatsHeader(t *testing.T) {
 	svc := playgroundSvc(&playgroundFakeRouter{decision: router.Decision{
 		Provider: providers.ProviderAiand,
-		Model:    "openai/gpt-oss-120b",
+		Model:    "qwen/qwen3.8-27b",
 		Reason:   "forced",
 	}})
 	rec := playgroundRoutePOST(admin.PlaygroundRouteHandler(svc, &auth.Service{}),
-		`{"model":"openai/gpt-oss-120b","messages":[{"role":"user","content":"hi"}]}`,
-		map[string]string{"x-weave-force-model": "zai-org/glm-5.2"})
+		`{"model":"qwen/qwen3.8-27b","messages":[{"role":"user","content":"hi"}]}`,
+		map[string]string{"x-weave-force-model": "zai-org/glm-5.3"})
 	require.Equal(t, http.StatusOK, rec.Code)
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, "openai/gpt-oss-120b", resp["model"])
+	assert.Equal(t, "qwen/qwen3.8-27b", resp["model"])
 }
 
 func TestPlaygroundRoute_ModelNullIsAuto(t *testing.T) {
 	svc := playgroundSvc(&playgroundFakeRouter{decision: router.Decision{
 		Provider: providers.ProviderAiand,
-		Model:    "zai-org/glm-5.2",
+		Model:    "zai-org/glm-5.3",
 		Reason:   "cluster",
 	}})
 	rec := playgroundRoutePOST(admin.PlaygroundRouteHandler(svc, &auth.Service{}),
 		`{"model":"auto","messages":[{"role":"user","content":"hi"}]}`,
-		map[string]string{"x-weave-force-model": "zai-org/glm-5.2"})
+		map[string]string{"x-weave-force-model": "zai-org/glm-5.3"})
 	require.Equal(t, http.StatusOK, rec.Code)
 }
 
@@ -173,7 +175,7 @@ func TestPlaygroundRoute_DecisionUpstreamIDNeverLegacy(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, "zai-org/glm-5.2", resp["model"])
+	assert.Equal(t, "zai-org/glm-5.3", resp["model"])
 }
 
 func TestPlaygroundRoute_ForceHeaderUnknown400(t *testing.T) {

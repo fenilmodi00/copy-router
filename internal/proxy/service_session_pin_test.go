@@ -1445,7 +1445,7 @@ func TestService_ForceModelHeader_WritesUserForcedPin(t *testing.T) {
 	ctx := authedCtx(uuid.New().String())
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	httpReq.Header.Set(proxy.ForceModelHeader, "opus")
+	httpReq.Header.Set(proxy.ForceModelHeader, "zai-org/glm-5.2")
 	require.NoError(t, svc.ProxyMessages(ctx, []byte(pinTestBodyAutoRoute), rec, httpReq))
 
 	store.mu.Lock()
@@ -1458,10 +1458,10 @@ func TestService_ForceModelHeader_WritesUserForcedPin(t *testing.T) {
 		}
 	}
 	require.NotNil(t, forced, "header must write a user_forced pin upsert")
-	assert.Equal(t, "zai-org/glm-5.2", forced.Model, "alias 'opus' resolves to the canonical id")
+	assert.Equal(t, "zai-org/glm-5.3", forced.Model, "alias 'zai-org/glm-5.2' resolves to the canonical id")
 	assert.Equal(t, providers.ProviderAiand, forced.Provider)
 	require.NotNil(t, fr.capturedReq)
-	assert.Equal(t, "zai-org/glm-5.2", fr.capturedReq.ForceModel, "valid force-model header must bypass router decorators")
+	assert.Equal(t, "zai-org/glm-5.3", fr.capturedReq.ForceModel, "valid force-model header must bypass router decorators")
 }
 
 // An unrecognized x-weave-force-model value fails the request: routing on

@@ -190,12 +190,12 @@ func TestWithCompaction_ZeroPctDisables(t *testing.T) {
 
 func TestSelectCompactionSummarizer_WindowAware(t *testing.T) {
 	prev := compactionSummarizerModels
-	compactionSummarizerModels = []string{"openai/gpt-oss-120b", "moonshotai/kimi-k3"}
+	compactionSummarizerModels = []string{"qwen/qwen3.8-27b", "moonshotai/kimi-k3"}
 	t.Cleanup(func() { compactionSummarizerModels = prev })
 
 	s := &Service{}
-	assert.Equal(t, "openai/gpt-oss-120b", s.selectCompactionSummarizer(1_000), "small history → cheaper small-window model")
-	assert.Equal(t, "moonshotai/kimi-k3", s.selectCompactionSummarizer(300_000), "history over gpt-oss window → large-window model")
+	assert.Equal(t, "qwen/qwen3.8-27b", s.selectCompactionSummarizer(1_000), "small history → cheaper small-window model")
+	assert.Equal(t, "moonshotai/kimi-k3", s.selectCompactionSummarizer(300_000), "history over qwen3.8 window → large-window model")
 	assert.Equal(t, "", s.selectCompactionSummarizer(5_000_000), "history over every window → none")
 }
 
@@ -205,9 +205,9 @@ func TestMaxEligibleContextWindow(t *testing.T) {
 	assert.Equal(t, 1_048_576+5_000, s.maxEligibleContextWindow(nil, nil, 5_000), "aiand flash strips Anthropic signatures, so sig savings expand the window")
 	assert.Equal(t, 0, s.maxEligibleContextWindow(map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}, nil, 0), "policy-excluding the only model leaves no window")
 
-	sStrip := &Service{availableModels: map[string]struct{}{"openai/gpt-oss-120b": {}}}
-	assert.Equal(t, 131_072, sStrip.maxEligibleContextWindow(nil, nil, 0))
-	assert.Equal(t, 131_072+5_000, sStrip.maxEligibleContextWindow(nil, nil, 5_000), "stripping model gains signature savings as headroom")
+	sStrip := &Service{availableModels: map[string]struct{}{"qwen/qwen3.8-27b": {}}}
+	assert.Equal(t, 262_144, sStrip.maxEligibleContextWindow(nil, nil, 0))
+	assert.Equal(t, 262_144+5_000, sStrip.maxEligibleContextWindow(nil, nil, 5_000), "stripping model gains signature savings as headroom")
 }
 
 func TestClassifyDispatchError_ContextWindowExceeded(t *testing.T) {

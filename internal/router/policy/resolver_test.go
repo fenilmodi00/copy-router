@@ -14,16 +14,16 @@ import (
 
 const (
 	modelFlash = "deepseek-ai/deepseek-v4-flash"
-	modelPro   = "deepseek-ai/deepseek-v4-pro"
+	modelMotif = "motif-technologies/motif-3"
 	modelKimi3 = "moonshotai/kimi-k3"
-	modelOss   = "openai/gpt-oss-120b"
+	modelQwen  = "qwen/qwen3.8-27b"
 )
 
 func catalogRosterID(model catalog.Model) string { return model.ID }
 
 func TestManagedResolverUsesCurrentProvidersAndNeverOpenRouter(t *testing.T) {
 	resolver := policy.NewResolver(
-		set(modelPro, "fictional-not-in-catalog"),
+		set(modelMotif, "fictional-not-in-catalog"),
 		set(providers.ProviderAiand, providers.ProviderOpenRouter),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
@@ -32,10 +32,10 @@ func TestManagedResolverUsesCurrentProvidersAndNeverOpenRouter(t *testing.T) {
 	resolved := resolver.Resolve(router.Request{})
 
 	require.Len(t, resolved.Candidates, 1)
-	assert.Equal(t, modelPro, resolved.Candidates[0].CatalogID)
+	assert.Equal(t, modelMotif, resolved.Candidates[0].CatalogID)
 	assert.Equal(t, providers.ProviderAiand, resolved.Candidates[0].Provider)
 	assert.NotEqual(t, providers.ProviderOpenRouter, resolved.Candidates[0].Provider)
-	assert.Equal(t, modelPro, resolved.Candidates[0].UpstreamID)
+	assert.Equal(t, modelMotif, resolved.Candidates[0].UpstreamID)
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
 		CatalogID: "fictional-not-in-catalog",
 		Reason:    policy.ExclusionUnknownCatalogModel,
@@ -126,7 +126,7 @@ func TestArmResolverRejectsRosterOnlySelectionForThreeBindings(t *testing.T) {
 
 func TestResolverAppliesHardFiltersAndPreferenceRanks(t *testing.T) {
 	resolver := policy.NewResolver(
-		set(modelKimi3, modelOss),
+		set(modelKimi3, modelQwen),
 		set(providers.ProviderAiand),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
@@ -134,7 +134,7 @@ func TestResolverAppliesHardFiltersAndPreferenceRanks(t *testing.T) {
 
 	resolved := resolver.Resolve(router.Request{
 		EnabledProviders: set(providers.ProviderAiand),
-		PreferredModels:  []string{modelOss, modelKimi3},
+		PreferredModels:  []string{modelQwen, modelKimi3},
 	})
 
 	require.Len(t, resolved.Candidates, 2)
@@ -144,12 +144,12 @@ func TestResolverAppliesHardFiltersAndPreferenceRanks(t *testing.T) {
 
 	none := resolver.Resolve(router.Request{
 		EnabledProviders: set(providers.ProviderAnthropic),
-		PreferredModels:  []string{modelOss, modelKimi3},
+		PreferredModels:  []string{modelQwen, modelKimi3},
 	})
 	assert.Empty(t, none.Candidates)
 	assert.Contains(t, none.Diagnostics, policy.Diagnostic{
-		CatalogID: modelOss,
-		RosterID:  modelOss,
+		CatalogID: modelQwen,
+		RosterID:  modelQwen,
 		Reason:    policy.ExclusionNoProvider,
 	})
 }
@@ -171,7 +171,7 @@ func TestResolverBuildsMappingOnlyFromFinalSoftFilteredPool(t *testing.T) {
 
 func TestResolverRejectsAmbiguousRosterMappings(t *testing.T) {
 	resolver := policy.NewResolver(
-		set(modelKimi3, modelOss),
+		set(modelKimi3, modelQwen),
 		set(providers.ProviderAiand),
 		func(catalog.Model) string { return "shared/arm" },
 		policy.ManagedProviderPolicy(),
@@ -321,7 +321,7 @@ func TestResolverKeepsRequestedExclusionWhenNoAllowlist(t *testing.T) {
 
 func TestResolverDirectlyEnforcesAllowlistForStrategySpecificCandidates(t *testing.T) {
 	resolver := policy.NewResolver(
-		set(modelOss),
+		set(modelQwen),
 		set(providers.ProviderAiand),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
@@ -333,7 +333,7 @@ func TestResolverDirectlyEnforcesAllowlistForStrategySpecificCandidates(t *testi
 
 	assert.Empty(t, resolved.Candidates)
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: modelOss,
+		CatalogID: modelQwen,
 		Reason:    policy.ExclusionNotAllowlisted,
 	})
 }

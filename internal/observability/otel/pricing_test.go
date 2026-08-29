@@ -17,18 +17,15 @@ func TestLookup(t *testing.T) {
 	}{
 		// ── aiand catalog (primary bindings) ─────────────────
 		{name: "deepseek-ai/deepseek-v4-flash", model: "deepseek-ai/deepseek-v4-flash", wantInput: 0.150, wantOutput: 0.250},
-		{name: "deepseek-ai/deepseek-v4-pro", model: "deepseek-ai/deepseek-v4-pro", wantInput: 1.000, wantOutput: 2.500},
 		{name: "moonshotai/kimi-k2.7", model: "moonshotai/kimi-k2.7", wantInput: 0.750, wantOutput: 3.500},
 		{name: "moonshotai/kimi-k3", model: "moonshotai/kimi-k3", wantInput: 3.000, wantOutput: 12.500},
-		{name: "openai/gpt-oss-120b", model: "openai/gpt-oss-120b", wantInput: 0.150, wantOutput: 0.600},
-		{name: "qwen/qwen3.6-27b", model: "qwen/qwen3.6-27b", wantInput: 0.320, wantOutput: 3.200},
-		{name: "google/gemma-4-31b-it", model: "google/gemma-4-31b-it", wantInput: 0.200, wantOutput: 0.500},
+		{name: "qwen/qwen3.8-27b", model: "qwen/qwen3.8-27b", wantInput: 0.400, wantOutput: 3.000},
 		{name: "motif-technologies/motif-3", model: "motif-technologies/motif-3", wantInput: 0.500, wantOutput: 2.000},
-		{name: "zai-org/glm-5.2", model: "zai-org/glm-5.2", wantInput: 1.000, wantOutput: 4.000},
+		{name: "zai-org/glm-5.3", model: "zai-org/glm-5.3", wantInput: 1.000, wantOutput: 4.000},
 
 		// ── Dated variants (8-digit suffix normalization) ──────
 		{name: "moonshotai/kimi-k3-20260101", model: "moonshotai/kimi-k3-20260101", wantInput: 3.000, wantOutput: 12.500},
-		{name: "zai-org/glm-5.2-20260528", model: "zai-org/glm-5.2-20260528", wantInput: 1.000, wantOutput: 4.000},
+		{name: "zai-org/glm-5.3-20260829", model: "zai-org/glm-5.3-20260829", wantInput: 1.000, wantOutput: 4.000},
 		{name: "deepseek-ai/deepseek-v4-flash-20251001", model: "deepseek-ai/deepseek-v4-flash-20251001", wantInput: 0.150, wantOutput: 0.250},
 
 		// ── Client aliases (no catalog row; zero pricing) ──────

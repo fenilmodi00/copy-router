@@ -1797,7 +1797,7 @@ func newCtxWindowScorer(t *testing.T, opts ctxWindowBundleOpts) *Scorer {
 	registry, err := loadRegistry([]byte(`{
 		"deployed_models": [
 			{"model": "moonshotai/kimi-k3", "provider": "aiand", "bench_column": "a", "proxy": true},
-			{"model": "openai/gpt-oss-120b", "provider": "aiand", "bench_column": "b", "proxy": true}
+			{"model": "qwen/qwen3.8-27b", "provider": "aiand", "bench_column": "b", "proxy": true}
 		]
 	}`))
 	require.NoError(t, err)
@@ -1805,8 +1805,8 @@ func newCtxWindowScorer(t *testing.T, opts ctxWindowBundleOpts) *Scorer {
 	qm := opts.qualityMeans
 	if qm == nil {
 		qm = Rankings{
-			0: {"moonshotai/kimi-k3": 0.4, "openai/gpt-oss-120b": 0.6},
-			1: {"moonshotai/kimi-k3": 0.6, "openai/gpt-oss-120b": 0.4},
+			0: {"moonshotai/kimi-k3": 0.4, "qwen/qwen3.8-27b": 0.6},
+			1: {"moonshotai/kimi-k3": 0.6, "qwen/qwen3.8-27b": 0.4},
 		}
 	}
 	kimiIn := opts.opusInputPer1K
@@ -1818,8 +1818,8 @@ func newCtxWindowScorer(t *testing.T, opts ctxWindowBundleOpts) *Scorer {
 		ossIn = 0.25
 	}
 	axes := map[string]ModelAxis{
-		"moonshotai/kimi-k3":  {InputPer1KUSD: &kimiIn},
-		"openai/gpt-oss-120b": {InputPer1KUSD: &ossIn},
+		"moonshotai/kimi-k3": {InputPer1KUSD: &kimiIn},
+		"qwen/qwen3.8-27b":   {InputPer1KUSD: &ossIn},
 	}
 
 	defaults := &DefaultRoutingKnobs{
@@ -1863,9 +1863,10 @@ func TestScorer_ContextWindowLargeEstPrefers1M(t *testing.T) {
 	winner, _ := argmax(scores, s.models)
 
 	require.InDelta(t, 1.548, float64(scores["moonshotai/kimi-k3"]), 1e-6, "1M model gets the large-window bump")
-	require.InDelta(t, 0.756, float64(scores["openai/gpt-oss-120b"]), 1e-6, "131K model gets a small penalty")
+	require.InDelta(t, 1.012, float64(scores["qwen/qwen3.8-27b"]), 1e-6,
+		"262K model sits at the 256K reference window, so its bump is ~zero")
 	assert.Equal(t, "moonshotai/kimi-k3", winner,
-		"large estimate (600K) must prefer the 1M-window kimi-k3 over the 131K gpt-oss")
+		"large estimate (600K) must prefer the 1M-window kimi-k3 over the 262K qwen3.8")
 }
 
 // A small estimate must not disturb the cheap model winning on merit: the
@@ -1877,8 +1878,8 @@ func TestScorer_ContextWindowSmallEstKeepsCheap(t *testing.T) {
 	scores := s.blendScoresV2([]int{0}, knobs, s.models, nil, nil, 10_000)
 	winner, _ := argmax(scores, s.models)
 
-	assert.Equal(t, "openai/gpt-oss-120b", winner,
-		"small estimate (10K) must not disturb the cheap 131K model winning on merit")
+	assert.Equal(t, "qwen/qwen3.8-27b", winner,
+		"small estimate (10K) must not disturb the cheap 262K model winning on merit")
 }
 
 // Weight 0.0 must be a strict no-op: the estimate has zero influence on scores.
@@ -1891,7 +1892,7 @@ func TestScorer_ContextWindowWeightZeroIsNoop(t *testing.T) {
 
 	assert.Equal(t, off, on, "weight 0.0 must yield identical scores regardless of estimate")
 	winner, _ := argmax(off, s.models)
-	assert.Equal(t, "openai/gpt-oss-120b", winner, "weight 0.0 must keep the base-blend winner")
+	assert.Equal(t, "qwen/qwen3.8-27b", winner, "weight 0.0 must keep the base-blend winner")
 }
 
 // A model absent from the catalog must fall back to DefaultContextWindow

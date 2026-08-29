@@ -52,7 +52,7 @@ func (e *ForcedModelUnknownError) Unwrap() error { return ErrForcedModelUnknown 
 // resolution in resolveForceModelWithEffort. Clients pinning a known catalog
 // model use its full ID; partial vendor names go through the cluster scorer.
 // ponytail: add back if a measurable caller base sends "claude" expecting
-// zai-org/glm-5.2 and the unknown-model rejection becomes a problem.
+// zai-org/glm-5.2 resolves via alias, so the unknown-model rejection becomes a problem only for genuinely unknown names.
 
 // resolveForceModelWithEffort strips a `:level` suffix and resolves the model
 // to its canonical catalog ID. `known` is true only for exact catalog matches;
@@ -373,9 +373,9 @@ func (s *Service) applyForceModelCommand(
 			"session_key_hex", fmt.Sprintf("%x", sessionKey),
 			"role", role,
 		)
-		msg = fmt.Sprintf("✦ **Weave Router** → force-model: %q isn't a recognized model · keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek-ai/deepseek-v4-flash, or zai-org/glm-5.2.\n\n", cmd.Model)
+		msg = fmt.Sprintf("✦ **Weave Router** → force-model: %q isn't a recognized model · keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek-ai/deepseek-v4-flash, or zai-org/glm-5.3.\n\n", cmd.Model)
 		if env.SourceFormat() == translate.FormatOpenAI {
-			msg = fmt.Sprintf("Weave Router: force-model: %q isn't a recognized model; keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek-ai/deepseek-v4-flash, or zai-org/glm-5.2.", cmd.Model)
+			msg = fmt.Sprintf("Weave Router: force-model: %q isn't a recognized model; keeping automatic routing. Use a full model ID, e.g. moonshotai/kimi-k3, deepseek-ai/deepseek-v4-flash, or zai-org/glm-5.3.", cmd.Model)
 		}
 		return "", msg, nil
 	}

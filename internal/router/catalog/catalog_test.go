@@ -109,8 +109,8 @@ func TestResolveBinding_V076RegistryIDs(t *testing.T) {
 
 func TestTierFor_KnownAndUnknown(t *testing.T) {
 	assert.Equal(t, TierLow, TierFor("deepseek-ai/deepseek-v4-flash"))
-	assert.Equal(t, TierMid, TierFor("deepseek-ai/deepseek-v4-pro"))
-	assert.Equal(t, TierHigh, TierFor("zai-org/glm-5.2"))
+	assert.Equal(t, TierLow, TierFor("qwen/qwen3.8-27b"))
+	assert.Equal(t, TierHigh, TierFor("zai-org/glm-5.3"))
 	assert.Equal(t, TierHigh, TierFor("moonshotai/kimi-k3"))
 	assert.Equal(t, TierUnknown, TierFor("definitely-not-a-model"))
 }
@@ -122,12 +122,13 @@ func TestByIDOrUpstream_MapsAiandRegistryIDs(t *testing.T) {
 		wantWireID string
 	}{
 		{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
-		{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4-flash"},
-		{"zai-org/glm-5.2", "zai-org/glm-5.2", "zai-org/glm-5.2"},
-		// Legacy alias z-ai/glm-5.2 (frozen v0.69–v0.74 + candidate-k12 artifacts)
-		// resolves to the canonical zai-org/glm-5.2 row; dispatch keeps the ai&
-		// wire name on the binding.
-		{"z-ai/glm-5.2", "zai-org/glm-5.2", "zai-org/glm-5.2"},
+		{"zai-org/glm-5.3", "zai-org/glm-5.3", "zai-org/glm-5.3"},
+		// Retired names (frozen v0.69–v0.76 artifacts, stored session pins)
+		// resolve to the successor rows; dispatch keeps the ai& wire name on
+		// the binding.
+		{"zai-org/glm-5.2", "zai-org/glm-5.3", "zai-org/glm-5.3"},
+		{"z-ai/glm-5.2", "zai-org/glm-5.3", "zai-org/glm-5.3"},
+		{"qwen/qwen3.6-27b", "qwen/qwen3.8-27b", "qwen/qwen3.8-27b"},
 		{"moonshotai/kimi-k2.7-code", "moonshotai/kimi-k2.7", "moonshotai/kimi-k2.7-code"},
 	}
 	for _, tt := range tests {
@@ -141,10 +142,11 @@ func TestByIDOrUpstream_MapsAiandRegistryIDs(t *testing.T) {
 	_, ok := ByIDOrUpstream("not-a-real-upstream-id")
 	assert.False(t, ok)
 }
-
 func TestContextWindowFor_ResolvesUpstreamRegistryIDs(t *testing.T) {
+	assert.Equal(t, 1_048_576, ContextWindowFor("zai-org/glm-5.3"),
+		"canon id zai-org/glm-5.3 resolves to its own 1M window")
 	assert.Equal(t, 1_048_576, ContextWindowFor("zai-org/glm-5.2"),
-		"canon id zai-org/glm-5.2 resolves to its own 1M window")
+		"retired id zai-org/glm-5.2 must resolve to the successor's 1M window via the alias")
 	assert.Equal(t, 1_048_576, ContextWindowFor("z-ai/glm-5.2"),
 		"legacy id z-ai/glm-5.2 must resolve to the same 1M window via the alias")
 	assert.Equal(t, 1_048_576, ContextWindowFor("deepseek-ai/deepseek-v4-flash"),
@@ -153,6 +155,7 @@ func TestContextWindowFor_ResolvesUpstreamRegistryIDs(t *testing.T) {
 		"upstream ID moonshotai/kimi-k2.7-code must resolve to moonshotai/kimi-k2.7's 256K window")
 	assert.Equal(t, 1_048_576, ContextWindowFor("moonshotai/kimi-k3"))
 	assert.Equal(t, 262_144, ContextWindowFor("motif-technologies/motif-3"))
+	assert.Equal(t, 262_144, ContextWindowFor("qwen/qwen3.8-27b"))
 	assert.Equal(t, DefaultContextWindow, ContextWindowFor("definitely-not-a-model"))
 }
 
@@ -167,7 +170,7 @@ func TestCatalog_EveryModelDeclaresReasoningEfforts(t *testing.T) {
 		seen := make(map[string]struct{}, len(m.ReasoningEfforts))
 		for _, level := range m.ReasoningEfforts {
 			assert.Contains(t, map[string]struct{}{
-				EffortNone: {}, EffortLow: {}, EffortMedium: {}, EffortHigh: {}, EffortMax: {},
+				EffortNone: {}, EffortLow: {}, EffortMedium: {}, EffortHigh: {}, EffortXHigh: {}, EffortMax: {},
 			}, level, "%s: unexpected effort %q", m.ID, level)
 			_, dup := seen[level]
 			assert.Falsef(t, dup, "%s: duplicate effort %q", m.ID, level)
@@ -196,18 +199,20 @@ func TestCapabilitiesFor_UsesCatalogReasoningEfforts(t *testing.T) {
 	require.True(t, spec.Supports(router.CapReasoning))
 	assert.Equal(t, []string{EffortNone, EffortHigh, EffortMax}, spec.Reasoning().Levels)
 
-	spec = CapabilitiesFor("deepseek-ai/deepseek-v4-flash") // upstream ID
-	assert.Equal(t, []string{EffortNone, EffortHigh, EffortMax}, spec.Reasoning().Levels)
-
 	spec = CapabilitiesFor("moonshotai/kimi-k3")
 	assert.Equal(t, []string{EffortLow, EffortHigh, EffortMax}, spec.Reasoning().Levels)
 
-	spec = CapabilitiesFor("openai/gpt-oss-120b")
-	assert.Equal(t, []string{EffortLow, EffortMedium, EffortHigh}, spec.Reasoning().Levels)
+	spec = CapabilitiesFor("zai-org/glm-5.3")
+	assert.Equal(t, []string{EffortNone, EffortLow, EffortXHigh, EffortMax}, spec.Reasoning().Levels)
+
+	spec = CapabilitiesFor("qwen/qwen3.8-27b")
+	assert.Equal(t, []string{EffortNone, EffortLow, EffortMedium, EffortXHigh}, spec.Reasoning().Levels)
 }
 
 func TestReasoningEffortsFor(t *testing.T) {
-	assert.Equal(t, []string{EffortNone, EffortHigh, EffortMax}, ReasoningEffortsFor("zai-org/glm-5.2"))
+	assert.Equal(t, []string{EffortNone, EffortLow, EffortXHigh, EffortMax}, ReasoningEffortsFor("zai-org/glm-5.3"))
+	assert.Equal(t, []string{EffortNone, EffortLow, EffortXHigh, EffortMax}, ReasoningEffortsFor("zai-org/glm-5.2"),
+		"retired glm-5.2 name resolves via alias to the successor's live menu")
 	assert.Nil(t, ReasoningEffortsFor("definitely-not-a-model"))
 }
 
