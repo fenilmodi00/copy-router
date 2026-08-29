@@ -375,7 +375,7 @@ def write_metadata(dst: Path, q53_on: float, q53_off: float, n_prompts, test_dat
         "flash wins FLASH_5 {2,9,10,11,15}. "
         "glm-5.3 quality = glm-5.2's per-cluster values x probe factor "
         f"({q53_on} on hard clusters {{0,13}}, {q53_off} elsewhere; "
-        f"{n_prompts}-prompt probe {test_date}). "
+        f"AA Index ratio 60/53 = 1.132 capped to {q53_on}). "
         f"qwen3.8-27b quality = pool max x {q_qwen38_off} everywhere (TierLow pool model, wins no clusters). "
         "GLM-5.3 shares GLM-5.2's 743B base with better agentic benchmarks "
         "(AA Index 60 vs 53, Terminal-Bench 3.0 28.3 vs 4.6, DeepSWE v1.1 66.9 vs 46.2). "
