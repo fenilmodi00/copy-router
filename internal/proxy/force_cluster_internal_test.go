@@ -68,7 +68,7 @@ func TestApplyForceClusterHeader_RejectsNonSidecarStrategy(t *testing.T) {
 func TestProxyMessages_ForceClusterOnNonSidecarStrategyRejects(t *testing.T) {
 	fr := &stripFailureRouter{}
 	fp := &stripFailureProvider{}
-	svc := NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: fp}, nil, false, nil, nil, false,
+	svc := NewService(fr, map[string]providers.Client{providers.ProviderAiand: fp}, nil, false, nil, nil, false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil)
 
 	body := `{"model":"moonshotai/kimi-k3","max_tokens":64,"messages":[{"role":"user","content":"hi"}]}`
@@ -98,12 +98,12 @@ func (r *forceClusterCapturingRouter) Route(_ context.Context, req router.Reques
 func TestProxyMessages_ForceClusterReachesRouterRequest(t *testing.T) {
 	strategy := router.StrategyHMM
 	fr := &forceClusterCapturingRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "hmm_policy:force_cluster",
 	}}
 	fp := &stripFailureProvider{}
-	svc := NewService(nil, map[string]providers.Client{providers.ProviderAnthropic: fp}, nil, false, nil, nil, false,
+	svc := NewService(nil, map[string]providers.Client{providers.ProviderAiand: fp}, nil, false, nil, nil, false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithPolicyStrategy(policy.StrategySpec{Strategy: strategy, Router: fr})
 

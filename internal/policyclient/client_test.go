@@ -28,7 +28,7 @@ func TestClientPostsVersionedRouteAndParsesPolicyMetadata(t *testing.T) {
 			RouteID:              "route-1",
 			SelectedArmID:        "arm-kimi-fireworks",
 			SelectedRosterID:     "moonshotai/kimi-k2.7-code",
-			SelectedProvider:     providers.ProviderFireworks,
+			SelectedProvider:     providers.ProviderAiand,
 			ChosenScore:          floatPtr(0.91),
 			CandidateScores:      map[string]float32{"moonshotai/kimi-k2.7-code": 0.91},
 			ScoreLabel:           "classifier_confidence",
@@ -81,7 +81,7 @@ func TestClientPostsVersionedRouteAndParsesPolicyMetadata(t *testing.T) {
 			SessionTurnCount:    9,
 			TurnType:            "tool_result",
 			PreviousServedModel: "claude-opus-4-8",
-			PreviousProvider:    providers.ProviderAnthropic,
+			PreviousProvider:    providers.ProviderAiand,
 			CacheState:          router.PolicyCacheStateWarm,
 			PriorOutputTokens:   intPointer(321),
 			SessionEverSwitched: true,
@@ -96,7 +96,7 @@ func TestClientPostsVersionedRouteAndParsesPolicyMetadata(t *testing.T) {
 			ArmID:          "arm-kimi-fireworks",
 			RosterID:       "moonshotai/kimi-k2.7-code",
 			CatalogID:      "moonshotai/kimi-k2.7",
-			Provider:       providers.ProviderFireworks,
+			Provider:       providers.ProviderAiand,
 			UpstreamID:     "accounts/fireworks/models/kimi-k2p5",
 			PreferenceRank: &preferenceRank,
 		}},
@@ -125,7 +125,7 @@ func TestClientPostsVersionedRouteAndParsesPolicyMetadata(t *testing.T) {
 	assert.Equal(t, 9, *got.SessionTurnCount)
 	assert.Equal(t, "tool_result", got.TurnType)
 	assert.Equal(t, "claude-opus-4-8", got.PreviousServedModel)
-	assert.Equal(t, providers.ProviderAnthropic, got.PreviousProvider)
+	assert.Equal(t, providers.ProviderAiand, got.PreviousProvider)
 	assert.Equal(t, router.PolicyCacheStateWarm, got.CacheState)
 	require.NotNil(t, got.PriorOutputTokens)
 	assert.Equal(t, 321, *got.PriorOutputTokens)
@@ -154,7 +154,7 @@ func TestClientPostsVersionedRouteAndParsesPolicyMetadata(t *testing.T) {
 	assert.Equal(t, "moonshotai/kimi-k2.7", got.Candidates[0].CatalogID)
 	assert.Equal(t, "accounts/fireworks/models/kimi-k2p5", got.Candidates[0].UpstreamID)
 	assert.Equal(t, "balanced|open", result.PolicyRouteKey)
-	assert.Equal(t, providers.ProviderFireworks, result.Provider)
+	assert.Equal(t, providers.ProviderAiand, result.Provider)
 	assert.Equal(t, "hmm-prod", result.PolicyArtifactID)
 	assert.Equal(t, "sha256:abc", result.PolicyArtifactSHA256)
 	assert.Equal(t, "roster-v2", result.RosterVersion)
@@ -175,7 +175,7 @@ func decideWithTimings(t *testing.T, timings *routeTimings) policy.Result {
 	defer server.Close()
 
 	result, err := New(server.URL, server.Client(), 0).Decide(context.Background(), policy.Query{
-		Candidates: []policy.Candidate{{RosterID: "anthropic/claude-opus-4-8", CatalogID: "claude-opus-4-8", Provider: providers.ProviderAnthropic}},
+		Candidates: []policy.Candidate{{RosterID: "anthropic/claude-opus-4-8", CatalogID: "claude-opus-4-8", Provider: providers.ProviderAiand}},
 	})
 	require.NoError(t, err)
 	return result
@@ -222,7 +222,7 @@ func TestClientDecideLeavesTimingsNilWhenOmittedEntirely(t *testing.T) {
 	defer server.Close()
 
 	result, err := New(server.URL, server.Client(), 0).Decide(context.Background(), policy.Query{
-		Candidates: []policy.Candidate{{RosterID: "anthropic/claude-opus-4-8", CatalogID: "claude-opus-4-8", Provider: providers.ProviderAnthropic}},
+		Candidates: []policy.Candidate{{RosterID: "anthropic/claude-opus-4-8", CatalogID: "claude-opus-4-8", Provider: providers.ProviderAiand}},
 	})
 
 	require.NoError(t, err)
@@ -312,7 +312,7 @@ func TestClientOmitsV2CandidateFieldsFromV1(t *testing.T) {
 			ArmID:                        "arm-fireworks",
 			RosterID:                     "deepseek-ai/deepseek-v4-pro",
 			CatalogID:                    "deepseek-ai/deepseek-v4-pro",
-			Provider:                     providers.ProviderFireworks,
+			Provider:                     providers.ProviderAiand,
 			BindingIndex:                 0,
 			Endpoint:                     string(router.EndpointAnthropicMessages),
 			ModelRevision:                "2026-07-20",
@@ -358,14 +358,14 @@ func TestClientPostsArmProviderMapForV2(t *testing.T) {
 				ArmID:        "arm-fireworks",
 				RosterID:     "deepseek-ai/deepseek-v4-pro",
 				CatalogID:    "deepseek-ai/deepseek-v4-pro",
-				Provider:     providers.ProviderFireworks,
+				Provider:     providers.ProviderAiand,
 				BindingIndex: 0,
 			},
 			{
 				ArmID:        "arm-makora",
 				RosterID:     "deepseek-ai/deepseek-v4-pro",
 				CatalogID:    "deepseek-ai/deepseek-v4-pro",
-				Provider:     providers.ProviderMakora,
+				Provider:     providers.ProviderAiand,
 				BindingIndex: 1,
 			},
 		},
@@ -373,8 +373,8 @@ func TestClientPostsArmProviderMapForV2(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{
-		"arm-fireworks": providers.ProviderFireworks,
-		"arm-makora":    providers.ProviderMakora,
+		"arm-fireworks": providers.ProviderAiand,
+		"arm-makora":    providers.ProviderAiand,
 	}, got.CandidateProviders)
 	assert.Equal(t, []string{"arm-fireworks", "arm-makora"}, got.CandidateModels)
 	require.NotNil(t, got.Candidates[0].BindingIndex)
@@ -410,7 +410,7 @@ func TestClientAcceptsLegacyRouteResponse(t *testing.T) {
 	defer server.Close()
 
 	result, err := New(server.URL, server.Client(), 0).Decide(context.Background(), policy.Query{
-		Candidates: []policy.Candidate{{RosterID: "anthropic/claude-opus-4-8", CatalogID: "claude-opus-4-8", Provider: providers.ProviderAnthropic}},
+		Candidates: []policy.Candidate{{RosterID: "anthropic/claude-opus-4-8", CatalogID: "claude-opus-4-8", Provider: providers.ProviderAiand}},
 	})
 
 	require.NoError(t, err)
@@ -451,8 +451,8 @@ func TestClientPreviewPostsNonLearningRequestAndReturnsEveryArm(t *testing.T) {
 		RouteID:         "preview-1",
 		TrainingAllowed: false,
 		Candidates: []policy.Candidate{
-			{RosterID: "arm-a", CatalogID: "model-a", Provider: providers.ProviderAnthropic},
-			{RosterID: "arm-b", CatalogID: "model-b", Provider: providers.ProviderOpenAI},
+			{RosterID: "arm-a", CatalogID: "model-a", Provider: providers.ProviderAiand},
+			{RosterID: "arm-b", CatalogID: "model-b", Provider: providers.ProviderAiand},
 		},
 	})
 

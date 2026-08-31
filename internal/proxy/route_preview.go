@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"workweave/router/internal/billing"
 	"workweave/router/internal/observability"
 	"workweave/router/internal/providers"
 	"workweave/router/internal/router"
@@ -52,15 +51,12 @@ func (s *Service) openAIRoutingRequest(ctx context.Context, body []byte, headers
 		promptText = features.OnlyUserMessageText
 	}
 
-	enabledProviders := s.enabledProvidersForRequest(ctx, providers.ProviderOpenAI, headers)
-	if billing.SubscriptionOnlyFromContext(ctx) {
-		enabledProviders = restrictToSubscriptionProviders(ctx, headers, enabledProviders)
-	}
+	enabledProviders := s.enabledProvidersForRequest(ctx, providers.ProviderAiand, headers)
 	outputReserve := contextWindowOutputReserve
 	if features.MaxTokens > outputReserve {
 		outputReserve = features.MaxTokens
 	}
-	excluded := s.excludeCodexOAuthOnlyModels(ctx, headers, enabledProviders, s.excludedModelsForRequest(ctx))
+	excluded := s.excludedModelsForRequest(ctx)
 	excluded, _ = excludeContextOverflowModels(
 		env.ContextOverflowTokenEstimate(),
 		env.SignatureTokenSavings(),
@@ -91,7 +87,6 @@ func (s *Service) openAIRoutingRequest(ctx context.Context, body []byte, headers
 		InstallationID:               installationID,
 		ClientSessionID:              clientSessionIDForRequest(ctx, env),
 		EnabledProviders:             enabledProviders,
-		CustomBindings:               s.customBindingsForRequest(ctx),
 		ExcludedModels:               excluded,
 		AllowedModels:                allowedModelsForRequest(ctx),
 		PreferredModels:              s.preferredModelsForRequest(ctx),
@@ -165,15 +160,12 @@ func (s *Service) anthropicRoutingRequest(
 		promptText = features.OnlyUserMessageText
 	}
 
-	enabledProviders := s.enabledProvidersForRequest(ctx, providers.ProviderAnthropic, headers)
-	if billing.SubscriptionOnlyFromContext(ctx) {
-		enabledProviders = restrictToSubscriptionProviders(ctx, headers, enabledProviders)
-	}
+	enabledProviders := s.enabledProvidersForRequest(ctx, providers.ProviderAiand, headers)
 	outputReserve := contextWindowOutputReserve
 	if features.MaxTokens > outputReserve {
 		outputReserve = features.MaxTokens
 	}
-	excluded := s.excludeCodexOAuthOnlyModels(ctx, headers, enabledProviders, s.excludedModelsForRequest(ctx))
+	excluded := s.excludedModelsForRequest(ctx)
 	excluded, _ = excludeContextOverflowModels(
 		env.ContextOverflowTokenEstimate(),
 		env.SignatureTokenSavings(),
@@ -204,7 +196,6 @@ func (s *Service) anthropicRoutingRequest(
 		InstallationID:               installationID,
 		ClientSessionID:              clientSessionIDForRequest(ctx, env),
 		EnabledProviders:             enabledProviders,
-		CustomBindings:               s.customBindingsForRequest(ctx),
 		ExcludedModels:               excluded,
 		AllowedModels:                allowedModelsForRequest(ctx),
 		PreferredModels:              s.preferredModelsForRequest(ctx),

@@ -173,12 +173,11 @@ func (s *Service) maybeCompact(ctx context.Context, env *translate.RequestEnvelo
 	return res, fmt.Errorf("context ~%d tokens over largest window %d: %w", res.FinalEstimate, maxWindow, ErrContextWindowExceeded)
 }
 
-// billCompactionSummary debits the compaction summary call as its own ledger
-// row and records its session-tagged telemetry row (mirrors the
-// switch-handover summary billing). No-ops when billing is unwired or the
-// usage carries no tokens.
-func (s *Service) billCompactionSummary(ctx context.Context, requestID, externalID string, usage handover.Usage) {
-	s.billAuxiliaryInference(ctx, requestID, auxSuffixPrecompactionSummary, externalID, usage)
+// emitCompactionSummaryTelemetry records the compaction summary call's
+// session-tagged telemetry row (mirrors the switch-handover summary). No-ops
+// when the usage carries no tokens.
+func (s *Service) emitCompactionSummaryTelemetry(ctx context.Context, requestID, externalID string, usage handover.Usage) {
+	s.emitAuxiliaryInferenceTelemetry(ctx, requestID, auxSuffixPrecompactionSummary, externalID, usage)
 }
 
 // runCompactionSummary picks a window-aware summarizer model and dispatches the

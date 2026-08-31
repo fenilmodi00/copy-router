@@ -36,20 +36,10 @@ function safeNext(raw: string | null): string {
   return raw;
 }
 
-// "loading" — initial mount, still probing the deployment for an account
-// login surface. "aiand" — GET /account/v1/me returned 200 with
-// authenticated:false, so the dashboard is in self-service mode and wants
-// the sk- key form. "admin" — the probe threw (404 /network error), meaning
-// the deployment is selfhosted/managed with no account surface; render the
-// existing admin-password form.
-type LoginMode = "loading" | "aiand" | "admin";
-
 function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
   const next = safeNext(params.get("next"));
-
-  const [mode, setMode] = useState<LoginMode>("loading");
 
   useEffect(() => {
     let cancelled = false;
@@ -60,38 +50,17 @@ function LoginInner() {
         if (cancelled) return;
         if (res.authenticated) {
           router.replace(next);
-        } else {
-          setMode("aiand");
         }
       })
       .catch(() => {
-        if (cancelled) return;
-        setMode("admin");
+        // Probe failures (session expired) fall through to the form below.
       });
     return () => {
       cancelled = true;
     };
   }, [router, next]);
 
-  if (mode === "loading") {
-    return (
-      <div className="w-full max-w-sm rounded-lg border border-border-darker bg-background p-6 shadow-sm">
-        <div className="mb-6 flex items-center gap-3">
-          <Skeleton className="h-8 w-8" />
-          <div className="flex flex-1 flex-col gap-2">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-3 w-40" />
-          </div>
-        </div>
-        <div className="space-y-3">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-        </div>
-      </div>
-    );
-  }
-  if (mode === "aiand") return <AiandKeyForm next={next} />;
-  return <AdminPasswordForm next={next} />;
+  return <AiandKeyForm next={next} />;
 }
 
 function AiandKeyForm({ next }: { next: string }) {
@@ -166,84 +135,6 @@ function AiandKeyForm({ next }: { next: string }) {
 
       <p className="mt-4 text-2xs text-muted-foreground">
         Use the aiand API key from your account. Your session is stored in a cookie set by the router.
-      </p>
-    </div>
-  );
-}
-
-function AdminPasswordForm({ next }: { next: string }) {
-  const router = useRouter();
-  const [password, setPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!password) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await api.auth.login(password);
-      router.replace(next);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Sign-in failed.";
-      if (message.includes("503")) {
-        setError("Admin sign-in is disabled. Set ROUTER_ADMIN_PASSWORD on the router and restart.");
-      } else if (message.includes("401")) {
-        setError("Wrong password.");
-      } else {
-        setError(message);
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="w-full max-w-sm rounded-lg border border-border-darker bg-background p-6 shadow-sm">
-      <div className="mb-6 flex items-center gap-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/ui/aiand.svg" alt="aiand-auto" width={29} height={32} className="h-8 w-auto" />
-        <div>
-          <h1 className="font-display text-base font-semibold text-foreground">aiand-auto</h1>
-          <p className="text-2xs text-muted-foreground">Sign in to the dashboard</p>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-3" autoComplete="off">
-        <Input
-          label="Admin password"
-          type="password"
-          name="router-admin-password"
-          autoComplete="off"
-          data-1p-ignore
-          data-lpignore="true"
-          data-form-type="other"
-          autoFocus
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Value of ROUTER_ADMIN_PASSWORD"
-          required
-        />
-        {error && (
-          <p className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-2xs text-danger">
-            {error}
-          </p>
-        )}
-        <Button
-          type="submit"
-          appearance={Appearance.Filled}
-          intent={Intent.Primary}
-          className="w-full"
-          disabled={submitting || password === ""}
-        >
-          {submitting ? "Signing in…" : "Sign in"}
-        </Button>
-      </form>
-
-      <p className="mt-4 text-2xs text-muted-foreground">
-        Set <code className="rounded bg-muted px-1 py-0.5 font-mono">ROUTER_ADMIN_PASSWORD</code> in your
-        router&rsquo;s environment to control this password.
       </p>
     </div>
   );

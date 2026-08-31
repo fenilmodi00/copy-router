@@ -92,7 +92,7 @@ func TestProxyMessages_SiblingFailoverOntoOpenAIUsesResponses(t *testing.T) {
 	failing := &alwaysFailingClient{}
 	rescue := &responsesRetryClient{}
 	decision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "claude-opus-5",
 		Reason:   "test",
 		Metadata: &router.RoutingMetadata{
@@ -103,13 +103,11 @@ func TestProxyMessages_SiblingFailoverOntoOpenAIUsesResponses(t *testing.T) {
 	svc := NewService(
 		staticRouter{decision: decision},
 		map[string]providers.Client{
-			providers.ProviderAnthropic: failing,
-			providers.ProviderAiand:     rescue,
+			providers.ProviderAiand: failing,
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAiand, "claude-haiku-4-5", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
-		providers.ProviderAnthropic: {},
-		providers.ProviderAiand:     {},
+		providers.ProviderAiand: {},
 	})
 	svc.retrySleep = noopSleep
 

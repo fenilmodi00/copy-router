@@ -72,7 +72,7 @@ describe("api.playground", () => {
 		await api.playground.chat({ messages: [] }, { signal: controller.signal });
 
 		expect(fetchMock).toHaveBeenCalledWith(
-			"/admin/v1/playground/chat",
+			"/v1/playground/chat",
 			expect.objectContaining({ signal: controller.signal }),
 		);
 	});
@@ -93,7 +93,7 @@ describe("api.playground", () => {
 		);
 
 		expect(fetchMock).toHaveBeenCalledWith(
-			"/admin/v1/playground/chat",
+			"/v1/playground/chat",
 			expect.objectContaining({
 				headers: expect.objectContaining({
 					"x-weave-force-model": "deepseek-ai/deepseek-v4-flash",
@@ -118,7 +118,7 @@ describe("api.playground", () => {
 		);
 
 		expect(fetchMock).toHaveBeenCalledWith(
-			"/admin/v1/playground/chat",
+			"/v1/playground/chat",
 			expect.objectContaining({
 				headers: expect.objectContaining({
 					"X-Playground-Session": "sess_abc123",

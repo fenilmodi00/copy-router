@@ -28,7 +28,6 @@ func (c *Client) ListModels(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("build model-list request: %w", err)
 	}
 	c.setAuth(ctx, upstream)
-	proxy.ApplyWIFTokenType(ctx, upstream)
 	proxy.ApplyIdentityHeader(ctx, upstream)
 
 	resp, err := c.http.Do(upstream)

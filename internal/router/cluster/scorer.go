@@ -352,13 +352,6 @@ func (s *Scorer) applyDialAlpha(t float64, alpha, floor []float64) {
 // model: an untiered row is passthrough-only, and a frozen bundle's
 // registry still names models the catalog has since stopped routing to.
 func resolveProviderFor(modelID, registryProvider string, available map[string]struct{}) string {
-	return resolveProviderWithCustom(modelID, registryProvider, available, nil)
-}
-
-// resolveProviderWithCustom is resolveProviderFor plus the request's
-// configuration-declared bindings, which rank after every catalog binding so
-// a custom endpoint only serves what no wired vendor already does.
-func resolveProviderWithCustom(modelID, registryProvider string, available map[string]struct{}, custom map[string][]string) string {
 	m, ok := catalog.ByID(modelID)
 	if !ok {
 		if _, ok := available[registryProvider]; ok {
@@ -374,7 +367,7 @@ func resolveProviderWithCustom(modelID, registryProvider string, available map[s
 			return b.Provider
 		}
 	}
-	return catalog.CustomProviderFor(modelID, available, custom)
+	return ""
 }
 
 // filterByProviders drops entries with no ProviderBinding resolvable under
@@ -505,7 +498,7 @@ func (s *Scorer) Route(ctx context.Context, req router.Request) (router.Decision
 	if req.EnabledProviders != nil {
 		eligibleModels = eligibleModels[:0:0]
 		for _, c := range s.candidates {
-			r := resolveProviderWithCustom(c.Model, c.Provider, req.EnabledProviders, req.CustomBindings)
+			r := resolveProviderFor(c.Model, c.Provider, req.EnabledProviders)
 			if r == "" {
 				continue
 			}

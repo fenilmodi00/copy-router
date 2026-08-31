@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"testing"
 
-	"workweave/router/internal/billing"
 	"workweave/router/internal/providers"
 	"workweave/router/internal/proxy"
 	"workweave/router/internal/router/bandit"
@@ -102,18 +101,6 @@ func TestClassifyDispatchError_BanditRLandHMMUnavailableRetry(t *testing.T) {
 	}
 }
 
-func TestClassifyDispatchError_CreditsExhaustedIs402(t *testing.T) {
-	cls, ok := proxy.ClassifyDispatchError(proxy.ErrCreditsExhaustedSubscriptionUnavailable)
-
-	require.True(t, ok, "the credits-exhausted sentinel must be classified")
-	assert.Equal(t, proxy.DispatchErrorCreditsExhausted, cls.Kind)
-	assert.Equal(t, http.StatusPaymentRequired, cls.Status)
-	assert.Contains(t, cls.Message, "credits are exhausted", "the client message must explain the depleted balance")
-	assert.Contains(t, cls.Message, "weave-router", "the client message must surface the top-up CTA")
-	assert.Equal(t, "warn", cls.LogLevel)
-	assert.False(t, cls.RetryAfter, "a retry won't help until credits are added")
-}
-
 func TestClassifyDispatchError_NotImplementedDoesNotLog(t *testing.T) {
 	cls, ok := proxy.ClassifyDispatchError(providers.ErrNotImplemented)
 
@@ -140,31 +127,6 @@ func TestClassifyDispatchError_TranslationCompatibleProviderUnavailableIs503(t *
 	assert.Equal(t, http.StatusServiceUnavailable, cls.Status)
 	assert.False(t, cls.Kind.IsClientError())
 	assert.True(t, cls.RetryAfter)
-}
-
-func TestClassifyDispatchError_UserSpendLimitReachedIs402(t *testing.T) {
-	err := fmt.Errorf("%w: spent 5 of 5 usd micros", billing.ErrUserMonthlySpendLimitReached)
-
-	cls, ok := proxy.ClassifyDispatchError(err)
-
-	require.True(t, ok)
-	assert.Equal(t, proxy.DispatchErrorUserSpendLimitReached, cls.Kind)
-	assert.Equal(t, http.StatusPaymentRequired, cls.Status)
-	assert.False(t, cls.RetryAfter)
-	assert.Equal(t, "warn", cls.LogLevel)
-	assert.False(t, cls.Kind.IsClientError())
-}
-
-func TestClassifyDispatchError_SpendLimitUnavailableFailsClosed503(t *testing.T) {
-	err := fmt.Errorf("%w: %v", billing.ErrSpendLimitCheckUnavailable, errors.New("pg down"))
-
-	cls, ok := proxy.ClassifyDispatchError(err)
-
-	require.True(t, ok)
-	assert.Equal(t, proxy.DispatchErrorSpendLimitUnavailable, cls.Kind)
-	assert.Equal(t, http.StatusServiceUnavailable, cls.Status)
-	assert.True(t, cls.RetryAfter)
-	assert.Equal(t, "error", cls.LogLevel)
 }
 
 func TestClassifyDispatchError_AnthropicCacheControlOverflowIs400(t *testing.T) {

@@ -72,14 +72,14 @@ func TestListUpstreamModelsHandler_ReturnsEndpointModels(t *testing.T) {
 	key := &auth.ExternalAPIKey{
 		ID:             "ext-1",
 		InstallationID: testInstallationID,
-		Provider:       providers.ProviderOpenAIGateway,
+		Provider:       providers.ProviderAiand,
 		Plaintext:      []byte("sk-byok"),
 		BaseURL:        "https://cortex.example/api/v2/cortex/v1",
 	}
 	lister := &modelListingClient{models: []string{"claude-fable-5", "snowflake-llama-70b"}}
 	engine := upstreamModelsEngine(
 		upstreamModelsAuthService([]*auth.ExternalAPIKey{key}),
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: lister}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: lister}),
 	)
 
 	rec := httptest.NewRecorder()
@@ -99,7 +99,7 @@ func TestListUpstreamModelsHandler_ReturnsEndpointModels(t *testing.T) {
 func TestListUpstreamModelsHandler_UnknownKeyIs404(t *testing.T) {
 	engine := upstreamModelsEngine(
 		upstreamModelsAuthService(nil),
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: &modelListingClient{}}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: &modelListingClient{}}),
 	)
 
 	rec := httptest.NewRecorder()
@@ -112,12 +112,12 @@ func TestListUpstreamModelsHandler_UnsupportedProviderIs501(t *testing.T) {
 	key := &auth.ExternalAPIKey{
 		ID:             "ext-1",
 		InstallationID: testInstallationID,
-		Provider:       providers.ProviderGoogle,
+		Provider:       providers.ProviderAiand,
 		Plaintext:      []byte("sk-byok"),
 	}
 	engine := upstreamModelsEngine(
 		upstreamModelsAuthService([]*auth.ExternalAPIKey{key}),
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderGoogle: plainClient{}}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: plainClient{}}),
 	)
 
 	rec := httptest.NewRecorder()
@@ -137,11 +137,11 @@ func discoverModelsEngine(proxySvc *proxy.Service) *gin.Engine {
 func TestDiscoverModelsHandler_UsesBodyCredentials(t *testing.T) {
 	lister := &modelListingClient{models: []string{"cortex-a"}}
 	engine := discoverModelsEngine(
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: lister}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: lister}),
 	)
 
 	body, _ := json.Marshal(map[string]string{
-		"provider": providers.ProviderOpenAIGateway,
+		"provider": providers.ProviderAiand,
 		"key":      "sk-unsaved",
 		"base_url": "https://cortex.example/api/v2/cortex/v1/",
 	})
@@ -159,10 +159,10 @@ func TestDiscoverModelsHandler_UsesBodyCredentials(t *testing.T) {
 
 func TestDiscoverModelsHandler_RejectsMissingKey(t *testing.T) {
 	engine := discoverModelsEngine(
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: &modelListingClient{}}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: &modelListingClient{}}),
 	)
 
-	body, _ := json.Marshal(map[string]string{"provider": providers.ProviderOpenAIGateway})
+	body, _ := json.Marshal(map[string]string{"provider": providers.ProviderAiand})
 	req := httptest.NewRequest(http.MethodPost, "/admin/v1/provider-keys/discover-models", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -175,14 +175,14 @@ func TestListUpstreamModelsHandler_EndpointFailureIs502(t *testing.T) {
 	key := &auth.ExternalAPIKey{
 		ID:             "ext-1",
 		InstallationID: testInstallationID,
-		Provider:       providers.ProviderOpenAIGateway,
+		Provider:       providers.ProviderAiand,
 		Plaintext:      []byte("sk-byok"),
 		BaseURL:        "https://cortex.example/api/v2/cortex/v1",
 	}
 	lister := &modelListingClient{err: errors.New("model listing returned status 401")}
 	engine := upstreamModelsEngine(
 		upstreamModelsAuthService([]*auth.ExternalAPIKey{key}),
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: lister}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: lister}),
 	)
 
 	rec := httptest.NewRecorder()

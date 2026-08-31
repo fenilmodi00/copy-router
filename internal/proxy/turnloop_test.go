@@ -40,7 +40,7 @@ func (f *fakeSummarizer) Summarize(ctx context.Context, env *translate.RequestEn
 	return f.summary, handover.Usage{}, nil
 }
 
-func (f *fakeSummarizer) Provider() string { return providers.ProviderAnthropic }
+func (f *fakeSummarizer) Provider() string { return providers.ProviderAiand }
 
 // usageProvider writes an Anthropic response with the configured token
 // usage so the OTel UsageExtractor surfaces it to the cache-stats writeback.
@@ -131,13 +131,13 @@ func newPinSvcCapturing(fr *fakeRouter, store *fakePinStore) (*proxy.Service, *f
 	p := &fakeProvider{}
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: p},
+		map[string]providers.Client{providers.ProviderAiand: p},
 		nil,
 		false,
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -173,7 +173,7 @@ func TestTurnLoop_ToolResultScoringDisabledSkipsScorer(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      "cluster:v0.2",
 		PinnedUntil: time.Now().Add(time.Hour),
@@ -198,14 +198,14 @@ func TestTurnLoop_ToolResultScoringEnabledRunsScorerAndStays(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      "cluster:v0.2",
 		PinnedUntil: time.Now().Add(time.Hour),
 	}
 	// Scorer agrees with the pin, so the planner STAYs and the served model
 	// is the pin's — but the scorer MUST have been consulted (routeCalls==1).
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	svc := newPinSvc(fr, store) // default: scoreToolResultTurns == true
 
 	ctx := authedCtx(uuid.New().String())
@@ -233,14 +233,14 @@ func TestTurnLoop_ToolResultScoringEnabledSwitchesSafely(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "moonshotai/kimi-k3",
 		Reason:          "cluster:v0.2",
 		PinnedUntil:     time.Now().Add(time.Hour),
 		LastInputTokens: 5000,
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	sz := &fakeSummarizer{summary: "Prior conversation summary."}
 	svc, up := newPinSvcCapturing(fr, store)
 	svc = svc.WithSummarizer(sz)
@@ -265,13 +265,13 @@ func TestTurnLoop_HMMToolResultCommunicationFollowsFreshDecision(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      "hmm_policy:tool_execution(label=explore)",
 		PinnedUntil: time.Now().Add(time.Hour),
 	}
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-pro",
 		Reason:   "hmm_policy(label=balanced)",
 		Metadata: &router.RoutingMetadata{
@@ -298,13 +298,13 @@ func TestTurnLoop_HMMToolResultToolExecutionUsesFreshDecision(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      "hmm_policy:tool_execution(label=explore)",
 		PinnedUntil: time.Now().Add(time.Hour),
 	}
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-pro",
 		Reason:   "hmm_policy:tool_execution(label=explore)",
 		Metadata: &router.RoutingMetadata{
@@ -332,7 +332,7 @@ func TestTurnLoop_HMMToolExecutionStaysWhenWarmCacheEVBeatsCheapFresh(t *testing
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "moonshotai/kimi-k2.7",
 		Reason:          "hmm_policy:tool_execution(label=explore)",
 		PinnedUntil:     time.Now().Add(time.Hour),
@@ -340,7 +340,7 @@ func TestTurnLoop_HMMToolExecutionStaysWhenWarmCacheEVBeatsCheapFresh(t *testing
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "hmm_policy:tool_execution(label=explore)",
 		Metadata: &router.RoutingMetadata{
@@ -367,14 +367,14 @@ func TestTurnLoop_HMMHistoryMaxedOutExcludesServedModelBeforeRouting(t *testing.
 	store := newFakePinStore()
 	store.hasHMMHistory = true
 	store.hmmHistory = sessionpin.Pin{
-		Provider:         providers.ProviderAnthropic,
+		Provider:         providers.ProviderAiand,
 		LastServedModel:  "moonshotai/kimi-k2.7",
 		LastOutputTokens: 8192,
 		LastTurnEndedAt:  time.Now().Add(-30 * time.Second),
 		PinnedUntil:      time.Now().Add(time.Hour),
 	}
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "hmm_policy(classifier 'fast')",
 		Metadata: &router.RoutingMetadata{
@@ -404,14 +404,14 @@ func TestTurnLoop_HMMExpiredHistoryMaxedOutStillExcludesServedModel(t *testing.T
 	// Expired history row (PinnedUntil in the past) that maxed out its output
 	// cap: the maxed model must still be excluded, matching the active-pin path.
 	store.hmmHistory = sessionpin.Pin{
-		Provider:         providers.ProviderAnthropic,
+		Provider:         providers.ProviderAiand,
 		LastServedModel:  "moonshotai/kimi-k2.7",
 		LastOutputTokens: 8192,
 		LastTurnEndedAt:  time.Now().Add(-time.Hour),
 		PinnedUntil:      time.Now().Add(-time.Minute),
 	}
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "hmm_policy(classifier 'fast')",
 		Metadata: &router.RoutingMetadata{
@@ -438,7 +438,7 @@ func TestTurnLoop_HMMConversationFollowsFreshDecision(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "deepseek-ai/deepseek-v4-flash",
 		Reason:          "hmm_policy(label=balanced)",
 		PinnedUntil:     time.Now().Add(time.Hour),
@@ -446,7 +446,7 @@ func TestTurnLoop_HMMConversationFollowsFreshDecision(t *testing.T) {
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "moonshotai/kimi-k2.7",
 		Reason:   "hmm_policy(label=maximum)",
 		Metadata: &router.RoutingMetadata{
@@ -474,7 +474,7 @@ func TestTurnLoop_HMMToolExecutionPhaseChangeUsesFreshDecision(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "deepseek-ai/deepseek-v4-pro",
 		Reason:          "hmm_policy(label=high)",
 		PinnedUntil:     time.Now().Add(time.Hour),
@@ -482,7 +482,7 @@ func TestTurnLoop_HMMToolExecutionPhaseChangeUsesFreshDecision(t *testing.T) {
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "moonshotai/kimi-k2.7",
 		Reason:   "hmm_policy:tool_execution(label=explore)",
 		Metadata: &router.RoutingMetadata{
@@ -510,7 +510,7 @@ func TestTurnLoop_HMMToolExecutionSameModelDoesNotRewritePin(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "deepseek-ai/deepseek-v4-pro",
 		Reason:          "hmm_policy(label=high)",
 		PinnedUntil:     time.Now().Add(time.Hour),
@@ -518,7 +518,7 @@ func TestTurnLoop_HMMToolExecutionSameModelDoesNotRewritePin(t *testing.T) {
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-pro",
 		Reason:   "hmm_policy:tool_execution(label=explore)",
 		Metadata: &router.RoutingMetadata{
@@ -556,34 +556,33 @@ func TestTurnLoop_ToolResultPinOnExcludedProviderFallsThroughToScorer(t *testing
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderOpenAI,
+		Provider:    providers.ProviderAiand,
 		Model:       "openai/gpt-oss-120b",
 		Reason:      "cluster:v0.2",
 		PinnedUntil: time.Now().Add(time.Hour),
 	}
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "cluster:v0.2",
 	}}
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderAnthropic: &fakeProvider{},
-			providers.ProviderOpenAI:    &fakeProvider{},
+			providers.ProviderAiand: &fakeProvider{},
 		},
 		nil,
 		false,
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 
 	ctx := context.WithValue(authedCtx(uuid.New().String()),
-		proxy.InstallationExcludedProvidersContextKey{}, []string{providers.ProviderOpenAI})
+		proxy.InstallationExcludedProvidersContextKey{}, []string{providers.ProviderAiand})
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	require.NoError(t, svc.ProxyMessages(ctx, []byte(toolResultBody), rec, httpReq))
@@ -599,13 +598,13 @@ func TestTurnLoop_PlannerStaysWhenScorerAgrees(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "deepseek-ai/deepseek-v4-flash",
 		Reason:          "cluster:v0.2",
 		PinnedUntil:     time.Now().Add(time.Hour),
 		LastTurnEndedAt: time.Now().Add(-1 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -623,14 +622,14 @@ func TestTurnLoop_PlannerSwitchesOnPositiveEV(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "moonshotai/kimi-k3",
 		Reason:          "cluster:v0.2",
 		PinnedUntil:     time.Now().Add(time.Hour),
 		LastInputTokens: 5000,
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	sz := &fakeSummarizer{summary: "Prior conversation summary."}
 	svc := newPinSvc(fr, store).WithSummarizer(sz)
 
@@ -656,14 +655,14 @@ func TestTurnLoop_SummarizerErrorPreservesFullHistory(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "moonshotai/kimi-k3",
 		Reason:          "cluster:v0.2",
 		PinnedUntil:     time.Now().Add(time.Hour),
 		LastInputTokens: 5000,
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	sz := &fakeSummarizer{errOnCall: errors.New("upstream haiku 500")}
 	svc, provider := newPinSvcCapturing(fr, store)
 	svc.WithSummarizer(sz)
@@ -685,14 +684,14 @@ func TestTurnLoop_HandoverPreservesFullHistoryWhenSummarizerNotWired(t *testing.
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "moonshotai/kimi-k3",
 		Reason:          "cluster:v0.2",
 		PinnedUntil:     time.Now().Add(time.Hour),
 		LastInputTokens: 5000,
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	// No WithSummarizer call — Service.summarizer stays nil.
 	svc, provider := newPinSvcCapturing(fr, store)
 
@@ -712,14 +711,14 @@ func TestTurnLoop_HandoverUsesClientCredsForSummarizerProvider(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "moonshotai/kimi-k3",
 		Reason:          "cluster:v0.2",
 		PinnedUntil:     time.Now().Add(time.Hour),
 		LastInputTokens: 5000,
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	sz := &fakeSummarizer{summary: "Prior conversation summary."}
 	svc := newPinSvc(fr, store).WithSummarizer(sz)
 
@@ -740,14 +739,14 @@ func TestTurnLoop_HandoverSkippedWhenClientCredsCrossProvider(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:        providers.ProviderOpenAI,
+		Provider:        providers.ProviderAiand,
 		Model:           "gpt-5",
 		Reason:          "cluster:v0.2",
 		PinnedUntil:     time.Now().Add(time.Hour),
 		LastInputTokens: 5000,
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	sz := &fakeSummarizer{summary: "Should not be invoked."}
 	svc := newPinSvc(fr, store).WithSummarizer(sz)
 
@@ -768,12 +767,12 @@ func TestTurnLoop_PlannerDisabledPreservesFirstDecisionWins(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      "cluster:v0.2",
 		PinnedUntil: time.Now().Add(time.Hour),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "moonshotai/kimi-k3", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "fresh"}}
 	svc := newPinSvc(fr, store).WithPlannerEnabled(false)
 
 	ctx := authedCtx(uuid.New().String())
@@ -788,19 +787,19 @@ func TestTurnLoop_PlannerDisabledPreservesFirstDecisionWins(t *testing.T) {
 // Asserts the orchestrator writes upstream usage back to the pin row.
 func TestTurnLoop_UsageWritebackPersistsCacheStats(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
 	provider := &usageProvider{in: 1200, out: 80, cacheIn: 900, cacheOut: 200}
 	// Telemetry repo flips usageRequired() on; nil here would short-circuit
 	// usage extraction in the proxy.
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: provider},
+		map[string]providers.Client{providers.ProviderAiand: provider},
 		nil,
 		false,
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		recordingTelemetry{},
 	)
 
@@ -845,7 +844,7 @@ func trimSessionTurn(t *testing.T, msgCount int) []byte {
 // as cold.
 func warmOpusPin() sessionpin.Pin {
 	return sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "moonshotai/kimi-k3",
 		Reason:          "cluster:v0.2",
 		PinnedUntil:     time.Now().Add(time.Hour),
@@ -861,7 +860,7 @@ func TestTurnLoop_PrefixTrimPricesPinColdAndSkipsSummarizer(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = warmOpusPin()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	sz := &fakeSummarizer{summary: "Prior conversation summary."}
 	svc := newPinSvc(fr, store).WithSummarizer(sz).WithPlanner(planner.EVConfig{
 		ThresholdUSD:           0.001,
@@ -893,7 +892,7 @@ func TestTurnLoop_PrefixTrimKillSwitchPreservesWarmStay(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = warmOpusPin()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	sz := &fakeSummarizer{summary: "Prior conversation summary."}
 	svc := newPinSvc(fr, store).WithSummarizer(sz).WithPrefixTrimFreeSwitch(false).WithPlanner(planner.EVConfig{
 		ThresholdUSD:           0.001,
@@ -923,7 +922,7 @@ func TestTurnLoop_PrefixTrimSkipsExpiredPinReAnchor(t *testing.T) {
 	expired := warmOpusPin()
 	expired.PinnedUntil = time.Now().Add(-time.Minute)
 	store.pin = expired
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	svc := newPinSvc(fr, store).WithAvailableModels(map[string]struct{}{
 		"moonshotai/kimi-k3":            {},
 		"deepseek-ai/deepseek-v4-flash": {},
@@ -951,7 +950,7 @@ func TestTurnLoop_SubAgentDoesNotInheritMainLoopTrimBaseline(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = warmOpusPin()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	sz := &fakeSummarizer{summary: "Prior conversation summary."}
 	svc := newPinSvc(fr, store).WithSummarizer(sz)
 	ctx := authedCtx(uuid.New().String())
@@ -982,14 +981,14 @@ func TestTurnLoop_MaxedOutPinExcludedFromCandidates(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:         providers.ProviderOpenRouter,
+		Provider:         providers.ProviderAiand,
 		Model:            "moonshotai/kimi-k2.7",
 		Reason:           "cluster:v0.52",
 		PinnedUntil:      time.Now().Add(time.Hour),
 		LastOutputTokens: 8192, // saturated previous turn
 		LastTurnEndedAt:  time.Now().Add(-10 * time.Second),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1011,7 +1010,7 @@ func TestTurnLoop_MaxedOutExcludesLastServedModelNotAnchor(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:         providers.ProviderAnthropic,
+		Provider:         providers.ProviderAiand,
 		Model:            "deepseek-ai/deepseek-v4-flash", // anchor, healthy
 		LastServedModel:  "moonshotai/kimi-k2.7",          // swapped-to paired model that saturated the cap
 		Reason:           "cluster:v0.52",
@@ -1019,7 +1018,7 @@ func TestTurnLoop_MaxedOutExcludesLastServedModelNotAnchor(t *testing.T) {
 		LastOutputTokens: 8192, // saturated previous turn
 		LastTurnEndedAt:  time.Now().Add(-10 * time.Second),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-pro", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-pro", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1039,14 +1038,14 @@ func TestTurnLoop_UnderMaxedOutThresholdKeepsPin(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:         providers.ProviderAnthropic,
+		Provider:         providers.ProviderAiand,
 		Model:            "deepseek-ai/deepseek-v4-flash",
 		Reason:           "cluster:v0.52",
 		PinnedUntil:      time.Now().Add(time.Hour),
 		LastOutputTokens: 1024, // healthy, well below threshold
 		LastTurnEndedAt:  time.Now().Add(-10 * time.Second),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())

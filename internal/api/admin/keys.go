@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"workweave/router/internal/auth"
-	"workweave/router/internal/config"
-	"workweave/router/internal/providers"
 
 	"github.com/gin-gonic/gin"
 )
@@ -187,13 +185,10 @@ type externalKeyResponse struct {
 }
 
 type upsertExternalKeyRequest struct {
-	Provider string `json:"provider" binding:"required"`
-	// Key is required for every auth type but "wif", which carries no secret;
-	// the binding can't express that, so the emptiness check lives below.
-	Key  string  `json:"key"`
-	Name *string `json:"name"`
-	// BaseURL points this key at a non-default endpoint. Required for gateway
-	// providers, which have no deployment default to fall back to.
+	Provider string  `json:"provider" binding:"required"`
+	Key      string  `json:"key" binding:"required"`
+	Name     *string `json:"name"`
+	// BaseURL points this key at a non-default endpoint.
 	BaseURL *string `json:"base_url"`
 	// ModelAliases maps catalog model IDs to the IDs this endpoint publishes
 	// them under, for endpoints with their own naming scheme.
@@ -202,8 +197,7 @@ type upsertExternalKeyRequest struct {
 	// for service-authenticated endpoints that attribute spend per user. Format: "email" or "json".
 	IdentityHeader       *string `json:"identity_header"`
 	IdentityHeaderFormat *string `json:"identity_header_format"`
-	// AuthType is "bearer" (default), "keypair_jwt" (Key is RSA; router signs a short-lived JWT
-	// for AuthAccount/AuthUser), or "wif" (no secret; router attests its own workload identity).
+	// AuthType is "bearer" (default); the only accepted value.
 	AuthType    string  `json:"auth_type"`
 	AuthAccount *string `json:"auth_account"`
 	AuthUser    *string `json:"auth_user"`
@@ -260,20 +254,6 @@ func UpsertExternalKeyHandler(authSvc *auth.Service, models DeployedModelsSource
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Provider and key are required."})
 			return
 		}
-		if req.Key == "" && req.AuthType != auth.AuthTypeWIF {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Provider and key are required."})
-			return
-		}
-		// A provider configured via the deployment's env var (e.g. ANTHROPIC_API_KEY)
-		// must not be shadowed by a dashboard BYOK key — credential resolution
-		// prefers BYOK, so the stored key would silently win on every outbound call.
-		// The frontend grays out env-keyed providers, but that guard is derived from
-		// GET /admin/v1/config and fails open if that fetch errors; this is the only
-		// backend enforcement. Mirrors the env-key check in ConfigHandler.
-		if config.GetOr(providers.APIKeyEnvVar(req.Provider), "") != "" {
-			c.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": "Provider already configured via deployment environment variable. Remove the env var before adding a dashboard key."})
-			return
-		}
 		allowed := deployedModelIDs(models)
 		key, err := authSvc.UpsertExternalAPIKey(c.Request.Context(), installation.ID, auth.UpsertExternalAPIKeyParams{
 			Provider:      req.Provider,
@@ -291,7 +271,7 @@ func UpsertExternalKeyHandler(authSvc *auth.Service, models DeployedModelsSource
 		})
 		if err != nil {
 			if errors.Is(err, auth.ErrUnknownModel) || errors.Is(err, auth.ErrInvalidModelAlias) ||
-				errors.Is(err, auth.ErrInvalidIdentityHeader) || errors.Is(err, auth.ErrInvalidKeypairAuth) {
+				errors.Is(err, auth.ErrInvalidIdentityHeader) || errors.Is(err, auth.ErrInvalidAuthType) {
 				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}

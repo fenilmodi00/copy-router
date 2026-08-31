@@ -298,8 +298,8 @@ func TestService_ProxyOpenAIChatCompletion_GatewayKeepsChatCompletions(t *testin
 		_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
 	}}
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAIGateway, Model: "moonshotai/kimi-k3", Reason: "test"}},
-		map[string]providers.Client{providers.ProviderOpenAIGateway: provider},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "test"}},
+		map[string]providers.Client{providers.ProviderAiand: provider},
 		nil, false, nil, nil, false, providers.ProviderAiand, "moonshotai/kimi-k2.7", nil,
 	)
 

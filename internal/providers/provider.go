@@ -15,32 +15,6 @@ import (
 	"workweave/router/internal/router"
 )
 
-// UpstreamHeaderObserver records subscription rate-limit headroom (see
-// internal/proxy/usage) without coupling adapters to the observer. Ctx lets it
-// check the resolved credential so only responses on the caller's own
-// subscription are recorded (not e.g. a handover summarizer's deployment-key
-// call). Invoked right after the upstream responds; must be cheap, non-blocking.
-type UpstreamHeaderObserver func(context.Context, http.Header)
-
-type upstreamHeaderObserverKey struct{}
-
-// WithUpstreamHeaderObserver returns ctx carrying obs; a nil obs leaves ctx unchanged.
-func WithUpstreamHeaderObserver(ctx context.Context, obs UpstreamHeaderObserver) context.Context {
-	if obs == nil {
-		return ctx
-	}
-	return context.WithValue(ctx, upstreamHeaderObserverKey{}, obs)
-}
-
-// ObserveUpstreamHeaders invokes the context's UpstreamHeaderObserver with ctx
-// and h, if one is set. Provider adapters call this after receiving an upstream
-// response.
-func ObserveUpstreamHeaders(ctx context.Context, h http.Header) {
-	if obs, ok := ctx.Value(upstreamHeaderObserverKey{}).(UpstreamHeaderObserver); ok && obs != nil {
-		obs(ctx, h)
-	}
-}
-
 // Adding a provider is a THREE-map edit: the Provider* constant here, its
 // APIKeyEnvVars entry, and its ProviderFamilies entry. Omitting the family
 // entry makes dispatch fall through to ErrProviderNotConfigured — a silent 502
@@ -50,27 +24,11 @@ func ObserveUpstreamHeaders(ctx context.Context, h http.Header) {
 // Composition root (cmd/router/main.go) registers ProviderAiand only. Other
 // Provider* names stay as wire-family / BYOK / test fixtures.
 const (
-	ProviderAnthropic  = "anthropic"
-	ProviderOpenAI     = "openai"
-	ProviderGoogle     = "google"
-	ProviderOpenRouter = "openrouter"
-	ProviderFireworks  = "fireworks"
-	ProviderBedrock    = "bedrock"
-	ProviderMakora     = "makora"
-	ProviderTogether   = "together"
-	ProviderXAI        = "xai"
 	// ProviderAiand is the ai& (aiand.com) OpenAI-compatible inference
 	// provider serving open-weight models (GLM, DeepSeek, Kimi, Qwen, Gemma,
 	// gpt-oss) from Japan-resident infra. OpenAI Chat Completions surface.
-	// This is the only provider the aiand-only deploy registers at boot.
+	// The single registered upstream of this deployment.
 	ProviderAiand = "aiand"
-	// ProviderAnthropicGateway is an Anthropic-spec enterprise gateway using
-	// Bearer auth; its endpoint is per-tenant with no deployment default.
-	ProviderAnthropicGateway = "anthropic_gateway"
-	// ProviderOpenAIGateway is the OpenAI-Chat-Completions-spec counterpart
-	// to ProviderAnthropicGateway: a per-tenant endpoint, bearer auth, no
-	// deployment default. Serves model classes the Anthropic spec cannot carry.
-	ProviderOpenAIGateway = "openai_gateway"
 )
 
 // TranslationFamily is the wire-format family a provider speaks; the proxy
@@ -94,17 +52,7 @@ const (
 // keep it covering EVERY dispatchable Provider* constant (see the three-map
 // note above).
 var ProviderFamilies = map[string]TranslationFamily{
-	ProviderAnthropic:        FamilyAnthropic,
-	ProviderOpenAI:           FamilyOpenAICompat,
-	ProviderOpenRouter:       FamilyOpenAICompat,
-	ProviderFireworks:        FamilyOpenAICompat,
-	ProviderBedrock:          FamilyOpenAICompat,
-	ProviderMakora:           FamilyOpenAICompat,
-	ProviderTogether:         FamilyOpenAICompat,
-	ProviderXAI:              FamilyOpenAICompat,
-	ProviderAiand:            FamilyOpenAICompat,
-	ProviderAnthropicGateway: FamilyAnthropic,
-	ProviderOpenAIGateway:    FamilyOpenAICompat,
+	ProviderAiand: FamilyOpenAICompat,
 }
 
 // FamilyFor returns the translation family for a provider, or FamilyUnknown
@@ -117,29 +65,6 @@ func FamilyFor(provider string) TranslationFamily {
 // Completions wire format.
 func IsOpenAICompat(provider string) bool {
 	return FamilyFor(provider) == FamilyOpenAICompat
-}
-
-// IsGateway reports whether the provider is a customer-hosted gateway rather
-// than a vendor API. A gateway serves only the models its key's aliases name,
-// so routing treats it as the installation's exclusive upstream.
-func IsGateway(provider string) bool {
-	switch provider {
-	case ProviderAnthropicGateway, ProviderOpenAIGateway:
-		return true
-	default:
-		return false
-	}
-}
-
-// AllProviders returns every known Provider* constant (every ProviderFamilies
-// key), sorted for deterministic iteration and display order.
-func AllProviders() []string {
-	out := make([]string, 0, len(ProviderFamilies))
-	for p := range ProviderFamilies {
-		out = append(out, p)
-	}
-	sort.Strings(out)
-	return out
 }
 
 // ValidateDispatchable reports an error if any registered provider is missing
@@ -159,75 +84,11 @@ func ValidateDispatchable(registered []string) error {
 	return fmt.Errorf("providers missing a ProviderFamilies entry (add them to internal/providers/provider.go): %s", strings.Join(missing, ", "))
 }
 
-// APIKeyEnvVars maps provider name to the env var providing its deployment-level upstream API key.
-// Bedrock uses AWS-issued long-term Bedrock API keys (static bearer tokens), not SigV4 access keys.
-var APIKeyEnvVars = map[string]string{
-	ProviderAnthropic:  "ANTHROPIC_API_KEY",
-	ProviderOpenAI:     "OPENAI_API_KEY",
-	ProviderOpenRouter: "OPENROUTER_API_KEY",
-	ProviderFireworks:  "FIREWORKS_API_KEY",
-	ProviderBedrock:    "AWS_BEARER_TOKEN_BEDROCK",
-	ProviderMakora:     "MAKORA_API_KEY",
-	ProviderTogether:   "TOGETHER_API_KEY",
-	ProviderXAI:        "XAI_API_KEY",
-	ProviderAiand:      "AIAND_API_KEY",
-	// Pairs with ANTHROPIC_GATEWAY_BASE_URL, the endpoint the token is scoped to.
-	ProviderAnthropicGateway: "ANTHROPIC_GATEWAY_TOKEN",
-	// Pairs with OPENAI_GATEWAY_BASE_URL, likewise.
-	ProviderOpenAIGateway: "OPENAI_GATEWAY_TOKEN",
-}
-
-// APIKeyEnvVar returns the env-var name for the given provider, or empty
-// when the provider is unknown.
-func APIKeyEnvVar(provider string) string {
-	return APIKeyEnvVars[provider]
-}
-
-// baseURLRequiredProviders have no vendor endpoint to default to, so a
-// credential without a base URL is undispatchable.
-var baseURLRequiredProviders = map[string]struct{}{
-	ProviderAnthropicGateway: {},
-	ProviderOpenAIGateway:    {},
-}
-
-// RequiresBaseURL reports whether a BYOK credential for this provider must
-// carry its own endpoint.
-func RequiresBaseURL(provider string) bool {
-	_, ok := baseURLRequiredProviders[provider]
-	return ok
-}
-
-// CacheTTL is the best-effort upstream prompt-cache lifetime per provider.
-// Anthropic's 1h extended cache is what pinSessionTTL is sized to; OSS
-// OpenAI-compatible providers cache on an undocumented minutes-scale window,
-// so a pin can outlive the cache — the planner uses this to stop crediting a
-// stale pin a cache-read discount it no longer earns.
-var CacheTTL = map[string]time.Duration{
-	ProviderAnthropic:  time.Hour,
-	ProviderOpenAI:     5 * time.Minute,
-	ProviderOpenRouter: 5 * time.Minute,
-	ProviderFireworks:  5 * time.Minute,
-	ProviderBedrock:    5 * time.Minute,
-	ProviderXAI:        5 * time.Minute,
-	ProviderAiand:      5 * time.Minute,
-	// A gateway publishes no prompt-cache lifetime of its own, so it keeps the
-	// conservative window rather than inheriting Anthropic's 1h extended cache.
-	ProviderAnthropicGateway: 5 * time.Minute,
-	ProviderOpenAIGateway:    5 * time.Minute,
-}
-
-// DefaultCacheTTL is the conservative fallback cache lifetime for providers
-// absent from CacheTTL.
+// DefaultCacheTTL is the best-effort upstream prompt-cache lifetime. The
+// OpenAI-compat upstreams cache on an undocumented minutes-scale window, so a
+// pin can outlive the cache — the planner uses this to stop crediting a stale
+// pin a cache-read discount it no longer earns.
 const DefaultCacheTTL = 5 * time.Minute
-
-// CacheTTLFor returns the best-effort prompt-cache lifetime for a provider,
-// falling back to DefaultCacheTTL for unknown providers.
-func CacheTTLFor(provider string) time.Duration {
-	if ttl, ok := CacheTTL[provider]; ok {
-		return ttl
-	}
-	return DefaultCacheTTL
-}
 
 // HopByHopHeaders are stripped from upstream responses per RFC 7230 §6.1.
 var HopByHopHeaders = map[string]struct{}{

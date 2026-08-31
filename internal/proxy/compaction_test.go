@@ -33,7 +33,7 @@ func (f *fakeCompactionSummarizer) SummarizeForCompaction(_ context.Context, _ *
 	return f.summary, f.usage, f.err
 }
 
-func (f *fakeCompactionSummarizer) Provider() string { return providers.ProviderAnthropic }
+func (f *fakeCompactionSummarizer) Provider() string { return providers.ProviderAiand }
 
 // alternatingAnthropicBody builds an Anthropic body of nMsgs user/assistant
 // messages (starting with user), each padded to ~perMsgPad content bytes.

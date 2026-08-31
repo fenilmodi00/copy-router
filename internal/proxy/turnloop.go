@@ -84,7 +84,7 @@ func cacheWarm(pin sessionpin.Pin) bool {
 	if pin.LastTurnEndedAt.IsZero() {
 		return false
 	}
-	return time.Since(pin.LastTurnEndedAt) < providers.CacheTTLFor(pin.Provider)
+	return time.Since(pin.LastTurnEndedAt) < providers.DefaultCacheTTL
 }
 
 // pinCacheCold keeps ordinary and HMM paths on the same cache-economics rule.
@@ -118,13 +118,9 @@ func cacheablePrefixTokens(pin sessionpin.Pin, total int, prefixBroken bool) (in
 		return 0, true // a client trim really did evict the prefix
 	}
 	cached := pin.LastCachedReadTokens + pin.LastCachedWriteTokens
-	// input_tokens is fresh-only on Anthropic (disjoint from read/write) but is
-	// prompt_tokens — already cache-inclusive — everywhere else. Mirrors
-	// catalog.EffectiveInputCost's provider branch.
+	// input_tokens is prompt_tokens — already cache-inclusive — on the
+	// OpenAI-compat upstream. Mirrors catalog.EffectiveInputCost.
 	prior := pin.LastInputTokens
-	if pin.Provider == providers.ProviderAnthropic {
-		prior += cached
-	}
 	if prior <= 0 {
 		return 0, false
 	}
@@ -517,10 +513,6 @@ func (s *Service) runTurnLoop(
 		"sub_agent_hint", subAgentHint,
 	)
 
-	// Discounts covered models' cost term by the caller's observed subscription
-	// headroom. nil (feature off / no headroom yet) leaves scoring unchanged.
-	req.SubsidizedModelCostFactor = s.subsidyFactors(ctx, reqHeaders)
-
 	// Explicit user-forced pins outrank every automatic fast path, including
 	// the turn-type hard pin; only check here so ordinary turns use the normal flow.
 	hardPinnedTurn := s.isHardPinnedTurn(ctx, res.TurnType)
@@ -624,15 +616,9 @@ func (s *Service) runTurnLoop(
 		)
 	}
 
-	// Without a pin store, run the scorer and return its decision. The usage
-	// bypass intercepts the fresh scorer decision here too (no pins to honor).
+	// Without a pin store, run the scorer and return its decision.
 	if s.pinStore == nil {
 		req.PolicyTurnContext = buildPolicyTurnContext(req, res, sessionpin.Pin{}, sessionpin.Pin{})
-		if dec, ok := s.usageBypassDecision(ctx, reqHeaders, req); ok {
-			res.Decision = dec
-			res.UsageBypass = true
-			return res, nil
-		}
 		decision, err := s.routeFor(ctx, req)
 		if err != nil {
 			return res, err
@@ -977,17 +963,6 @@ func (s *Service) runTurnLoop(
 	// pin-drop guards (context overflow, provider disabled, images, maxed-out),
 	// but before the tool-result/planner-disabled stickies and scorer, so a
 	// stale pin from a prior routed stretch can't make a tool_result
-	// continuation diverge from the bypassed tool_use turn. The pin itself is
-	// untouched and resumes once utilization crosses the threshold.
-	// Bypass settles whether the turn is routed at all (caller's prepaid quota,
-	// not a routing-quality opinion) — AuthoritativePerTurn controls which model
-	// is chosen for a routed turn, so the gate must not apply here.
-	if dec, ok := s.usageBypassDecision(ctx, reqHeaders, req); ok {
-		res.Decision = dec
-		res.UsageBypass = true
-		return res, nil
-	}
-
 	// Tool-result turns: by default, fall through to the scorer + planner for
 	// MainLoop parity. Kill switch preserves the legacy #82 verbatim-reuse path.
 	// The #82 noisy-embedding concern is stale under only_user_message embed mode:
@@ -1642,17 +1617,16 @@ func (s *Service) normalizeHMMStayPin(req router.Request, p sessionpin.Pin) (ses
 	// A failed turn preserves the prior model but may leave an invalid provider
 	// binding; validate before reusing, or re-resolve against available providers.
 	if p.Provider != "" {
-		if _, enabled := providerSet[p.Provider]; enabled {
-			pinned := map[string]struct{}{p.Provider: {}}
-			if _, valid := catalog.ResolveBindingWithCustom(model, pinned, req.CustomBindings); valid {
-				return p, true
-			}
+		pinned := map[string]struct{}{p.Provider: {}}
+		if len(catalog.EnumerateBindings(model, pinned)) > 0 {
+			return p, true
 		}
 	}
-	binding, ok := catalog.ResolveBindingWithCustom(model, providerSet, req.CustomBindings)
-	if !ok {
+	bindings := catalog.EnumerateBindings(model, providerSet)
+	if len(bindings) == 0 {
 		return sessionpin.Pin{}, false
 	}
+	binding := bindings[0].ProviderBinding
 	p.Provider = binding.Provider
 	return p, true
 }
@@ -1971,13 +1945,7 @@ func resolveSummarizerCreds(ctx context.Context, provider string, headers http.H
 			return creds
 		}
 	}
-	creds := ExtractClientCredentials(provider, headers)
-	if creds != nil && creds.OAuth {
-		// A Claude subscription token can't authenticate the synthetic
-		// summarizer call (no Claude Code identity block) and would 401.
-		return nil
-	}
-	return creds
+	return ExtractClientCredentials(provider, headers)
 }
 
 // sortedEnabledKeys returns a deterministic slice of the keys in m for

@@ -31,7 +31,7 @@ func TestSessionAffinity_FireworksSetsHeaderNotBody(t *testing.T) {
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
 		TargetModel:     "deepseek-ai/deepseek-v4-pro",
-		TargetProvider:  providers.ProviderFireworks,
+		TargetProvider:  providers.ProviderAiand,
 		SessionAffinity: affinityKey,
 	})
 	require.NoError(t, err)
@@ -47,7 +47,7 @@ func TestSessionAffinity_FireworksSetsHeaderNotBody(t *testing.T) {
 // prefill. Keying the header off the OpenAI-compat family gives them replica
 // stickiness with no per-provider edit.
 func TestSessionAffinity_MakoraAndTogetherSetHeader(t *testing.T) {
-	for _, provider := range []string{providers.ProviderMakora, providers.ProviderTogether} {
+	for _, provider := range []string{providers.ProviderAiand, providers.ProviderAiand} {
 		t.Run(provider, func(t *testing.T) {
 			env, err := translate.ParseAnthropic(anthropicSrc())
 			require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestSessionAffinity_OpenRouterUsesSessionIDHeader(t *testing.T) {
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
 		TargetModel:     "deepseek-ai/deepseek-v4-pro",
-		TargetProvider:  providers.ProviderOpenRouter,
+		TargetProvider:  providers.ProviderAiand,
 		SessionAffinity: affinityKey,
 	})
 	require.NoError(t, err)
@@ -88,7 +88,7 @@ func TestSessionAffinity_OpenAIUsesPromptCacheKeyBody(t *testing.T) {
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
 		TargetModel:     "gpt-5.5",
-		TargetProvider:  providers.ProviderOpenAI,
+		TargetProvider:  providers.ProviderAiand,
 		SessionAffinity: affinityKey,
 	})
 	require.NoError(t, err)
@@ -106,7 +106,7 @@ func TestSessionAffinity_XAIUsesGrokConvIDHeader(t *testing.T) {
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
 		TargetModel:     "grok-4.5",
-		TargetProvider:  providers.ProviderXAI,
+		TargetProvider:  providers.ProviderAiand,
 		SessionAffinity: affinityKey,
 	})
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestSessionAffinity_BedrockGetsNoHint(t *testing.T) {
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
 		TargetModel:     "moonshotai/kimi-k2.5",
-		TargetProvider:  providers.ProviderBedrock,
+		TargetProvider:  providers.ProviderAiand,
 		SessionAffinity: affinityKey,
 	})
 	require.NoError(t, err)
@@ -141,7 +141,7 @@ func TestSessionAffinity_EmptyIsNoOp(t *testing.T) {
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
 		TargetModel:    "deepseek-ai/deepseek-v4-pro",
-		TargetProvider: providers.ProviderFireworks,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -161,7 +161,7 @@ func TestSessionAffinity_OpenAIFallsBackToStablePrefixKey(t *testing.T) {
 		require.NoError(t, err)
 		out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
 			TargetModel:    "gpt-5.5",
-			TargetProvider: providers.ProviderOpenAI,
+			TargetProvider: providers.ProviderAiand,
 		})
 		require.NoError(t, err)
 		v, ok := promptCacheKey(t, out.Body)
@@ -184,7 +184,7 @@ func TestSessionAffinity_OpenAIFallbackKeyVariesByPrefix(t *testing.T) {
 		require.NoError(t, err)
 		out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
 			TargetModel:    "gpt-5.5",
-			TargetProvider: providers.ProviderOpenAI,
+			TargetProvider: providers.ProviderAiand,
 		})
 		require.NoError(t, err)
 		v, ok := promptCacheKey(t, out.Body)
@@ -208,7 +208,7 @@ func TestSessionAffinity_OpenAIPreservesCallerPromptCacheKey(t *testing.T) {
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
 		TargetModel:    "gpt-5.5",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -227,7 +227,7 @@ func TestSessionAffinity_OpenAIEmptyPrefixStaysUnhinted(t *testing.T) {
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
 		TargetModel:    "gpt-5.5",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -246,7 +246,7 @@ func TestSessionAffinity_OpenAIEmptyToolsArrayStaysUnhinted(t *testing.T) {
 
 	out, err := env.PrepareOpenAI(nil, translate.EmitOptions{
 		TargetModel:    "gpt-5.5",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 

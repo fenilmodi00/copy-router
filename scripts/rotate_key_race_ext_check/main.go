@@ -71,7 +71,7 @@ func main() {
 		fail("rotate vs delete", err)
 	}
 
-	fmt.Println("\n=== 3. HTTP-level rotate race (httptest + WithAdminOnly) ===")
+	fmt.Println("\n=== 3. HTTP-level rotate race (httptest + WithAccountCookie) ===")
 	if err := checkHTTPRotateRace(ctx, pool); err != nil {
 		fail("http rotate race", err)
 	}
@@ -331,7 +331,6 @@ func (r *signalListRepo) SoftDelete(ctx context.Context, installationID, id stri
 
 func checkHTTPRotateRace(ctx context.Context, pool *pgxpool.Pool) error {
 	const n = 5
-	const adminPassword = "rotate-race-http-check-password"
 
 	repo := postgres.NewRepository(pool, auth.NoOpEncryptor{})
 	hold := newListHold(n)
@@ -343,27 +342,35 @@ func checkHTTPRotateRace(ctx context.Context, pool *pgxpool.Pool) error {
 		auth.NoOpAPIKeyCache{},
 		nil,
 		time.Now,
-	).WithAdminPassword(adminPassword)
+	).WithAccountRepos(repo.Accounts, repo.LoginSessions)
 
-	// Admin cookie sessions operate on EnsureAdminInstallation's singleton.
-	install, err := svc.EnsureAdminInstallation(ctx)
+	// A hosted account session maps to its own installation; create one
+	// directly (the login probe would need a live ai& upstream).
+	account, err := repo.Accounts.UpsertByAiandUser(ctx, auth.AccountUpsertParams{
+		ID:          "acct-rotate-race-" + uuid.NewString()[:8],
+		AiandUserID: "user-rotate-race-http-check",
+	})
 	if err != nil {
-		return fmt.Errorf("ensure admin installation: %w", err)
+		return fmt.Errorf("upsert account: %w", err)
+	}
+	install, err := svc.EnsureAccountInstallation(ctx, account)
+	if err != nil {
+		return fmt.Errorf("ensure account installation: %w", err)
 	}
 	name := "http-race-key-" + uuid.NewString()[:8]
 	issued, _, err := svc.IssueAPIKey(ctx, install.ID, &name, nil)
 	if err != nil {
 		return fmt.Errorf("issue key: %w", err)
 	}
-	fmt.Printf("method=httptest+WithAdminOnly installation_id=%s initial_key_id=%s\n", install.ID, issued.ID)
+	fmt.Printf("method=httptest+WithAccountCookie installation_id=%s initial_key_id=%s\n", install.ID, issued.ID)
 
-	session, _, err := svc.IssueAdminSession()
+	session, _, err := svc.IssueLoginSession(ctx, account, install)
 	if err != nil {
-		return fmt.Errorf("issue admin session: %w", err)
+		return fmt.Errorf("issue login session: %w", err)
 	}
 
 	engine := gin.New()
-	mgmt := engine.Group("/admin/v1", middleware.WithAdminOnly(svc))
+	mgmt := engine.Group("/v1", middleware.WithAccountCookie(svc))
 	mgmt.POST("/keys/:id/rotate", admin.RotateAPIKeyHandler(svc))
 
 	var (
@@ -382,8 +389,8 @@ func checkHTTPRotateRace(ctx context.Context, pool *pgxpool.Pool) error {
 			ready.Done()
 			<-start
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys/"+issued.ID+"/rotate", nil)
-			req.AddCookie(&http.Cookie{Name: auth.AdminSessionCookieName, Value: session})
+			req := httptest.NewRequest(http.MethodPost, "/v1/keys/"+issued.ID+"/rotate", nil)
+			req.AddCookie(&http.Cookie{Name: auth.LoginSessionCookieName, Value: session})
 			engine.ServeHTTP(rec, req)
 			statusMu.Lock()
 			statuses[rec.Code]++

@@ -4,8 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"strings"
-
-	"workweave/router/internal/providers"
 )
 
 type openAIReasoningSignatureEnvelope struct {
@@ -15,13 +13,19 @@ type openAIReasoningSignatureEnvelope struct {
 	Enc      string `json:"enc"`
 }
 
+// reasoningSignatureProvider is the provider marker stamped inside the
+// base64 reasoning-signature envelope. A wire-format constant from the
+// multi-provider era; kept verbatim so signatures written by older routers
+// still round-trip.
+const reasoningSignatureProvider = "openai"
+
 func encodeOpenAIReasoningSignature(id, enc string) string {
 	if id == "" || enc == "" {
 		return ""
 	}
 	b, err := json.Marshal(openAIReasoningSignatureEnvelope{
 		Version:  1,
-		Provider: providers.ProviderOpenAI,
+		Provider: reasoningSignatureProvider,
 		ID:       id,
 		Enc:      enc,
 	})
@@ -43,7 +47,7 @@ func decodeOpenAIReasoningSignature(sig string) (id, enc string, ok bool) {
 	if err := json.Unmarshal(b, &env); err != nil {
 		return "", "", false
 	}
-	if env.Version != 1 || env.Provider != providers.ProviderOpenAI || env.ID == "" || env.Enc == "" {
+	if env.Version != 1 || env.Provider != reasoningSignatureProvider || env.ID == "" || env.Enc == "" {
 		return "", "", false
 	}
 	return env.ID, env.Enc, true

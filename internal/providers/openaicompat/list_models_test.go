@@ -23,7 +23,7 @@ func TestListModels_ReturnsSortedDedupedIDs(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := openaicompat.NewGatewayClient("deploy-token", srv.URL)
+	c := openaicompat.NewClient("deploy-token", srv.URL)
 	models, err := c.ListModels(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, []string{"claude-fable-5", "llama3.1-70b"}, models)
@@ -39,7 +39,7 @@ func TestListModels_BYOKCredentialsOverrideBaseURLAndKey(t *testing.T) {
 	}))
 	defer byokSrv.Close()
 
-	c := openaicompat.NewGatewayClient("deploy-token", "http://127.0.0.1:1/unreachable")
+	c := openaicompat.NewClient("deploy-token", "http://127.0.0.1:1/unreachable")
 	ctx := context.WithValue(context.Background(), proxy.CredentialsContextKey{}, &proxy.Credentials{
 		APIKey:  []byte("byok-token"),
 		BaseURL: byokSrv.URL,
@@ -56,14 +56,14 @@ func TestListModels_UpstreamErrorStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := openaicompat.NewGatewayClient("bad-token", srv.URL)
+	c := openaicompat.NewClient("bad-token", srv.URL)
 	_, err := c.ListModels(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "401")
 }
 
 func TestListModels_NoBaseURL(t *testing.T) {
-	c := openaicompat.NewGatewayClient("token", "")
+	c := openaicompat.NewClient("token", "")
 	_, err := c.ListModels(context.Background())
 	require.Error(t, err)
 }
@@ -74,7 +74,7 @@ func TestListModels_MalformedBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := openaicompat.NewGatewayClient("token", srv.URL)
+	c := openaicompat.NewClient("token", srv.URL)
 	_, err := c.ListModels(context.Background())
 	require.Error(t, err)
 }

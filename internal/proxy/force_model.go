@@ -69,33 +69,18 @@ func resolveForceModelWithEffort(model string) (canonicalID, provider string, kn
 		return m.ID, m.Providers[0].Provider, true, effort
 	}
 	unknownID := model
-	requiredProvider := ""
 	if nativeID, ok := strings.CutPrefix(model, "openai/"); ok {
 		model = nativeID
 		unknownID = nativeID
-		requiredProvider = providers.ProviderOpenAI
 	}
 	// Second try after stripping openai/ prefix.
-	if m, ok := catalog.ByIDOrUpstream(model); ok && len(m.Providers) > 0 && (requiredProvider == "" || m.Providers[0].Provider == requiredProvider) {
+	if m, ok := catalog.ByIDOrUpstream(model); ok && len(m.Providers) > 0 {
 		return m.ID, m.Providers[0].Provider, true, effort
 	}
-	if requiredProvider != "" {
-		return unknownID, requiredProvider, false, effort
-	}
-	switch {
-	case strings.HasPrefix(model, "claude-"):
-		return model, providers.ProviderAnthropic, false, effort
-	case strings.HasPrefix(model, "gpt-"),
-		model == "o1", model == "o3", model == "o1-pro", model == "o3-pro",
-		strings.HasPrefix(model, "o1-"), strings.HasPrefix(model, "o3-"), strings.HasPrefix(model, "o4-"):
-		return model, providers.ProviderOpenAI, false, effort
-	case strings.HasPrefix(model, "gemini-"):
-		return model, providers.ProviderGoogle, false, effort
-	case strings.Contains(model, "/"):
-		return model, providers.ProviderOpenRouter, false, effort
-	default:
-		return model, providers.ProviderAnthropic, false, effort
-	}
+	// Unknown model: ai& is the only dispatchable upstream, so any binding a
+	// caller forces resolves there (and fails there, with an honest upstream
+	// unknown-model error rather than a synthetic provider mismatch).
+	return unknownID, providers.ProviderAiand, false, effort
 }
 
 // resolveForceModel is the legacy two-return surface kept for backward compat.

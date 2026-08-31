@@ -13,7 +13,6 @@ import (
 	analyticsapi "workweave/router/internal/api/analytics"
 	anthropicapi "workweave/router/internal/api/anthropic"
 	openaiapi "workweave/router/internal/api/openai"
-	"workweave/router/internal/billing"
 	"workweave/router/internal/policyclient"
 	"workweave/router/internal/router"
 	"workweave/router/internal/server/middleware"
@@ -43,23 +42,6 @@ const (
 	analyticsTimeout = 60 * time.Second
 )
 
-// DeploymentMode gates whether the self-hoster admin dashboard and its
-// /admin/v1/* API are mounted. Managed (SaaS) deployments skip it since
-// keys, BYOK secrets, and config are owned by the Weave control plane.
-type DeploymentMode string
-
-const (
-	// DeploymentModeSelfHosted mounts the dashboard and /admin/v1/* API. Default when ROUTER_DEPLOYMENT_MODE is unset.
-	DeploymentModeSelfHosted DeploymentMode = "selfhosted"
-	// DeploymentModeManaged skips the dashboard and admin API entirely so misconfig can't expose a redundant control plane.
-	DeploymentModeManaged DeploymentMode = "managed"
-	// DeploymentModeSelfServe mounts the dashboard driven by self-service
-	// (aiand-key) login instead of the operator password. The dashboard data
-	// plane is a separate /admin/v1 surface scoped to the logged-in account's
-	// installation; the operator admin API is NOT mounted.
-	DeploymentModeSelfServe DeploymentMode = "selfserve"
-)
-
 // Register wires routes onto the engine. In managed mode the dashboard +
 // /admin/v1/* routes are not registered at all.
 //
@@ -85,10 +67,7 @@ const (
 // (GET /admin/v1/aiand/models) inside the dashboard metrics group. nil means
 // no catalog route (self-hosted without AIAND_API_KEY). Self-serve always
 // wires a handler that authenticates upstream with each user's BYOK key.
-func Register(engine *gin.Engine, s Services, mode DeploymentMode) {
-	// Managed mode: BYOK is opt-in per installation (see WithAuth).
-	byokRequiresOptIn := mode == DeploymentModeManaged
-
+func Register(engine *gin.Engine, s Services) {
 	engine.GET("/health", middleware.WithTimeout(healthTimeout), admin.HealthHandler)
 	engine.GET("/readyz", middleware.WithTimeout(readinessTimeout), admin.ReadinessHandler(s.ReadinessChecker))
 
@@ -141,41 +120,28 @@ func Register(engine *gin.Engine, s Services, mode DeploymentMode) {
 	}
 
 	// /validate is a token-validity probe used by clients (not the dashboard), so it stays mounted in both modes.
-	adminAuthed := engine.Group("", middleware.WithTimeout(validateTimeout), middleware.WithAuth(s.Auth, byokRequiresOptIn))
+	adminAuthed := engine.Group("", middleware.WithTimeout(validateTimeout), middleware.WithAuth(s.Auth))
 	adminAuthed.GET("/validate", admin.ValidateHandler)
 
-	if mode == DeploymentModeSelfHosted {
-		// Public — mounting inside WithAuth would be a chicken-and-egg
-		// deadlock for users who don't yet have a cookie.
-		authPublic := engine.Group("/admin/v1/auth", middleware.WithTimeout(adminTimeout))
-		authPublic.POST("/login", admin.LoginHandler(s.Auth))
-		authPublic.POST("/logout", admin.LogoutHandler())
-		authPublic.GET("/me", admin.MeHandler(s.Auth))
-	}
-
-	if mode == DeploymentModeSelfServe {
-		// Public — login must be reachable without a session cookie.
-		accountPublic := engine.Group("/account/v1", middleware.WithTimeout(adminTimeout))
-		accountPublic.POST("/login", account.LoginHandler(s.Auth))
-		accountPublic.POST("/logout", account.LogoutHandler())
-		accountPublic.GET("/me", account.MeHandler(s.Auth))
-	}
+	// Public — login must be reachable without a session cookie.
+	accountPublic := engine.Group("/account/v1", middleware.WithTimeout(adminTimeout))
+	accountPublic.POST("/login", account.LoginHandler(s.Auth))
+	accountPublic.POST("/logout", account.LogoutHandler())
+	accountPublic.GET("/me", account.MeHandler(s.Auth))
 
 	// Dashboard data plane (metrics, keys, provider-keys, config, excluded-models,
 	// content-capture): single source of truth in dashboard_routes.go, mounted by
 	// the helper for both selfhosted and selfserve. Managed mode is a no-op.
 	// Login surfaces above are genuinely mode-specific and stay here.
-	mountDashboardRoutes(engine, s, mode, byokRequiresOptIn)
+	mountDashboardRoutes(engine, s)
 
 	messagesMiddleware := []gin.HandlerFunc{
 		middleware.WithTimingEntry(),
 		middleware.WithTimeout(messagesTimeout),
-		middleware.WithAuth(s.Auth, byokRequiresOptIn),
+		middleware.WithAuth(s.Auth),
 		middleware.WithAgentShadowEvaluation(),
 	}
-	if s.Billing != nil {
-		messagesMiddleware = append(messagesMiddleware, middleware.WithBalanceCheck(s.Billing, billing.MinBalanceMicros), middleware.WithAPIKeySpendCap(s.Billing), middleware.WithOrgMonthlySpendCap(s.Billing))
-	}
+
 	messagesMiddleware = append(messagesMiddleware,
 		middleware.WithEmbedOnlyUserMessageOverride(),
 		middleware.WithClusterVersionOverride(),
@@ -190,10 +156,7 @@ func Register(engine *gin.Engine, s Services, mode DeploymentMode) {
 	chatCompletionMiddleware := []gin.HandlerFunc{
 		middleware.WithTimingEntry(),
 		middleware.WithTimeout(chatCompletionTimeout),
-		middleware.WithAuth(s.Auth, byokRequiresOptIn),
-	}
-	if s.Billing != nil {
-		chatCompletionMiddleware = append(chatCompletionMiddleware, middleware.WithBalanceCheck(s.Billing, billing.MinBalanceMicros), middleware.WithAPIKeySpendCap(s.Billing), middleware.WithOrgMonthlySpendCap(s.Billing))
+		middleware.WithAuth(s.Auth),
 	}
 	chatCompletionMiddleware = append(chatCompletionMiddleware,
 		middleware.WithEmbedOnlyUserMessageOverride(),
@@ -214,7 +177,7 @@ func Register(engine *gin.Engine, s Services, mode DeploymentMode) {
 	// /v1/messages, and gating it would break client negotiation.
 	passthroughGroup := engine.Group("",
 		middleware.WithTimeout(passthroughTimeout),
-		middleware.WithAuth(s.Auth, byokRequiresOptIn),
+		middleware.WithAuth(s.Auth),
 	)
 	passthroughGroup.POST("/v1/messages/count_tokens", anthropicapi.PassthroughHandler(s.Proxy))
 	passthroughGroup.GET("/v1/models", openaiapi.ModelsHandler(anthropicapi.PassthroughHandler(s.Proxy)))
@@ -224,10 +187,7 @@ func Register(engine *gin.Engine, s Services, mode DeploymentMode) {
 
 	routeMiddleware := []gin.HandlerFunc{
 		middleware.WithTimeout(routeTimeout),
-		middleware.WithAuth(s.Auth, byokRequiresOptIn),
-	}
-	if s.Billing != nil {
-		routeMiddleware = append(routeMiddleware, middleware.WithBalanceCheck(s.Billing, billing.MinBalanceMicros), middleware.WithAPIKeySpendCap(s.Billing), middleware.WithOrgMonthlySpendCap(s.Billing))
+		middleware.WithAuth(s.Auth),
 	}
 	routeMiddleware = append(routeMiddleware,
 		middleware.WithEmbedOnlyUserMessageOverride(),
@@ -243,7 +203,7 @@ func Register(engine *gin.Engine, s Services, mode DeploymentMode) {
 	previewGroup := engine.Group("",
 		middleware.WithTimingEntry(),
 		middleware.WithTimeout(routeTimeout),
-		middleware.WithAuth(s.Auth, byokRequiresOptIn),
+		middleware.WithAuth(s.Auth),
 		middleware.WithEmbedOnlyUserMessageOverride(),
 		middleware.WithRouterStrategyDefault(defaultStrategy, registeredStrategies...),
 		middleware.WithPolicyDebugOverride(),

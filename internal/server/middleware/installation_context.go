@@ -45,15 +45,6 @@ func BindInstallationContext(
 			QualityBias: installation.RoutingQualityWeight,
 		})
 	}
-	if installation.UsageBypassEnabled {
-		ctx = context.WithValue(ctx, proxy.InstallationUsageBypassContextKey{}, proxy.UsageBypassConfig{
-			Enabled:   true,
-			Threshold: installation.UsageBypassThreshold,
-		})
-	}
-	if installation.SubscriptionRoutingDisabled {
-		ctx = context.WithValue(ctx, proxy.InstallationSubscriptionRoutingDisabledContextKey{}, true)
-	}
 	if installation.HideTerminalSurfaces {
 		ctx = context.WithValue(ctx, proxy.InstallationHideTerminalSurfacesContextKey{}, true)
 	}

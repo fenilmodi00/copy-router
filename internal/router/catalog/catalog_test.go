@@ -52,7 +52,7 @@ func TestByID_UnknownReturnsFalse(t *testing.T) {
 }
 
 func TestPriceFor_UnknownProviderForKnownModel(t *testing.T) {
-	_, ok := PriceFor(providers.ProviderOpenAI, "deepseek-ai/deepseek-v4-flash")
+	_, ok := PriceFor("openai-unregistered", "deepseek-ai/deepseek-v4-flash")
 	assert.False(t, ok)
 }
 
@@ -71,7 +71,7 @@ func TestResolveBinding_PicksAiand(t *testing.T) {
 	assert.Equal(t, providers.ProviderAiand, b.Provider)
 	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", b.UpstreamID)
 
-	availNoAiand := map[string]struct{}{providers.ProviderOpenAI: {}}
+	availNoAiand := map[string]struct{}{"openai-unregistered": {}}
 	_, ok = ResolveBinding("deepseek-ai/deepseek-v4-flash", availNoAiand)
 	assert.False(t, ok)
 }

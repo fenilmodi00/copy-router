@@ -1,19 +1,18 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { logout, accountLogout, replace, loginSession, pathname } = vi.hoisted(() => ({
-  logout: vi.fn().mockResolvedValue({ ok: true }),
+const { accountLogout, replace, loginSession, pathname } = vi.hoisted(() => ({
   accountLogout: vi.fn().mockResolvedValue({ ok: true }),
   replace: vi.fn(),
   loginSession: {
     state: "authed" as const,
-    surface: null as "account" | "admin" | null,
+    surface: null as "account" | null,
   },
   pathname: { value: "/dashboard" },
 }));
 
 vi.mock("@/lib/api", () => ({
-  api: { auth: { logout, accountLogout } },
+  api: { auth: { accountLogout } },
 }));
 
 vi.mock("@/lib/use-login-session-gate", () => ({
@@ -37,7 +36,6 @@ import { Sidebar } from "./Sidebar";
 
 describe("Sidebar sign-out", () => {
   beforeEach(() => {
-    logout.mockClear();
     accountLogout.mockClear();
     replace.mockClear();
     loginSession.surface = null;
@@ -50,20 +48,9 @@ describe("Sidebar sign-out", () => {
     fireEvent.click(screen.getByRole("button"));
 
     await waitFor(() => expect(accountLogout).toHaveBeenCalledTimes(1));
-    expect(logout).not.toHaveBeenCalled();
     expect(replace).toHaveBeenCalledWith("/login");
   });
 
-  it("calls admin logout when the shell is a selfhosted admin session", async () => {
-    loginSession.surface = "admin";
-    render(<Sidebar />);
-
-    fireEvent.click(screen.getByRole("button"));
-
-    await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
-    expect(accountLogout).not.toHaveBeenCalled();
-    expect(replace).toHaveBeenCalledWith("/login");
-  });
 });
 
 describe("Sidebar navigation", () => {

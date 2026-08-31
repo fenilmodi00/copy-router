@@ -59,12 +59,12 @@ func TestInternalListUpstreamModelsHandler_ListsWithMintedCredential(t *testing.
 }
 
 func TestInternalListUpstreamModelsHandler_UnmintableCredentialIs502(t *testing.T) {
+	// The probe now resolves the stored secret directly; an empty secret
+	// (no credential the endpoint would accept) is the unmintable case.
 	key := &auth.ExternalAPIKey{
 		ID:             "ext-1",
 		InstallationID: testInstallationID,
 		Provider:       providers.ProviderAiand,
-		AuthType:       auth.AuthTypeKeypairJWT,
-		AuthAccount:    "acct",
 		BaseURL:        "https://api.aiand.com/v1",
 	}
 	engine := internalUpstreamModelsEngine(

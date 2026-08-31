@@ -587,7 +587,7 @@ func TestCrossFormat_AnthropicToOpenAI_SimpleText(t *testing.T) {
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -624,7 +624,7 @@ func TestCrossFormat_AnthropicToOpenAI_ToolConversation(t *testing.T) {
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -689,7 +689,7 @@ func TestCrossFormat_AnthropicToOpenAI_OverlongToolUseIDClampedAndPaired(t *test
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -711,7 +711,7 @@ func TestCrossFormat_AnthropicToOpenAI_Image(t *testing.T) {
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -759,7 +759,7 @@ func TestCrossFormat_AnthropicToOpenAI_ToolResultImageHoisted(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -808,7 +808,7 @@ func TestCrossFormat_AnthropicToOpenAI_ToolResultTextAndImageSplit(t *testing.T)
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -834,7 +834,7 @@ func TestCrossFormat_AnthropicToOpenAI_ArraySystemFlattened(t *testing.T) {
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -855,7 +855,7 @@ func TestCrossFormat_AnthropicToOpenAI_EmptyToolInputBecomesEmptyArgsString(t *t
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -913,7 +913,7 @@ func TestCrossFormat_AnthropicToOpenAI_ScalarFieldsCarriedThrough(t *testing.T) 
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -939,7 +939,7 @@ func TestCrossFormat_AnthropicToOpenAI_ReasoningModelOmitsStop(t *testing.T) {
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-5.4-mini",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 		Capabilities:   router.Lookup("gpt-5.4-mini"),
 	})
 	require.NoError(t, err)
@@ -995,7 +995,7 @@ func TestCrossFormat_AnthropicToOpenAI_InputSchemaBecomesParameters(t *testing.T
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -1038,7 +1038,7 @@ func TestCrossFormat_AnthropicToOpenAI_StripsUnsupportedToolSchemaPattern(t *tes
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "moonshotai/kimi-k2.7",
-		TargetProvider: providers.ProviderFireworks,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -1126,7 +1126,7 @@ func TestCrossFormat_AnthropicToOpenAI_ToolResultSplitIntoSeparateMessages(t *te
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-4",
-		TargetProvider: providers.ProviderOpenAI,
+		TargetProvider: providers.ProviderAiand,
 	})
 	require.NoError(t, err)
 
@@ -1531,7 +1531,7 @@ func TestCrossFormat_AnthropicToOpenAI_ToolChoiceVariants(t *testing.T) {
 			require.NoError(t, err)
 			prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 				TargetModel:    "gpt-4",
-				TargetProvider: providers.ProviderOpenAI,
+				TargetProvider: providers.ProviderAiand,
 			})
 			require.NoError(t, err)
 

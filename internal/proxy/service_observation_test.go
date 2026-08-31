@@ -165,16 +165,16 @@ func (r *shadowRequestRouter) Route(_ context.Context, request router.Request) (
 func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) {
 	const installID = "66666666-6666-6666-6666-666666666666"
 	serving := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 	}
 	scorerDecision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "moonshotai/kimi-k3",
 	}
 	shadowRouter := &shadowRequestRouter{
 		decision: router.Decision{
-			Provider: providers.ProviderOpenAI,
+			Provider: providers.ProviderAiand,
 			Model:    "openai/gpt-oss-120b",
 			Metadata: &router.RoutingMetadata{
 				RouteID:              "shadow-route-1",
@@ -239,7 +239,7 @@ func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) 
 func TestProxyMessages_RecordsClusterObservation(t *testing.T) {
 	const installID = "11111111-1111-1111-1111-111111111111"
 	decision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "cluster:v-test top_p=[3,7] model=deepseek-ai/deepseek-v4-flash provider=anthropic",
 		Metadata: &router.RoutingMetadata{
@@ -254,7 +254,7 @@ func TestProxyMessages_RecordsClusterObservation(t *testing.T) {
 	telem := newCaptureTelemetry()
 	svc := proxy.NewService(
 		&fakeRouter{decision: decision},
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil,
 		false,
 		nil,
@@ -297,7 +297,7 @@ func TestProxyMessages_RecordsClusterObservation(t *testing.T) {
 func TestProxyMessages_RecordsPolicyObservation(t *testing.T) {
 	const installID = "55555555-5555-5555-5555-555555555555"
 	decision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "policy:hmm",
 		Metadata: &router.RoutingMetadata{
@@ -314,7 +314,7 @@ func TestProxyMessages_RecordsPolicyObservation(t *testing.T) {
 	telem := newCaptureTelemetry()
 	svc := proxy.NewService(
 		&fakeRouter{decision: decision},
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil, false, nil, nil, false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
@@ -346,7 +346,7 @@ func TestProxyMessages_RecordsPolicyObservation(t *testing.T) {
 func TestProxyMessages_PersistsCacheTokens(t *testing.T) {
 	const installID = "44444444-4444-4444-4444-444444444444"
 	decision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "pin",
 	}
@@ -359,7 +359,7 @@ func TestProxyMessages_PersistsCacheTokens(t *testing.T) {
 	}
 	svc := proxy.NewService(
 		&fakeRouter{decision: decision},
-		map[string]providers.Client{providers.ProviderAnthropic: provider},
+		map[string]providers.Client{providers.ProviderAiand: provider},
 		nil, false, nil, nil, false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
@@ -383,7 +383,7 @@ func TestProxyMessages_PersistsCacheTokens(t *testing.T) {
 func TestProxyMessages_ChosenScoreZeroIsPersisted(t *testing.T) {
 	const installID = "33333333-3333-3333-3333-333333333333"
 	decision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "cluster:v-test top_p=[0] model=deepseek-ai/deepseek-v4-flash provider=anthropic",
 		Metadata: &router.RoutingMetadata{
@@ -396,7 +396,7 @@ func TestProxyMessages_ChosenScoreZeroIsPersisted(t *testing.T) {
 	telem := newCaptureTelemetry()
 	svc := proxy.NewService(
 		&fakeRouter{decision: decision},
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil, false, nil, nil, false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
@@ -420,7 +420,7 @@ func TestProxyMessages_NoMetadataOmitsClusterFields(t *testing.T) {
 	require.NotEqual(t, uuid.Nil.String(), installID)
 
 	decision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "pin",
 		// Metadata intentionally nil; matches pinDecision shape.
@@ -428,7 +428,7 @@ func TestProxyMessages_NoMetadataOmitsClusterFields(t *testing.T) {
 	telem := newCaptureTelemetry()
 	svc := proxy.NewService(
 		&fakeRouter{decision: decision},
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil,
 		false,
 		nil,
@@ -509,14 +509,14 @@ func TestProxyMessages_PersistsRolloutID(t *testing.T) {
 	const installID = "66666666-6666-6666-6666-666666666666"
 	const rolloutID = "policy-rollout-1"
 	decision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 	telem := newCaptureTelemetry()
 	svc := proxy.NewService(
 		&fakeRouter{decision: decision},
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil, false, nil, nil, false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
@@ -538,14 +538,14 @@ func TestProxyMessages_PersistedPolicyRolloutIDOverridesClientIdentity(t *testin
 	const installID = "66666666-6666-6666-6666-666666666666"
 	const rolloutID = "policy-rollout-42"
 	decision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 	telem := newCaptureTelemetry()
 	svc := proxy.NewService(
 		&fakeRouter{decision: decision},
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil, false, nil, nil, false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,
@@ -570,14 +570,14 @@ func TestProxyMessages_PersistedPolicyRolloutIDOverridesClientIdentity(t *testin
 func TestProxyMessages_PersistsSessionKeyAndRole(t *testing.T) {
 	const installID = "77777777-7777-7777-7777-777777777777"
 	decision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "pin",
 	}
 	telem := newCaptureTelemetry()
 	svc := proxy.NewService(
 		&fakeRouter{decision: decision},
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil, false, nil, nil, false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		telem,

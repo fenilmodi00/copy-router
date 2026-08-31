@@ -6,27 +6,32 @@ import (
 	"testing"
 	"time"
 
-	"workweave/router/internal/auth"
-	"workweave/router/internal/billing"
-	"workweave/router/internal/router/catalog"
-	"workweave/router/internal/router/handover"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"workweave/router/internal/auth"
+	"workweave/router/internal/providers"
+	"workweave/router/internal/router/catalog"
+	"workweave/router/internal/router/handover"
 )
 
-// auxTelemetryRepo captures the telemetry rows billAuxiliaryInference writes.
-// fireTelemetry is async, so writes are mutex-guarded and read via waitForRows.
+// auxTelemetryRepo captures the telemetry rows emitAuxiliaryInferenceTelemetry
+// writes. fireTelemetry is async, so writes are mutex-guarded and read via
+// waitForRows.
 type auxTelemetryRepo struct {
-	mu   sync.Mutex
-	rows []InsertTelemetryParams
+	mu    sync.Mutex
+	rows  []InsertTelemetryParams
+	drain chan struct{}
 }
 
 func (r *auxTelemetryRepo) InsertRequestTelemetry(_ context.Context, p InsertTelemetryParams) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.rows = append(r.rows, p)
+	if r.drain != nil {
+		r.drain <- struct{}{}
+	}
 	return nil
 }
 
@@ -88,111 +93,58 @@ func (r *auxTelemetryRepo) GetTelemetryBySessionSequence(context.Context, uuid.U
 	return TelemetryTurnResult{}, nil
 }
 
-// auxBillingRepo captures debit params so a test can assert the ledger row and
-// the telemetry row describe the same call.
-type auxBillingRepo struct {
-	mu     sync.Mutex
-	debits []billing.DebitParams
-}
-
-func (r *auxBillingRepo) GetBalance(context.Context, string) (int64, error) { return 0, nil }
-func (r *auxBillingRepo) HasActiveOverride(context.Context, string) (bool, error) {
-	return false, nil
-}
-
-func (r *auxBillingRepo) DebitInference(_ context.Context, p billing.DebitParams) (int64, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.debits = append(r.debits, p)
-	return 0, nil
-}
-
-func (r *auxBillingRepo) snapshot() []billing.DebitParams {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	out := make([]billing.DebitParams, len(r.debits))
-	copy(out, r.debits)
-	return out
-}
-
-func (r *auxBillingRepo) GetAPIKeySpend(context.Context, string) (int64, *int64, bool, error) {
-	return 0, nil, false, nil
-}
-
-func (r *auxBillingRepo) GetUserMonthlySpendAndLimit(context.Context, string, string) (int64, *int64, error) {
-	return 0, nil, nil
-}
-
-func (r *auxBillingRepo) GetOrgMonthlySpendAndLimit(context.Context, string) (int64, *int64, error) {
-	return 0, nil, nil
-}
-
-func (r *auxBillingRepo) GetAutopayConfig(context.Context, string) (bool, int64, error) {
-	return false, 0, nil
-}
-
-func (r *auxBillingRepo) BillingTablesExist(context.Context) (bool, error) { return true, nil }
-
 const (
-	auxTestSessionID = "1a3f5b7c-9d02-4e68-b1c4-7f0e2a6d9c53"
-	auxTestOrgID     = "org_aux_test"
-	auxTestRequestID = "req-aux-1"
+	auxTestRequestID = "req_auxtest"
+	auxTestOrgID     = "org_auxtest"
 	// auxTestModel must exist in the router catalog: the point of the
-	// telemetry row is real cost, and an unpriced model would make the
-	// assertions pass on zeros.
-	auxTestModel = DefaultHandoverModel
+	// cost assertions is that telemetry prices match catalog pricing.
+	auxTestModel     = DefaultHandoverModel
+	auxTestSessionID = "sess_auxtest"
 )
 
 // auxTestUsage is a summarizer usage with tokens in every bucket, so a
 // dropped cache field shows up as a cost mismatch rather than a silent zero.
 func auxTestUsage() handover.Usage {
 	return handover.Usage{
-		InputTokens:   4000,
-		OutputTokens:  700,
-		CacheCreation: 1200,
-		CacheRead:     9000,
 		Model:         auxTestModel,
-		Provider:      "anthropic",
+		Provider:      providers.ProviderAiand,
+		InputTokens:   1200,
+		OutputTokens:  90,
+		CacheCreation: 300,
+		CacheRead:     400,
 	}
 }
 
-// auxTestService wires a Service with capturing billing + telemetry repos.
-func auxTestService(t *testing.T) (*Service, *auxBillingRepo, *auxTelemetryRepo) {
+// auxTestService wires a Service with a capturing telemetry repo.
+func auxTestService(t *testing.T) (*Service, *auxTelemetryRepo) {
 	t.Helper()
-	billingRepo := &auxBillingRepo{}
 	telemetryRepo := &auxTelemetryRepo{}
 	return &Service{
-		billing:   billing.NewService(billingRepo).WithByokFeeRate(0.05),
 		telemetry: telemetryRepo,
-	}, billingRepo, telemetryRepo
+	}, telemetryRepo
 }
 
 // auxTestContext carries the installation + client identity the router's auth
 // middleware would have stashed on a real request.
 func auxTestContext(installationID uuid.UUID, sessionID string) context.Context {
 	ctx := context.WithValue(context.Background(), InstallationIDContextKey{}, installationID.String())
-	ctx = context.WithValue(ctx, ExternalIDContextKey{}, auxTestOrgID)
-	return context.WithValue(ctx, ClientIdentityContextKey{}, ClientIdentity{
-		SessionID: sessionID,
-		DeviceID:  "device-aux-1",
-		ClientApp: "claude_code",
-	})
+	return context.WithValue(ctx, ClientIdentityContextKey{}, ClientIdentity{SessionID: sessionID})
 }
 
-// TestBillAuxiliaryInferenceTagsSessionAndCost is the contract the public
-// session-cost endpoint depends on: a billed summarizer call produces a
+// TestEmitAuxiliaryInferenceTelemetryTagsSessionAndCost is the contract the
+// public session-cost endpoint depends on: a summarizer call produces a
 // telemetry row carrying the SAME client session id as the turn that
 // triggered it, with actual cost populated.
-func TestBillAuxiliaryInferenceTagsSessionAndCost(t *testing.T) {
-	s, _, telemetryRepo := auxTestService(t)
+func TestEmitAuxiliaryInferenceTelemetryTagsSessionAndCost(t *testing.T) {
+	s, telemetryRepo := auxTestService(t)
 	installationID := uuid.New()
 	usage := auxTestUsage()
 
-	s.billAuxiliaryInference(auxTestContext(installationID, auxTestSessionID),
+	s.emitAuxiliaryInferenceTelemetry(auxTestContext(installationID, auxTestSessionID),
 		auxTestRequestID, auxSuffixHandoverSummary, auxTestOrgID, usage)
 
 	rows := telemetryRepo.waitForRows(1)
-	require.Len(t, rows, 1, "a billed auxiliary call must write exactly one telemetry row")
+	require.Len(t, rows, 1, "an auxiliary call must write exactly one telemetry row")
 	row := rows[0]
 
 	assert.Equal(t, auxTestSessionID, row.SessionID,
@@ -201,7 +153,7 @@ func TestBillAuxiliaryInferenceTagsSessionAndCost(t *testing.T) {
 		"auxiliary calls must not masquerade as router.upstream served turns")
 	assert.Equal(t, installationID.String(), row.InstallationID)
 	assert.Equal(t, auxTestRequestID+auxSuffixHandoverSummary, row.RequestID,
-		"the suffix must match the ledger's request-id convention so the two rows join")
+		"the suffix must match the historical ledger request-id convention so rows stay distinct")
 	assert.Equal(t, auxTestRequestID, row.TraceID,
 		"the trace id ties the auxiliary call back to the turn that triggered it")
 
@@ -225,86 +177,60 @@ func TestBillAuxiliaryInferenceTagsSessionAndCost(t *testing.T) {
 	assert.Equal(t, int32(usage.CacheRead), *row.CacheReadTokens)
 }
 
-// TestBillAuxiliaryInferenceMatchesLedgerAmount proves the telemetry row's
-// actual cost and the credit-ledger notional cost carry the same economic
-// meaning, so summing either representation of a session yields the same total.
-func TestBillAuxiliaryInferenceMatchesLedgerAmount(t *testing.T) {
-	s, billingRepo, telemetryRepo := auxTestService(t)
-	usage := auxTestUsage()
-
-	s.billAuxiliaryInference(auxTestContext(uuid.New(), auxTestSessionID),
-		auxTestRequestID, auxSuffixPrecompactionSummary, auxTestOrgID, usage)
-
-	rows := telemetryRepo.waitForRows(1)
-	require.Len(t, rows, 1)
-	debits := billingRepo.snapshot()
-	require.Len(t, debits, 1, "fireBilling is synchronous, so the debit must already be recorded")
-
-	telemetryMicros := catalog.USDToMicros(rows[0].ActualInputCostUSD) +
-		catalog.USDToMicros(rows[0].ActualOutputCostUSD)
-	assert.Equal(t, debits[0].NotionalCostMicros, telemetryMicros,
-		"ledger notional cost and telemetry actual cost must describe the same charge")
-	assert.Equal(t, auxTestRequestID+auxSuffixPrecompactionSummary, debits[0].RouterRequestID,
-		"the ledger and telemetry rows must share a request id")
-}
-
-// TestBillAuxiliaryInferenceSkipsNonCalls proves a skipped or failed
+// TestEmitAuxiliaryInferenceTelemetrySkipsNonCalls proves a skipped or failed
 // summarizer writes nothing: a zero-token row would inflate a session's
 // request_count with a call that never happened.
-func TestBillAuxiliaryInferenceSkipsNonCalls(t *testing.T) {
+func TestEmitAuxiliaryInferenceTelemetrySkipsNonCalls(t *testing.T) {
 	cases := []struct {
 		name  string
 		usage handover.Usage
 	}{
 		{name: "summarizer never ran", usage: handover.Usage{}},
 		{name: "no model reported", usage: handover.Usage{InputTokens: 100, OutputTokens: 10}},
-		{name: "no tokens consumed", usage: handover.Usage{Model: auxTestModel, Provider: "anthropic"}},
+		{name: "no tokens consumed", usage: handover.Usage{Model: auxTestModel, Provider: providers.ProviderAiand}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s, billingRepo, telemetryRepo := auxTestService(t)
+			s, telemetryRepo := auxTestService(t)
 
-			s.billAuxiliaryInference(auxTestContext(uuid.New(), auxTestSessionID),
+			s.emitAuxiliaryInferenceTelemetry(auxTestContext(uuid.New(), auxTestSessionID),
 				auxTestRequestID, auxSuffixHandoverSummary, auxTestOrgID, tc.usage)
 
 			// Give the async telemetry write a chance to land if it were fired.
 			time.Sleep(50 * time.Millisecond)
 			assert.Empty(t, telemetryRepo.snapshot(), "no upstream call means no telemetry row")
-			assert.Empty(t, billingRepo.snapshot(), "no upstream call means no debit")
 		})
 	}
 }
 
-// TestBillAuxiliaryInferenceBillsWithoutInstallation proves an unauthenticated
-// / selfhosted path still debits (billing is keyed on external id) but writes
-// no telemetry: the telemetry table's installation_id is NOT NULL.
-func TestBillAuxiliaryInferenceBillsWithoutInstallation(t *testing.T) {
-	s, billingRepo, telemetryRepo := auxTestService(t)
+// TestEmitAuxiliaryInferenceTelemetrySkipsWithoutInstallation proves an
+// unauthenticated path writes no telemetry: the telemetry table's
+// installation_id is NOT NULL.
+func TestEmitAuxiliaryInferenceTelemetrySkipsWithoutInstallation(t *testing.T) {
+	s, telemetryRepo := auxTestService(t)
 
 	ctx := context.WithValue(context.Background(), ClientIdentityContextKey{},
 		ClientIdentity{SessionID: auxTestSessionID})
-	s.billAuxiliaryInference(ctx, auxTestRequestID, auxSuffixHandoverSummary, auxTestOrgID, auxTestUsage())
+	s.emitAuxiliaryInferenceTelemetry(ctx, auxTestRequestID, auxSuffixHandoverSummary, auxTestOrgID, auxTestUsage())
 
 	time.Sleep(50 * time.Millisecond)
-	assert.Len(t, billingRepo.snapshot(), 1, "the customer is still charged for the call")
 	assert.Empty(t, telemetryRepo.snapshot(), "no installation means no row to attribute")
 }
 
-// TestBillAuxiliaryInferenceUsesSummarizerProviderForBYOK proves BYOK is keyed
-// off the summarizer's own provider, not the turn's resolved credential — the
-// summarizer dispatches on its own credential context.
-func TestBillAuxiliaryInferenceUsesSummarizerProviderForBYOK(t *testing.T) {
-	s, billingRepo, _ := auxTestService(t)
+// TestEmitAuxiliaryInferenceTelemetryAttributesUser proves the row carries
+// the resolved router user id when one is on the context, so per-user cost
+// breakdowns include router-originated calls.
+func TestEmitAuxiliaryInferenceTelemetryAttributesUser(t *testing.T) {
+	s, telemetryRepo := auxTestService(t)
+	installationID := uuid.New()
 
-	ctx := auxTestContext(uuid.New(), auxTestSessionID)
-	ctx = context.WithValue(ctx, ExternalAPIKeysContextKey{}, []*auth.ExternalAPIKey{
-		{Provider: "anthropic", Plaintext: []byte("sk-ant-byok")},
-	})
-	s.billAuxiliaryInference(ctx, auxTestRequestID, auxSuffixHandoverSummary, auxTestOrgID, auxTestUsage())
+	ctx := auxTestContext(installationID, auxTestSessionID)
+	ctx = context.WithValue(ctx, auth.UserIDContextKey{}, "user_auxtest")
 
-	debits := billingRepo.snapshot()
-	require.Len(t, debits, 1)
-	assert.Zero(t, debits[0].DeltaUsdMicros,
-		"a BYOK-served summary debits no inference cost — the customer paid their own upstream")
-	assert.NotZero(t, debits[0].FeeUsdMicros, "Weave still charges its platform fee")
+	s.emitAuxiliaryInferenceTelemetry(ctx, auxTestRequestID, auxSuffixHandoverSummary, auxTestOrgID, auxTestUsage())
+
+	rows := telemetryRepo.waitForRows(1)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "user_auxtest", rows[0].RouterUserID,
+		"the auxiliary row must attribute the user so per-user cost sums include it")
 }

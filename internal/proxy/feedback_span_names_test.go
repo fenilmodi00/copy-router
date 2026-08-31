@@ -111,12 +111,12 @@ func TestFeedbackSpans_UseDistinctNamesAndSchemas(t *testing.T) {
 	// --- Pipeline B: /router-feedback slash command ---
 	store := newFakePinStore()
 	store.hasPin = true
-	store.pin = sessionpin.Pin{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", LastServedModel: "deepseek-ai/deepseek-v4-flash"}
+	store.pin = sessionpin.Pin{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", LastServedModel: "deepseek-ai/deepseek-v4-flash"}
 	feedbackStore := &fakeFeedbackStore{}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-pro", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-pro", Reason: "cluster"}}
 	cmdSvc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		emitter,
 		false,
 		nil,

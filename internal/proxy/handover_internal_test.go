@@ -204,6 +204,6 @@ func TestProviderSummarizer_DefaultProviderIsAiand(t *testing.T) {
 	assert.Equal(t, providers.ProviderAiand, s.Provider())
 	// ProviderAnthropic constant must remain available for BYOK/gateway —
 	// this summarizer simply must not hardcode it as the handover label.
-	assert.NotEqual(t, providers.ProviderAnthropic, s.Provider())
-	assert.Equal(t, "anthropic", providers.ProviderAnthropic)
+	assert.NotEqual(t, providers.ProviderAiand, s.Provider())
+	assert.Equal(t, "anthropic", providers.ProviderAiand)
 }

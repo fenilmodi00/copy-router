@@ -254,8 +254,7 @@ func TestDispatchWithFallback_RetriesOnResponseHeaderTimeout(t *testing.T) {
 	}
 
 	s := newServiceWithProviders(t, map[string]providers.Client{
-		providers.ProviderMakora:     primary,
-		providers.ProviderOpenRouter: fallback,
+		providers.ProviderAiand:     primary,
 	})
 
 	rec := httptest.NewRecorder()
@@ -267,8 +266,8 @@ func TestDispatchWithFallback_RetriesOnResponseHeaderTimeout(t *testing.T) {
 		buf:             buf,
 		initialDecision: router.Decision{Model: "deepseek-ai/deepseek-v4-flash"},
 		bindings: []catalog.ProviderBinding{
-			{Provider: providers.ProviderMakora},
-			{Provider: providers.ProviderOpenRouter},
+			{Provider: providers.ProviderAiand},
+			{Provider: providers.ProviderAiand},
 		},
 		attempt: func(ctx context.Context, d router.Decision, p providers.Client) error {
 			buf.Seal()
@@ -281,7 +280,7 @@ func TestDispatchWithFallback_RetriesOnResponseHeaderTimeout(t *testing.T) {
 	assert.Equal(t, 1, primary.calls)
 	assert.Equal(t, 1, fallback.calls)
 	assert.Equal(t, "rescued", rec.Body.String())
-	assert.Equal(t, providers.ProviderMakora, rec.Header().Get(HeaderRouterFallbackFrom))
+	assert.Equal(t, providers.ProviderAiand, rec.Header().Get(HeaderRouterFallbackFrom))
 }
 
 // Covers the mid-stream stall watchdog (prod incident 2026-06-09: streams
@@ -298,8 +297,7 @@ func TestDispatchWithFallback_RetriesOnUpstreamIdleTimeout(t *testing.T) {
 	}
 
 	s := newServiceWithProviders(t, map[string]providers.Client{
-		providers.ProviderOpenAI:     primary,
-		providers.ProviderOpenRouter: fallback,
+		providers.ProviderAiand:     primary,
 	})
 
 	rec := httptest.NewRecorder()
@@ -311,8 +309,8 @@ func TestDispatchWithFallback_RetriesOnUpstreamIdleTimeout(t *testing.T) {
 		buf:             buf,
 		initialDecision: router.Decision{Model: "openai/gpt-oss-120b"},
 		bindings: []catalog.ProviderBinding{
-			{Provider: providers.ProviderOpenAI},
-			{Provider: providers.ProviderOpenRouter},
+			{Provider: providers.ProviderAiand},
+			{Provider: providers.ProviderAiand},
 		},
 		attempt: func(ctx context.Context, d router.Decision, p providers.Client) error {
 			buf.Seal()
@@ -325,7 +323,7 @@ func TestDispatchWithFallback_RetriesOnUpstreamIdleTimeout(t *testing.T) {
 	assert.Equal(t, 1, primary.calls)
 	assert.Equal(t, 1, fallback.calls)
 	assert.Equal(t, "rescued", rec.Body.String())
-	assert.Equal(t, providers.ProviderOpenAI, rec.Header().Get(HeaderRouterFallbackFrom))
+	assert.Equal(t, providers.ProviderAiand, rec.Header().Get(HeaderRouterFallbackFrom))
 }
 
 func TestDispatchWithFallback_NoRetryOnNonRetryableStatus(t *testing.T) {
@@ -831,21 +829,13 @@ func TestShouldFailover(t *testing.T) {
 		ctx := context.WithValue(context.Background(), CredentialsContextKey{}, &Credentials{APIKey: []byte("sk-byok"), Source: "byok"})
 		assert.False(t, s.shouldFailover(ctx))
 	})
-	t.Run("subscription OAuth credential skips failover", func(t *testing.T) {
-		// A subscription token authenticates only against Anthropic; failing
-		// over to another vendor would 401, so it must bind to one provider.
-		s := &Service{}
-		ctx := context.WithValue(context.Background(), CredentialsContextKey{},
-			&Credentials{APIKey: []byte("sk-ant-oat01-token"), Source: "subscription", OAuth: true})
-		assert.False(t, s.shouldFailover(ctx))
-	})
 	t.Run("BYOK keys on context disable failover", func(t *testing.T) {
 		// resolveAndInject re-resolves credentials and would prefer a BYOK key for
 		// the fallback binding, spending the customer's account without intent.
 		s := &Service{}
 		ctx := context.WithValue(context.Background(), ExternalAPIKeysContextKey{},
 			[]*auth.ExternalAPIKey{
-				{Provider: providers.ProviderMakora, Plaintext: []byte("mk-byok")},
+				{Provider: providers.ProviderAiand, Plaintext: []byte("mk-byok")},
 			})
 		assert.False(t, s.shouldFailover(ctx))
 	})

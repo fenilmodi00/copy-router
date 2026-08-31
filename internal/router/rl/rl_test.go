@@ -78,7 +78,7 @@ func TestRouteOmitsModelsWithNoEnabledProvider(t *testing.T) {
 
 	_, err := r.Route(context.Background(), router.Request{
 		PromptText:       "hi",
-		EnabledProviders: enabled(providers.ProviderAnthropic),
+		EnabledProviders: enabled("anthropic-unregistered"),
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, rl.ErrPolicyUnavailable))
@@ -106,7 +106,7 @@ func TestRouteNoEligibleCandidatesIsUnavailable(t *testing.T) {
 
 	_, err := r.Route(context.Background(), router.Request{
 		PromptText:       "hi",
-		EnabledProviders: enabled(providers.ProviderOpenAI),
+		EnabledProviders: enabled("openai-unregistered"),
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, rl.ErrPolicyUnavailable))

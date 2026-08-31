@@ -1,17 +1,17 @@
 // Command record_provider_fixtures refreshes the translation-conformance
-// upstream fixtures from live providers. For each case it runs the SAME inbound
-// Anthropic body through the router's own Prepare* emit, sends the translated
-// request to the real upstream, and writes the raw response to the fixture the
-// conformance suite (internal/proxy/conformance_*_test.go) replays offline.
+// upstream fixtures from the live ai& upstream. For each case it runs the SAME
+// inbound Anthropic body through the router's own Prepare* emit, sends the
+// translated request to the real upstream, and writes the raw response to the
+// fixture the conformance suite (internal/proxy/conformance_*_test.go) replays
+// offline.
 //
 // It is a separate main package (not a _test.go), so `go test ./...` never runs
-// it and CI never touches the network. It is further gated on RECORD=1 and the
-// per-provider API key being present.
+// it and CI never touches the network. It is further gated on RECORD=1 and
+// AIAND_API_KEY being present.
 //
 // Usage (from the repo root):
 //
-//	RECORD=1 OPENAI_API_KEY=… OPENROUTER_API_KEY=… \
-//	    go run ./scripts/record_provider_fixtures
+//	RECORD=1 AIAND_API_KEY=… go run ./scripts/record_provider_fixtures
 //
 // After recording, regenerate the goldens and review the diff:
 //
@@ -31,7 +31,9 @@ import (
 
 	"workweave/router/internal/observability"
 	"workweave/router/internal/providers"
+	"workweave/router/internal/providers/openaicompat"
 	"workweave/router/internal/router"
+	"workweave/router/internal/router/catalog"
 	"workweave/router/internal/translate"
 )
 
@@ -44,26 +46,25 @@ type format int
 const (
 	formatOpenAIChat format = iota
 	formatOpenAIResponses
-	formatAnthropic
 )
 
 type recordCase struct {
 	fixture       string // path under fixtureRoot, e.g. "openai_chat/basic_text.upstream.sse"
 	format        format
-	model         string
-	provider      string
+	model         string // catalog model ID; UpstreamID is used when non-empty
 	anthropicBody string
 }
 
-// cases mirror the conformance suite's fixtures. Keep them in sync: a new
-// conformance case that wants live-recorded input adds an entry here.
+// cases mirror the conformance suite's fixtures, restricted to models the
+// catalog binds to ai&. Keep them in sync: a new conformance case that wants
+// live-recorded input adds an entry here.
 var cases = []recordCase{
-	{"openai_chat/basic_text.upstream.sse", formatOpenAIChat, "deepseek-ai/deepseek-v4-pro", providers.ProviderOpenRouter,
-		`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`},
-	{"openai_chat/toolcall.upstream.sse", formatOpenAIChat, "deepseek-ai/deepseek-v4-pro", providers.ProviderOpenRouter,
-		`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Weather in NYC?"}]}`},
-	{"responses/toolcall.upstream.sse", formatOpenAIResponses, "gpt-5.5", providers.ProviderOpenAI,
-		`{"model":"gpt-5.5","stream":true,"max_tokens":2048,"thinking":{"type":"enabled","budget_tokens":24576},"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Weather in NYC?"}]}`},
+	{"openai_chat/basic_text.upstream.sse", formatOpenAIChat, "deepseek-ai/deepseek-v4-flash",
+		`{"model":"deepseek-ai/deepseek-v4-flash","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`},
+	{"openai_chat/toolcall.upstream.sse", formatOpenAIChat, "deepseek-ai/deepseek-v4-flash",
+		`{"model":"deepseek-ai/deepseek-v4-flash","stream":true,"max_tokens":1024,"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Weather in NYC?"}]}`},
+	{"responses/toolcall.upstream.sse", formatOpenAIResponses, "moonshotai/kimi-k2.7",
+		`{"model":"moonshotai/kimi-k2.7","stream":true,"max_tokens":2048,"thinking":{"type":"enabled","budget_tokens":24576},"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Weather in NYC?"}]}`},
 }
 
 const weatherTool = `[{"name":"get_weather","description":"Get the weather","input_schema":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}]`
@@ -76,9 +77,9 @@ func main() {
 	client := &http.Client{Timeout: 180 * time.Second}
 	var recorded, skipped, failed int
 	for _, c := range cases {
-		key, keyEnv := apiKeyFor(c.format)
+		key := os.Getenv("AIAND_API_KEY")
 		if key == "" {
-			fmt.Printf("SKIP  %s (%s not set)\n", c.fixture, keyEnv)
+			fmt.Println("SKIP  (AIAND_API_KEY not set)")
 			skipped++
 			continue
 		}
@@ -96,15 +97,29 @@ func main() {
 	}
 }
 
+// upstreamID returns the wire model name for a catalog model: the ai& binding's
+// UpstreamID when non-empty, else the catalog ID.
+func upstreamID(modelID string) string {
+	m, ok := catalog.ByID(modelID)
+	if !ok || len(m.Providers) == 0 {
+		return modelID
+	}
+	if u := m.Providers[0].UpstreamID; u != "" {
+		return u
+	}
+	return m.ID
+}
+
 func record(client *http.Client, c recordCase, apiKey string) (err error) {
+	model := upstreamID(c.model)
 	env, err := translate.ParseAnthropic([]byte(c.anthropicBody))
 	if err != nil {
 		return fmt.Errorf("parse anthropic body: %w", err)
 	}
 	opts := translate.EmitOptions{
-		TargetModel:    c.model,
-		TargetProvider: c.provider,
-		Capabilities:   router.Lookup(c.model),
+		TargetModel:    model,
+		TargetProvider: providers.ProviderAiand,
+		Capabilities:   router.Lookup(model),
 	}
 
 	prep, err := prepare(env, c.format, opts)
@@ -112,7 +127,7 @@ func record(client *http.Client, c recordCase, apiKey string) (err error) {
 		return fmt.Errorf("emit upstream request: %w", err)
 	}
 
-	url, hdr := endpoint(c, apiKey, prep)
+	url, hdr := endpoint(c.format, apiKey)
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(prep.Body))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
@@ -149,41 +164,19 @@ func prepare(env *translate.RequestEnvelope, f format, opts translate.EmitOption
 		return env.PrepareOpenAI(http.Header{}, opts)
 	case formatOpenAIResponses:
 		return env.PrepareOpenAIResponses(http.Header{}, opts)
-	case formatAnthropic:
-		return env.PrepareAnthropic(http.Header{}, opts)
 	default:
 		return providers.PreparedRequest{}, fmt.Errorf("unknown format %d", f)
 	}
 }
 
-// endpoint returns the live upstream URL and auth headers for a case.
-func endpoint(c recordCase, apiKey string, prep providers.PreparedRequest) (string, map[string]string) {
-	switch c.format {
-	case formatOpenAIChat:
-		if c.provider == providers.ProviderOpenRouter {
-			return "https://openrouter.ai/api/v1/chat/completions", map[string]string{"Authorization": "Bearer " + apiKey}
-		}
-		return "https://api.openai.com/v1/chat/completions", map[string]string{"Authorization": "Bearer " + apiKey}
-	case formatOpenAIResponses:
-		return "https://api.openai.com/v1/responses", map[string]string{"Authorization": "Bearer " + apiKey}
-	case formatAnthropic:
-		return "https://api.anthropic.com/v1/messages",
-			map[string]string{"x-api-key": apiKey, "anthropic-version": "2023-06-01"}
-	default:
-		return "", nil
-	}
-}
-
-func apiKeyFor(f format) (key, env string) {
+// endpoint returns the live ai& upstream URL and auth headers for a case.
+func endpoint(f format, apiKey string) (string, map[string]string) {
 	switch f {
 	case formatOpenAIChat:
-		// OpenRouter is the recorded OpenAI-compat provider for the chat cases.
-		return os.Getenv("OPENROUTER_API_KEY"), "OPENROUTER_API_KEY"
+		return openaicompat.AiandBaseURL + "/chat/completions", map[string]string{"Authorization": "Bearer " + apiKey}
 	case formatOpenAIResponses:
-		return os.Getenv("OPENAI_API_KEY"), "OPENAI_API_KEY"
-	case formatAnthropic:
-		return os.Getenv("ANTHROPIC_API_KEY"), "ANTHROPIC_API_KEY"
+		return openaicompat.AiandBaseURL + "/responses", map[string]string{"Authorization": "Bearer " + apiKey}
 	default:
-		return "", ""
+		return "", nil
 	}
 }

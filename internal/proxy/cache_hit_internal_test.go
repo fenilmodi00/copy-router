@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"workweave/router/internal/billing"
 	"workweave/router/internal/providers"
 	"workweave/router/internal/router"
 	"workweave/router/internal/router/cache"
@@ -73,7 +72,7 @@ func cacheHitEmbedding(seed float32) []float32 {
 
 func cacheHitDecision(emb []float32) router.Decision {
 	return router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "test",
 		Metadata: &router.RoutingMetadata{Embedding: emb, ClusterIDs: []int{0, 1}},
@@ -141,19 +140,6 @@ func TestTryServeSemanticCacheHit_MissReturnsFalse(t *testing.T) {
 	assert.False(t, served)
 }
 
-func TestTryServeSemanticCacheHit_ExcludedWhenSubscriptionOnly(t *testing.T) {
-	emb := cacheHitEmbedding(5)
-	c := cache.New(cache.DefaultConfig())
-	c.Store("tenant-cache-hit", cache.FormatAnthropic, emb, 0, cache.CachedResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)}, "", 0)
-	svc := NewService(nil, nil, nil, false, c, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil)
-
-	ctx := billing.WithSubscriptionOnly(cacheHitCtx(t))
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-	served := svc.tryServeSemanticCacheHit(ctx, rec, cache.FormatAnthropic, translate.RoutingFeatures{Model: "moonshotai/kimi-k3"}, cacheHitDecision(emb), cacheHitRouteRes(), [16]byte{1}, time.Now(), 1, "tenant-cache-hit", false, false, req, false, false)
-	assert.False(t, served)
-}
-
 func TestTryServeSemanticCacheHit_ExcludedWhenStream(t *testing.T) {
 	emb := cacheHitEmbedding(6)
 	c := cache.New(cache.DefaultConfig())
@@ -174,7 +160,7 @@ func TestTryServeSemanticCacheHit_ExcludedWhenNoMetadata(t *testing.T) {
 	ctx := cacheHitCtx(t)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "test"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "test"}
 	served := svc.tryServeSemanticCacheHit(ctx, rec, cache.FormatAnthropic, translate.RoutingFeatures{Model: "moonshotai/kimi-k3"}, decision, cacheHitRouteRes(), [16]byte{1}, time.Now(), 1, "tenant-cache-hit", false, false, req, false, false)
 	assert.False(t, served)
 }

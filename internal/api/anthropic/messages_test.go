@@ -223,7 +223,7 @@ func TestMessagesHandler_ClusterUnavailableReturns503WithRetryAfter(t *testing.T
 
 func TestMessagesHandler_RLPolicyUnavailableReturns503(t *testing.T) {
 	// No RL router wired — strategy fails closed rather than falling back to cluster scorer.
-	svc := newTestService(&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-5"}}, "", nil)
+	svc := newTestService(&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "claude-sonnet-4-5"}}, "", nil)
 	engine := messagesEngine(svc)
 
 	rec := httptest.NewRecorder()
@@ -240,7 +240,7 @@ func TestMessagesHandler_RLPolicyUnavailableReturns503(t *testing.T) {
 
 func TestMessagesHandler_BanditUnavailableReturns503(t *testing.T) {
 	// No bandit router wired, mirroring the RL case above.
-	svc := newTestService(&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-5"}}, "", nil)
+	svc := newTestService(&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "claude-sonnet-4-5"}}, "", nil)
 	engine := messagesEngine(svc)
 
 	rec := httptest.NewRecorder()
@@ -277,8 +277,8 @@ func TestMessagesHandler_ProviderNotConfiguredReturns502(t *testing.T) {
 func TestMessagesHandler_UpstreamStatusErrorPassesThroughStatus(t *testing.T) {
 	client := &fakeProviderClient{proxyErr: &providers.UpstreamStatusError{Status: http.StatusTooManyRequests}}
 	svc := newTestService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-5", Reason: "test"}},
-		providers.ProviderAnthropic, client,
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "claude-sonnet-4-5", Reason: "test"}},
+		providers.ProviderAiand, client,
 	)
 	engine := messagesEngine(svc)
 
@@ -292,8 +292,8 @@ func TestMessagesHandler_UpstreamStatusErrorPassesThroughStatus(t *testing.T) {
 func TestMessagesHandler_UnknownErrorReturns502(t *testing.T) {
 	client := &fakeProviderClient{proxyErr: errors.New("boom: transport exploded")}
 	svc := newTestService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-5", Reason: "test"}},
-		providers.ProviderAnthropic, client,
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "claude-sonnet-4-5", Reason: "test"}},
+		providers.ProviderAiand, client,
 	)
 	engine := messagesEngine(svc)
 
@@ -307,8 +307,8 @@ func TestMessagesHandler_UnknownErrorReturns502(t *testing.T) {
 func TestMessagesHandler_HappyPathServesUpstreamResponse(t *testing.T) {
 	client := &fakeProviderClient{proxyStatus: http.StatusOK, proxyBody: `{"id":"msg_1","type":"message"}`}
 	svc := newTestService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-5", Reason: "test_reason"}},
-		providers.ProviderAnthropic, client,
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "claude-sonnet-4-5", Reason: "test_reason"}},
+		providers.ProviderAiand, client,
 	)
 	engine := messagesEngine(svc)
 
@@ -317,7 +317,7 @@ func TestMessagesHandler_HappyPathServesUpstreamResponse(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, `{"id":"msg_1","type":"message"}`, rec.Body.String())
 	assert.Equal(t, "claude-sonnet-4-5", rec.Header().Get("x-router-model"))
-	assert.Equal(t, providers.ProviderAnthropic, rec.Header().Get("x-router-provider"))
+	assert.Equal(t, providers.ProviderAiand, rec.Header().Get("x-router-provider"))
 	assert.Equal(t, "test_reason", rec.Header().Get("x-router-decision"))
 }
 
@@ -391,7 +391,7 @@ func TestRouteHandler_RequestTooLarge(t *testing.T) {
 }
 
 func TestRouteHandler_HappyPathReturnsDecision(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5", Reason: "cheap_and_cheerful"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "claude-haiku-4-5", Reason: "cheap_and_cheerful"}
 	svc := newTestService(&fakeRouter{decision: decision}, "", nil)
 	engine := routeEngine(svc)
 
@@ -402,7 +402,7 @@ func TestRouteHandler_HappyPathReturnsDecision(t *testing.T) {
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
 	assert.Equal(t, "claude-haiku-4-5", got["model"])
-	assert.Equal(t, providers.ProviderAnthropic, got["provider"])
+	assert.Equal(t, providers.ProviderAiand, got["provider"])
 	assert.Equal(t, "cheap_and_cheerful", got["reason"])
 }
 
@@ -425,9 +425,9 @@ func TestRouteHandler_ClientModelAliasRoutesLikeChat(t *testing.T) {
 }
 
 func TestRouteHandler_ForwardsAuthorizationForProviderEligibility(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "claude-haiku-4-5"}
 	var got router.Request
-	svc := newTestService(&fakeRouter{decision: decision, got: &got}, providers.ProviderAnthropic, &fakeProviderClient{}).
+	svc := newTestService(&fakeRouter{decision: decision, got: &got}, providers.ProviderAiand, &fakeProviderClient{}).
 		WithByokOnly(true)
 	engine := routeEngine(svc)
 	req := httptest.NewRequest(http.MethodPost, "/v1/route", bytes.NewReader([]byte(validAnthropicBody)))
@@ -437,7 +437,7 @@ func TestRouteHandler_ForwardsAuthorizationForProviderEligibility(t *testing.T) 
 	engine.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, got.EnabledProviders, providers.ProviderAnthropic)
+	assert.Contains(t, got.EnabledProviders, providers.ProviderAiand)
 }
 
 func previewRouteEngine(svc *proxy.Service, authorized bool) *gin.Engine {
@@ -498,7 +498,7 @@ func TestPreviewRouteHandler_ReturnsFrozenPolicyPlan(t *testing.T) {
 
 func TestRouteAnthropicRequest_ForwardsValidInstallationIDUUIDVerbatim(t *testing.T) {
 	installID := uuid.New()
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "claude-haiku-4-5"}
 	var got router.Request
 	svc := newTestService(&fakeRouter{decision: decision, got: &got}, "", nil)
 
@@ -510,7 +510,7 @@ func TestRouteAnthropicRequest_ForwardsValidInstallationIDUUIDVerbatim(t *testin
 }
 
 func TestRouteAnthropicRequest_DropsMalformedInstallationIDInsteadOfForwardingRaw(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "claude-haiku-4-5"}
 	var got router.Request
 	svc := newTestService(&fakeRouter{decision: decision, got: &got}, "", nil)
 
@@ -525,7 +525,7 @@ func TestRouteAnthropicRequest_DropsMalformedInstallationIDInsteadOfForwardingRa
 }
 
 func TestRouteAnthropicRequest_DropsEmptyInstallationIDInsteadOfForwardingRaw(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "claude-haiku-4-5"}
 	var got router.Request
 	svc := newTestService(&fakeRouter{decision: decision, got: &got}, "", nil)
 
@@ -537,7 +537,7 @@ func TestRouteAnthropicRequest_DropsEmptyInstallationIDInsteadOfForwardingRaw(t 
 }
 
 func TestRouteAnthropicRequest_DropsMissingInstallationIDInsteadOfForwardingRaw(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "claude-haiku-4-5"}
 	var got router.Request
 	svc := newTestService(&fakeRouter{decision: decision, got: &got}, "", nil)
 
@@ -560,7 +560,7 @@ func passthroughEngine(svc *proxy.Service) *gin.Engine {
 
 func TestPassthroughHandler_NotImplementedReturns501(t *testing.T) {
 	client := &fakeProviderClient{passthroughErr: providers.ErrNotImplemented}
-	svc := newTestService(&fakeRouter{}, providers.ProviderAnthropic, client)
+	svc := newTestService(&fakeRouter{}, providers.ProviderAiand, client)
 	engine := passthroughEngine(svc)
 
 	rec := httptest.NewRecorder()
@@ -584,7 +584,7 @@ func TestPassthroughHandler_RequestTooLarge(t *testing.T) {
 
 func TestPassthroughHandler_HappyPath(t *testing.T) {
 	client := &fakeProviderClient{proxyBody: `{"input_tokens":42}`}
-	svc := newTestService(&fakeRouter{}, providers.ProviderAnthropic, client)
+	svc := newTestService(&fakeRouter{}, providers.ProviderAiand, client)
 	engine := passthroughEngine(svc)
 
 	rec := httptest.NewRecorder()

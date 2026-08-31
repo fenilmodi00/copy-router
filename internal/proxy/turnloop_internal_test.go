@@ -93,7 +93,7 @@ func TestPinCacheCold_OrdinaryAndHMMShareTheSameRule(t *testing.T) {
 	t.Parallel()
 
 	warm := sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		LastTurnEndedAt: time.Now().Add(-time.Minute),
 	}
 	cold := warm
@@ -109,7 +109,7 @@ func TestConsumePostCommandContinuation_RequiresEffectiveStrategy(t *testing.T) 
 	store.consumeHit = true
 	store.consumePin = sessionpin.Pin{Strategy: router.StrategyCluster}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAiand, "claude-haiku-4-5", nil)
 	ctx := router.WithStrategy(context.Background(), router.StrategyHMMBeta)
 
 	_, found := svc.consumePostCommandContinuation(ctx, [sessionpin.SessionKeyLen]byte{1}, sessionpin.DefaultRole)
@@ -126,19 +126,19 @@ func TestApplyPinEvidence_UsesAvailablePriorTurnData(t *testing.T) {
 
 	zeroTimestamp := turnLoopResult{}
 	applyPinEvidence(&zeroTimestamp, sessionpin.Pin{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 	})
-	assert.Equal(t, providers.ProviderAnthropic, zeroTimestamp.PinProvider)
+	assert.Equal(t, providers.ProviderAiand, zeroTimestamp.PinProvider)
 	assert.Nil(t, zeroTimestamp.PriorTurnGapMS)
 
 	withHistory := turnLoopResult{}
 	applyPinEvidence(&withHistory, sessionpin.Pin{
-		Provider:        providers.ProviderFireworks,
+		Provider:        providers.ProviderAiand,
 		Model:           "accounts/fireworks/models/qwen3-235b-a22b",
 		LastTurnEndedAt: time.Now().Add(-time.Second),
 	})
-	assert.Equal(t, providers.ProviderFireworks, withHistory.PinProvider)
+	assert.Equal(t, providers.ProviderAiand, withHistory.PinProvider)
 	require.NotNil(t, withHistory.PriorTurnGapMS)
 	assert.Greater(t, *withHistory.PriorTurnGapMS, int64(0))
 
@@ -295,7 +295,7 @@ func TestRecordTurnUsage_HMMDecisionWritesHistoryOnly(t *testing.T) {
 	require.Len(t, store.upserts, 1)
 	assert.Equal(t, hmmHistoryRole(sessionpin.DefaultRole), store.upserts[0].Role)
 	assert.Equal(t, "hmm_policy(label=high)", store.upserts[0].Reason)
-	assert.Equal(t, providers.ProviderAnthropic, store.upserts[0].Provider)
+	assert.Equal(t, providers.ProviderAiand, store.upserts[0].Provider)
 	assert.Empty(t, store.upserts[0].Model, "HMM history rows must not be routable pins")
 	assert.Equal(t, router.StrategyHMMBeta, store.upserts[0].Strategy)
 	assert.Equal(t, []string{hmmHistoryRole(sessionpin.DefaultRole)}, store.usageRoles)
@@ -331,7 +331,7 @@ func TestRecordTurnUsage_HMMModelChangeWritesCurrentUsageOnly(t *testing.T) {
 	res := turnLoopResult{
 		InstallationID: uuid.New(),
 		Decision: router.Decision{
-			Provider: providers.ProviderAnthropic,
+			Provider: providers.ProviderAiand,
 			Model:    "moonshotai/kimi-k2.7",
 			Reason:   "hmm_policy(label=high)",
 			Metadata: &router.RoutingMetadata{
@@ -378,7 +378,7 @@ func TestRecordHMMTurnHistory_ZeroUsageRefreshesTTLButSkipsUsageWriteback(t *tes
 	res := turnLoopResult{
 		InstallationID: uuid.New(),
 		Decision: router.Decision{
-			Provider: providers.ProviderAnthropic,
+			Provider: providers.ProviderAiand,
 			Model:    "moonshotai/kimi-k2.7",
 			Reason:   "hmm_policy(label=high)",
 			Metadata: &router.RoutingMetadata{
@@ -403,10 +403,10 @@ func TestRecordHMMTurnHistory_ZeroUsageRefreshesTTLButSkipsUsageWriteback(t *tes
 func TestRecordHMMTurnHistory_ZeroUsagePreservesPriorProvider(t *testing.T) {
 	store := newStubPinStore()
 	store.getFound = true
-	store.getPin = sessionpin.Pin{Provider: providers.ProviderMakora}
+	store.getPin = sessionpin.Pin{Provider: providers.ProviderAiand}
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderMakora: nil, providers.ProviderOpenAI: nil},
+		map[string]providers.Client{providers.ProviderAiand: nil},
 		nil,
 		false,
 		nil,
@@ -424,7 +424,7 @@ func TestRecordHMMTurnHistory_ZeroUsagePreservesPriorProvider(t *testing.T) {
 	res := turnLoopResult{
 		InstallationID: uuid.New(),
 		Decision: router.Decision{
-			Provider: providers.ProviderOpenAI,
+			Provider: providers.ProviderAiand,
 			Model:    "openai/gpt-oss-120b",
 			Reason:   "hmm_policy(label=high)",
 			Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMM), RouteID: "route-1"},
@@ -438,14 +438,14 @@ func TestRecordHMMTurnHistory_ZeroUsagePreservesPriorProvider(t *testing.T) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	require.Len(t, store.upserts, 1)
-	assert.Equal(t, providers.ProviderMakora, store.upserts[0].Provider,
+	assert.Equal(t, providers.ProviderAiand, store.upserts[0].Provider,
 		"a failed turn must not replace the provider paired with the last successful HMM model")
 }
 
 func TestNormalizeHMMStayPin_RepairsMismatchedProvider(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAiand: nil, providers.ProviderOpenAI: nil},
+		map[string]providers.Client{providers.ProviderAiand: nil},
 		nil,
 		false,
 		nil,
@@ -455,7 +455,7 @@ func TestNormalizeHMMStayPin_RepairsMismatchedProvider(t *testing.T) {
 		nil,
 	)
 	pin := sessionpin.Pin{
-		Provider:        providers.ProviderOpenAI,
+		Provider:        providers.ProviderAiand,
 		LastServedModel: "deepseek-ai/deepseek-v4-flash",
 		LastTurnEndedAt: time.Now(),
 		PinnedUntil:     time.Now().Add(time.Hour),
@@ -471,7 +471,7 @@ func TestNormalizeHMMStayPin_RepairsMismatchedProvider(t *testing.T) {
 func TestNormalizeHMMStayPin_ReResolvesDisabledProvider(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAiand: nil, providers.ProviderOpenAI: nil},
+		map[string]providers.Client{providers.ProviderAiand: nil},
 		nil,
 		false,
 		nil,
@@ -481,7 +481,7 @@ func TestNormalizeHMMStayPin_ReResolvesDisabledProvider(t *testing.T) {
 		nil,
 	)
 	pin := sessionpin.Pin{
-		Provider:        providers.ProviderOpenAI,
+		Provider:        providers.ProviderAiand,
 		LastServedModel: "deepseek-ai/deepseek-v4-flash",
 		LastTurnEndedAt: time.Now(),
 		PinnedUntil:     time.Now().Add(time.Hour),
@@ -545,12 +545,12 @@ func TestRecordTurnUsage_HMMEVStayWritesHistoryOnly(t *testing.T) {
 	res := turnLoopResult{
 		InstallationID: uuid.New(),
 		Decision: router.Decision{
-			Provider: providers.ProviderAnthropic,
+			Provider: providers.ProviderAiand,
 			Model:    "moonshotai/kimi-k2.7",
 			Reason:   hmmHistoryReason,
 		},
 		Fresh: router.Decision{
-			Provider: providers.ProviderMakora,
+			Provider: providers.ProviderAiand,
 			Model:    "deepseek-ai/deepseek-v4-flash",
 			Reason:   "hmm_policy(classifier 'fast')",
 			Metadata: &router.RoutingMetadata{
@@ -698,13 +698,13 @@ func TestLoadPin_RequiresBetaStrategyMatch(t *testing.T) {
 			store := newStubPinStore()
 			store.getFound = true
 			store.getPin = sessionpin.Pin{
-				Provider:    providers.ProviderAnthropic,
+				Provider:    providers.ProviderAiand,
 				Model:       "claude-opus-4-7",
 				Strategy:    tt.stored,
 				PinnedUntil: time.Now().Add(time.Hour),
 			}
 			svc := NewService(nil, nil, nil, false, nil, store, false,
-				providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+				providers.ProviderAiand, "claude-haiku-4-5", nil)
 			ctx := router.WithStrategy(context.Background(), tt.request)
 
 			pin, found := svc.loadPin(ctx, [sessionpin.SessionKeyLen]byte{1}, sessionpin.DefaultRole)
@@ -791,7 +791,7 @@ func TestModelSwitched(t *testing.T) {
 func TestService_NewService_HMMUpgradeConfidenceDefaults(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil},
+		map[string]providers.Client{providers.ProviderAiand: nil},
 		nil,
 		false,
 		nil,
@@ -806,7 +806,7 @@ func TestService_NewService_HMMUpgradeConfidenceDefaults(t *testing.T) {
 func TestService_WithHMMUpgradeConfidenceThreshold(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil},
+		map[string]providers.Client{providers.ProviderAiand: nil},
 		nil,
 		false,
 		nil,

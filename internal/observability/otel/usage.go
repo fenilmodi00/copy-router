@@ -159,41 +159,11 @@ func (u *UsageExtractor) scanBuffer() {
 	u.tryExtractFromJSON()
 }
 
-// Dispatch is family-based so Anthropic-spec gateway providers
-// (e.g. anthropic_gateway) are parsed correctly instead of recording zero usage.
-func (u *UsageExtractor) extractFromSSEEvent(eventType []byte, data []byte) {
-	switch providers.FamilyFor(u.provider) {
-	case providers.FamilyAnthropic:
-		u.extractAnthropicSSE(eventType, data)
-	case providers.FamilyOpenAICompat:
+// Dispatch is family-based; today every registered provider is
+// OpenAI-compatible. Anthropic-family SSE parsing dies with the provider.
+func (u *UsageExtractor) extractFromSSEEvent(_ []byte, data []byte) {
+	if providers.FamilyFor(u.provider) == providers.FamilyOpenAICompat {
 		u.extractOpenAISSE(data)
-	}
-}
-
-// message_start carries input_tokens + cache tokens; message_delta carries output_tokens.
-func (u *UsageExtractor) extractAnthropicSSE(eventType []byte, data []byte) {
-	if !bytes.Equal(eventType, []byte("message_start")) && !bytes.Equal(eventType, []byte("message_delta")) {
-		return
-	}
-
-	input, output, cacheCreation, cacheRead, found := extractUsageGJSON(data, providers.ProviderAnthropic)
-	if !found {
-		return
-	}
-
-	if bytes.Equal(eventType, []byte("message_start")) {
-		if input > 0 {
-			u.input = input
-		}
-		if cacheCreation > 0 {
-			u.cacheCreation = cacheCreation
-		}
-		if cacheRead > 0 {
-			u.cacheRead = cacheRead
-		}
-	}
-	if bytes.Equal(eventType, []byte("message_delta")) && output > 0 {
-		u.output = output
 	}
 }
 

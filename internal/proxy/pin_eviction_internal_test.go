@@ -173,7 +173,7 @@ func TestExpireSessionPinInvalidatesPostCommandContinuation(t *testing.T) {
 	continuationRole := commandContinuationRole(sessionpin.DefaultRole)
 	store := &evictionStubPinStore{continuations: map[string]sessionpin.Pin{
 		continuationRole: {
-			Provider:    providers.ProviderAnthropic,
+			Provider:    providers.ProviderAiand,
 			Model:       "deepseek-ai/deepseek-v4-flash",
 			PinnedUntil: time.Now().Add(time.Minute),
 		},

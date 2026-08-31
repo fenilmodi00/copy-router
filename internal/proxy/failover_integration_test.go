@@ -80,7 +80,7 @@ func TestProxyMessages_FireworksFailureFallbackToOpenRouter(t *testing.T) {
 			"fireworks":  openaicompat.NewClient("test-fw-key", fireworks.URL),
 			"openrouter": openaicompat.NewClient("test-or-key", openrouter.URL),
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
+		nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
 		"fireworks":  {},
 		"openrouter": {},
@@ -153,7 +153,7 @@ func TestProxyMessages_BothBindingsFail(t *testing.T) {
 			"fireworks":  openaicompat.NewClient("test-fw-key", fireworks.URL),
 			"openrouter": openaicompat.NewClient("test-or-key", openrouter.URL),
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
+		nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
 		"fireworks":  {},
 		"openrouter": {},
@@ -207,9 +207,9 @@ func TestProxyMessages_SingleBindingPreservesEagerPrelude(t *testing.T) {
 
 	// deepseek-ai/deepseek-v4-flash is single-binding (Anthropic only).
 	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash"},
+		router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash"},
 		map[string]providers.Client{
-			providers.ProviderAnthropic: &fakeProvider{
+			providers.ProviderAiand: &fakeProvider{
 				proxyResponse: func(w http.ResponseWriter) {
 					// Mirror the translator's expected SSE shape.
 					w.Header().Set("Content-Type", "text/event-stream")
@@ -219,7 +219,7 @@ func TestProxyMessages_SingleBindingPreservesEagerPrelude(t *testing.T) {
 				},
 			},
 		},
-	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}})
+	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAiand: {}})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
@@ -255,12 +255,12 @@ func TestProxyMessages_SingleBindingStreamingPreCommitError(t *testing.T) {
 	// inbound Anthropic Messages request so the cross-format
 	// AnthropicSSETranslator + Prelude path runs.
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "gpt-5"}},
 		map[string]providers.Client{
-			providers.ProviderOpenAI: openaicompat.NewClient("test-key", stub.URL),
+			providers.ProviderAiand: openaicompat.NewClient("test-key", stub.URL),
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderOpenAI: {}})
+		nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil,
+	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAiand: {}})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))

@@ -45,10 +45,10 @@ func TestForceModelCommand_SessionStrikeOutDoesNotReject(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
-		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic))
+		WithDeploymentKeyedProviders(keyed(providers.ProviderAiand))
 
 	ctx := context.WithValue(context.Background(),
-		SessionDisabledProvidersContextKey{}, []string{providers.ProviderAnthropic})
+		SessionDisabledProvidersContextKey{}, []string{providers.ProviderAiand})
 	env := forceCommandEnv(t)
 	rec := httptest.NewRecorder()
 	require.NoError(t, svc.handleForceModelCommand(ctx, rec, env,

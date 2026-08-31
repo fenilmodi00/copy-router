@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"workweave/router/internal/billing"
 	"workweave/router/internal/observability"
 	"workweave/router/internal/observability/otel"
 	"workweave/router/internal/router"
@@ -53,7 +52,7 @@ func (s *Service) tryServeSemanticCacheHit(
 	requestID := requestIDFor(ctx)
 
 	cacheMeta := cacheMetadataFor(decision, routeRes)
-	cacheEligible := s.semanticCacheAllowed(ctx) && s.semanticCache != nil && !usageBypassEngaged && !stream && cacheMeta != nil && externalID != "" && !bypassEval && !extraExclusion && !billing.SubscriptionOnlyFromContext(ctx) && len(s.subsidyFactors(ctx, r.Header)) == 0
+	cacheEligible := s.semanticCacheAllowed(ctx) && s.semanticCache != nil && !usageBypassEngaged && !stream && cacheMeta != nil && externalID != "" && !bypassEval && !extraExclusion
 
 	if !cacheEligible {
 		return false

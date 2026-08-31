@@ -14,16 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestConfigHandler_EnvProviderKeys_IncludesEveryDeployedProvider guards
-// [114]: ConfigHandler used to derive its display list from a hand-maintained
-// literal that silently omitted providers added after the initial list even
-// though they're wired into providerMap, so an operator who set the env var
-// still saw the key reported as absent. ConfigHandler must now report every
-// provider whose env var is actually set, regardless of when the provider
-// was added to internal/providers.
-func TestConfigHandler_EnvProviderKeys_IncludesEveryDeployedProvider(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderMakora), "dummy-key")
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderBedrock), "dummy-key")
+// TestConfigHandler_EnvProviderKeys_ReportsAiandKey covers the single-provider
+// contract: the config response lists "aiand" only when AIAND_API_KEY is set.
+func TestConfigHandler_EnvProviderKeys_ReportsAiandKey(t *testing.T) {
+	t.Setenv("AIAND_API_KEY", "dummy-key")
 
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -41,6 +35,27 @@ func TestConfigHandler_EnvProviderKeys_IncludesEveryDeployedProvider(t *testing.
 		EnvProviderKeys []string `json:"env_provider_keys"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	require.Contains(t, body.EnvProviderKeys, providers.ProviderMakora)
-	require.Contains(t, body.EnvProviderKeys, providers.ProviderBedrock)
+	require.Equal(t, []string{providers.ProviderAiand}, body.EnvProviderKeys)
+}
+
+func TestConfigHandler_EnvProviderKeys_EmptyWithoutEnvKey(t *testing.T) {
+	t.Setenv("AIAND_API_KEY", "")
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.GET("/admin/v1/config", func(c *gin.Context) {
+		c.Set("router_installation", &auth.Installation{ID: "inst-1"})
+	}, admin.ConfigHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/v1/config", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var body struct {
+		EnvProviderKeys []string `json:"env_provider_keys"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Empty(t, body.EnvProviderKeys)
 }

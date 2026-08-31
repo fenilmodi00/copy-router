@@ -9,75 +9,25 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// expectedRosterPrefix pins the vendor prefix rosterIDFor applies for a given
-// provider's primary binding, keyed off the roster's OpenRouter-style slug
-// convention (see rosterAliases doc comment). This map is deliberately
-// explicit rather than derived from providers.ProviderFamilies so a new
-// Provider* constant forces a decision here (finding [113]: provider
-// dispatch drift guard) instead of silently falling through to the bare
-// model-ID default.
-var expectedRosterPrefix = map[string]string{
-	providers.ProviderAnthropic:        "anthropic/",
-	providers.ProviderOpenAI:           "openai/",
-	providers.ProviderGoogle:           "google/",
-	providers.ProviderXAI:              "x-ai/",
-	providers.ProviderAnthropicGateway: "anthropic/",
+// rosterIDFor is now a pure alias map: ai& is the sole provider, so the
+// per-provider switch and its vendor-prefix arms are gone. These tests pin
+// the two behaviors that remain — the alias and the bare-ID passthrough.
+
+func TestRosterIDForAppliesAlias(t *testing.T) {
+	model := catalog.Model{ID: "moonshotai/kimi-k2.7"}
+	assert.Equal(t, "moonshotai/kimi-k2.7-code", rosterIDFor(model))
 }
 
-// defaultRosterPrefixProviders are providers intentionally left off
-// expectedRosterPrefix because rosterIDFor's bare-model-ID fallback (no
-// prefix) is correct for them — either the model ID is already slash-form
-// (OpenAI-compat upstreams dispatched via catalog models with slash IDs) or
-// the RL policy roster doesn't need to distinguish them.
-var defaultRosterPrefixProviders = map[string]struct{}{
-	providers.ProviderOpenRouter: {},
-	providers.ProviderFireworks:  {},
-	providers.ProviderBedrock:    {},
-	providers.ProviderMakora:     {},
-	providers.ProviderTogether:   {},
-	providers.ProviderAiand:      {},
-	// An OpenAI-spec gateway serves several vendors' models, so no single
-	// vendor prefix is right; the bare ID lets the sidecar match what it can.
-	providers.ProviderOpenAIGateway: {},
-}
-
-// TestRosterIDForCoversEveryProvider guards against a new Provider* constant
-// going unreviewed by rosterIDFor's per-provider switch in mapping.go. Every
-// provider in providers.AllProviders() must be accounted for in exactly one
-// of expectedRosterPrefix or defaultRosterPrefixProviders.
-func TestRosterIDForCoversEveryProvider(t *testing.T) {
-	for _, p := range providers.AllProviders() {
-		_, explicit := expectedRosterPrefix[p]
-		_, defaulted := defaultRosterPrefixProviders[p]
-		assert.Truef(t, explicit || defaulted,
-			"provider %q not accounted for in expectedRosterPrefix or defaultRosterPrefixProviders — "+
-				"review internal/router/rl/mapping.go's rosterIDFor and internal/providers/CLAUDE.md's onboarding recipe step 5", p)
-		assert.Falsef(t, explicit && defaulted,
-			"provider %q is listed in both expectedRosterPrefix and defaultRosterPrefixProviders", p)
+func TestRosterIDForPassthroughUnaliased(t *testing.T) {
+	for _, id := range []string{"zai-org/glm-5.3", "deepseek-ai/deepseek-v4-flash", "moonshotai/kimi-k3"} {
+		assert.Equal(t, id, rosterIDFor(catalog.Model{ID: id}), "unaliased catalog ID must pass through")
 	}
 }
 
-// TestRosterIDForMatchesActualBehavior asserts rosterIDFor actually applies
-// the pinned vendor prefix (or lack thereof) for every known provider, using
-// a bare (non-slash, non-aliased) model ID per provider so the vendor-prefix
-// branch of the switch is exercised rather than the alias or slash-form
-// short-circuits.
-func TestRosterIDForMatchesActualBehavior(t *testing.T) {
-	const bareModelID = "some-bare-model-id"
-
-	for _, p := range providers.AllProviders() {
-		t.Run(p, func(t *testing.T) {
-			model := catalog.Model{
-				ID:        bareModelID,
-				Providers: []catalog.ProviderBinding{{Provider: p}},
-			}
-			got := rosterIDFor(model)
-
-			if prefix, ok := expectedRosterPrefix[p]; ok {
-				assert.Equal(t, prefix+bareModelID, got)
-				return
-			}
-			assert.Equal(t, bareModelID, got, "provider %q expected to fall through to the bare model ID", p)
-		})
+func TestRosterAliasesOnlyReferenceCatalogModels(t *testing.T) {
+	for alias := range rosterAliases {
+		_, ok := catalog.ByID(alias)
+		assert.Truef(t, ok, "roster alias %q has no catalog model", alias)
+		_ = providers.ProviderAiand // keep the import honest if catalog drops providers
 	}
 }

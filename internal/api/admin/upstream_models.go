@@ -12,7 +12,7 @@ import (
 )
 
 // discoverModelsRequest carries an unsaved key's connection details for pre-save model discovery.
-// Only bearer auth is accepted; derived types (key-pair, WIF) need the stored secret and use the GET route.
+// Bearer-only BYOK credentials are accepted pre-save; no derived auth types remain.
 type discoverModelsRequest struct {
 	Provider string  `json:"provider" binding:"required"`
 	Key      string  `json:"key" binding:"required"`

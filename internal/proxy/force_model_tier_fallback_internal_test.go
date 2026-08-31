@@ -41,7 +41,7 @@ func (r *tierProbeRouter) Route(_ context.Context, req router.Request) (router.D
 	if best == "" {
 		return router.Decision{}, errors.New("no eligible candidate")
 	}
-	return router.Decision{Provider: providers.ProviderAnthropic, Model: best, Reason: "fake"}, nil
+	return router.Decision{Provider: providers.ProviderAiand, Model: best, Reason: "fake"}, nil
 }
 
 // forcedPinStore returns a single user-forced pin for every lookup.
@@ -139,13 +139,13 @@ func TestRunTurnLoop_ForcedModelContextOverflow_StaysInTier(t *testing.T) {
 		"deepseek-ai/deepseek-v4-flash": {},
 	}}
 	store := &forcedPinStore{pin: sessionpin.Pin{
-		Provider:    providers.ProviderFireworks,
+		Provider:    providers.ProviderAiand,
 		Model:       forced,
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(time.Hour),
 	}}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(fr.available).
 		WithPlannerEnabled(false)
 
@@ -177,7 +177,7 @@ func TestRunTurnLoop_ForcedModelContextOverflow_StaysInTier(t *testing.T) {
 
 func TestRunTurnLoop_ForcedModelOverridesHardPin(t *testing.T) {
 	store := &forcedPinStore{pin: sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "moonshotai/kimi-k3",
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(time.Hour),
@@ -191,7 +191,7 @@ func TestRunTurnLoop_ForcedModelOverridesHardPin(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -222,11 +222,11 @@ func TestRunTurnLoop_ForcedModelOverridesHardPin(t *testing.T) {
 // silently reverting an explicit user choice.
 func TestRunTurnLoop_ForcedModelServesDespiteDisabledProvider(t *testing.T) {
 	store := &forcedPinStore{pin: sessionpin.Pin{
-		Provider:          providers.ProviderAnthropic,
+		Provider:          providers.ProviderAiand,
 		Model:             "moonshotai/kimi-k3",
 		Reason:            translate.ReasonUserForceModel,
 		PinnedUntil:       time.Now().Add(time.Hour),
-		DisabledProviders: []string{providers.ProviderAnthropic},
+		DisabledProviders: []string{providers.ProviderAiand},
 	}}
 	fr := &tierProbeRouter{available: map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}}
 	svc := NewService(
@@ -237,7 +237,7 @@ func TestRunTurnLoop_ForcedModelServesDespiteDisabledProvider(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -251,13 +251,13 @@ func TestRunTurnLoop_ForcedModelServesDespiteDisabledProvider(t *testing.T) {
 
 	res, err := svc.runTurnLoop(context.Background(), env, feats, "key-1", uuid.New(), "", nil, router.Request{
 		RequestedModel:   feats.Model,
-		EnabledProviders: map[string]struct{}{providers.ProviderAnthropic: {}},
+		EnabledProviders: map[string]struct{}{providers.ProviderAiand: {}},
 	})
 	require.NoError(t, err)
 
 	assert.Equal(t, "moonshotai/kimi-k3", res.Decision.Model,
 		"force-model must serve through the pinned provider despite the session-level disable")
-	assert.Equal(t, providers.ProviderAnthropic, res.Decision.Provider)
+	assert.Equal(t, providers.ProviderAiand, res.Decision.Provider)
 	assert.Equal(t, translate.ReasonUserForceModel, res.Decision.Reason)
 	assert.True(t, res.StickyHit)
 	assert.Empty(t, fr.captured, "a forced pin must not invoke the scorer")
@@ -265,7 +265,7 @@ func TestRunTurnLoop_ForcedModelServesDespiteDisabledProvider(t *testing.T) {
 
 func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 	store := &overwritingPinStore{pin: sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      "cluster:v0.2",
 		PinnedUntil: time.Now().Add(time.Hour),
@@ -279,7 +279,7 @@ func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -313,7 +313,7 @@ func TestForceModelHeader_OverridesHardPin(t *testing.T) {
 // must return ok=false rather than hand the scorer an empty pool.
 func TestRestrictToTier_FallsBackWhenNoInTierCandidate(t *testing.T) {
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}})
 
 	excluded := map[string]struct{}{"deepseek-ai/deepseek-v4-pro": {}}
@@ -326,7 +326,7 @@ func TestRestrictToTier_FallsBackWhenNoInTierCandidate(t *testing.T) {
 // models stay eligible.
 func TestRestrictToTier_ExcludesOtherTiers(t *testing.T) {
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
+		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(map[string]struct{}{
 			"zai-org/glm-5.2":               {}, // high
 			"deepseek-ai/deepseek-v4-flash": {}, // low
