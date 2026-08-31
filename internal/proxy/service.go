@@ -406,6 +406,9 @@ type nativeResponsesReasoningHashContextKey struct{}
 // nativeResponsesToolHashContextKey preserves native Responses tool identity.
 type nativeResponsesToolHashContextKey struct{}
 
+// responsesFooterEchoedContextKey is set when the original Responses input
+// already carries a rating hint after the last human turn.
+type responsesFooterEchoedContextKey struct{}
 // InstallationExcludedModelsContextKey is the context key for the authed
 // installation's model exclusion list. Carried as []string.
 type InstallationExcludedModelsContextKey struct{}
@@ -2669,6 +2672,9 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	// cleanup, matching the OpenAI chat path. The echo check must read the body
 	// before the strip erases its evidence.
 	footerEchoedSinceHumanTurn := translate.FeedbackFooterSinceLastHumanTurn(body)
+	if echoed, _ := ctx.Value(responsesFooterEchoedContextKey{}).(bool); echoed {
+		footerEchoedSinceHumanTurn = true
+	}
 	if strippedBody, ferr := translate.StripFeedbackFooterFromMessages(body); ferr != nil {
 		log.Error("Failed to strip feedback footer from inbound messages", "err", ferr)
 	} else {
@@ -2754,11 +2760,14 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	if !agentShadowMode {
 		if cmd, hasCmd := env.ExtractRouterFeedbackCommand(); hasCmd {
 			log.Info("ProxyMessages router-feedback command")
-			if err := s.handleRouterFeedbackCommand(ctx, w, env, cmd, installationID, sessionKey, feats.Tokens); err != nil {
+			if err := s.handleRouterFeedbackCommand(ctx, w, env, cmd, installationID, sessionKey, feats.Tokens, !cmd.FromToolResult); err != nil {
 				return err
 			}
-			s.grantPostCommandContinuation(ctx, installationID, sessionKey, roleForTier(catalog.TierFor(feats.Model)))
-			return nil
+			if !cmd.FromToolResult {
+				s.grantPostCommandContinuation(ctx, installationID, sessionKey, roleForTier(catalog.TierFor(feats.Model)))
+				return nil
+			}
+			requestBodyChanged = true
 		}
 	}
 
@@ -5119,6 +5128,9 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	// cleanup, matching the Anthropic Messages path. The echo check must read
 	// the body before the strip erases its evidence.
 	footerEchoedSinceHumanTurn := translate.FeedbackFooterSinceLastHumanTurn(body)
+	if echoed, _ := ctx.Value(responsesFooterEchoedContextKey{}).(bool); echoed {
+		footerEchoedSinceHumanTurn = true
+	}
 	strippedBody, stripErr = translate.StripFeedbackFooterFromMessages(body)
 	if stripErr != nil {
 		log.Error("Failed to strip feedback footer from OpenAI messages", "err", stripErr)
@@ -5185,11 +5197,14 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	}
 	if cmd, hasCmd := env.ExtractRouterFeedbackCommand(); hasCmd {
 		log.Info("ProxyOpenAIChatCompletion router-feedback command")
-		if err := s.handleRouterFeedbackCommand(ctx, w, env, cmd, installationID, sessionKey, feats.Tokens); err != nil {
+		if err := s.handleRouterFeedbackCommand(ctx, w, env, cmd, installationID, sessionKey, feats.Tokens, !cmd.FromToolResult); err != nil {
 			return err
 		}
-		s.grantPostCommandContinuation(ctx, installationID, sessionKey, roleForTier(catalog.TierFor(feats.Model)))
-		return nil
+		if !cmd.FromToolResult {
+			s.grantPostCommandContinuation(ctx, installationID, sessionKey, roleForTier(catalog.TierFor(feats.Model)))
+			return nil
+		}
+		requestBodyChanged = true
 	}
 
 	// Sanitize after command extraction: a skill can encode its command as a
@@ -5525,6 +5540,11 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	debugEnabled, _ := ctx.Value(PolicyDebugEnabledContextKey{}).(bool)
 	if rw, ok := w.(*translate.ResponsesWriter); ok && marker != "" && !verbatimPassthrough && (debugEnabled || billing.SubscriptionOnlyFromContext(ctx)) {
 		rw.SetBadgeText(marker)
+	}
+	if rw, ok := w.(*translate.ResponsesWriter); ok {
+		if footer := s.feedbackFooter(ctx, clientID.ClientApp, routeRes.TurnType, footerEchoedSinceHumanTurn); footer != "" {
+			rw.SetFooterText(footer)
+		}
 	}
 	// Outlives the passthrough teardown of marker below, so a chat/completions
 	// re-dispatch can still badge the translated stream.
@@ -5993,6 +6013,9 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 func (s *Service) ProxyOpenAIResponses(ctx context.Context, body []byte, w http.ResponseWriter, r *http.Request) error {
 	ctx = s.withUsageObserver(ctx, r.Header)
 	clientAppCodex := ClientIdentityFrom(ctx).ClientApp == ClientAppCodex
+	if translate.FeedbackFooterSinceLastHumanTurnInResponses(body) {
+		ctx = context.WithValue(ctx, responsesFooterEchoedContextKey{}, true)
+	}
 	conversion, err := translate.ConvertResponsesToChatCompletionsWithOptions(body, translate.ResponsesConversionOptions{
 		PortableCodex: clientAppCodex,
 	})
@@ -6003,12 +6026,20 @@ func (s *Service) ProxyOpenAIResponses(ctx context.Context, body []byte, w http.
 	codexNativeRequest := codexResponsesRequest(ctx, r.Header)
 	nativeBody := conversion.OriginalBody
 	if clientAppCodex {
+		nativeBody, err = translate.StripRouterCommandsFromResponsesInput(nativeBody)
+		if err != nil {
+			return fmt.Errorf("strip Responses router command: %w", err)
+		}
 		// Codex records response.output_item.done as conversation history and
 		// sends it back in the next native request. Remove only the badge this
 		// client opted into so router text never reaches the selected model.
 		nativeBody, err = translate.StripRoutingBadgeFromResponsesInput(nativeBody)
 		if err != nil {
 			return fmt.Errorf("strip native Responses routing badge: %w", err)
+		}
+		nativeBody, err = translate.StripFeedbackFooterFromResponsesInput(nativeBody)
+		if err != nil {
+			return fmt.Errorf("strip native Responses feedback footer: %w", err)
 		}
 	}
 	// Every Responses turn stashes its original bytes for post-routing native

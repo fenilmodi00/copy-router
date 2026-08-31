@@ -35,6 +35,8 @@ func TestFeedbackFooterSinceLastHumanTurn_NewHumanTurnResets(t *testing.T) {
 }
 
 func TestFeedbackFooterSinceLastHumanTurn_SkipsFooterlessContinuations(t *testing.T) {
+	// A suppressed continuation response between the footer-bearing answer and
+	// the current request must not re-enable the hint.
 	body := buildBody(t, []map[string]any{
 		{"role": "user", "content": []any{textBlock("do the thing")}},
 		{"role": "assistant", "content": []any{textBlock("all done" + sampleFooter())}},
@@ -77,4 +79,10 @@ func TestFeedbackFooterSinceLastHumanTurn_EmptyAndMissing(t *testing.T) {
 	} {
 		assert.False(t, translate.FeedbackFooterSinceLastHumanTurn(body))
 	}
+}
+
+func TestFeedbackFooterSinceLastHumanTurnInResponses(t *testing.T) {
+	body := []byte("{\"input\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"done\\n\\n_Weave Router feedback:_ `$rf +` x\"}]}]}")
+	assert.True(t, translate.FeedbackFooterSinceLastHumanTurnInResponses(body))
+	assert.True(t, translate.FeedbackFooterSinceLastHumanTurn(body))
 }
