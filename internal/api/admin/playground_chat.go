@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"workweave/router/internal/auth"
+	"workweave/router/internal/flags"
 	"workweave/router/internal/observability"
 	"workweave/router/internal/proxy"
 	"workweave/router/internal/server/middleware"
@@ -51,8 +52,13 @@ func PlaygroundChatHandler(svc playgroundChatProxy, authSvc *auth.Service) gin.H
 		}
 		ctx = context.WithValue(ctx, proxy.ClientIdentityContextKey{}, identity)
 		ctx = proxy.ResolveUserFromContext(ctx, authSvc, middleware.InstallationFrom(c))
-		c.Request = c.Request.WithContext(ctx)
 		c.Request.Header.Set(playgroundRoutingMarkerHeader, "off")
+		// The playground is a chat-shaped surface backed by the fork's own
+		// upstream; keep its turns on chat/completions rather than the broad
+		// Responses rollout.
+		ctx = flags.WithOverrides(ctx, flags.Overrides{
+			Bools: map[flags.Key]bool{flags.KeyOpenAIResponsesBroad: false},
+		})
 
 		err = svc.ProxyOpenAIChatCompletion(ctx, body, c.Writer, c.Request)
 		if err == nil && installation != nil {

@@ -26,7 +26,10 @@ var globalLoggerBudget = map[string]int{
 	// Pure schema-emit / validation helpers with no ctx in scope. Threading a
 	// ctx through these is a wider refactor; they are diagnostics about a
 	// tool schema, not about a request's fate.
-	"internal/translate":           7,
+	// Upstream #1085 raised this with the Responses translators
+	// (ResponsesToAnthropicWriter consolidates via t.log(); the chat
+	// translator + emit paths are Finalize-time diagnostics with no ctx).
+	"internal/translate":           9,
 	"internal/translate/toolcheck": 5,
 
 	// The exporter itself: logging its own transport failures. A ctx here
