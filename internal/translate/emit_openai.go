@@ -259,6 +259,9 @@ func (e *RequestEnvelope) buildOpenAIFromAnthropic(opts EmitOptions) ([]byte, pr
 		return nil, stats, fmt.Errorf("strip claude-code-only tools: %w", err)
 	}
 	stats.CCOnlyToolsStripped = removed
+	// Anthropic executes web_search_*/web_fetch_* itself; passing them through
+	// writeOpenAIToolsFromAnthropic creates phantom function tools. Drop them.
+	body, stats.ServerToolsStripped = stripServerTools(body)
 	jw := newJSONWriter()
 	jw.Obj()
 	jw.Key("model")

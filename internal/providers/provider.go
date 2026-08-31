@@ -539,6 +539,9 @@ type RequestMutationStats struct {
 	// CCOnlyToolsStripped counts Claude-Code-only tools removed before
 	// dispatching to a non-Anthropic upstream. See claudecode_tool_filter.go.
 	CCOnlyToolsStripped int
+	// ServerToolsStripped counts native server tools (web_search_*, web_fetch_*)
+	// removed before emitting to a non-Anthropic upstream. See translate.stripServerTools.
+	ServerToolsStripped int
 	// Transformations carries stable, structured request transformation outcomes.
 	Transformations []RequestTransformation
 }
