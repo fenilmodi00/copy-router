@@ -7,7 +7,7 @@ This page is the exhaustive reference; the [README](../README.md) has the
 ## Table of contents
 
 - [Provider API keys](#provider-api-keys)
-  - [Client Claude aliases → catalog IDs](#client-claude-aliases--catalog-ids)
+  - [Client model strings → catalog IDs](#client-model-strings--catalog-ids)
   - [Routing intent via the `model` field](#routing-intent-via-the-model-field)
   - [Peripheral gateway / BYOK env](#peripheral-gateway--byok-env)
   - [Key-pair auth](#key-pair-auth)
@@ -43,21 +43,21 @@ above, each installation can supply its own provider keys via the dashboard.
 Those are stored in Postgres and used only for that installation's traffic.
 See [BYOK encryption](#byok-encryption).
 
-### Client Claude aliases → catalog IDs
+### Client model strings → catalog IDs
 
-Clients may still send Claude-era model names on **force-model** paths
-(`claude-sonnet-5`, `/force-model opus`, `x-weave-force-model`, `model="opus"`,
-…). Those strings are **remap inputs only** — they are not catalog rows.
-Force-model resolution maps them onto existing aiand catalog IDs:
+Force-model / `model` field resolution accepts **exact catalog IDs**, binding
+`UpstreamID`s, and **retired catalog aliases** from `catalog.aliases`
+(e.g. `zai-org/glm-5.2` → `zai-org/glm-5.3`, `qwen/qwen3.6-27b` →
+`qwen/qwen3.8-27b`). An optional `:level` effort suffix is stripped first.
 
-| Client alias | Catalog ID |
-| --- | --- |
-| `claude-fable-5` (+ fable shorts) | `moonshotai/kimi-k3` |
-| `claude-opus-4-8` (+ `opus-4-8` / `claude-4-8`) | `zai-org/glm-5.2` |
-| `claude-opus-5` / `opus` / `claude-5` | `zai-org/glm-5.2` |
-| `claude-sonnet-5` / `sonnet` | `moonshotai/kimi-k2.7` |
-| `claude-sonnet-4-6` | `deepseek-ai/deepseek-v4-pro` |
-| `claude-haiku-4-5` / `haiku` | `deepseek-ai/deepseek-v4-flash` |
+There is **no** Claude-era short-name remap table anymore
+(`forceModelAliases` was deleted). Strings like `claude-opus-5`, `opus`, or
+`claude-sonnet-5` do **not** resolve to catalog rows — they fail force-model /
+non-`auto` `model` with HTTP 400 (`ErrForcedModelUnknown`). Clients that still
+send Claude-era names should pin a catalog ID instead
+(`moonshotai/kimi-k3`, `zai-org/glm-5.3`, `deepseek-ai/deepseek-v4-flash`, …).
+
+`model="auto"` never clears an existing pin; only `/unforce-model` does.
 
 ### Routing intent via the `model` field
 
@@ -68,14 +68,15 @@ values plus everything in between:
   action.
 - `model="<catalog-id-or-alias>"` — force exactly that model: a canonical
   catalog ID (`moonshotai/kimi-k2.7`, `deepseek-ai/deepseek-v4-flash`), a bare
-  tail (`kimi-k2.7`), an alias (`opus`, `kimi-k3`, `claude-sonnet-5`,
-  `claude-haiku-4-5`), an `openai/…` provider prefix, optionally with a
-  `:level` effort suffix (`opus:high`). This is **exactly equivalent** to the
+  tail when unique (`kimi-k2.7`), a retired catalog alias (`zai-org/glm-5.2`),
+  an `openai/…` provider prefix strip, optionally with a `:level` effort suffix
+  (`moonshotai/kimi-k3:high`). This is **exactly equivalent** to the
   `x-weave-force-model` header / `/force-model` command: it writes the same
   user-forced session pin (`ReasonUserForceModel`, never expires), serves that
   model on the same turn, and 400s on values that name no catalog model. A
   Claude Code `[1m]` context-window variant tag on the field
-  (`kimi-k2.7[1m]`) is stripped before resolution.
+  (`kimi-k2.7[1m]`) is stripped before resolution. Claude-era short names
+  (`opus`, `claude-sonnet-5`) are **not** remapped — they 400.
 
 Precedence, when more than one carrier names a model:
 `/force-model` chat command > `model` field > `x-weave-force-model` header. All

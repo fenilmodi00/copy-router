@@ -17,15 +17,15 @@ Canonical model identity in the deploy catalog (open-weight rows such as `moonsh
 _Avoid_: Keeping Claude catalog rows so a harness can keep sending Claude names
 
 **UpstreamID**:
-Model ID the chosen provider binding sends on the wire to that upstream. May match the catalog ID or differ when the upstream’s published name diverges (example shape: catalog `zai-org/glm-5.2` vs upstream `zai-org/glm-5.2`).
+Model ID the chosen provider binding sends on the wire to that upstream. May match the catalog ID or differ when the upstream’s published name diverges (example: catalog `moonshotai/kimi-k2.7` vs upstream `moonshotai/kimi-k2.7-code`).
 _Avoid_: Treating every client-facing string as an upstream ID; inventing Claude upstream IDs for aiand
 
 **ClientModelAlias**:
-Client-supplied Claude-era (and short) model strings remapped onto existing aiand **CatalogModelID**s (Appendix F style). Examples only: `claude-fable-5` → `moonshotai/kimi-k3`; `claude-opus-5` / `claude-opus-4-8` → `zai-org/glm-5.2`; `claude-sonnet-5` → `moonshotai/kimi-k2.7`; `claude-sonnet-4-6` → `deepseek-ai/deepseek-v4-pro`; `claude-haiku-4-5` → `deepseek-ai/deepseek-v4-flash`. Aliases are remap inputs, not catalog rows.
-_Avoid_: Calling aliases “models in the catalog”; using aliases as a reason to retain Claude catalog entries
+Retired **catalog** IDs kept resolvable via `catalog.aliases` (e.g. `zai-org/glm-5.2` → `zai-org/glm-5.3`). Not a Claude-era short-name table — those remap inputs were deleted; unknown force-model values 400.
+_Avoid_: Documenting Appendix-F Claude→catalog remaps that no longer exist in code; treating Claude harness names as catalog rows
 
 **ClientHarness**:
-Optional client tool that speaks a peripheral wire (notably Claude Code on Anthropic Messages). A harness is not a provider and not a reason to keep Claude catalog rows; it reaches aiand through translation and aliases.
+Optional client tool that speaks a peripheral wire (notably Claude Code on Anthropic Messages). A harness is not a provider and not a reason to keep Claude catalog rows; it reaches aiand through translation. Pin with catalog IDs, not Claude short names.
 _Avoid_: Treating Claude Code as deploy baseline; equating harness presence with Anthropic-as-upstream
 
 **IngressSurface**:

@@ -1,8 +1,8 @@
-// Package feedback defines the signed, no-login token that authorizes a
-// single router request's feedback link (`/f/<token>`). It's the sole
-// credential for the public feedback page — minted at routing time, verified
-// on page load/rating submit — and the Weave backend never sees the secret.
-// Pure (HMAC + base64, no I/O) so it can be shared across layers.
+// Package feedback defines the signed, no-login token that historically
+// authorized the `/f/<token>` feedback-link pages. Those HTTP pages were
+// removed (ROUTER_FEEDBACK_* env vars are ignored); the signer remains for
+// token mint/verify on remaining internal paths and its removal is tracked
+// separately. Pure (HMAC + base64, no I/O) so it can be shared across layers.
 package feedback
 
 import (

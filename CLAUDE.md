@@ -4,6 +4,8 @@
 
 Root guide for AI agents in the `router/` subproject. Covers cross-cutting design + the layer model. **First read for any task:** [README](README.md), then this file. Then read the `CLAUDE.md` inside the package you're editing — each subpackage has its own with focused recipes + invariants.
 
+**Deploy identity.** This tree is an **ai& (aiand)-exclusive** router: `cmd/router/main.go` registers only `providers.ProviderAiand` into `providerMap`. Catalog rows bind solely to aiand (`AIAND_API_KEY` / `AIAND_API_URL`). Other `Provider*` constants remain for wire-family dispatch, BYOK/gateway fixtures, and tests — they are not boot-registered upstreams. HTTP header prefixes like `x-weave-*` are load-bearing wire names in this codebase; they do not mean a multi-provider Weaveform product surface.
+
 ## Engineering principles
 
 - **Patterns of Enterprise Application Architecture** (Fowler)
@@ -29,10 +31,12 @@ Three concentric layers. Imports flow inward only.
 |  |                            /admin/v1/*)                     |  |
 |  |  internal/api/anthropic   (/v1/messages, passthrough,       |  |
 |  |                            /v1/route)                       |  |
-|  |  internal/api/openai      (/v1/chat/completions)            |  |
-|  |  internal/api/feedback    (/f/<token> no-login feedback     |  |
-|  |                            page; deliberately no auth       |  |
-|  |                            middleware)                      |  |
+|  |  internal/api/openai      (/v1/chat/completions,           |  |
+|  |                            /v1/responses, /v1/models)      |  |
+|  |  internal/api/feedback    (/router-feedback in-chat        |  |
+|  |                            command surface; the /f/<token> |  |
+|  |                            HTTP pages were removed — do    |  |
+|  |                            not remount them)                |  |
 |  |  internal/api/analytics   (/v1/analytics/* read-only        |  |
 |  |                            routing-decision export;         |  |
 |  |                            ra_ keys only)                   |  |
@@ -137,7 +141,7 @@ Pick by responsibility, then read that package's `CLAUDE.md`:
 | Identity / API-key logic | `internal/auth` (method on `*Service`) | [internal/auth/CLAUDE.md](internal/auth/CLAUDE.md) |
 | Routing / dispatch / per-action orchestration | `internal/proxy` (method on `*Service`) | [internal/proxy/CLAUDE.md](internal/proxy/CLAUDE.md) |
 | Balance check / inference debit | `internal/billing` (method on `*Service`) | — |
-| Feedback-link token signing (no I/O) | `internal/feedback` | — |
+| Feedback-link token signing (no I/O; HTTP pages removed) | `internal/feedback` | — |
 | Routing-decision export row shape / cursor / schema | `internal/analytics` | — |
 | Cross-format wire conversion (no I/O) | `internal/translate` | [internal/translate/CLAUDE.md](internal/translate/CLAUDE.md) |
 | New upstream provider | `internal/providers/<name>/` | [internal/providers/CLAUDE.md](internal/providers/CLAUDE.md) |
@@ -226,12 +230,13 @@ A helper that logs on the request path takes `ctx` and calls `observability.From
 
 ## Deployment modes
 
-`ROUTER_DEPLOYMENT_MODE` read at boot in `cmd/router/main.go`:
+`ROUTER_DEPLOYMENT_MODE` read at boot in `cmd/router/main.go` (any other value panics):
 
-- **`selfhosted`** (default): full dashboard at `/ui/*`, `/admin/v1/*` API (auth, metrics, keys, provider-keys, config, excluded-models), dashboard cookie auth all mounted. Provider keys read from env vars; missing keys keep providers registered for client-passthrough but exclude from hard-pin resolution.
-- **`managed`**: dashboard + `/admin/v1/*` not mounted at all — Weave-managed deploys have separate control plane. Every provider registered with empty deployment key; proxy service in BYOK-only mode, so request without BYOK or client-supplied auth for chosen provider 400s rather than silently spending platform budget. Setting variable to any other value panics at boot. BYOK is **opt-in per installation** here (`byok_enabled` on the installation row, set by the control plane): until it's set, `withAPIKey` strips external keys so a stored key can't spend against a credit-billed deployment. An opted-in BYOK turn debits no inference cost; a platform fee (`BYOK_FEE_RATE`, default 0) may be charged as a separate `byok_fee` ledger row.
+- **`selfhosted`** (default): dashboard at `/ui/*` + `/admin/v1/*` (operator password / `ROUTER_ADMIN_PASSWORD`). Registers **aiand only**; `AIAND_API_KEY` is the deploy baseline. Missing deploy key keeps the client registered for BYOK/passthrough but excludes it from hard-pin resolution.
+- **`selfserve`**: dashboard at `/ui/*` with `/account/v1/*` (login/logout/me). Users sign in with an ai& `sk-` key — [`internal/providers/aiand.KeyVerifier`](internal/providers/aiand) probes `GET /v1/models` (`AIAND_IDENTITY_URL`) and takes the org from the `X-Org-Id` response header (sk- keys are org-scoped; one org → one installation; key rotation within the org reuses it). `account.id` = installation `external_id`. Models/Playground bill the stored per-user BYOK key; deploy `AIAND_API_KEY` is optional. Same `dashboardRoutes` table as selfhosted under the account cookie.
+- **`managed`**: dashboard + `/admin/v1/*` not mounted (separate control plane). aiand still registered; when billing is unwired, proxy runs BYOK-only (`byokOnly`) so a missing key 400s instead of spending a platform budget. When billing is wired, platform-key mode is gated by balance checks. BYOK is **opt-in per installation** (`byok_enabled`): until set, `withAPIKey` strips external keys so a stored key can't spend against a credit-billed deployment. Opted-in BYOK turns debit no inference cost; a platform fee (`BYOK_FEE_RATE`, default 0) may land as a `byok_fee` ledger row.
 
-When adding new endpoint, put inside `selfhosted` block in `server.Register` unless part of product surface (`/v1/*`, `/health`, `/validate`). Do not re-expose admin surface in managed mode.
+When adding a new admin endpoint, gate it in `server.Register` / dashboard route tables for `selfhosted`/`selfserve` as appropriate; do not mount admin UI in `managed`. Product surface (`/v1/*`, `/health`, `/validate`, analytics) stays available in all modes.
 
 ## Eval harness (sibling `router-internal/eval/`)
 
@@ -251,4 +256,5 @@ The eval harness is a sibling Poetry package, **not in this repo** — lives at 
 
 - **"Should I commit `internal/sqlc/`?"** Yes. Dockerfile + CI builds depend on generated code being present. Run `make generate` before committing migration or query changes.
 - **"How do I run one-off query against local DB?"** `docker compose exec postgres psql -U router -d router`. Migrate step has already applied schema. (Router lives in `router` schema; pool's `AfterConnect` hook pins `search_path` so accidental writes to `public.*` are impossible.)
-- **"How do I add new OpenAI-compatible upstream?"** Add `*BaseURL` constant to `internal/providers/openaicompat`, provider-name constant + env-var entry to `internal/providers/provider.go`, registration block in `cmd/router/main.go`. No new adapter package. See [internal/providers/CLAUDE.md](internal/providers/CLAUDE.md).
+- **"How do I add a model on this aiand-only deploy?"** Append a `Model` with `ProviderAiand` binding in [`internal/router/catalog/catalog.go`](internal/router/catalog/catalog.go), update the cluster bundle registry if it should be scored, run `go run ./cmd/genprices`. See [docs/adding-glm-5-3.md](docs/adding-glm-5-3.md) and [internal/router/catalog/CLAUDE.md](internal/router/catalog/CLAUDE.md).
+- **"How do I add a second upstream provider?"** This fork does not — composition root registers aiand only. Extending beyond aiand means a new `Provider*` + `APIKeyEnvVars` + `ProviderFamilies` entry, an `openaicompat` (or native) client, and a registration block in `cmd/router/main.go`. See [internal/providers/CLAUDE.md](internal/providers/CLAUDE.md).
