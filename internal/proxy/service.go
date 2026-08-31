@@ -2821,7 +2821,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		// can correlate with the route even if local compaction rewrites env.
 		FeedbackKey:          hex.EncodeToString(sessionKey[:]),
 		FeedbackRole:         roleForTier(catalog.TierFor(feats.Model)),
-		ClientSessionID:      env.ClientSessionID(),
+		ClientSessionID:      clientSessionIDForRequest(ctx, env),
 		EnabledProviders:     enabledProviders,
 		CustomBindings:       s.customBindingsForRequest(ctx),
 		ExcludedModels:       excluded,
@@ -2880,7 +2880,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		// but modelSwitched() below needs them. Load the same switch history
 		// the turn loop would have produced.
 		if s.pinStore != nil {
-			sessionKey := DeriveSessionKey(env, apiKeyID)
+			sessionKey := deriveSessionKeyForRequest(ctx, env, apiKeyID)
 			role := roleForTier(catalog.TierFor(feats.Model))
 			pin, _ := s.loadPin(ctx, sessionKey, role)
 			hmmHistory := s.loadHMMHistory(ctx, sessionKey, role)
@@ -5219,7 +5219,7 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 		// can correlate with the route even if local compaction rewrites env.
 		FeedbackKey:          hex.EncodeToString(sessionKey[:]),
 		FeedbackRole:         roleForTier(catalog.TierFor(feats.Model)),
-		ClientSessionID:      env.ClientSessionID(),
+		ClientSessionID:      clientSessionIDForRequest(ctx, env),
 		EnabledProviders:     enabledProviders,
 		CustomBindings:       s.customBindingsForRequest(ctx),
 		ExcludedModels:       excludedOAI,
