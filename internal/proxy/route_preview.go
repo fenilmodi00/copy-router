@@ -12,6 +12,7 @@ import (
 	"workweave/router/internal/providers"
 	"workweave/router/internal/router"
 	"workweave/router/internal/router/policy"
+	"workweave/router/internal/router/sessionpin"
 	"workweave/router/internal/translate"
 )
 
@@ -110,13 +111,19 @@ func (s *Service) PreviewOpenAIRoute(ctx context.Context, body []byte, headers h
 
 // anthropicRoutingRequest parses an Anthropic Messages body into a router.Request
 // using the same normalization the dispatch path applies (strip routing marker,
-// strip feedback footer, canonicalize context-window variant tags, resolve force-model
-// from model field + x-weave-force-model header). Never writes a session pin.
-func (s *Service) anthropicRoutingRequest(ctx context.Context, body []byte, headers http.Header) (router.Request, error) {
+// strip feedback footer, strip /beta artifacts, canonicalize context-window
+// variant tags, resolve force-model from model field + x-weave-force-model
+// header). Never writes a session pin.
+func (s *Service) anthropicRoutingRequest(
+	ctx context.Context,
+	body []byte,
+	headers http.Header,
+	ingress string,
+) (context.Context, router.Request, error) {
 	log := observability.FromContext(ctx)
 	cleanBody, err := stripRoutingMarkerFromMessages(body)
 	if err != nil {
-		return router.Request{}, fmt.Errorf("strip routing marker: %w", err)
+		return ctx, router.Request{}, fmt.Errorf("strip routing marker: %w", err)
 	}
 	if withoutFooter, footerErr := translate.StripFeedbackFooterFromMessages(cleanBody); footerErr != nil {
 		log.Error("Failed to strip feedback footer from route preview", "err", footerErr)
@@ -131,11 +138,25 @@ func (s *Service) anthropicRoutingRequest(ctx context.Context, body []byte, head
 
 	env, err := translate.ParseAnthropic(cleanBody)
 	if err != nil {
-		return router.Request{}, fmt.Errorf("parse request: %w", err)
+		return ctx, router.Request{}, fmt.Errorf("parse request: %w", err)
+	}
+
+	apiKeyID, _ := ctx.Value(APIKeyIDContextKey{}).(string)
+	var sessionKey [sessionpin.SessionKeyLen]byte
+	ctx, log, sessionKey = bindRequestLogger(ctx, env, apiKeyID, "", ingress)
+	if removed := env.StripRouterFeedbackArtifacts(); removed > 0 {
+		log.Info("Stripped router-feedback artifacts from route preview", "removed_messages", removed)
+	}
+	if removed := env.StripBetaArtifacts(); removed > 0 {
+		log.Info("Stripped beta artifacts from route preview", "removed_messages", removed)
+	}
+	ctx, err = s.applySessionStrategy(ctx, installationIDFromContext(ctx), sessionKey)
+	if err != nil {
+		return ctx, router.Request{}, err
 	}
 	previewForceModel, err := previewForceModelFromRequest(headers, env)
 	if err != nil {
-		return router.Request{}, err
+		return ctx, router.Request{}, err
 	}
 	embedOnlyUser := s.ResolveEmbedOnlyUserMessage(ctx)
 	features := env.RoutingFeatures(embedOnlyUser)
@@ -167,7 +188,7 @@ func (s *Service) anthropicRoutingRequest(ctx context.Context, body []byte, head
 	if id := installationIDFromContext(ctx); id != uuid.Nil {
 		installationID = id.String()
 	}
-	return router.Request{
+	return ctx, router.Request{
 		RequestedModel:               features.Model,
 		ForceModel:                   previewForceModel,
 		EstimatedInputTokens:         features.Tokens,
@@ -194,10 +215,11 @@ func (s *Service) anthropicRoutingRequest(ctx context.Context, body []byte, head
 // PreviewAnthropicRoute evaluates an Anthropic request with the registered
 // policy preview contract without dispatching or invoking serving lifecycle state.
 func (s *Service) PreviewAnthropicRoute(ctx context.Context, body []byte, headers http.Header) (policy.PreviewResult, error) {
-	req, err := s.anthropicRoutingRequest(ctx, body, headers)
+	ctx, req, err := s.anthropicRoutingRequest(ctx, body, headers, "anthropic_route_preview")
 	if err != nil {
 		return policy.PreviewResult{}, err
 	}
+
 	req, err = s.applyTranslationPlan(ctx, req)
 	if err != nil {
 		return policy.PreviewResult{}, err

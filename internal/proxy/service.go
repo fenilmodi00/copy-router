@@ -35,6 +35,7 @@ import (
 	"workweave/router/internal/router/policy"
 	"workweave/router/internal/router/rl"
 	"workweave/router/internal/router/sessionpin"
+	"workweave/router/internal/router/sessionstrategy"
 	"workweave/router/internal/router/turntype"
 	"workweave/router/internal/sse"
 	"workweave/router/internal/timing"
@@ -75,6 +76,9 @@ type Service struct {
 	// pinStore persists session-sticky routing decisions. Nil when the feature
 	// flag is off; the orchestrator then runs the scorer every turn.
 	pinStore sessionpin.Store
+	// sessionStrategyStore persists the explicit per-session /beta selection.
+	// Stable routing is represented by no row.
+	sessionStrategyStore sessionstrategy.Store
 	// noProgress tracks per-session dispatch fingerprints to catch the
 	// cross-envelope subagent loop (parent agent re-spawning identical
 	// sub-conversations). Nil disables the detector.
@@ -406,6 +410,7 @@ type nativeResponsesToolHashContextKey struct{}
 // responsesFooterEchoedContextKey is set when the original Responses input
 // already carries a rating hint after the last human turn.
 type responsesFooterEchoedContextKey struct{}
+
 // InstallationExcludedModelsContextKey is the context key for the authed
 // installation's model exclusion list. Carried as []string.
 type InstallationExcludedModelsContextKey struct{}
@@ -2264,7 +2269,7 @@ func (s *Service) Route(ctx context.Context, req router.Request) (router.Decisio
 // callers in internal/api/* never import internal/translate directly,
 // matching ProxyMessages.
 func (s *Service) RouteAnthropicRequest(ctx context.Context, body []byte, headers http.Header) (decision router.Decision, err error) {
-	req, err := s.anthropicRoutingRequest(ctx, body, headers)
+	ctx, req, err := s.anthropicRoutingRequest(ctx, body, headers, "anthropic_route")
 	if err != nil {
 		return decision, err
 	}
@@ -2704,6 +2709,10 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	if removed := env.StripRouterFeedbackArtifacts(); removed > 0 {
 		log.Info("Stripped router-feedback artifacts from Anthropic history", "removed_messages", removed)
 	}
+	if removed := env.StripBetaArtifacts(); removed > 0 {
+		ctx = withBetaArtifactHistory(ctx)
+		log.Info("Stripped beta artifacts from Anthropic history", "removed_messages", removed)
+	}
 
 	embedFlag := s.ResolveEmbedOnlyUserMessage(ctx)
 	feats := env.RoutingFeatures(embedFlag)
@@ -2723,6 +2732,18 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		"prompt_preview", observability.Preview(promptText, 200),
 	)
 
+	// /beta toggle: handled server-side, never forwarded upstream, no post-command continuation.
+	if !agentShadowMode {
+		if cmd, hasCmd := env.ExtractBetaCommand(); hasCmd {
+			log.Info("ProxyMessages beta command")
+			return s.handleBetaCommand(ctx, w, env, cmd, installationID, sessionKey, feats.Tokens)
+		}
+		ctx, err = s.applySessionStrategy(ctx, installationID, sessionKey)
+		if err != nil {
+			return err
+		}
+		*r = *r.WithContext(ctx)
+	}
 	// Handle /force-model and /unforce-model before routing (stripped from
 	// env.body so the upstream never sees it). Session key is derived before
 	// extraction: DeriveSessionKey can fall back to prompt text, and deriving
@@ -5077,6 +5098,7 @@ func finalizeAfterProxy(proxyErr error, fn func() error) error {
 func responsesEligibleProvider(p string) bool {
 	return p == providers.ProviderOpenAI || p == providers.ProviderAiand
 }
+
 // openAISurface names which OpenAI endpoint an attempt POSTs to and in what
 // representation; the three cases differ in both emit and response handling.
 type openAISurface int
@@ -5091,6 +5113,7 @@ const (
 	// chat/completions request, with the response translated back to chat.
 	surfaceResponsesTranslated
 )
+
 // ProxyOpenAIChatCompletion routes an OpenAI Chat Completion request,
 // translating cross-format when the decision picks a non-OpenAI provider.
 func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w http.ResponseWriter, r *http.Request) error {
@@ -5145,6 +5168,10 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	if removed := env.StripRouterFeedbackArtifacts(); removed > 0 {
 		log.Info("Stripped router-feedback artifacts from OpenAI history", "removed_messages", removed)
 	}
+	if removed := env.StripBetaArtifacts(); removed > 0 {
+		ctx = withBetaArtifactHistory(ctx)
+		log.Info("Stripped beta artifacts from OpenAI history", "removed_messages", removed)
+	}
 	embedFlag := s.ResolveEmbedOnlyUserMessage(ctx)
 	feats := env.RoutingFeatures(embedFlag)
 	promptText := feats.PromptText
@@ -5164,6 +5191,17 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 		"total_input_tokens", feats.Tokens,
 		"prompt_preview", observability.Preview(promptText, 200),
 	)
+
+	// /beta toggle: handled server-side before other routing commands; no post-command continuation.
+	if cmd, hasCmd := env.ExtractBetaCommand(); hasCmd {
+		log.Info("ProxyOpenAIChatCompletion beta command")
+		return s.handleBetaCommand(ctx, w, env, cmd, installationID, sessionKey, feats.Tokens)
+	}
+	ctx, err = s.applySessionStrategy(ctx, installationID, sessionKey)
+	if err != nil {
+		return err
+	}
+	*r = *r.WithContext(ctx)
 
 	// Handle /force-model and /unforce-model before routing (stripped from
 	// env.body so the upstream never sees it). Session key is derived before
@@ -5706,50 +5744,50 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 			}
 			return err
 		}
-	attempt = func(actx context.Context, d router.Decision, p providers.Client) error {
-		surface := surfaceChat
-		if responsesEligibleProvider(d.Provider) {
-			switch {
-			case responsesPassthrough:
-				surface = surfaceResponsesNative
-			case translateToResponses:
-				surface = surfaceResponsesTranslated
+		attempt = func(actx context.Context, d router.Decision, p providers.Client) error {
+			surface := surfaceChat
+			if responsesEligibleProvider(d.Provider) {
+				switch {
+				case responsesPassthrough:
+					surface = surfaceResponsesNative
+				case translateToResponses:
+					surface = surfaceResponsesTranslated
+				}
 			}
-		}
-		err := dispatchOpenAI(actx, d, p, surface)
-		// Retried once pre-commit on chat/completions; memoized for later turns.
-		// A native attempt also needs promotedToResponses — a Codex passthrough has none.
-		if err == nil || surface == surfaceChat ||
-			committed(preludeBuf) || !providers.IsUpstreamResponsesUnsupported(err) {
-			return err
-		}
-		if surface == surfaceResponsesNative {
-			rw, ok := w.(*translate.ResponsesWriter)
-			if !promotedToResponses || !ok || !rw.ClearPassthrough() {
+			err := dispatchOpenAI(actx, d, p, surface)
+			// Retried once pre-commit on chat/completions; memoized for later turns.
+			// A native attempt also needs promotedToResponses — a Codex passthrough has none.
+			if err == nil || surface == surfaceChat ||
+				committed(preludeBuf) || !providers.IsUpstreamResponsesUnsupported(err) {
 				return err
 			}
-		} else {
-			if rw, ok := w.(*translate.ResponsesWriter); ok {
-				_ = rw.ClearPassthrough()
+			if surface == surfaceResponsesNative {
+				rw, ok := w.(*translate.ResponsesWriter)
+				if !promotedToResponses || !ok || !rw.ClearPassthrough() {
+					return err
+				}
+			} else {
+				if rw, ok := w.(*translate.ResponsesWriter); ok {
+					_ = rw.ClearPassthrough()
+				}
 			}
-		}
-		s.rememberGatewayLacksResponses(responsesEndpointKey)
-		log.Warn("OpenAI endpoint rejected the Responses API; retrying on chat/completions",
-			"model", d.Model,
-			"decision_provider", d.Provider,
-			"request_id", requestID)
-		translateToResponses = false
-		responsesPassthrough = false
-		if translatedMarker != "" {
-			if rw, ok := w.(*translate.ResponsesWriter); ok {
-				rw.SetBadgeText(translatedMarker)
+			s.rememberGatewayLacksResponses(responsesEndpointKey)
+			log.Warn("OpenAI endpoint rejected the Responses API; retrying on chat/completions",
+				"model", d.Model,
+				"decision_provider", d.Provider,
+				"request_id", requestID)
+			translateToResponses = false
+			responsesPassthrough = false
+			if translatedMarker != "" {
+				if rw, ok := w.(*translate.ResponsesWriter); ok {
+					rw.SetBadgeText(translatedMarker)
+				}
 			}
+			if preludeBuf != nil {
+				preludeBuf.Discard()
+			}
+			return dispatchOpenAI(actx, d, p, surfaceChat)
 		}
-		if preludeBuf != nil {
-			preludeBuf.Discard()
-		}
-		return dispatchOpenAI(actx, d, p, surfaceChat)
-	}
 	case providers.FamilyAnthropic:
 		crossFormat = true
 		prep, emitErr := env.PrepareAnthropic(r.Header, opts)

@@ -19,7 +19,7 @@ func TestAnthropicRoutingRequest_ModelFieldForcesPreview(t *testing.T) {
 	svc := &Service{}
 	ctx := context.WithValue(context.Background(), InstallationIDContextKey{}, uuid.New().String())
 
-	req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"z-ai/glm-5.2","messages":[{"role":"user","content":"hi"}]}`), nil)
+	_, req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"z-ai/glm-5.2","messages":[{"role":"user","content":"hi"}]}`), nil, "anthropic_route_test")
 	require.NoError(t, err)
 	assert.Equal(t, "zai-org/glm-5.3", req.ForceModel, "catalog alias 'z-ai/glm-5.2' forces the canonical id in preview")
 	assert.Equal(t, "z-ai/glm-5.2", req.RequestedModel, "requested model keeps the raw field; ForceModel carries the force")
@@ -29,7 +29,7 @@ func TestAnthropicRoutingRequest_AutoLeavesPreviewUnforced(t *testing.T) {
 	svc := &Service{}
 	ctx := context.WithValue(context.Background(), InstallationIDContextKey{}, uuid.New().String())
 
-	req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"auto","messages":[{"role":"user","content":"hi"}]}`), nil)
+	_, req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"auto","messages":[{"role":"user","content":"hi"}]}`), nil, "anthropic_route_test")
 	require.NoError(t, err)
 	assert.Equal(t, "", req.ForceModel, "model=auto must not force in preview")
 }
@@ -38,7 +38,7 @@ func TestAnthropicRoutingRequest_UnknownClientModelRoutesNormally(t *testing.T) 
 	svc := &Service{}
 	ctx := context.WithValue(context.Background(), InstallationIDContextKey{}, uuid.New().String())
 
-	req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"claude-sonnet-4-20250514","messages":[{"role":"user","content":"hi"}]}`), nil)
+	_, req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"claude-sonnet-4-20250514","messages":[{"role":"user","content":"hi"}]}`), nil, "anthropic_route_test")
 	require.NoError(t, err, "client passthrough aliases must not fail route preview")
 	assert.Equal(t, "", req.ForceModel, "unknown client model must not force")
 	assert.Equal(t, "claude-sonnet-4-20250514", req.RequestedModel)
@@ -50,7 +50,7 @@ func TestAnthropicRoutingRequest_UnknownModelWithForceHeaderFailsPreview(t *test
 	headers := http.Header{}
 	headers.Set(ForceModelHeader, "gpt-4o")
 
-	_, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"auto","messages":[{"role":"user","content":"hi"}]}`), headers)
+	_, _, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"auto","messages":[{"role":"user","content":"hi"}]}`), headers, "anthropic_route_test")
 	require.ErrorIs(t, err, ErrForcedModelUnknown, "explicit header force on unknown model must fail like dispatch")
 }
 
@@ -58,7 +58,7 @@ func TestAnthropicRoutingRequest_ContextVariantStrippedInPreview(t *testing.T) {
 	svc := &Service{}
 	ctx := context.WithValue(context.Background(), InstallationIDContextKey{}, uuid.New().String())
 
-	req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"moonshotai/kimi-k3[1m]","messages":[{"role":"user","content":"hi"}]}`), nil)
+	_, req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"moonshotai/kimi-k3[1m]","messages":[{"role":"user","content":"hi"}]}`), nil, "anthropic_route_test")
 	require.NoError(t, err)
 	assert.Equal(t, "moonshotai/kimi-k3", req.ForceModel, "[1m] variant stripped before preview resolution")
 }
@@ -115,7 +115,7 @@ func TestAnthropicRoutingRequest_ForceModelCarriedInRequest(t *testing.T) {
 	ctx := context.WithValue(context.Background(), InstallationIDContextKey{}, uuid.New().String())
 	ctx = context.WithValue(ctx, ExternalIDContextKey{}, "org-1")
 
-	req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"deepseek-ai/deepseek-v4-flash","messages":[{"role":"user","content":"hi"}]}`), nil)
+	_, req, err := svc.anthropicRoutingRequest(ctx, []byte(`{"model":"deepseek-ai/deepseek-v4-flash","messages":[{"role":"user","content":"hi"}]}`), nil, "anthropic_route_test")
 	require.NoError(t, err)
 	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", req.ForceModel)
 	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", req.RequestedModel)

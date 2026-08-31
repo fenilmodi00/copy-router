@@ -18,19 +18,6 @@ func pinMatchesEffectiveStrategy(ctx context.Context, pin sessionpin.Pin) bool {
 	return pin.Strategy == "" && expected != router.StrategyHMMBeta
 }
 
-type betaArtifactHistoryContextKey struct{}
-
-// Historical /beta control turns prove this transcript crossed a policy
-// boundary even though its strategy-specific pin history was invalidated.
-func withBetaArtifactHistory(ctx context.Context) context.Context {
-	return context.WithValue(ctx, betaArtifactHistoryContextKey{}, true)
-}
-
-func betaArtifactHistoryFromContext(ctx context.Context) bool {
-	found, _ := ctx.Value(betaArtifactHistoryContextKey{}).(bool)
-	return found
-}
-
 func strategyContext(strategy router.Strategy) context.Context {
 	return router.WithStrategy(context.Background(), strategy)
 }

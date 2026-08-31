@@ -571,6 +571,14 @@ type RouterSessionPin struct {
 	RoutingStrategy           string
 }
 
+// Explicit per-session router strategy preferences
+type RouterSessionStrategyPreference struct {
+	InstallationID uuid.UUID
+	SessionKey     []byte
+	Strategy       string
+	Enabled        bool
+}
+
 // Shadow-mode spiral (death-march) detections: log-only fire-rate corpus measured on live traffic before escalation is armed
 type RouterSpiralShadowEvent struct {
 	ID             uuid.UUID

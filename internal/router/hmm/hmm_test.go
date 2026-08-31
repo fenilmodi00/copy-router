@@ -4,7 +4,11 @@ import (
 	"context"
 	"testing"
 
+	"workweave/router/internal/providers"
+	"workweave/router/internal/router"
+
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type fakeDecider struct {
@@ -26,6 +30,28 @@ func candidateRosterIDs(candidates []Candidate) []string {
 		ids = append(ids, candidate.RosterID)
 	}
 	return ids
+}
+
+func TestRouterUsesSeparatelySelectableHMMStrategies(t *testing.T) {
+	for _, strategy := range []router.Strategy{router.StrategyHMMEmbedding, router.StrategyHMMBeta} {
+		t.Run(string(strategy), func(t *testing.T) {
+			decider := &fakeDecider{res: Result{Model: "moonshotai/kimi-k2.7-code"}}
+			r := newWithRoutingTargets(
+				strategy,
+				decider,
+				map[string]struct{}{"moonshotai/kimi-k2.7": {}},
+				map[string]struct{}{providers.ProviderAiand: {}},
+			)
+
+			decision, err := r.Route(context.Background(), router.Request{PromptText: "hello"})
+
+			require.NoError(t, err)
+			assert.Equal(t, strategy, decider.query.Strategy)
+			require.NotNil(t, decision.Metadata)
+			assert.Equal(t, string(strategy), decision.Metadata.Strategy)
+			assert.Contains(t, decision.Reason, "hmm_policy")
+		})
+	}
 }
 
 func TestIsToolExecutionResultRecognizesBothTaxonomies(t *testing.T) {
