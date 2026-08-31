@@ -1488,3 +1488,56 @@ func TestService_ForceModelHeader_UnknownModelRejected(t *testing.T) {
 	defer store.mu.Unlock()
 	assert.Empty(t, store.upserts, "a refused force must not write any pin")
 }
+
+// A /force-model pin that names an unavailable provider was silently dropped:
+// the turn fell through to the scorer while the user trusted the prior ack.
+// The pin must still be dropped (serving it would 401), but now it surfaces.
+func TestService_SessionPin_ForcedPinDropped_SurfacesInMarker(t *testing.T) {
+	const body = `{"model":"gpt-4o","stream":true,"messages":[{"role":"user","content":"analyze usage"}]}`
+
+	store := newFakePinStore()
+	store.hasPin = true
+	store.pin = sessionpin.Pin{
+		Provider:    providers.ProviderAnthropic,
+		Model:       "claude-opus-5",
+		Reason:      translate.ReasonUserForceModel,
+		PinnedUntil: time.Now().Add(time.Hour),
+	}
+	// The scorer's fallback pick once the forced pin is dropped.
+	fr := &fakeRouter{decision: router.Decision{
+		Provider: providers.ProviderOpenAI, Model: "gpt-5.5", Reason: "cluster:v0.2",
+	}}
+	// Only OpenAI is wired, so the Anthropic-bound forced pin cannot be served.
+	openAI := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		for _, frame := range []string{
+			`{"id":"chatcmpl_1","object":"chat.completion.chunk","choices":[{"delta":{"content":"ok"}}]}`,
+			`{"id":"chatcmpl_1","object":"chat.completion.chunk","choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1}}`,
+			`[DONE]`,
+		} {
+			_, _ = io.WriteString(w, "data: "+frame+"\n\n")
+		}
+	}}
+	svc := proxy.NewService(
+		fr,
+		map[string]providers.Client{providers.ProviderOpenAI: openAI},
+		nil, false, nil,
+		store,
+		false, providers.ProviderOpenAI, "gpt-4o-mini",
+		nil,
+	)
+
+	ctx := authedCtx(uuid.New().String())
+	rec := httptest.NewRecorder()
+	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
+	require.NoError(t, svc.ProxyOpenAIChatCompletion(ctx, []byte(body), rec, httpReq))
+
+	assert.Equal(t, 1, fr.routeCalls, "an unservable forced pin must fall through to routing")
+	assert.Equal(t, "gpt-5.5", rec.Header().Get(proxy.HeaderRouterModel),
+		"the scorer's pick serves the turn")
+	assert.Contains(t, rec.Body.String(), "force-model pin could not be served",
+		"the dropped pin must be surfaced, not silently swallowed")
+	assert.Contains(t, rec.Body.String(), "claude-opus-5",
+		"the marker names the pin that was dropped")
+}

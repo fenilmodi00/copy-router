@@ -76,6 +76,38 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 			wantEmpty: true,
 		},
 		{
+			// The bug this guards: a /force-model pin that can't be served
+			// silently reverted to the scorer, so the user kept trusting the
+			// "force-model applied" ack while another model served the turn.
+			name: "dropped forced pin: surfaced even when the model didn't change",
+			res: turnLoopResult{
+				Decision:            router.Decision{Model: "gpt-5.5", Provider: "openai"},
+				PriorServedModel:    "gpt-5.5",
+				ForcedPinDropped:    true,
+				ForcedPinDropReason: "provider_not_enabled",
+				ForcedPinModel:      "claude-opus-5",
+			},
+			wantContains: []string{
+				"✦ **Weave Router** → gpt-5.5",
+				markerReasonForcedPinDropped,
+				"claude-opus-5",
+			},
+			wantNotContain: []string{
+				markerReasonUserForced,
+				"provider_not_enabled",
+			},
+		},
+		{
+			name: "dropped forced pin: suppressed in suggestion mode",
+			res: turnLoopResult{
+				Decision:         router.Decision{Model: "gpt-5.5", Provider: "openai"},
+				SuggestionMode:   true,
+				ForcedPinDropped: true,
+				ForcedPinModel:   "claude-opus-5",
+			},
+			wantEmpty: true,
+		},
+		{
 			name: "tier_upgrade: planner bumped to a higher tier",
 			res: turnLoopResult{
 				Decision:        decision,
