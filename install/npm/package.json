@@ -16,6 +16,7 @@
     "install.sh",
     "uninstall.sh",
     "cc-statusline.sh",
+    "codex-status.sh",
     "commands/",
     "codex-skills/",
     "pi-router/",
