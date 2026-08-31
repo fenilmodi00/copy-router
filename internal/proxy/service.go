@@ -192,6 +192,9 @@ type Service struct {
 	// for degrading to a same-cluster candidate when every binding of the
 	// routed model fails with a transient upstream fault.
 	siblingFailover bool
+	// openAIResponsesBroad is the deployment default for
+	// ROUTER_OPENAI_RESPONSES_BROAD; see ResolveOpenAIResponsesBroad.
+	openAIResponsesBroad bool
 	// sseKeepalive is the client-silence budget before a ping is injected
 	// (ROUTER_SSE_KEEPALIVE_INTERVAL_SECONDS; 0 disables). See sse.KeepaliveWriter.
 	sseKeepalive time.Duration
@@ -1238,6 +1241,7 @@ func NewService(r router.Router, providerMap map[string]providers.Client, emitte
 		loopEscalationEnabled:         true,
 		cyberRefusalRepin:             false,
 		siblingFailover:               true,
+		openAIResponsesBroad:          true,
 		cyberRefusalFallbackModel:     "moonshotai/kimi-k2.7",
 	}
 }
@@ -1302,6 +1306,13 @@ func (s *Service) WithCyberRefusalRepin(enabled bool) *Service {
 // (ROUTER_SIBLING_FAILOVER); see siblingFailover.
 func (s *Service) WithSiblingFailover(enabled bool) *Service {
 	s.siblingFailover = enabled
+	return s
+}
+
+// WithOpenAIResponsesBroad sets the rollout flag for direct-OpenAI Responses
+// routing (ROUTER_OPENAI_RESPONSES_BROAD).
+func (s *Service) WithOpenAIResponsesBroad(enabled bool) *Service {
+	s.openAIResponsesBroad = enabled
 	return s
 }
 
@@ -3295,11 +3306,16 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 				attemptOpts := targetOpts
 				attemptOpts.TargetProvider = d.Provider
 				respSummary = translate.ResponseSummary{}
-				// Reasoning OpenAI models (gpt-5.x) reject tools/stop/reasoning_effort
-				// on /v1/chat/completions; agentic tool turns must use Responses
-				// instead. Scoped to direct OpenAI (the only one with /v1/responses).
-				useResponses := translate.UseOpenAIResponsesAPI(
-					d.Provider, attemptOpts.Capabilities, feats.HasTools)
+				// Direct OpenAI serves every expressible turn on Responses;
+				// gateways only the reasoning tool turn chat/completions rejects.
+				gatewayKey := gatewayResponsesKey(actx, d.Provider)
+				useResponses := translate.UseOpenAIResponsesAPI(translate.ResponsesRoute{
+					Provider:       d.Provider,
+					Capabilities:   attemptOpts.Capabilities,
+					HasTools:       feats.HasTools,
+					ChatOnlyParams: env.RequiresChatCompletionsParams(attemptOpts.Capabilities),
+					Broad:          s.ResolveOpenAIResponsesBroad(actx),
+				}) && !s.gatewayLacksResponses(gatewayKey)
 				var prep providers.PreparedRequest
 				var emitErr error
 				if useResponses {
@@ -5449,7 +5465,13 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	promotedToResponses := false
 	if !responsesPassthrough && !compResOAI.Applied && !routeRes.Handover.Invoked &&
 		decision.Provider == providers.ProviderOpenAI &&
-		translate.UseOpenAIResponsesAPI(decision.Provider, opts.Capabilities, feats.HasTools) &&
+		translate.UseOpenAIResponsesAPI(translate.ResponsesRoute{
+			Provider:       decision.Provider,
+			Capabilities:   opts.Capabilities,
+			HasTools:       feats.HasTools,
+			ChatOnlyParams: env.RequiresChatCompletionsParams(opts.Capabilities),
+			Broad:          s.ResolveOpenAIResponsesBroad(ctx),
+		}) &&
 		!s.gatewayLacksResponses(responsesEndpointKey) {
 		if native, ok := ctx.Value(nativeResponsesBodyContextKey{}).([]byte); ok && len(native) > 0 {
 			responsesBody = native

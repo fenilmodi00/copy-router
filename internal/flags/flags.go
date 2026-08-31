@@ -61,6 +61,7 @@ const (
 	KeyCyberRefusalRepin         Key = "cyber_refusal_repin"
 	KeyCyberRefusalFallback      Key = "cyber_refusal_fallback_model"
 	KeyEmbedOnlyUserMessage      Key = "embed_only_user_message"
+	KeyOpenAIResponsesBroad      Key = "openai_responses_broad"
 )
 
 // Definition describes one overridable flag. DeploymentDefault is not stored
@@ -80,7 +81,7 @@ type Definition struct {
 // RegistryVersion changes whenever Registry's membership changes. Publish uses
 // it to make pruning safe during rolling deploys: a revision with an older
 // registry version may not delete definitions published by a newer revision.
-const RegistryVersion = 1
+const RegistryVersion = 2
 
 // Registry is the curated allowlist of flags that may carry a per-organization
 // override. It is deliberately explicit rather than derived from the env var
@@ -205,6 +206,13 @@ var Registry = []Definition{
 		EnvVar:         "ROUTER_EMBED_ONLY_USER_MESSAGE",
 		Kind:           KindBool,
 		Description:    "Embed user-role text only, instead of the concatenated stream.",
+		OrgOverridable: true,
+	},
+	{
+		Key:            KeyOpenAIResponsesBroad,
+		EnvVar:         "ROUTER_OPENAI_RESPONSES_BROAD",
+		Kind:           KindBool,
+		Description:    "Serve every direct-OpenAI turn on /v1/responses. Off, only the reasoning tool turn chat/completions rejects is promoted.",
 		OrgOverridable: true,
 	},
 }
