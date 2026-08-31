@@ -29,17 +29,19 @@ type InsertTelemetryParams struct {
 	InstallationID string
 	// APIKeyID attributes the row to the authenticating api key (per-key spend
 	// audit). Empty leaves the column NULL.
-	APIKeyID               string
-	RequestID              string
-	SpanType               string
-	TraceID                string
-	Timestamp              time.Time
-	RequestedModel         string
-	DecisionModel          string
-	DecisionProvider       string
-	DecisionReason         string
-	EstimatedInputTokens   int32
-	StickyHit              bool
+	APIKeyID             string
+	RequestID            string
+	SpanType             string
+	TraceID              string
+	Timestamp            time.Time
+	RequestedModel       string
+	DecisionModel        string
+	DecisionProvider     string
+	DecisionReason       string
+	EstimatedInputTokens int32
+	StickyHit            bool
+	// PinTier is the actual served-path turn-loop tier. Empty leaves the column NULL.
+	PinTier                string
 	EmbedInput             string
 	InputTokens            int32
 	OutputTokens           int32
@@ -83,10 +85,10 @@ type InsertTelemetryParams struct {
 	// SemanticCacheHit marks turns served from the router semantic response cache.
 	SemanticCacheHit *bool
 	DeviceID         string
-	SessionID           string
-	RouterUserID        string
-	ClientApp           string
-	TurnType            string
+	SessionID        string
+	RouterUserID     string
+	ClientApp        string
+	TurnType         string
 	// RolloutID joins eval/training-harness rollout rewards onto decisions
 	// (x-weave-rollout-id header). Empty for normal traffic → NULL column.
 	RolloutID string
@@ -199,26 +201,26 @@ type TelemetryModelBucket struct {
 
 // TelemetryRow is one upstream span returned by the drill-down endpoint.
 type TelemetryRow struct {
-	Timestamp           time.Time
-	RequestID           string
-	RequestedModel      string
-	DecisionModel       string
-	DecisionProvider    string
-	DecisionReason      string
-	StickyHit           bool
-	InputTokens         int32
-	OutputTokens        int32
-	CacheCreationTokens *int32
-	CacheReadTokens     *int32
+	Timestamp            time.Time
+	RequestID            string
+	RequestedModel       string
+	DecisionModel        string
+	DecisionProvider     string
+	DecisionReason       string
+	StickyHit            bool
+	InputTokens          int32
+	OutputTokens         int32
+	CacheCreationTokens  *int32
+	CacheReadTokens      *int32
 	CacheInputSavingsUSD CacheInputSavingsUSD
-	RequestedCostUSD    float64
-	ActualCostUSD       float64
-	TotalLatencyMs      int64
-	UpstreamStatusCode  int32
-	RouterUserID        string
-	ClientApp           string
-	TurnType            string
-	UserEmail           string
+	RequestedCostUSD     float64
+	ActualCostUSD        float64
+	TotalLatencyMs       int64
+	UpstreamStatusCode   int32
+	RouterUserID         string
+	ClientApp            string
+	TurnType             string
+	UserEmail            string
 }
 
 // TelemetryTurnResult is the per-turn telemetry metadata relevant for

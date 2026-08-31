@@ -301,6 +301,10 @@ type RouterModelRouterRequestTelemetry struct {
 	AuthorityShadowFreshScore *float64
 	// True when the turn was served from the router semantic response cache (x-router-cache: hit). Distinct from upstream prompt-cache token counters.
 	SemanticCacheHit *bool
+	// Dollars saved on prompt-cache reads for this turn (catalog-priced). NULL when not computed at insert time.
+	CacheInputSavingsUsd *float64
+	// The actual served-path pin tier for this turn (for example, authoritative_per_turn or hmm_ev_stay_ev_negative). NULL on rows written before this column existed or when no turn-loop tier was available.
+	PinTier *string
 }
 
 // End-user identities seen on inbound requests, scoped to an installation. Replaces the per-user API key pattern.
