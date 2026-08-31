@@ -5589,22 +5589,30 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	// (Codex client sees response.created via ResponsesWriter's lazy
 	// emitCreated on the first upstream byte instead).
 	if rw, ok := w.(*translate.ResponsesWriter); ok {
-		// A native OpenAI Responses route streams the original Responses
-		// bytes verbatim; cross-family routes stay in translation mode.
+		// Native Responses upstream dispatch must passthrough on the return
+		// leg when the routed provider actually serves /v1/responses.
+		// Promotion stashes the native body for routing hashes even when the
+		// scorer picks a chat-only provider (e.g. portable Codex → Fireworks);
+		// gating on responsesEligibleProvider avoids forwarding chat SSE
+		// verbatim on those cross-provider turns.
 		//
 		// Set once here (before Prelude), not per-attempt: response.created
 		// suppression depends on passthrough being engaged before the first
 		// write. Safe because decision.Provider == OpenAI is always a
 		// single-binding GPT model with no cross-format fallback to retry
 		// into. If a GPT model ever gains a fallback, gate this per-attempt.
-		if verbatimPassthrough {
-			markerEnabled := suppressMarkerIfRequested(ctx, r.Header, "enabled") != "" && !routeRes.SuggestionMode
-			mandatoryWarning := billing.SubscriptionOnlyFromContext(ctx)
-			if clientID.ClientApp == ClientAppCodex && (markerEnabled || mandatoryWarning) {
-				if mandatoryWarning {
-					rw.SetBadgeText(subscriptionOnlyWarningMarkerCodex)
+		if responsesPassthrough && responsesEligibleProvider(decision.Provider) {
+			if verbatimPassthrough {
+				markerEnabled := suppressMarkerIfRequested(ctx, r.Header, "enabled") != "" && !routeRes.SuggestionMode
+				mandatoryWarning := billing.SubscriptionOnlyFromContext(ctx)
+				if clientID.ClientApp == ClientAppCodex && (markerEnabled || mandatoryWarning) {
+					if mandatoryWarning {
+						rw.SetBadgeText(subscriptionOnlyWarningMarkerCodex)
+					}
+					rw.SetPassthroughBadge()
+				} else {
+					rw.SetPassthrough()
 				}
-				rw.SetPassthroughBadge()
 			} else {
 				rw.SetPassthrough()
 			}

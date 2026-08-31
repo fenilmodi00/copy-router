@@ -176,39 +176,15 @@ func main() {
 	// ai& is the sole upstream provider of this deployment.
 
 	// ai& (aiand.com) OpenAI-compatible inference surface for open-weight
-	// models (GLM, DeepSeek, Kimi, Qwen, Gemma, gpt-oss). Registration and the
-	// dashboard's live-catalog endpoint share the deployment's key/URL.
-	var aiandCatalogHandler gin.HandlerFunc
+	// models (GLM, DeepSeek, Kimi, Qwen, Gemma, gpt-oss). Registration and
+	// the dashboard's live-catalog endpoint share the deployment's key/URL.
+	aiandBaseURL := config.GetOr("AIAND_API_URL", openaiCompatProvider.AiandBaseURL)
 	{
-
-		aiandBaseURL := config.GetOr("AIAND_API_URL", openaiCompatProvider.AiandBaseURL)
 		registerDeploymentKeyedProvider(providerMap, envKeyedProviders, logger,
 			providers.ProviderAiand, "ai&", "AIAND_API_KEY", aiandBaseURL, byokOnly,
 			func(key, baseURL string) providers.Client {
 				return openaiCompatProvider.NewClientWithModelIDMap(key, baseURL, upstreamIDsForProvider(providers.ProviderAiand))
 			})
-		deploymentAiandKey := config.GetOr("AIAND_API_KEY", "")
-		// Self-serve mounts the catalog route even without a deployment key:
-		// each signed-in user supplies their own aiand BYOK credential from
-		// login. Self-hosted still uses AIAND_API_KEY when set.
-		if deploymentAiandKey != "" || deploymentMode == server.DeploymentModeSelfServe {
-			admin.AiandCatalogHandler(deploymentAiandKey, aiandBaseURL,
-				// Deployment key rides this client; a 3xx must fail the != 200
-				// status check instead of relaying the key to another host.
-				&http.Client{
-					Timeout: aiandCatalogBudget,
-					CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-						return http.ErrUseLastResponse
-					},
-				}, time.Now)
-			if deploymentAiandKey != "" {
-				logger.Info("ai& catalog endpoint enabled", "base_url", aiandBaseURL)
-			} else {
-				logger.Info("ai& catalog endpoint enabled (per-user BYOK keys)", "base_url", aiandBaseURL)
-			}
-		} else {
-			logger.Info("ai& catalog endpoint disabled (AIAND_API_KEY not set)")
-		}
 	}
 
 	availableProviders := make(map[string]struct{}, len(providerMap))
@@ -957,8 +933,10 @@ func main() {
 		Billing:             billingSvc,
 		ReadinessChecker:    hmmReadinessChecker,
 		HMMRosterSource:     hmmRosterSource,
-		Analytics:           analyticsSvc,
-		AiandCatalogHandler: aiandCatalogHandler,
+		Analytics: analyticsSvc,
+		// Built straight into the Services literal so the route can never be
+		// silently dropped — mounting is keyed on this field being non-nil.
+		AiandCatalogHandler: buildAiandCatalogHandler(config.GetOr("AIAND_API_KEY", ""), aiandBaseURL, deploymentMode, logger),
 	}, deploymentMode)
 
 	srv := &http.Server{
@@ -1634,4 +1612,30 @@ func upstreamIDsForProvider(provider string) map[string]string {
 		return nil
 	}
 	return out
+}
+// buildAiandCatalogHandler wires the dashboard's live ai& model-catalog route
+// for the given deployment mode. It returns the handler (nil when the route
+// must not mount) plus whether it mounted, so the composition root can log
+// accurately. Self-serve mounts the route even without a deployment key —
+// each signed-in user supplies their own aiand BYOK credential from login.
+// Self-hosted mounts it only when AIAND_API_KEY is set.
+func buildAiandCatalogHandler(deploymentKey, baseURL string, mode server.DeploymentMode, logger *slog.Logger) gin.HandlerFunc {
+	if deploymentKey == "" && mode != server.DeploymentModeSelfServe {
+		logger.Info("ai& catalog endpoint disabled (AIAND_API_KEY not set)")
+		return nil
+	}
+	if deploymentKey != "" {
+		logger.Info("ai& catalog endpoint enabled", "base_url", baseURL)
+	} else {
+		logger.Info("ai& catalog endpoint enabled (per-user BYOK keys)", "base_url", baseURL)
+	}
+	return admin.AiandCatalogHandler(deploymentKey, baseURL,
+		// Deployment key rides this client; a 3xx must fail the != 200
+		// status check instead of relaying the key to another host.
+		&http.Client{
+			Timeout: aiandCatalogBudget,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}, time.Now)
 }

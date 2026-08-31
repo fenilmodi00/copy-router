@@ -311,3 +311,49 @@ func TestService_ProxyOpenAIChatCompletion_GatewayKeepsChatCompletions(t *testin
 	require.Len(t, provider.proxyEndpoints, 1)
 	assert.Equal(t, providers.EndpointChatCompletions, provider.proxyEndpoints[0])
 }
+
+// Broad-rollout promotion sends a /v1/responses ingress turn to the upstream
+// Responses endpoint; the return leg must passthrough native frames, not
+// re-parse them as chat.completion.chunk events.
+func TestService_ProxyOpenAIResponses_BroadRolloutPassthroughsNativeUpstream(t *testing.T) {
+	const upstreamBody = `{"id":"resp_test","object":"response","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hello from upstream"}]}],"usage":{"input_tokens":5,"output_tokens":3,"total_tokens":8}}`
+	provider := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, upstreamBody)
+	}}
+	svc := openAIChatService(provider, "deepseek-ai/deepseek-v4-flash")
+
+	body := []byte(`{"model":"auto","input":"Say hello","max_output_tokens":15}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
+	require.NoError(t, svc.ProxyOpenAIResponses(context.Background(), body, rec, req))
+
+	require.Len(t, provider.proxyEndpoints, 1)
+	assert.Equal(t, providers.EndpointResponses, provider.proxyEndpoints[0])
+	assert.Equal(t, "hello from upstream", gjson.GetBytes(rec.Body.Bytes(), "output.0.content.0.text").String())
+}
+
+func TestService_ProxyOpenAIResponses_BroadRolloutPassthroughsNativeUpstreamStreaming(t *testing.T) {
+	provider := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		for _, frame := range []string{
+			`{"type":"response.output_text.delta","output_index":0,"delta":"hi"}`,
+			`{"type":"response.completed","response":{"id":"resp_1","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}],"usage":{"input_tokens":5,"output_tokens":1}}}`,
+		} {
+			_, _ = io.WriteString(w, "data: "+frame+"\n\n")
+		}
+	}}
+	svc := openAIChatService(provider, "deepseek-ai/deepseek-v4-flash")
+
+	body := []byte(`{"model":"auto","input":"Say hello","max_output_tokens":15,"stream":true}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
+	require.NoError(t, svc.ProxyOpenAIResponses(context.Background(), body, rec, req))
+
+	require.Len(t, provider.proxyEndpoints, 1)
+	assert.Equal(t, providers.EndpointResponses, provider.proxyEndpoints[0])
+	assert.Contains(t, rec.Body.String(), `"type":"response.completed"`)
+	assert.NotContains(t, rec.Body.String(), `"type":"response.failed"`)
+}
