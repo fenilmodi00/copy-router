@@ -158,7 +158,8 @@ func SanitizeInboundAuthHeader(v string) string {
 // KeepAlive=30s guards against AWS NAT-GW/NLB/VPC-endpoint reapers (350s fixed
 // idle) by keeping the TCP connection live at the network layer.
 // ResponseHeaderTimeout only guards time-to-first-byte; per-read inactivity is
-// enforced separately by StreamBody's watchdog.
+// enforced separately by StreamBody's watchdog. On a managed deployment the
+// dialer also refuses non-public destinations (see publicDestinationsOnly).
 func NewTransport(dialTimeout, tlsTimeout time.Duration) *http.Transport {
 	return NewTransportWithResponseHeaderTimeout(dialTimeout, tlsTimeout, DefaultResponseHeaderTimeout)
 }
@@ -169,12 +170,26 @@ func NewTransport(dialTimeout, tlsTimeout time.Duration) *http.Transport {
 // via Responses API). Streaming inactivity is still bounded separately by
 // StreamBody's idle watchdog, so this can't reintroduce an unbounded hang.
 func NewTransportWithResponseHeaderTimeout(dialTimeout, tlsTimeout, responseHeaderTimeout time.Duration) *http.Transport {
-	return &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   dialTimeout,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
+	return newTransport(dialTimeout, tlsTimeout, responseHeaderTimeout, publicDestinationsOnly)
+}
+
+// newTransport is NewTransportWithResponseHeaderTimeout with the dial policy
+// passed explicitly rather than read from the environment.
+func newTransport(dialTimeout, tlsTimeout, responseHeaderTimeout time.Duration, publicOnly bool) *http.Transport {
+	dialer := &net.Dialer{
+		Timeout:   dialTimeout,
+		KeepAlive: 30 * time.Second,
+	}
+	// Through a proxy the dialer connects to the proxy, not the upstream —
+	// honoring one makes the policy appear enforced when it is not.
+	proxy := http.ProxyFromEnvironment
+	if publicOnly {
+		dialer.Control = restrictDestination
+		proxy = nil
+	}
+	t := &http.Transport{
+		Proxy:                 proxy,
+		DialContext:           dialer.DialContext,
 		MaxIdleConnsPerHost:   64,
 		MaxIdleConns:          256,
 		IdleConnTimeout:       90 * time.Second,
@@ -183,6 +198,23 @@ func NewTransportWithResponseHeaderTimeout(dialTimeout, tlsTimeout, responseHead
 		ResponseHeaderTimeout: responseHeaderTimeout,
 		ForceAttemptHTTP2:     true,
 	}
+	return t
+}
+
+// ErrRefusedRedirect is returned when an upstream answers with a redirect.
+// A provider base URL is configuration, not discovery — the Location names a
+// host the deployment never configured, so the call is failed rather than relayed.
+var ErrRefusedRedirect = errors.New("upstream returned a redirect, which is not followed")
+
+// NewClient returns an http.Client on transport that refuses redirects.
+// Failing the call keeps a 3xx off every relay path — returning it would let
+// each adapter treat the redirect status as success.
+func NewClient(transport http.RoundTripper) *http.Client {
+	return &http.Client{Transport: transport, CheckRedirect: refuseRedirect}
+}
+
+func refuseRedirect(*http.Request, []*http.Request) error {
+	return ErrRefusedRedirect
 }
 
 // StartIdleWatchdog cancels ctx with ErrUpstreamIdleTimeout once idleTimeout

@@ -189,8 +189,15 @@ func main() {
 		// each signed-in user supplies their own aiand BYOK credential from
 		// login. Self-hosted still uses AIAND_API_KEY when set.
 		if deploymentAiandKey != "" || deploymentMode == server.DeploymentModeSelfServe {
-			aiandCatalogHandler = admin.AiandCatalogHandler(deploymentAiandKey, aiandBaseURL,
-				&http.Client{Timeout: aiandCatalogBudget}, time.Now)
+			admin.AiandCatalogHandler(deploymentAiandKey, aiandBaseURL,
+				// Deployment key rides this client; a 3xx must fail the != 200
+				// status check instead of relaying the key to another host.
+				&http.Client{
+					Timeout: aiandCatalogBudget,
+					CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+						return http.ErrUseLastResponse
+					},
+				}, time.Now)
 			if deploymentAiandKey != "" {
 				logger.Info("ai& catalog endpoint enabled", "base_url", aiandBaseURL)
 			} else {
@@ -260,7 +267,14 @@ func main() {
 			panic("selfserve mode: account repos not wired")
 		}
 		keyVerifier := &aiandProvider.KeyVerifier{
-			Client:      &http.Client{Timeout: 15 * time.Second},
+			Client: &http.Client{
+				Timeout: 15 * time.Second,
+				// Verifies user sk- keys as Bearer; never follow a redirect
+				// carrying them. The refused 3xx fails the identity probe.
+				CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+					return http.ErrUseLastResponse
+				},
+			},
 			IdentityURL: config.GetOr("AIAND_IDENTITY_URL", aiandProvider.DefaultBaseURL),
 		}
 		authSvc.WithAccountRepos(repo.Accounts, repo.LoginSessions).WithKeyVerifier(keyVerifier)

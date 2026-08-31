@@ -358,6 +358,7 @@ Step-by-step: [HOST_WSL_SUPABASE.md](HOST_WSL_SUPABASE.md).
 | ------------------------ | ------------ | ------- |
 | `PORT`                   | `8080`       | HTTP listen port. |
 | `ROUTER_DEPLOYMENT_MODE` | `selfhosted` | `selfhosted` mounts `/ui/*` and `/admin/v1/*`. `managed` skips both (for SaaS deployments with a separate admin UI). `selfserve` mounts a self-service dashboard plane instead. |
+| `ROUTER_RESTRICT_UPSTREAM_EGRESS` | follows `ROUTER_DEPLOYMENT_MODE` | When true, provider adapters refuse to dial an upstream that resolves outside the public internet (loopback, private, link-local, CGNAT). Defaults to true in `managed` mode and false in `selfhosted`/`selfserve`, where pointing a provider at an in-cluster or loopback gateway is normal. While on, provider adapters also ignore `HTTP_PROXY`/`HTTPS_PROXY` — a proxied connection makes the destination unverifiable, so a proxy set alongside `managed` mode is silently bypassed (traffic dials DIRECT). |
 | `ROUTER_ADMIN_PASSWORD`  | `admin`      | Dashboard password. Defaults to `admin` with a startup warning when unset — **set this for any internet-facing deployment**. Not used in `selfserve` mode (see below). |
 
 ### Playground (`/ui/playground`)

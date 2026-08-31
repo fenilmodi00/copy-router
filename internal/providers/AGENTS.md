@@ -19,7 +19,7 @@ Provider adapters (`internal/providers/<name>/`) import `internal/proxy` for the
 ## Adding a new `providers.Client` adapter
 
 1. **Prefer `openaicompat`.** For OpenAI-compatible upstreams, pass a base URL into `openaicompat.NewClient` / `NewClientWithModelIDMap`. Only add a new adapter package when the wire format is not Chat Completions.
-2. **Implement `Proxy` and `Passthrough`.** Use `httputil.NewTransport` and `httputil.StreamBody`. Call `proxy.OnUpstreamMeta` when usage/headers are observed. Do not leak provider-specific types across the package boundary.
+2. **Implement `Proxy` and `Passthrough`.** Build the client with `httputil.NewClient(httputil.NewTransport(...))` so redirects are refused and the managed-mode destination policy applies, and use `httputil.StreamBody`. Call `proxy.OnUpstreamMeta` when usage/headers are observed. Do not leak provider-specific types across the package boundary.
 3. **Add compile-time check:** `var _ providers.Client = (*Client)(nil)`.
 4. **Add a canonical name constant** to [`provider.go`](provider.go) (the `Provider*` block) + register the matching env-var name in `APIKeyEnvVars` **and** a `ProviderFamilies` entry (see the "THREE-map edit" comment above the `Provider*` block in `provider.go`). Deployment today wires `"aiand"` only. Other `Provider*` names remain for wire-family dispatch, BYOK/custom bindings, and tests. Skipping the `ProviderFamilies` entry silently 502s at request time — `families_test.go`'s `TestEveryProviderHasFamilyAndEnvVar` catches map drift for constants that appear in `ProviderFamilies`.
 5. **Check the non-family-based dispatch switches.** Most cross-format dispatch in `internal/proxy` keys off `providers.FamilyFor`. Two switches still key off literal `Provider*` constants:
