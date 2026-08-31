@@ -44,10 +44,10 @@ export default function ModelDetailView(props: { params?: { id?: string } }) {
 
 function ModelDetailPage({ id }: { id: string }) {
   const dashboardFilters = useDashboardFilters();
-  const { fromISO, toISO, granularity } = dashboardFilters.filters;
+  const { range, fromISO, toISO, granularity } = dashboardFilters.filters;
 
   const catalogQ = useCatalog();
-  const chartQ = useMetricsModelBreakdown(granularity, fromISO, toISO);
+  const chartQ = useMetricsModelBreakdown(granularity, range.id, fromISO, toISO);
 
   // One 30d hour-breakdown fans into all three MiniStat windows (was 3× fetches).
   // Hour buckets keep the 24h column honest; day granularity would flatten
@@ -57,7 +57,7 @@ function ModelDetailPage({ id }: { id: string }) {
     () => new Date(windowTo.getTime() - 30 * 24 * 3600_000).toISOString(),
     [windowTo],
   );
-  const windowsQ = useMetricsModelBreakdown("hour", windowFromISO, windowTo.toISOString());
+  const windowsQ = useMetricsModelBreakdown("hour", "detail-30d", windowFromISO, windowTo.toISOString());
 
   const [metric, setMetric] = useState<ModelBreakdownMetric>("requests");
   const basket = useCompareBasket();

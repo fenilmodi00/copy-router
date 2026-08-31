@@ -6,7 +6,7 @@ import { Button } from "@/components/molecules/Button";
 import { Card } from "@/components/molecules/Card";
 import { Appearance, Intent } from "@/components/types";
 import { api } from "@/lib/api";
-import { invalidateRoutingPreferences, useRoutingPreferences } from "@/lib/data-cache";
+import { useInvalidateRoutingPreferences, useRoutingPreferences } from "@/lib/data-cache";
 import { useEffect, useState } from "react";
 
 // Routing dials, rendered as proportional weights (sum to 100%) — mirrors the
@@ -97,6 +97,7 @@ function DistributionBar({ weights }: { weights: Record<string, number> }) {
 
 export function RoutingPriorityPanel() {
   const { data: prefs, error: loadError } = useRoutingPreferences();
+  const invalidateRoutingPreferences = useInvalidateRoutingPreferences();
   const [weights, setWeights] = useState<Record<string, number>>({
     quality: DEFAULT_QUALITY,
     price: 100 - DEFAULT_QUALITY,

@@ -11,17 +11,40 @@ describe("queryKeys", () => {
   it("keeps catalog and range-scoped metrics keys distinct so remounts share catalog but not windows", () => {
     // Behavioral: same catalog identity across callers; different windows must
     // not collide or a filter change would serve the wrong timeseries.
+    const from = "2026-08-27T15:00:00.000Z";
+    const to = "2026-08-27T16:00:00.000Z";
+    const laterTo = "2026-08-27T18:00:00.000Z";
     expect(queryKeys.catalog).not.toEqual(
-      queryKeys.metricsSummary("a", "b") as unknown as readonly string[],
+      queryKeys.metricsSummary("last-24h", to) as unknown as readonly string[],
     );
-    expect(queryKeys.metricsSummary("a", "b")).not.toEqual(
-      queryKeys.metricsSummary("a", "c"),
+    // A different range is a different window.
+    expect(queryKeys.metricsSummary("last-24h", to)).not.toEqual(
+      queryKeys.metricsSummary("last-7d", to),
     );
-    expect(queryKeys.metricsTimeseries("hour", "a", "b")).not.toEqual(
-      queryKeys.metricsTimeseries("day", "a", "b"),
+    // A to-timestamp beyond the quantum boundary is a different window.
+    expect(queryKeys.metricsSummary("last-24h", to)).not.toEqual(
+      queryKeys.metricsSummary("last-24h", laterTo),
     );
-    expect(queryKeys.metricsModelBreakdown("hour", "a", "b")).not.toEqual(
-      queryKeys.metricsSummary("a", "b"),
+    expect(queryKeys.metricsTimeseries("hour", "last-24h", to)).not.toEqual(
+      queryKeys.metricsTimeseries("day", "last-24h", to),
+    );
+    expect(queryKeys.metricsModelBreakdown("hour", "last-24h", to)).not.toEqual(
+      queryKeys.metricsSummary("last-24h", to),
+    );
+  });
+
+  it("quantizes to-timestamps so remounts within one 5-minute bucket share a key", () => {
+    // Behavioral: two mounts of the same range a minute apart must hit the
+    // same cache entry or the dashboard skeleton-flashes on every remount.
+    const first = "2026-08-27T15:30:12.345Z";
+    const second = "2026-08-27T15:31:47.890Z";
+    expect(queryKeys.metricsSummary("last-24h", first)).toEqual(
+      queryKeys.metricsSummary("last-24h", second),
+    );
+    // Crossing a quantum boundary rolls the key over, bounding staleness.
+    const nextBucket = "2026-08-27T15:35:00.001Z";
+    expect(queryKeys.metricsSummary("last-24h", first)).not.toEqual(
+      queryKeys.metricsSummary("last-24h", nextBucket),
     );
   });
 });

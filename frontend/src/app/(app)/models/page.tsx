@@ -31,10 +31,10 @@ const TIER_OPTIONS = [
 
 export default function ModelsPage() {
   const dashboardFilters = useDashboardFilters();
-  const { fromISO, toISO, granularity } = dashboardFilters.filters;
+  const { range, fromISO, toISO, granularity } = dashboardFilters.filters;
 
   const catalogQ = useCatalog();
-  const popularityQ = useMetricsModelBreakdown(granularity, fromISO, toISO);
+  const popularityQ = useMetricsModelBreakdown(granularity, range.id, fromISO, toISO);
 
   const [q, setQ] = useState("");
   const [caps, setCaps] = useState<string[]>([]);

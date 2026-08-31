@@ -5,11 +5,12 @@ import { Button } from "@/components/molecules/Button";
 import { Card } from "@/components/molecules/Card";
 import { Appearance, Intent } from "@/components/types";
 import { api, type DeployedModel } from "@/lib/api";
-import { invalidateExcludedModels, useExcludedModels } from "@/lib/data-cache";
+import { useInvalidateExcludedModels, useExcludedModels } from "@/lib/data-cache";
 import { useEffect, useState } from "react";
 
 export function ModelSelectionPanel() {
   const { data, error: loadError, isLoading } = useExcludedModels();
+  const invalidateExcludedModels = useInvalidateExcludedModels();
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [savedExcluded, setSavedExcluded] = useState<Set<string>>(new Set());
   const [envOverrideActive, setEnvOverrideActive] = useState(false);

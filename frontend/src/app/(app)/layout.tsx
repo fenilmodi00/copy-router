@@ -2,25 +2,25 @@
 
 import { Sidebar } from "@/components/Sidebar";
 import { SidebarLayout } from "@/components/SidebarLayout";
-import { Skeleton } from "@/components/atoms/Skeleton";
 import {
   LoginSessionProvider,
   useLoginSession,
 } from "@/lib/use-login-session-gate";
+import { useBackgroundWarm } from "@/lib/data-cache";
 
 function AppShell({ children }: { children: React.ReactNode }) {
+  // Warm likely-next-route caches (Models/Settings data) once, after paint.
+  useBackgroundWarm();
+
   const { state } = useLoginSession();
 
-  if (state !== "authed") {
-    return (
-      <SidebarLayout sidebar={<div className="md:w-[244px]" />}>
-        <div className="flex flex-col gap-4 p-6">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-32 w-full" />
-        </div>
-      </SidebarLayout>
-    );
+  // Render the page immediately while the login probe is in flight — the
+  // auth round-trip no longer serializes ahead of page data, and cached
+  // data paints right away. An anonymous verdict redirects to /login (the
+  // probe is one cheap call; the brief window shows skeleton pages whose
+  // fetches would 401 anyway). Warm likely-next-route caches once painted.
+  if (state === "anonymous") {
+    return null;
   }
 
   return <SidebarLayout sidebar={<Sidebar />}>{children}</SidebarLayout>;

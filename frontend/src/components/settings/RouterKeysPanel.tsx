@@ -8,7 +8,7 @@ import { Button } from "@/components/molecules/Button";
 import { Card } from "@/components/molecules/Card";
 import { Appearance, Intent } from "@/components/types";
 import { api, type APIKey, type APIKeyScope, type IssueAPIKeyResponse } from "@/lib/api";
-import { invalidateKeys, useKeys } from "@/lib/data-cache";
+import { useInvalidateKeys, useKeys } from "@/lib/data-cache";
 import { Copy, RotateCw, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -56,6 +56,7 @@ function keyMatchesQuery(k: APIKey, query: string): boolean {
 
 export function RouterKeysPanel() {
   const { data: keysData, error: loadError, isLoading } = useKeys();
+  const invalidateKeys = useInvalidateKeys();
   const keys = keysData ?? [];
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);

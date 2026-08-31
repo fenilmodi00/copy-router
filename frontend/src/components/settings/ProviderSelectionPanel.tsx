@@ -5,11 +5,12 @@ import { Button } from "@/components/molecules/Button";
 import { Card } from "@/components/molecules/Card";
 import { Appearance, Intent } from "@/components/types";
 import { api } from "@/lib/api";
-import { invalidateExcludedProviders, useExcludedProviders } from "@/lib/data-cache";
+import { useInvalidateExcludedProviders, useExcludedProviders } from "@/lib/data-cache";
 import { useEffect, useState } from "react";
 
 export function ProviderSelectionPanel() {
   const { data, error: loadError, isLoading } = useExcludedProviders();
+  const invalidateExcludedProviders = useInvalidateExcludedProviders();
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [savedExcluded, setSavedExcluded] = useState<Set<string>>(new Set());
   const [envOverrideActive, setEnvOverrideActive] = useState(false);

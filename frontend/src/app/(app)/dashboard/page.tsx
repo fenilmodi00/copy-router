@@ -70,7 +70,7 @@ function resolveOnboarding(
 
 export default function DashboardPage() {
   const dashboardFilters = useDashboardFilters();
-  const { fromISO, toISO, granularity } = dashboardFilters.filters;
+  const { range, fromISO, toISO, granularity } = dashboardFilters.filters;
   const router = useRouter();
   const { surface } = useLoginSession();
   const [skipOverride, setSkipOverride] = useState(false);
@@ -79,9 +79,9 @@ export default function DashboardPage() {
   // still gets a cheap empty metrics response; an established one paints KPIs
   // without waiting on the onboarding round-trip.
   const onboardingQ = useOnboarding();
-  const summaryQ = useMetricsSummary(fromISO, toISO);
-  const timeseriesQ = useMetricsTimeseries(granularity, fromISO, toISO);
-  const breakdownQ = useMetricsModelBreakdown(granularity, fromISO, toISO);
+  const summaryQ = useMetricsSummary(range.id, fromISO, toISO);
+  const timeseriesQ = useMetricsTimeseries(granularity, range.id, fromISO, toISO);
+  const breakdownQ = useMetricsModelBreakdown(granularity, range.id, fromISO, toISO);
   // Catalog shares the singleton key with Models / Compare / detail.
   useCatalog();
 
