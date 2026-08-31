@@ -317,3 +317,29 @@ func TestGatewayClient_DispatchesToConfiguredEndpoint(t *testing.T) {
 	assert.Equal(t, "/api/v2/cortex/v1/chat/completions", gotPath)
 	assert.Equal(t, "Bearer gateway-token", gotAuth)
 }
+
+// A Responses-endpoint request must go to /responses, not chat/completions,
+// while keeping the version-probe fallback on a 404.
+func TestProxy_ResponsesEndpointUsesResponsesPath(t *testing.T) {
+	var gotPath string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"resp-1","object":"response"}`))
+	}))
+	defer upstream.Close()
+
+	c := openaicompat.NewClient("test-key", upstream.URL+"/api/v1/")
+	prep := providers.PreparedRequest{
+		Body:     []byte(`{"model":"glm-5.3","input":[]}`),
+		Headers:  make(http.Header),
+		Endpoint: providers.EndpointResponses,
+	}
+	clientReq := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
+	rec := httptest.NewRecorder()
+
+	require.NoError(t, c.Proxy(context.Background(), router.Decision{Model: "glm-5.3"}, prep, rec, clientReq))
+	assert.Equal(t, "/api/v1/responses", gotPath)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}

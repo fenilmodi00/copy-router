@@ -172,7 +172,15 @@ func (c *Client) Proxy(ctx context.Context, decision router.Decision, prep provi
 	// Applied after the catalog map so a BYOK endpoint's own naming wins.
 	body = proxy.ApplyModelAlias(ctx, body, decision.Model)
 	baseURL := proxy.EffectiveBaseURL(ctx, c.baseURL)
-	upstream, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(body))
+	// EndpointResponses is the Responses surface: reasoning models reject a tool
+	// turn on chat/completions, and OpenAI-compatible upstreams that mount
+	// /v1/responses (aiand) serve it there. The proxy re-emits onto
+	// chat/completions when the upstream answers that it has no such surface.
+	suffix := "/chat/completions"
+	if prep.Endpoint == providers.EndpointResponses {
+		suffix = "/responses"
+	}
+	upstream, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+suffix, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build upstream request: %w", err)
 	}

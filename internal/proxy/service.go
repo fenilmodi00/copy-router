@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"workweave/router/internal/auth"
@@ -122,6 +123,10 @@ type Service struct {
 	// byokOnly disables deployment-level credential fallback so customer
 	// requests never silently consume the platform's API key budget.
 	byokOnly bool
+	// noResponsesGateways memoizes gateway endpoints that answered they have no
+	// Responses API, so only the first tool turn against such an endpoint pays
+	// the probe. Keyed by gatewayResponsesKey.
+	noResponsesGateways sync.Map
 	// excludedModelsOverride, when non-nil, replaces the per-installation
 	// exclusion list on every request. Set from ROUTER_EXCLUDED_MODELS at boot.
 	excludedModelsOverride map[string]struct{}
@@ -1738,6 +1743,36 @@ func (s *Service) ExcludedProvidersOverride() []string {
 // OTel export, DB telemetry persistence, and credit billing all need it.
 func (s *Service) usageRequired() bool {
 	return s.emitter != nil || s.telemetry != nil || s.billing != nil
+}
+
+// gatewayResponsesKey identifies the endpoint whose Responses support is being
+// memoized: the BYOK base URL, or the provider name for a deployment-keyed
+// gateway (one endpoint per process). Empty for direct vendors, which are not
+// memoized.
+func gatewayResponsesKey(ctx context.Context, provider string) string {
+	if !providers.IsGateway(provider) {
+		return ""
+	}
+	return EffectiveBaseURL(ctx, provider)
+}
+
+// gatewayLacksResponses reports whether that endpoint already told us it serves
+// no Responses API.
+func (s *Service) gatewayLacksResponses(key string) bool {
+	if key == "" {
+		return false
+	}
+	_, ok := s.noResponsesGateways.Load(key)
+	return ok
+}
+
+// rememberGatewayLacksResponses records a gateway's rejection of the Responses
+// API so later tool turns go straight to chat/completions.
+func (s *Service) rememberGatewayLacksResponses(key string) {
+	if key == "" {
+		return
+	}
+	s.noResponsesGateways.Store(key, struct{}{})
 }
 
 // newTelemetryBuffer returns a request-scoped buffer, or nil when OTel is

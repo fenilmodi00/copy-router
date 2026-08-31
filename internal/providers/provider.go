@@ -94,16 +94,15 @@ const (
 // keep it covering EVERY dispatchable Provider* constant (see the three-map
 // note above).
 var ProviderFamilies = map[string]TranslationFamily{
-	ProviderAnthropic:  FamilyAnthropic,
-	ProviderOpenAI:     FamilyOpenAICompat,
-	ProviderOpenRouter: FamilyOpenAICompat,
-	ProviderFireworks:  FamilyOpenAICompat,
-	ProviderBedrock:    FamilyOpenAICompat,
-	ProviderMakora:     FamilyOpenAICompat,
-	ProviderTogether:   FamilyOpenAICompat,
-	ProviderXAI:        FamilyOpenAICompat,
-	ProviderAiand:      FamilyOpenAICompat,
-
+	ProviderAnthropic:        FamilyAnthropic,
+	ProviderOpenAI:           FamilyOpenAICompat,
+	ProviderOpenRouter:       FamilyOpenAICompat,
+	ProviderFireworks:        FamilyOpenAICompat,
+	ProviderBedrock:          FamilyOpenAICompat,
+	ProviderMakora:           FamilyOpenAICompat,
+	ProviderTogether:         FamilyOpenAICompat,
+	ProviderXAI:              FamilyOpenAICompat,
+	ProviderAiand:            FamilyOpenAICompat,
 	ProviderAnthropicGateway: FamilyAnthropic,
 	ProviderOpenAIGateway:    FamilyOpenAICompat,
 }
@@ -118,6 +117,18 @@ func FamilyFor(provider string) TranslationFamily {
 // Completions wire format.
 func IsOpenAICompat(provider string) bool {
 	return FamilyFor(provider) == FamilyOpenAICompat
+}
+
+// IsGateway reports whether the provider is a customer-hosted gateway rather
+// than a vendor API. A gateway serves only the models its key's aliases name,
+// so routing treats it as the installation's exclusive upstream.
+func IsGateway(provider string) bool {
+	switch provider {
+	case ProviderAnthropicGateway, ProviderOpenAIGateway:
+		return true
+	default:
+		return false
+	}
 }
 
 // AllProviders returns every known Provider* constant (every ProviderFamilies
@@ -478,6 +489,41 @@ func IsUpstreamOutputConfigFormatRejection(err error) bool {
 		return false
 	}
 	for _, phrase := range unknownFieldPhrases {
+		if strings.Contains(body, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+// responsesUnsupportedPhrases are prose bodies meaning the gateway does not
+// serve /v1/responses at all (as opposed to rejecting this particular body).
+// Snowflake Cortex gates the surface per account and answers 400/403 rather
+// than 404, so status alone can't classify it.
+var responsesUnsupportedPhrases = []string{
+	"responses rest api not enabled",
+	"responses api not enabled",
+	"not allowed to access this endpoint",
+	"unknown path",
+}
+
+// IsUpstreamResponsesUnsupported reports whether err means the upstream has no
+// usable Responses API, so the caller should re-emit the turn onto
+// chat/completions. A 404 covers gateways that never mount the path; the prose
+// phrases cover gateways that mount it but leave it disabled per account.
+func IsUpstreamResponsesUnsupported(err error) bool {
+	var buffered *UpstreamErrorResponse
+	if !errors.As(err, &buffered) {
+		return false
+	}
+	if buffered.Status == http.StatusNotFound {
+		return true
+	}
+	if buffered.Status != http.StatusBadRequest && buffered.Status != http.StatusForbidden {
+		return false
+	}
+	body := strings.ToLower(string(buffered.Body))
+	for _, phrase := range responsesUnsupportedPhrases {
 		if strings.Contains(body, phrase) {
 			return true
 		}
