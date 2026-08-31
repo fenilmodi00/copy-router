@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"workweave/router/internal/router"
 	"workweave/router/internal/router/sessionpin"
 
 	"github.com/google/uuid"
@@ -189,7 +190,7 @@ func (st *sessionPinStoreFake) Get(ctx context.Context, key [sessionpin.SessionK
 	return st.onGet(ctx, key, role)
 }
 
-func (st *sessionPinStoreFake) Consume(ctx context.Context, key [sessionpin.SessionKeyLen]byte, role string) (sessionpin.Pin, bool, error) {
+func (st *sessionPinStoreFake) Consume(ctx context.Context, key [sessionpin.SessionKeyLen]byte, role string, expected router.Strategy) (sessionpin.Pin, bool, error) {
 	return st.onGet(ctx, key, role)
 }
 
@@ -201,23 +202,23 @@ func (st *sessionPinStoreFake) UpdateUsage(ctx context.Context, key [sessionpin.
 	return nil
 }
 
-func (st *sessionPinStoreFake) IncrementUpstreamErrors(ctx context.Context, key [sessionpin.SessionKeyLen]byte, role string) (int, error) {
+func (st *sessionPinStoreFake) IncrementUpstreamErrors(ctx context.Context, key [sessionpin.SessionKeyLen]byte, role string, expected router.Strategy) (int, error) {
 	return 0, nil
 }
 
-func (st *sessionPinStoreFake) ResetUpstreamErrors(ctx context.Context, key [sessionpin.SessionKeyLen]byte, role string) error {
+func (st *sessionPinStoreFake) ResetUpstreamErrors(ctx context.Context, key [sessionpin.SessionKeyLen]byte, role string, expected router.Strategy) error {
 	return nil
 }
 
-func (st *sessionPinStoreFake) IncrementOverloadErrors(ctx context.Context, key [sessionpin.SessionKeyLen]byte, role string) (int, error) {
+func (st *sessionPinStoreFake) IncrementOverloadErrors(ctx context.Context, key [sessionpin.SessionKeyLen]byte, role string, expected router.Strategy) (int, error) {
 	return 0, nil
 }
 
-func (st *sessionPinStoreFake) ResetOverloadErrors(ctx context.Context, key [sessionpin.SessionKeyLen]byte, role string) error {
+func (st *sessionPinStoreFake) ResetOverloadErrors(ctx context.Context, key [sessionpin.SessionKeyLen]byte, role string, expected router.Strategy) error {
 	return nil
 }
 
-func (st *sessionPinStoreFake) DisableProvider(ctx context.Context, key [sessionpin.SessionKeyLen]byte, role, provider string) error {
+func (st *sessionPinStoreFake) DisableProvider(ctx context.Context, key [sessionpin.SessionKeyLen]byte, role, provider string, expected router.Strategy) error {
 	return nil
 }
 

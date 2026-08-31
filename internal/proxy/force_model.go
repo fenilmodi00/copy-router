@@ -150,7 +150,7 @@ func (s *Service) setForceModelPin(
 	existing, found, err := s.pinStore.Get(ctx, sessionKey, role)
 	if err != nil {
 		log.Error("force-model: prior pin lookup failed", "err", err)
-	} else if found {
+	} else if found && pinMatchesEffectiveStrategy(ctx, existing) {
 		lastServedModel = existing.LastServedModel
 	}
 	forced := sessionpin.Pin{
@@ -160,6 +160,7 @@ func (s *Service) setForceModelPin(
 		Provider:        provider,
 		Model:           canonicalModel,
 		Reason:          translate.ReasonUserForceModel,
+		Strategy:        router.StrategyFromContext(ctx),
 		TurnCount:       1,
 		PinnedUntil:     pinNeverExpires,
 		LastServedModel: lastServedModel,

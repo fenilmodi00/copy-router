@@ -2243,7 +2243,7 @@ func defaultStrategyUnavailable(strategy router.Strategy) error {
 	switch strategy {
 	case router.StrategyRL:
 		return rl.ErrPolicyUnavailable
-	case router.StrategyHMM, router.StrategyHMMEmbedding:
+	case router.StrategyHMM, router.StrategyHMMEmbedding, router.StrategyHMMBeta:
 		return hmm.ErrHMMUnavailable
 	case router.StrategyBandit:
 		return bandit.ErrBanditUnavailable
@@ -2595,7 +2595,7 @@ func (s *Service) maybeRepinOnRefusal(ctx context.Context, obs *refusalObserver,
 	// Prefer the scorer's runner-up (PairedModel); use context.Background() because
 	// the request ctx may already be canceled when the response has been written.
 	fbModel, fbProvider := s.ResolveCyberRefusalFallbackModel(ctx), ""
-	if existing, found, err := s.pinStore.Get(context.Background(), sessionKey, role); err == nil && found && existing.PairedModel != "" {
+	if existing, found, err := s.pinStore.Get(context.Background(), sessionKey, role); err == nil && found && pinMatchesEffectiveStrategy(ctx, existing) && existing.PairedModel != "" {
 		fbModel, fbProvider = existing.PairedModel, existing.PairedProvider
 	}
 	if fbProvider == "" {
@@ -2615,6 +2615,7 @@ func (s *Service) maybeRepinOnRefusal(ctx context.Context, obs *refusalObserver,
 		Provider:       fbProvider,
 		Model:          fbModel,
 		Reason:         "cyber-refusal-repin",
+		Strategy:       router.StrategyFromContext(ctx),
 		TurnCount:      1,
 		PinnedUntil:    pinExpiry("cyber-refusal-repin"),
 	}
@@ -4173,6 +4174,7 @@ func (s *Service) recordTurnUsage(res turnLoopResult, servedProvider, servedMode
 		return
 	}
 	usage := sessionpin.Usage{
+		Strategy:            strategyForTurnLoopResult(res),
 		InputTokens:         in,
 		CachedReadTokens:    cacheRead,
 		CachedWriteTokens:   cacheCreation,
@@ -4205,23 +4207,25 @@ func (s *Service) recordHMMTurnHistory(res turnLoopResult, servedProvider, serve
 		return
 	}
 	hasUsage := in != 0 || out != 0 || cacheCreation != 0 || cacheRead != 0
+	strategyCtx := strategyContext(strategyForTurnLoopResult(res))
 	historyProvider := servedProvider
+	// A failed turn has no usage writeback; preserve the prior provider to
+	// avoid an invalid model/provider pair on the next HMM stay.
 	if !hasUsage {
-		// A failed turn has no usage writeback; preserve the prior provider to
-		// avoid an invalid model/provider pair on the next HMM stay.
-		if prior := s.loadHMMHistory(context.Background(), res.SessionKey, res.PinRole); prior.Provider != "" {
+		if prior := s.loadHMMHistory(strategyCtx, res.SessionKey, res.PinRole); prior.Provider != "" {
 			historyProvider = prior.Provider
 		}
 	}
 	role := hmmHistoryRole(res.PinRole)
 	// The upsert only refreshes the row's TTL/turn_count/provider (ON CONFLICT
 	// leaves the usage columns untouched), so it is always safe to run.
-	s.upsertPin(context.Background(), sessionpin.Pin{
+	s.upsertPin(strategyCtx, sessionpin.Pin{
 		SessionKey:     res.SessionKey,
 		Role:           role,
 		InstallationID: res.InstallationID,
 		Provider:       historyProvider,
 		Reason:         hmmHistoryStoredReason(res),
+		Strategy:       router.StrategyFromContext(strategyCtx),
 		TurnCount:      1,
 		PinnedUntil:    pinExpiry(hmmHistoryReason),
 	})
@@ -4232,6 +4236,7 @@ func (s *Service) recordHMMTurnHistory(res turnLoopResult, servedProvider, serve
 	}
 	now := time.Now()
 	if err := s.pinStore.UpdateUsage(context.Background(), res.SessionKey, role, sessionpin.Usage{
+		Strategy:            router.StrategyFromContext(strategyCtx),
 		InputTokens:         in,
 		CachedReadTokens:    cacheRead,
 		CachedWriteTokens:   cacheCreation,
