@@ -204,7 +204,7 @@ func TestExpireSessionPinAndHMMHistoryExpiresBothRoles(t *testing.T) {
 		installationID,
 		sessionKey,
 		sessionpin.DefaultRole,
-		"tool_call_loop_break",
+		"no_progress_break",
 	)
 
 	require.NoError(t, err)
@@ -217,7 +217,7 @@ func TestExpireSessionPinAndHMMHistoryExpiresBothRoles(t *testing.T) {
 		assert.Equal(t, installationID, expired.InstallationID)
 		assert.Empty(t, expired.Provider)
 		assert.Empty(t, expired.Model)
-		assert.Equal(t, "tool_call_loop_break", expired.Reason)
+		assert.Equal(t, "no_progress_break", expired.Reason)
 		assert.True(t, expired.PinnedUntil.Before(time.Now()))
 	}
 }
