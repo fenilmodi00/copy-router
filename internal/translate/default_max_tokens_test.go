@@ -245,3 +245,16 @@ func TestCrossFormat_AnthropicToOpenAI_Qwen38MaxExplicitMaxTokensPassedThrough(t
 	require.NoError(t, json.Unmarshal(prep.Body, &out))
 	assert.Equal(t, float64(64000), out["max_tokens"])
 }
+
+// Regression (upstream 4d6d80d8, re-keyed to the fork's canonical id): GLM-5.3
+// missing from modelMaxOutputTokens clamped max_tokens to the 8192 default, so
+// always-on reasoning exhausted the budget before answering.
+func TestOpenAISameFormat_ExplicitMaxTokensNotClampedTo8192ForGLM53(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":64000}`)
+	opts := translate.EmitOptions{
+		TargetModel:  "zai-org/glm-5.3",
+		Capabilities: router.Lookup("zai-org/glm-5.3"),
+	}
+	out := parseAndEmit(t, body, "openai", opts)
+	assert.Equal(t, float64(64000), out["max_tokens"])
+}

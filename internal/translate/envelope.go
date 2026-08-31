@@ -1222,6 +1222,10 @@ var modelMaxOutputTokens = map[string]int{
 	"minimax/minimax-m2.7":             65536,
 	"z-ai/glm-5":                       65536,
 	"z-ai/glm-5.1":                     65536,
+	// aiand's canonical GLM-5.3: upstream reports both 5.3 arms absent from
+	// this map clamp to the 8192 default, so a 64K max_tokens request was
+	// truncated (upstream 4d6d80d8 regression note, re-keyed to the fork id).
+	"zai-org/glm-5.3":                  131072,
 	"google/gemini-3.7-flash":          65536,
 }
 
