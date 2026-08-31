@@ -3,6 +3,7 @@ package translate
 import (
 	"bufio"
 	"bytes"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -96,7 +97,25 @@ type ResponsesToAnthropicWriter struct {
 	toolLedger        *ToolCallLedger
 }
 
-// NewResponsesToAnthropicWriter wraps w to translate a streaming Responses
+// log routes this translator's diagnostics through one observability.Get()
+// call site (see internal/observability's global-logger budget).
+func (t *ResponsesToAnthropicWriter) log() *slog.Logger {
+	return observability.Get()
+}
+
+const malformedResponsesFrameMessage = "upstream sent a malformed Responses event"
+
+// malformedResponsesFrame reports whether an SSE payload is not parseable JSON.
+// Skipping silently would present a dropped-content turn as a clean completion;
+// a `[DONE]` sentinel is tolerated since gateways emit it even though Responses
+// terminates on response.completed.
+func malformedResponsesFrame(data []byte) bool {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("[DONE]")) {
+		return false
+	}
+	return !gjson.ValidBytes(data)
+}
+
 // upstream into Anthropic for the client.
 func NewResponsesToAnthropicWriter(w http.ResponseWriter, requestModel string, sink UsageSink) *ResponsesToAnthropicWriter {
 	flusher, _ := w.(http.Flusher)
@@ -283,6 +302,12 @@ func (t *ResponsesToAnthropicWriter) translateResponsesEvent(raw []byte) error {
 	_, data := sse.ParseEvent(raw)
 	if len(data) == 0 {
 		return nil
+	}
+	if malformedResponsesFrame(data) {
+		t.log().Error("ResponsesToAnthropic upstream sent an unparseable event",
+			"request_model", t.requestModel,
+			"frame_bytes", len(data))
+		return t.emitStreamErrorEvent("api_error", malformedResponsesFrameMessage)
 	}
 	// Match on the in-payload `type`, not `event:` — intermediaries sometimes
 	// drop the latter. markOutputProgress is deliberately skipped for reasoning

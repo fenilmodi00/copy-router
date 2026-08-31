@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"workweave/router/internal/flags"
 	"workweave/router/internal/providers"
 	"workweave/router/internal/proxy"
 	"workweave/router/internal/router"
@@ -617,6 +618,11 @@ func TestProxyOpenAIChatCompletion_PlaygroundTelemetry(t *testing.T) {
 	rec := httptest.NewRecorder()
 	body := []byte(`{"model":"auto","messages":[{"role":"user","content":"hello"}],"stream":true}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/admin/v1/playground/chat", strings.NewReader(""))
+	// This test pins telemetry, not endpoint choice; keep the turn on chat so
+	// the chat-shaped fake provider serves it under the broad Responses rule.
+	ctx = flags.WithOverrides(ctx, flags.Overrides{
+		Bools: map[flags.Key]bool{flags.KeyOpenAIResponsesBroad: false},
+	})
 	require.NoError(t, svc.ProxyOpenAIChatCompletion(ctx, body, rec, httpReq))
 
 	row := telem.firstRow(t)

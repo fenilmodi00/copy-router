@@ -235,7 +235,7 @@ func TestOpenAISameFormat_ReasoningEffortDeletedForGPT5OnChatCompletions(t *test
 	}`)
 	opts := translate.EmitOptions{
 		TargetModel:    "gpt-5.6-luna",
-		TargetProvider: providers.ProviderAiand,
+		TargetProvider: providers.ProviderOpenAIGateway,
 		Capabilities:   router.Lookup("gpt-5.6-luna"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
@@ -248,10 +248,11 @@ func TestOpenAISameFormat_ReasoningEffortDeletedForGPT5OnChatCompletions(t *test
 func TestOpenAISameFormat_ToolTurnOptsOutOfReasoningForDirectGPT56(t *testing.T) {
 	tools := `"tools":[{"type":"function","function":{"name":"read_file","parameters":{"type":"object"}}}]`
 	for _, tc := range []struct {
-		name  string
-		model string
-		body  []byte
-		want  any
+		name     string
+		model    string
+		provider string
+		body     []byte
+		want     any
 	}{
 		{
 			name:  "tool turn",
@@ -268,6 +269,14 @@ func TestOpenAISameFormat_ToolTurnOptsOutOfReasoningForDirectGPT56(t *testing.T)
 			want:  nil,
 		},
 		{
+			// aiand is an OpenAI-compat Responses upstream: same gpt-5.6 quirk.
+			name:     "aiand tool turn",
+			model:    "gpt-5.6-luna",
+			provider: providers.ProviderAiand,
+			body:     []byte(`{"model":"gpt-5.6-luna","messages":[{"role":"user","content":"hi"}],"reasoning_effort":"medium",` + tools + `}`),
+			want:     "none",
+		},
+		{
 			name:  "older reasoning model serves tool turns as-is",
 			model: "gpt-5.5",
 			body:  []byte(`{"model":"gpt-5.5","messages":[{"role":"user","content":"hi"}],` + tools + `}`),
@@ -275,9 +284,13 @@ func TestOpenAISameFormat_ToolTurnOptsOutOfReasoningForDirectGPT56(t *testing.T)
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			provider := tc.provider
+			if provider == "" {
+				provider = providers.ProviderOpenAI
+			}
 			opts := translate.EmitOptions{
 				TargetModel:    tc.model,
-				TargetProvider: providers.ProviderOpenAI,
+				TargetProvider: provider,
 				Capabilities:   router.Lookup(tc.model),
 			}
 			out := parseAndEmit(t, tc.body, "openai", opts)

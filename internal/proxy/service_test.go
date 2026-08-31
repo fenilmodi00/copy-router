@@ -861,7 +861,12 @@ func TestService_ProxyOpenAIChatCompletion_NativeOpenAI(t *testing.T) {
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 
-	err := svc.ProxyOpenAIChatCompletion(context.Background(), []byte(body), rec, httpReq)
+	// Broad rollout off: this asserts the untranslated same-format path, which
+	// stays reachable as the kill switch's target.
+	ctx := flags.WithOverrides(context.Background(), flags.Overrides{
+		Bools: map[flags.Key]bool{flags.KeyOpenAIResponsesBroad: false},
+	})
+	err := svc.ProxyOpenAIChatCompletion(ctx, []byte(body), rec, httpReq)
 	require.NoError(t, err)
 
 	require.Len(t, provider.proxyBodies, 1)

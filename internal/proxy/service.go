@@ -5066,6 +5066,27 @@ func finalizeAfterProxy(proxyErr error, fn func() error) error {
 	return finErr
 }
 
+// responsesEligibleProvider reports whether a provider's turns may be
+// promoted onto /v1/responses: direct OpenAI, and aiand (an OpenAI-compat
+// upstream that documents the Responses API). Gateways are excluded — most
+// mount no Responses surface.
+func responsesEligibleProvider(p string) bool {
+	return p == providers.ProviderOpenAI || p == providers.ProviderAiand
+}
+// openAISurface names which OpenAI endpoint an attempt POSTs to and in what
+// representation; the three cases differ in both emit and response handling.
+type openAISurface int
+
+const (
+	// surfaceChat is /v1/chat/completions with the client's own format.
+	surfaceChat openAISurface = iota
+	// surfaceResponsesNative is /v1/responses with a Responses caller's
+	// original bytes, streamed back verbatim.
+	surfaceResponsesNative
+	// surfaceResponsesTranslated is /v1/responses emitted from a
+	// chat/completions request, with the response translated back to chat.
+	surfaceResponsesTranslated
+)
 // ProxyOpenAIChatCompletion routes an OpenAI Chat Completion request,
 // translating cross-format when the decision picks a non-OpenAI provider.
 func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w http.ResponseWriter, r *http.Request) error {
@@ -5464,7 +5485,7 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 	responsesEndpointKey := EffectiveBaseURL(ctx, decision.Provider)
 	promotedToResponses := false
 	if !responsesPassthrough && !compResOAI.Applied && !routeRes.Handover.Invoked &&
-		decision.Provider == providers.ProviderOpenAI &&
+		responsesEligibleProvider(decision.Provider) &&
 		translate.UseOpenAIResponsesAPI(translate.ResponsesRoute{
 			Provider:       decision.Provider,
 			Capabilities:   opts.Capabilities,
@@ -5479,7 +5500,25 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 			promotedToResponses = true
 		}
 	}
+	_, isResponses := w.(*translate.ResponsesWriter)
 
+	// Chat caller: emit onto Responses and translate back; skipped for
+	// Responses-ingress (handled above).
+	translateToResponses := !isResponses && !responsesPassthrough &&
+		responsesEligibleProvider(decision.Provider) &&
+		translate.UseOpenAIResponsesAPI(translate.ResponsesRoute{
+			Provider:       decision.Provider,
+			Capabilities:   opts.Capabilities,
+			HasTools:       feats.HasTools,
+			ChatOnlyParams: env.RequiresChatCompletionsParams(opts.Capabilities),
+			Broad:          s.ResolveOpenAIResponsesBroad(ctx),
+		}) &&
+		!s.gatewayLacksResponses(responsesEndpointKey)
+	// nil when the request has no tools; the translator treats nil as syntax-check-only.
+	toolValidator := env.ToolValidator()
+
+	// Overwritten per attempt, so it holds the winning attempt's signals.
+	var respSummary translate.ResponseSummary
 	// Inject verbose routing marker when policy debug is enabled; gated on
 	// verbatimPassthrough (verbatim OpenAI frames can't have chunks injected).
 	verbatimPassthrough := responsesPassthrough && decision.Provider == providers.ProviderOpenAI
@@ -5536,7 +5575,6 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 		// chat-completions routing-marker chunk would corrupt that stream.
 		marker = ""
 	}
-	_, isResponses := w.(*translate.ResponsesWriter)
 	maybeEmitOpenAIRoutingMetadata(ctx, s, sink, env.Stream(), responsesPassthrough, isResponses, decision, requestID, body, feats.Tokens, feats.MaxTokens)
 	// makeMarkerSink wraps sink with an OpenAIRoutingMarkerWriter emitting the
 	// marker chunk + HTTP 200 eagerly (skipped for /v1/responses). Called per
@@ -5576,9 +5614,10 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 		// should not see. On failover to OpenRouter the body must be re-emitted.
 		// Split from attempt so a native dispatch that finds no Responses surface
 		// can re-emit onto chat/completions while still pre-commit.
-		dispatchOpenAI := func(actx context.Context, d router.Decision, p providers.Client, native bool) error {
+		dispatchOpenAI := func(actx context.Context, d router.Decision, p providers.Client, surface openAISurface) error {
 			var prep providers.PreparedRequest
-			if native {
+			switch surface {
+			case surfaceResponsesNative:
 				// Dispatch the caller's ORIGINAL Responses body (untranslated) to
 				// the OpenAI Responses endpoint, rewriting only the model. This keeps
 				// native Responses extensions lossless.
@@ -5595,19 +5634,41 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 						Transformations: responseTransformationsFromContext(actx),
 					},
 				}
-			} else {
+			default:
 				attemptOpts := opts
 				attemptOpts.TargetProvider = d.Provider
 				var emitErr error
-				prep, emitErr = env.PrepareOpenAI(r.Header, attemptOpts)
+				if surface == surfaceResponsesTranslated {
+					prep, emitErr = env.PrepareOpenAIResponses(r.Header, attemptOpts)
+				} else {
+					prep, emitErr = env.PrepareOpenAI(r.Header, attemptOpts)
+				}
 				if emitErr != nil {
-					log.Error("Failed to emit OpenAI body", "err", emitErr, "decision_provider", d.Provider)
+					log.Error("Failed to emit OpenAI body", "err", emitErr,
+						"decision_provider", d.Provider, "endpoint", prep.Endpoint)
 					return fmt.Errorf("emit body: %w", emitErr)
 				}
 			}
 			attemptSink := makeMarkerSink()
 			proxyWriter := attemptSink
-			if s.usageRequired() {
+			// A translated attempt reads Responses SSE, which the chat-shaped
+			// usage extractor can't parse — the translator records usage instead.
+			var translator *translate.ResponsesToOpenAIChatWriter
+			switch {
+			case surface == surfaceResponsesTranslated:
+				var usage otel.UsageSink
+				if s.usageRequired() {
+					extractor = otel.NewUsageExtractor(nil, d.Provider)
+					usage = extractor
+				}
+				translator = translate.NewResponsesToOpenAIChatWriter(attemptSink, d.Model, usage).
+					WithLogger(log).
+					WithToolValidator(toolValidator)
+				if err := translator.Prelude(env.Stream()); err != nil {
+					log.Error("chat/completions prelude failed (Responses upstream)", "err", err)
+				}
+				proxyWriter = translator
+			case s.usageRequired():
 				extractor = otel.NewUsageExtractor(attemptSink, d.Provider)
 				proxyWriter = extractor
 			}
@@ -5617,41 +5678,63 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 			err := p.Proxy(actx, d, prep, proxyWriter, r)
 			// Post-commit: bytes already on the wire, render as an in-stream
 			// frame instead of a corrupting envelope (pre-commit goes through
-			// dispatchWithFallback). Gate on THIS attempt being native: a non-native
-			// request through the translating ResponsesWriter still needs its own
-			// error frame; a native attempt already delivered the upstream's.
-			if err != nil && !native && env.Stream() && preludeBuf.Committed() {
+			// dispatchWithFallback). Gate on THIS attempt being non-native: a
+			// request through a translating writer still needs its own error
+			// frame; a native attempt already delivered the upstream's.
+			if err != nil && surface != surfaceResponsesNative && env.Stream() && preludeBuf.Committed() {
 				err = emitOpenAISSEErrorEvent(sink, err)
+			}
+			if translator != nil {
+				finalErr := finalizeAfterProxy(err, translator.Finalize)
+				respSummary = translator.Summary()
+				return finalErr
 			}
 			return err
 		}
-		attempt = func(actx context.Context, d router.Decision, p providers.Client) error {
-			native := responsesPassthrough && d.Provider == providers.ProviderOpenAI
-			err := dispatchOpenAI(actx, d, p, native)
-			// Only a promoted turn (with a chat projection to fall back to) retries;
-			// the result is memoized so later turns skip the probe.
-			if err == nil || !native || !promotedToResponses ||
-				committed(preludeBuf) || !providers.IsUpstreamResponsesUnsupported(err) {
-				return err
+	attempt = func(actx context.Context, d router.Decision, p providers.Client) error {
+		surface := surfaceChat
+		if responsesEligibleProvider(d.Provider) {
+			switch {
+			case responsesPassthrough:
+				surface = surfaceResponsesNative
+			case translateToResponses:
+				surface = surfaceResponsesTranslated
 			}
+		}
+		err := dispatchOpenAI(actx, d, p, surface)
+		// Retried once pre-commit on chat/completions; memoized for later turns.
+		// A native attempt also needs promotedToResponses — a Codex passthrough has none.
+		if err == nil || surface == surfaceChat ||
+			committed(preludeBuf) || !providers.IsUpstreamResponsesUnsupported(err) {
+			return err
+		}
+		if surface == surfaceResponsesNative {
 			rw, ok := w.(*translate.ResponsesWriter)
-			if !ok || !rw.ClearPassthrough() {
+			if !promotedToResponses || !ok || !rw.ClearPassthrough() {
 				return err
 			}
-			s.rememberGatewayLacksResponses(responsesEndpointKey)
-			log.Warn("OpenAI endpoint rejected the Responses API; retrying on chat/completions",
-				"model", d.Model,
-				"decision_provider", d.Provider,
-				"request_id", requestID)
-			responsesPassthrough = false
-			if translatedMarker != "" {
+		} else {
+			if rw, ok := w.(*translate.ResponsesWriter); ok {
+				_ = rw.ClearPassthrough()
+			}
+		}
+		s.rememberGatewayLacksResponses(responsesEndpointKey)
+		log.Warn("OpenAI endpoint rejected the Responses API; retrying on chat/completions",
+			"model", d.Model,
+			"decision_provider", d.Provider,
+			"request_id", requestID)
+		translateToResponses = false
+		responsesPassthrough = false
+		if translatedMarker != "" {
+			if rw, ok := w.(*translate.ResponsesWriter); ok {
 				rw.SetBadgeText(translatedMarker)
 			}
-			if preludeBuf != nil {
-				preludeBuf.Discard()
-			}
-			return dispatchOpenAI(actx, d, p, false)
 		}
+		if preludeBuf != nil {
+			preludeBuf.Discard()
+		}
+		return dispatchOpenAI(actx, d, p, surfaceChat)
+	}
 	case providers.FamilyAnthropic:
 		crossFormat = true
 		prep, emitErr := env.PrepareAnthropic(r.Header, opts)
@@ -5872,6 +5955,21 @@ func (s *Service) ProxyOpenAIChatCompletion(ctx context.Context, body []byte, w 
 		applyPlannerTelemetry(&telOAI, routeRes)
 		applyAuthorityShadowTelemetry(&telOAI, routeRes)
 		s.fireTelemetry(telOAI)
+	}
+
+	// One event per tool call that failed toolcheck validation, mirroring the
+	// Anthropic path's per-model tool-calling-quality signal.
+	for _, iss := range respSummary.ToolCallIssues {
+		log.Info("router.tool_call_invalid",
+			"tool_name", iss.ToolName,
+			"failure_bucket", string(iss.Bucket),
+			"detail", iss.Detail,
+			"repaired", iss.Repaired,
+			"repair_actions", iss.Actions,
+			"model", decision.Model,
+			"provider", finalProvider,
+			"session_key_prefix", shortSessionKey(routeRes.SessionKey),
+		)
 	}
 
 	log.Info("ProxyOpenAIChatCompletion complete", append([]any{"requested_model", feats.Model, "baseline_model", s.baselineFor(feats.Model), "decision_model", decision.Model, "decision_provider", decision.Provider, "primary_provider", primaryProvider, "fallback_attempts", winnerIdx, "failover_used", finalProvider != primaryProvider, "decision_reason", decision.Reason, "requested_tier", routeRes.RequestedTier.String(), "decision_tier", catalog.TierFor(decision.Model).String(), "embedded_tokens", len(promptText) / 4, "total_input_tokens", feats.Tokens, "has_tools", feats.HasTools, "embed_input", embedInput, "cross_format", crossFormat, "sticky_hit", stickyHit, "pin_tier", pinTier, "turn_type", string(tt), "route_ms", routeMs, "proxy_ms", proxyMs, "proxy_err", proxyErr, "upstream_err_body", providers.UpstreamErrorBodyMessage(proxyErr), "upstream_status", upstreamStatus(proxyErr), "routing_marker", marker, "prior_served_model", routeRes.PriorServedModel, "hard_pinned", routeRes.HardPinned}, plannerLogFields(routeRes)...)...)

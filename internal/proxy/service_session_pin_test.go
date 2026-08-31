@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"workweave/router/internal/auth"
+	"workweave/router/internal/flags"
 	"workweave/router/internal/providers"
 	"workweave/router/internal/proxy"
 	"workweave/router/internal/router"
@@ -1529,6 +1530,12 @@ func TestService_SessionPin_ForcedPinDropped_SurfacesInMarker(t *testing.T) {
 	)
 
 	ctx := authedCtx(uuid.New().String())
+	// The broad Responses rollout would translate this turn through a Responses
+	// upstream the fake chat-only provider can't speak; this test pins marker
+	// machinery, not endpoint choice.
+	ctx = flags.WithOverrides(ctx, flags.Overrides{
+		Bools: map[flags.Key]bool{flags.KeyOpenAIResponsesBroad: false},
+	})
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
 	require.NoError(t, svc.ProxyOpenAIChatCompletion(ctx, []byte(body), rec, httpReq))
