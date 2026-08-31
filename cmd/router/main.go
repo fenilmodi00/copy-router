@@ -397,6 +397,8 @@ func main() {
 	cyberRefusalRepin := config.GetOr("ROUTER_CYBER_REFUSAL_REPIN", "false") == "true"
 	cyberRefusalFallbackModel := config.GetOr("ROUTER_CYBER_REFUSAL_FALLBACK_MODEL", "moonshotai/kimi-k2.7")
 	effortEscalation := config.GetOr("ROUTER_EFFORT_ESCALATION", "false") == "true"
+	scopedSearchRequirement := config.GetOr("ROUTER_SCOPED_SEARCH_REQUIREMENT", "true") == "true"
+	searchRequirementDecayTurns := parseEnvInt("ROUTER_SEARCH_REQUIREMENT_DECAY_TURNS", proxy.DefaultSearchRequirementDecayTurns)
 	// Kill switch for degrading to a same-cluster candidate when the routed
 	// model's bindings are all exhausted by a transient upstream fault.
 	siblingFailover := config.GetOr("ROUTER_SIBLING_FAILOVER", "true") == "true"
@@ -661,6 +663,7 @@ func main() {
 	})
 
 	proxySvc := proxy.NewService(routeEntry, providerMap, telemetryEmitter, embedOnlyUser, semanticCache, pinStore, hardPinExplore, hardPinProvider, hardPinModel, repo.Telemetry).
+		WithScopedSearchRequirement(scopedSearchRequirement, searchRequirementDecayTurns).
 		WithTranslationCompatibilityMode(proxy.TranslationCompatibilityMode(translationCompatibilityMode)).
 		WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyRL, Router: rlRouter, Unavailable: rl.ErrPolicyUnavailable}).
 		WithPolicyStrategy(policy.StrategySpec{
