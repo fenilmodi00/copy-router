@@ -43,6 +43,7 @@ import (
 	"workweave/router/internal/router/handover"
 	"workweave/router/internal/router/hmm"
 	"workweave/router/internal/router/hmm/rosterdata"
+	"workweave/router/internal/router/hmm/selection"
 	"workweave/router/internal/router/planner"
 	"workweave/router/internal/router/policy"
 	"workweave/router/internal/router/rl"
@@ -455,7 +456,6 @@ func main() {
 	prefixTrimFreeSwitch := config.GetOr("ROUTER_PREFIX_TRIM_FREE_SWITCH", "true") == "true"
 	hmmUpgradeConfidence := parseEnvFloat("ROUTER_HMM_UPGRADE_CONFIDENCE_THRESHOLD", 0.85)
 	hmmSameTierPin := config.GetOr("ROUTER_HMM_SAME_TIER_PIN", "false") == "true"
-	hmPinStickyOnArmSelectorUnavail := config.GetOr("ROUTER_HMM_PIN_STICKY_ON_ARM_SELECTOR_UNAVAIL", "false") == "true"
 	// authoritativeUpgradeGate keeps the 0.85 escalation floor active for authoritative-per-turn
 	// policies; kill switch for a return to verbatim policy selection.
 	authoritativeUpgradeGate := config.GetOr("ROUTER_AUTHORITATIVE_UPGRADE_GATE", "true") == "true"
@@ -526,6 +526,25 @@ func main() {
 		logger.Info("RL policy router disabled (ROUTER_RL_SIDECAR_URL unset); x-weave-router-strategy: rl will return 503")
 	}
 
+	// Loaded only when ROUTER_HMM_ROSTER_PATH is set; the declarative roster is
+	// the source of the HMM strategies' deterministic arm selection below.
+	var declarativeRoster *rosterdata.Roster
+	if rosterPath := strings.TrimSpace(config.GetOr("ROUTER_HMM_ROSTER_PATH", "")); rosterPath != "" {
+		loadedRoster, rosterErr := rosterdata.Load(rosterPath)
+		if rosterErr != nil {
+			logger.Error("HMM declarative roster failed to load; refusing to boot", "path", rosterPath, "err", rosterErr)
+			panic(rosterErr)
+		}
+		declarativeRoster = loadedRoster
+		logger.Info(
+			"HMM declarative roster loaded",
+			"path", rosterPath,
+			"schema_version", declarativeRoster.SchemaVersion,
+			"clusters", len(declarativeRoster.Clusters),
+			"arms", len(declarativeRoster.AllArms()),
+		)
+	}
+
 	// Wired only when ROUTER_HMM_SIDECAR_URL is set; x-weave-router-strategy:
 	// hmm then routes through it. Unset fails closed with 503.
 	var hmmRouter router.Router
@@ -589,6 +608,15 @@ func main() {
 				logger.Info("HMM policy sidecar capabilities discovered after boot", "sidecar_url", hmmSidecarURL)
 			}()
 		}
+		// No roster means no Go-side selection authority; refuse to boot rather
+		// than silently serving the sidecar's arm.
+		if declarativeRoster == nil {
+			logger.Error("HMM sidecar configured without ROUTER_HMM_ROSTER_PATH; refusing to boot", "sidecar_url", hmmSidecarURL)
+			panic("ROUTER_HMM_ROSTER_PATH is required when ROUTER_HMM_SIDECAR_URL is set")
+		}
+		armSelector := selection.Selector(declarativeRoster)
+		hmmPolicyRouter.WithArmSelector(armSelector)
+		hmmEmbeddingPolicyRouter.WithArmSelector(armSelector)
 		hmmRouter = hmmPolicyRouter
 		hmmEmbeddingRouter = hmmEmbeddingPolicyRouter
 		logger.Info(
@@ -602,23 +630,6 @@ func main() {
 		)
 	} else {
 		logger.Info("HMM policy routers disabled (ROUTER_HMM_SIDECAR_URL unset); HMM strategies will return 503")
-	}
-
-	// Loaded only when ROUTER_HMM_ROSTER_PATH is set; declarative-roster data
-	// is load-and-validate only today — nothing serves from it.
-	if rosterPath := strings.TrimSpace(config.GetOr("ROUTER_HMM_ROSTER_PATH", "")); rosterPath != "" {
-		declarativeRoster, rosterErr := rosterdata.Load(rosterPath)
-		if rosterErr != nil {
-			logger.Error("HMM declarative roster failed to load; refusing to boot", "path", rosterPath, "err", rosterErr)
-			panic(rosterErr)
-		}
-		logger.Info(
-			"HMM declarative roster loaded",
-			"path", rosterPath,
-			"schema_version", declarativeRoster.SchemaVersion,
-			"clusters", len(declarativeRoster.Clusters),
-			"arms", len(declarativeRoster.AllArms()),
-		)
 	}
 
 	// Wired only when ROUTER_BANDIT_POSTERIOR_FILE points at a ts_posterior.json;
@@ -711,7 +722,6 @@ func main() {
 		WithPrefixTrimFreeSwitch(prefixTrimFreeSwitch).
 		WithHMMUpgradeConfidenceThreshold(hmmUpgradeConfidence).
 		WithHMMSameTierPin(hmmSameTierPin).
-		WithHMPinStickyOnArmSelectorUnavail(hmPinStickyOnArmSelectorUnavail).
 		WithAuthoritativeUpgradeGate(authoritativeUpgradeGate).
 		WithAuthorityCacheShadow(authorityCacheShadow).
 		WithPolicyDeadlineFallback(policyDeadlineFallback).

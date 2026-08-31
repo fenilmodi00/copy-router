@@ -311,14 +311,6 @@ const (
 	hmmReasonPhaseChange          = "hmm_phase_change"
 )
 
-// hmmPinStickyArmSelectorUnavailReason is the PinTier value when a reroute is suppressed by the arm-selector unavailable fallback.
-const hmmPinStickyArmSelectorUnavailReason = "hmm_pin_sticky_arm_selector_unavailable"
-
-// hmmArmSelectorUnavailableSentinel mirrors ml_dev.hmm_router.route_selector.PIN_STICKY_OVERRIDE_ELIGIBLE_SENTINEL.
-// Substring-matched against the sidecar's opaque Reason string to detect a legacy pairwise-bandit fallback
-// draw without a schema bump. Keep in sync across the Python/Go boundary.
-const hmmArmSelectorUnavailableSentinel = "[pin_sticky_override_eligible]"
-
 // decisionPolicyGroup returns the policy cluster/group a decision was drawn
 // from, or "" for reconstructed pins and routers that report no group.
 func decisionPolicyGroup(dec router.Decision) string {
@@ -326,36 +318,6 @@ func decisionPolicyGroup(dec router.Decision) string {
 		return ""
 	}
 	return dec.Metadata.PolicyGroup
-}
-
-// stickPinOnArmSelectorUnavailable reports whether the active pin should override a fresh
-// authoritative-per-turn decision when hmmArmSelectorUnavailableSentinel is present —
-// the arm-selector fell back to per-turn epsilon-greedy draws (ArmSelectorUnavailableError),
-// causing turn-to-turn churn. No tier check: the bandit draws within one cluster, not one
-// catalog tier; both groups must match so a genuine cluster escalation still switches through.
-func stickPinOnArmSelectorUnavailable(fresh router.Decision, pin sessionpin.Pin, pinFound, prefixBroken bool) bool {
-	if !pinFound || pin.Model == "" {
-		return false
-	}
-	if !isHMMPinReason(pin.Reason) {
-		return false
-	}
-	if !strings.Contains(fresh.Reason, hmmArmSelectorUnavailableSentinel) {
-		return false
-	}
-	// Unknown group on either side means we cannot prove the reroute stayed in
-	// the pin's cluster, so fail open and let the fresh decision serve.
-	freshGroup := decisionPolicyGroup(fresh)
-	if freshGroup == "" || pin.PolicyGroup == "" || freshGroup != pin.PolicyGroup {
-		return false
-	}
-	if pin.Model == fresh.Model {
-		return false
-	}
-	if prefixBroken {
-		return false
-	}
-	return true
 }
 
 // policyDeadlineFallbackReason is set as PinTier when a policy sidecar deadline degrades to a pin or tier-3 default.
@@ -661,12 +623,10 @@ func (s *Service) runTurnLoop(
 	// bypass intercepts the fresh scorer decision here too (no pins to honor).
 	if s.pinStore == nil {
 		req.PolicyTurnContext = buildPolicyTurnContext(req, res, sessionpin.Pin{}, sessionpin.Pin{})
-		if !res.AuthoritativePerTurn {
-			if dec, ok := s.usageBypassDecision(ctx, reqHeaders, req); ok {
-				res.Decision = dec
-				res.UsageBypass = true
-				return res, nil
-			}
+		if dec, ok := s.usageBypassDecision(ctx, reqHeaders, req); ok {
+			res.Decision = dec
+			res.UsageBypass = true
+			return res, nil
 		}
 		decision, err := s.routeFor(ctx, req)
 		if err != nil {
@@ -1014,12 +974,13 @@ func (s *Service) runTurnLoop(
 	// stale pin from a prior routed stretch can't make a tool_result
 	// continuation diverge from the bypassed tool_use turn. The pin itself is
 	// untouched and resumes once utilization crosses the threshold.
-	if !res.AuthoritativePerTurn {
-		if dec, ok := s.usageBypassDecision(ctx, reqHeaders, req); ok {
-			res.Decision = dec
-			res.UsageBypass = true
-			return res, nil
-		}
+	// Bypass settles whether the turn is routed at all (caller's prepaid quota,
+	// not a routing-quality opinion) — AuthoritativePerTurn controls which model
+	// is chosen for a routed turn, so the gate must not apply here.
+	if dec, ok := s.usageBypassDecision(ctx, reqHeaders, req); ok {
+		res.Decision = dec
+		res.UsageBypass = true
+		return res, nil
 	}
 
 	// Tool-result turns: by default, fall through to the scorer + planner for
@@ -1140,20 +1101,6 @@ func (s *Service) runTurnLoop(
 			ctx, req, activePin, hmmHistory, fresh, s.plannerTokensFor(env, feats), prefixBroken,
 		)
 		s.logAuthorityCacheShadow(ctx, res)
-		if s.hmPinStickyOnArmSelectorUnavail && stickPinOnArmSelectorUnavailable(fresh, pin, pinFound, prefixBroken) {
-			decision := pinDecision(pin)
-			res.Decision = decision
-			res.StickyHit = true
-			res.PinTier = hmmPinStickyArmSelectorUnavailReason
-			log.Info("turnloop suppressed arm-selector-unavailable reroute; keeping session pin",
-				"pin_model", pin.Model,
-				"pin_provider", pin.Provider,
-				"fresh_model", fresh.Model,
-				"fresh_provider", fresh.Provider,
-			)
-			s.refreshPin(ctx, installationID, res.SessionKey, pin, res.PinRole, decision)
-			return res, nil
-		}
 		// Upgrade-confidence guard: authoritative selection bypasses the HMM
 		// cost gate, but the escalation floor still applies. A scored fresh
 		// decision that costs more than the pinned model only wins at

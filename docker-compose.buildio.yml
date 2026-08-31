@@ -116,10 +116,18 @@ services:
       
       # BYOK encryption (required for production with customer keys)
       EXTERNAL_KEY_ENCRYPTION_KEY: ${EXTERNAL_KEY_ENCRYPTION_KEY}
-      
       # Onnx assets path inside container
       ROUTER_ONNX_ASSETS_DIR: /opt/router/assets
       ROUTER_ONNX_LIBRARY_DIR: /usr/lib
+
+      # HMM policy sidecar (hmm profile). v3 contract: the router owns arm
+      # selection and REQUIRES a v6 roster file when the sidecar URL is set —
+      # the server refuses to boot otherwise (and 503s every hmm turn against
+      # a pre-v3 sidecar image; rebuild + redeploy both together).
+      ROUTER_HMM_SIDECAR_URL: ${ROUTER_HMM_SIDECAR_URL:-}
+      ROUTER_HMM_ROSTER_PATH: ${ROUTER_HMM_ROSTER_PATH:-/opt/router/hmm_router_cluster_roster_v6.json}
+    volumes:
+      - ./sidecars/hmm/roster/hmm_router_cluster_roster_v6.json:/opt/router/hmm_router_cluster_roster_v6.json:ro
     ports:
       - "8080:8080"
     deploy:

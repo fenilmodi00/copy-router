@@ -9,6 +9,7 @@ Index of Markdown documentation in the `router/` repo.
 | [HOST_WSL_SUPABASE.md](HOST_WSL_SUPABASE.md) | Host `make setup` / `make dev` against Supabase session pooler (no Compose Postgres; `PUBSUB_DISABLED=true`). |
 | [ANALYTICS_EXPORT.md](ANALYTICS_EXPORT.md) | `/v1/analytics/*` raw routing-decision export: read-only keys, cursor paging, row grain, field reference. |
 | [POLICY_ROUTER_HARNESS.md](POLICY_ROUTER_HARNESS.md) | Contract for out-of-process policy sidecars. |
+| [HMM_GO_SELECTION.md](HMM_GO_SELECTION.md) | Architecture, `policy_router_v3` split, and rollback story for Go-owned HMM roster ownership and deterministic arm selection. |
 | [TRANSLATION_COMPATIBILITY.md](TRANSLATION_COMPATIBILITY.md) | Cross-format translation requirements and rollout modes. |
 
 For engineering conventions (layer model, package layout, recipes), see the
