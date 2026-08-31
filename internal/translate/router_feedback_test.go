@@ -434,7 +434,6 @@ func TestExtractRouterFeedbackCommand_ArrayContentMultipleTextBlocks(t *testing.
 	assert.Equal(t, "", second["text"], "the directive-bearing text block must be stripped")
 }
 
-
 // emit.sh forwards "$*", so a multi-line note arrives under one "Output:" preamble; parsing only the first line would truncate the note and leak the rest upstream.
 func TestExtractRouterFeedbackCommand_CodexExecMultiLineNote(t *testing.T) {
 	body := mustMarshalJSON(t, map[string]any{

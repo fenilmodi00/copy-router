@@ -72,7 +72,6 @@ func DeterministicHoldout(sessionKey [sessionpin.SessionKeyLen]byte, pct int) bo
 	return int(binary.BigEndian.Uint32(sessionKey[0:4])%100) < pct
 }
 
-
 // Cyclic-loop-detection knobs. This catches a WIDER cycle — re-reading a few
 // files for dozens of turns (seen post-#332: gpt-5.5/haiku re-read x45+ over
 // 400 turns).
@@ -268,4 +267,3 @@ func (s *Service) handleLoopEscalation(
 		}
 	}
 }
-

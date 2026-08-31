@@ -28,13 +28,13 @@ func RespondRoutingMetadata(ctx context.Context) bool {
 
 // RoutingMetadataPayload is the playground routing_metadata SSE event body.
 type RoutingMetadataPayload struct {
-	Model             string  `json:"model"`
-	Provider          string  `json:"provider"`
-	Reason            string  `json:"reason"`
-	RequestedCostUSD  float64 `json:"requested_cost_usd"`
-	ActualCostUSD     float64 `json:"actual_cost_usd"`
-	CacheSavingsUSD   float64 `json:"cache_savings_usd"`
-	ID                string  `json:"id"`
+	Model            string  `json:"model"`
+	Provider         string  `json:"provider"`
+	Reason           string  `json:"reason"`
+	RequestedCostUSD float64 `json:"requested_cost_usd"`
+	ActualCostUSD    float64 `json:"actual_cost_usd"`
+	CacheSavingsUSD  float64 `json:"cache_savings_usd"`
+	ID               string  `json:"id"`
 }
 
 // emitOpenAIRoutingMetadataEvent writes a routing_metadata SSE frame.

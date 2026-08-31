@@ -163,7 +163,7 @@ func TestService_ProxyMessages_HandoverSwitchToOpenAIEmitsResponses(t *testing.T
 		fr,
 		map[string]providers.Client{
 			providers.ProviderAnthropic: &fakeProvider{},
-			providers.ProviderAiand:    openAI,
+			providers.ProviderAiand:     openAI,
 		},
 		nil, false, nil, store, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
 	).WithSummarizer(summarizer)

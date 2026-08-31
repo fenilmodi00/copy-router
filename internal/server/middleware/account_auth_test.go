@@ -16,9 +16,9 @@ import (
 )
 
 type sessionAccountRepo struct {
-	accounts  map[string]*auth.Account
-	sessions  map[string]*auth.LoginSession
-	nextSess  int
+	accounts map[string]*auth.Account
+	sessions map[string]*auth.LoginSession
+	nextSess int
 }
 
 func newSessionAccountRepo() *sessionAccountRepo {

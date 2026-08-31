@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 // --- helpers ---
 
 type toolCall struct {

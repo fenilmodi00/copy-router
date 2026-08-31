@@ -19,8 +19,8 @@ import (
 )
 
 type playgroundTelemetryCapture struct {
-	mu    sync.Mutex
-	rows  []proxy.InsertTelemetryParams
+	mu     sync.Mutex
+	rows   []proxy.InsertTelemetryParams
 	notify chan struct{}
 }
 

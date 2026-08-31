@@ -13,7 +13,6 @@ var ErrStrategyUnavailable = errors.New("router: strategy unavailable")
 // value ("") means the deployment default (cluster).
 type Strategy string
 
-
 const (
 	// StrategyCluster is the default cluster-scorer strategy (AvengersPro).
 	StrategyCluster Strategy = "cluster"

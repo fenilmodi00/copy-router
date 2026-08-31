@@ -926,14 +926,14 @@ func main() {
 	}
 	analyticsSvc := analytics.NewService(repo.Analytics, time.Now)
 	server.Register(engine, server.Services{
-		Auth:                authSvc,
-		Proxy:               proxySvc,
-		DeployedModels:      deployedModels,
-		HMMModels:           hmmRosterModels,
-		Billing:             billingSvc,
-		ReadinessChecker:    hmmReadinessChecker,
-		HMMRosterSource:     hmmRosterSource,
-		Analytics: analyticsSvc,
+		Auth:             authSvc,
+		Proxy:            proxySvc,
+		DeployedModels:   deployedModels,
+		HMMModels:        hmmRosterModels,
+		Billing:          billingSvc,
+		ReadinessChecker: hmmReadinessChecker,
+		HMMRosterSource:  hmmRosterSource,
+		Analytics:        analyticsSvc,
 		// Built straight into the Services literal so the route can never be
 		// silently dropped — mounting is keyed on this field being non-nil.
 		AiandCatalogHandler: buildAiandCatalogHandler(config.GetOr("AIAND_API_KEY", ""), aiandBaseURL, deploymentMode, logger),
@@ -1613,6 +1613,7 @@ func upstreamIDsForProvider(provider string) map[string]string {
 	}
 	return out
 }
+
 // buildAiandCatalogHandler wires the dashboard's live ai& model-catalog route
 // for the given deployment mode. It returns the handler (nil when the route
 // must not mount) plus whether it mounted, so the composition root can log

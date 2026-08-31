@@ -41,17 +41,17 @@ type AccountRepository interface {
 
 // LoginSession is a revocable, opaque, SHA-256-hashed dashboard session.
 type LoginSession struct {
-	ID              string
-	AccountID       string
-	InstallationID  string
-	TokenHash       string
-	TokenPrefix     string
-	TokenSuffix     string
-	IssuedAt        time.Time
-	ExpiresAt       time.Time
-	RevokedAt       *time.Time
-	LastSeenAt      time.Time
-	IPAtIssue       *net.IP
+	ID             string
+	AccountID      string
+	InstallationID string
+	TokenHash      string
+	TokenPrefix    string
+	TokenSuffix    string
+	IssuedAt       time.Time
+	ExpiresAt      time.Time
+	RevokedAt      *time.Time
+	LastSeenAt     time.Time
+	IPAtIssue      *net.IP
 }
 
 // LoginSessionRepository persists dashboard sessions for self-service accounts.

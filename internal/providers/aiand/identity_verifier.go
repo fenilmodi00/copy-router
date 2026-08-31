@@ -29,8 +29,8 @@ const DefaultBaseURL = "https://api.aiand.com"
 // are org-scoped, so one org → one selfserve account (key rotation within
 // the same org reuses the same installation).
 type KeyVerifier struct {
-	Client       *http.Client
-	IdentityURL  string
+	Client      *http.Client
+	IdentityURL string
 }
 
 // Validate calls aiand's GET /v1/models with the key as a bearer token and

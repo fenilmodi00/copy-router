@@ -557,6 +557,7 @@ func TestResponsesWriter_PassthroughBadgePreservesNativeStream(t *testing.T) {
 		})
 	}
 }
+
 // passthroughTestMarker stands in for the routing marker the proxy supplies.
 const passthroughTestMarker = "✦ **Weave Router** → gpt-5.6-terra · best pick for this turn"
 

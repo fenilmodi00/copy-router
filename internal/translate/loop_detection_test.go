@@ -248,7 +248,6 @@ func TestAssistantToolCallSignatures_IncludesRouterNudgeEntries(t *testing.T) {
 func TestAssistantToolCallArgsPreview_AlignsWithSignatures_Anthropic(t *testing.T) {
 	const windowSize = 10
 
-
 	var content []any
 	id := 0
 	nextID := func() string {

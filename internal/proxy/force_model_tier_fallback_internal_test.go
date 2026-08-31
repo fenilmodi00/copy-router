@@ -134,8 +134,8 @@ func TestRunTurnLoop_ForcedModelContextOverflow_StaysInTier(t *testing.T) {
 	require.Equal(t, catalog.TierHigh, catalog.TierFor(sameTier), "test premise: kimi-k3 is high-tier")
 
 	fr := &tierProbeRouter{available: map[string]struct{}{
-		forced:                      {},
-		sameTier:                    {},
+		forced:                          {},
+		sameTier:                        {},
 		"deepseek-ai/deepseek-v4-flash": {},
 	}}
 	store := &forcedPinStore{pin: sessionpin.Pin{
@@ -328,9 +328,9 @@ func TestRestrictToTier_ExcludesOtherTiers(t *testing.T) {
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
 		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil).
 		WithAvailableModels(map[string]struct{}{
-			"zai-org/glm-5.2":     {}, // high
-			"deepseek-ai/deepseek-v4-flash":  {}, // low
-			"deepseek-ai/deepseek-v4-pro": {}, // mid
+			"zai-org/glm-5.2":               {}, // high
+			"deepseek-ai/deepseek-v4-flash": {}, // low
+			"deepseek-ai/deepseek-v4-pro":   {}, // mid
 		})
 
 	out, ok := svc.restrictToTier(nil, catalog.TierHigh)

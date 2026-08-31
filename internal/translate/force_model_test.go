@@ -548,7 +548,6 @@ func TestExtractForceModelCommand_NoUserMessage(t *testing.T) {
 	assert.False(t, found)
 }
 
-
 // buildAnthropicBody creates a minimal Anthropic Messages request with text as
 // the sole user message content.
 func buildAnthropicBody(t *testing.T, text string) []byte {

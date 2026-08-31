@@ -925,7 +925,7 @@ func TestTurnLoop_PrefixTrimSkipsExpiredPinReAnchor(t *testing.T) {
 	store.pin = expired
 	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
 	svc := newPinSvc(fr, store).WithAvailableModels(map[string]struct{}{
-		"moonshotai/kimi-k3":  {},
+		"moonshotai/kimi-k3":            {},
 		"deepseek-ai/deepseek-v4-flash": {},
 	})
 	ctx := authedCtx(uuid.New().String())
@@ -1012,8 +1012,8 @@ func TestTurnLoop_MaxedOutExcludesLastServedModelNotAnchor(t *testing.T) {
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
 		Provider:         providers.ProviderAnthropic,
-		Model:            "deepseek-ai/deepseek-v4-flash",     // anchor, healthy
-		LastServedModel:  "moonshotai/kimi-k2.7", // swapped-to paired model that saturated the cap
+		Model:            "deepseek-ai/deepseek-v4-flash", // anchor, healthy
+		LastServedModel:  "moonshotai/kimi-k2.7",          // swapped-to paired model that saturated the cap
 		Reason:           "cluster:v0.52",
 		PinnedUntil:      time.Now().Add(time.Hour),
 		LastOutputTokens: 8192, // saturated previous turn

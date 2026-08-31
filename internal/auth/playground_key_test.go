@@ -13,10 +13,10 @@ import (
 )
 
 type playgroundKeyRepo struct {
-	mu       sync.Mutex
-	keys     map[string][]*auth.APIKey
-	created  []auth.CreateAPIKeyParams
-	nextID   int
+	mu      sync.Mutex
+	keys    map[string][]*auth.APIKey
+	created []auth.CreateAPIKeyParams
+	nextID  int
 }
 
 func (r *playgroundKeyRepo) Create(_ context.Context, params auth.CreateAPIKeyParams) (*auth.APIKey, error) {
