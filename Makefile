@@ -1,7 +1,7 @@
 # Prerequisites:
 #   - Go 1.25+
 #   - sqlc (go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0)
-#   - golang-migrate (brew install golang-migrate)
+#   - golang-migrate (brew install golang-migrate) for migrate-* targets
 #   - CompileDaemon for `make dev` (go install github.com/githubnemo/CompileDaemon@latest)
 #   - bun for `make frontend-dev` (https://bun.sh)
 #
@@ -9,7 +9,7 @@
 #   Targets that touch the database read DATABASE_URL from .env.development
 #   (and .env.local if present).
 #   Host / Build.io parity: point DATABASE_URL at Supabase session pooler
-#   (:5432), set PUBSUB_DISABLED=true, then `make setup` / `make dev`.
+#   (:5432), then `make setup` / `make dev`.
 #   Do not run `make db` or `make full-setup` on that path — see
 #   docs/HOST_WSL_SUPABASE.md.
 #   Local disposable Postgres: `make db` (Compose on 5433) or any other
@@ -52,13 +52,18 @@ test-install: ## Run offline installer regression tests
 
 smoke: ## Pre-merge smoke suite (compose+MITM in CI; use smoke-host for local Supabase)
 	./scripts/smoke/run.sh
-smoke-host: ## Smoke against host make setup/dev + Supabase (no compose, no pubsub-emulator)
+smoke-host: ## Smoke against host make setup/dev + Supabase (no compose)
 	SMOKE_HOST=1 ./scripts/smoke/run.sh
 
-initdb: ## Create the database and router schema (idempotent)
+initdb: ## Create the database and apply canonical schema if empty (fresh install)
 	@go run ./cmd/initdb
 
-migrate-up: initdb ## Apply all pending migrations
+# Incremental golang-migrate. DATABASE_URL must already include a query
+# string (e.g. ?sslmode=disable) so search_path can be appended with &.
+# Fresh install uses initdb/compose (canonical dump), not this target.
+# After initdb/compose, stamp version 1 before the first incremental up:
+#   migrate -path db/migrations -database "$(DATABASE_URL)&search_path=router" force 1
+migrate-up: ## Apply pending migrations (empty DB: 0001_init; else 0002+)
 	migrate -path db/migrations \
 		-database "$(DATABASE_URL)&search_path=router" up
 
@@ -68,12 +73,15 @@ migrate-down: ## Roll back the last migration
 
 migrate-create: ## Create a new migration (usage: make migrate-create NAME=add-foo)
 	@if [ -z "$(NAME)" ]; then echo "Usage: make migrate-create NAME=add-foo"; exit 1; fi
-	migrate create -ext sql -dir db/migrations $(NAME)
+	migrate create -ext sql -dir db/migrations -seq -digits 4 $(NAME)
 
 seed: ## Create a local dev installation + API key and print usage instructions
 	go run ./cmd/seed
 
-setup: migrate-up seed ## Bootstrap (host DB): init DB, run migrations, seed an API key
+# initdb = fresh install (canonical schema). migrate-up = incremental after
+# the 0001_init baseline. setup stays on initdb; do not chain migrate-up
+# (0001 would collide with tables initdb already created).
+setup: initdb seed ## Bootstrap (host DB): init DB + schema, seed an API key
 
 full-setup: generate-statusline ## Bootstrap router: docker compose + seed + interactively wire Claude Code
 	@if [ -n "$(KEY)" ] && [ -n "$(BASE_URL)" ]; then \
@@ -88,7 +96,7 @@ full-setup: generate-statusline ## Bootstrap router: docker compose + seed + int
 			echo "error: KEY and BASE_URL must both be provided together."; \
 			exit 1; \
 		fi; \
-		./install/spin "Building docker compose stack (postgres, migrate, server)" \
+		./install/spin "Building docker compose stack (postgres, server)" \
 			docker compose up --build -d || exit 1; \
 		./install/spin "Waiting for router /health" bash -c '\
 			for i in $$(seq 1 60); do \
@@ -122,7 +130,7 @@ db: ## Start the compose Postgres only (port 5433)
 
 # `make dev` runs both processes with hot-reload:
 #   - Go router via CompileDaemon on :8080
-#   - Next.js dashboard via `bun run dev` on :3000 (rewrites /admin → :8080)
+#   - Next.js dashboard via `bun run dev` on :3000 (rewrites /v1 and /account → :8080)
 #
 # `-tags ORT` is required for hugot v0.7+ to enable the ONNX Runtime
 # backend. Without it, cluster.NewEmbedder fails at boot and the
@@ -138,7 +146,7 @@ db: ## Start the compose Postgres only (port 5433)
 #
 # PORT is exported from .env.local for the Go router. Next.js also
 # reads PORT, so without an override it binds :8080 first, Go fails
-# with "address already in use", and /admin rewrites loop to Next
+# with "address already in use", and /v1 rewrites loop to Next
 # (ECONNRESET). Force the UI onto 3000 regardless of .env.local.
 dev: ## Run Go router (:8080) + Next.js UI (:3000) with hot-reload
 	@set -e; \

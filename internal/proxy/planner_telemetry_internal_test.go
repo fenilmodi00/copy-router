@@ -24,7 +24,7 @@ func TestApplyPlannerTelemetry_StayPopulatesPinAndEV(t *testing.T) {
 	p := InsertTelemetryParams{}
 	applyPlannerTelemetry(&p, turnLoopResult{
 		PinModel:    "claude-sonnet-5",
-		PinProvider: providers.ProviderAnthropic,
+		PinProvider: providers.ProviderAiand,
 		PlannerDecision: planner.Decision{
 			Outcome:            planner.OutcomeStay,
 			Reason:             planner.ReasonEVNegative,
@@ -36,7 +36,7 @@ func TestApplyPlannerTelemetry_StayPopulatesPinAndEV(t *testing.T) {
 	assert.Equal(t, "stay", p.PlannerOutcome)
 	assert.Equal(t, planner.ReasonEVNegative, p.PlannerReason)
 	assert.Equal(t, "claude-sonnet-5", p.PlannerPinModel)
-	assert.Equal(t, providers.ProviderAnthropic, p.PlannerPinProvider)
+	assert.Equal(t, providers.ProviderAiand, p.PlannerPinProvider)
 	require.NotNil(t, p.PlannerExpectedSavingsUSD)
 	assert.InDelta(t, 0.01, *p.PlannerExpectedSavingsUSD, 1e-12)
 	require.NotNil(t, p.PlannerEvictionCostUSD)
@@ -51,7 +51,7 @@ func TestApplyPlannerTelemetry_SwitchRecordsAbandonedPin(t *testing.T) {
 	p := InsertTelemetryParams{}
 	applyPlannerTelemetry(&p, turnLoopResult{
 		PinModel:    "claude-opus-5",
-		PinProvider: providers.ProviderAnthropic,
+		PinProvider: providers.ProviderAiand,
 		PlannerDecision: planner.Decision{
 			Outcome:                  planner.OutcomeSwitch,
 			Reason:                   planner.ReasonEVPositive,

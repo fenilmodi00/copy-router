@@ -9,12 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"workweave/router/internal/billing"
 	"workweave/router/internal/providers"
 	"workweave/router/internal/proxy"
 	"workweave/router/internal/router"
 	"workweave/router/internal/router/cache"
-	"workweave/router/internal/router/catalog"
 	"workweave/router/internal/router/handover"
 	"workweave/router/internal/router/sessionpin"
 	"workweave/router/internal/translate"
@@ -111,35 +109,6 @@ func TestService_ProxyOpenAIChatCompletion_ResponsesStreamBypassesCache(t *testi
 		"both streaming turns must reach the provider on Responses")
 }
 
-// Usage lives in the Responses payload, not in a chat.completion, so the ledger
-// debit is only correct if the translated usage — including the cached prefix —
-// feeds billing.
-func TestService_ProxyOpenAIChatCompletion_ResponsesUsageDebitsBilling(t *testing.T) {
-	repo := &capturingBillingRepo{}
-	provider := &fakeProvider{proxyResponse: responsesTextUpstream}
-	svc := openAIChatService(provider, "moonshotai/kimi-k3").
-		WithBillingService(billing.NewService(repo))
-
-	ctx := proxyContextWithExternalID(t, "tenant-billing")
-	rec := httptest.NewRecorder()
-	require.NoError(t, svc.ProxyOpenAIChatCompletion(ctx, []byte(chatCacheableTurnBody), rec,
-		httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatCacheableTurnBody))))
-	require.Equal(t, providers.EndpointResponses, provider.proxyEndpoints[0])
-
-	price, ok := catalog.PriceFor(providers.ProviderAiand, "moonshotai/kimi-k3")
-	require.True(t, ok)
-	want := catalog.USDToMicros(
-		catalog.EffectiveInputCost(40, 0, 32, price.InputUSDPer1M, price, providers.ProviderAiand) +
-			catalog.EffectiveOutputCost(6, price.OutputUSDPer1M))
-
-	debits := repo.recordedDebits()
-	require.Len(t, debits, 1, "a served Responses turn must debit exactly once")
-	assert.Equal(t, "moonshotai/kimi-k3", debits[0].RouterModel)
-	assert.Equal(t, want, debits[0].NotionalCostMicros,
-		"the debit must price the Responses usage block, cached prefix included")
-	assert.Positive(t, want)
-}
-
 // A handover rewrites the envelope before emit, so the switch turn's Responses
 // request must carry the summary rather than the original history — the same
 // hazard as compaction, on the path that actually switches provider families.
@@ -147,7 +116,7 @@ func TestService_ProxyMessages_HandoverSwitchToOpenAIEmitsResponses(t *testing.T
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "moonshotai/kimi-k3",
 		Reason:          "cluster:v0.2",
 		PinnedUntil:     time.Now().Add(time.Hour),
@@ -162,10 +131,9 @@ func TestService_ProxyMessages_HandoverSwitchToOpenAIEmitsResponses(t *testing.T
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderAnthropic: &fakeProvider{},
-			providers.ProviderAiand:     openAI,
+			providers.ProviderAiand: openAI,
 		},
-		nil, false, nil, store, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, store, false, providers.ProviderAiand, "claude-haiku-4-5", nil,
 	).WithSummarizer(summarizer)
 
 	rec := httptest.NewRecorder()
@@ -192,7 +160,7 @@ func (f *fakeChatCompactionSummarizer) SummarizeForCompaction(context.Context, *
 	return f.summary, handover.Usage{InputTokens: 10, OutputTokens: 4}, nil
 }
 
-func (f *fakeChatCompactionSummarizer) Provider() string { return providers.ProviderAnthropic }
+func (f *fakeChatCompactionSummarizer) Provider() string { return providers.ProviderAiand }
 
 // Compaction rewrites the envelope before emit, so a compacted chat turn must
 // still be emitted as Responses and carry the summary — the rewritten history,

@@ -15,12 +15,11 @@ import (
 var ErrRestrictedDestination = errors.New("upstream destination is not publicly routable")
 
 // restrictUpstreamEgressEnv forces the public-destination dial policy on or
-// off regardless of deployment mode.
+// off. Default false: in-cluster gateways are a legitimate upstream.
 const restrictUpstreamEgressEnv = "ROUTER_RESTRICT_UPSTREAM_EGRESS"
 
 // publicDestinationsOnly reports whether provider transports refuse non-public
-// upstream addresses. Default is true for managed (per-tenant URLs reach only
-// public endpoints) and false for self-hosted (in-cluster gateways are normal).
+// upstream addresses (per-tenant URLs reach only public endpoints).
 var publicDestinationsOnly = publicDestinationsOnlyFromEnv()
 
 func publicDestinationsOnlyFromEnv() bool {
@@ -29,7 +28,7 @@ func publicDestinationsOnlyFromEnv() bool {
 			return b
 		}
 	}
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("ROUTER_DEPLOYMENT_MODE")), "managed")
+	return false
 }
 
 // restrictDestination runs in the dialer's Control hook, so a hostname is

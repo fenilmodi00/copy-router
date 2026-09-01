@@ -241,8 +241,8 @@ func TestAuthorityCacheShadowCandidateScoreCoverage(t *testing.T) {
 			"anthropic/" + shadowPinnedModel + ":" + effort: 0.62,
 			"anthropic/" + shadowFreshModel + ":" + effort:  0.71,
 		})
-		stay := candidateScoreForWithProvider(dec, shadowPinnedModel+":"+effort, providers.ProviderAnthropic)
-		fresh := candidateScoreForWithProvider(dec, shadowFreshModel+":"+effort, providers.ProviderAnthropic)
+		stay := candidateScoreForWithProvider(dec, shadowPinnedModel+":"+effort, providers.ProviderAiand)
+		fresh := candidateScoreForWithProvider(dec, shadowFreshModel+":"+effort, providers.ProviderAiand)
 		require.NotNil(t, stay)
 		require.NotNil(t, fresh)
 		assert.InDelta(t, 0.62, *stay, 1e-6)
@@ -371,7 +371,7 @@ func TestCandidateScoreFor(t *testing.T) {
 		dec := hmmFreshDecisionWithArmScores(shadowFreshModel, nil, map[string]float32{
 			rosterArmID: 0.71,
 		})
-		got := candidateScoreForWithArm(dec, shadowFreshModel, providers.ProviderAnthropic, rosterArmID)
+		got := candidateScoreForWithArm(dec, shadowFreshModel, providers.ProviderAiand, rosterArmID)
 		require.NotNil(t, got)
 		assert.InDelta(t, 0.71, *got, 1e-6)
 	})
@@ -379,13 +379,16 @@ func TestCandidateScoreFor(t *testing.T) {
 	t.Run("stay score uses re-resolved provider", func(t *testing.T) {
 		dec := hmmFreshDecisionWithArmScores(shadowFreshModel, nil, map[string]float32{
 			"anthropic/" + shadowPinnedModel: 0.62,
-			"openai/" + shadowPinnedModel:    0.91,
+			// A second arm on a different model keeps the fallback scan
+			// unambiguous: aiand-only means both arms resolve to the same
+			// provider, so same-model arms can no longer be told apart.
+			"anthropic/" + shadowFreshModel: 0.91,
 		})
 		dec.Metadata.CandidateArmProviders = map[string]string{
-			"anthropic/" + shadowPinnedModel: providers.ProviderAnthropic,
-			"openai/" + shadowPinnedModel:    providers.ProviderOpenAI,
+			"anthropic/" + shadowPinnedModel: providers.ProviderAiand,
+			"anthropic/" + shadowFreshModel:  providers.ProviderAiand,
 		}
-		got := candidateScoreForWithProvider(dec, shadowPinnedModel, providers.ProviderAnthropic)
+		got := candidateScoreForWithProvider(dec, shadowPinnedModel, providers.ProviderAiand)
 		require.NotNil(t, got)
 		assert.InDelta(t, 0.62, *got, 1e-6)
 	})

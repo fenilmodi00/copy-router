@@ -17,15 +17,15 @@ Canonical model identity in the deploy catalog (open-weight rows such as `moonsh
 _Avoid_: Keeping Claude catalog rows so a harness can keep sending Claude names
 
 **UpstreamID**:
-Model ID the chosen provider binding sends on the wire to that upstream. May match the catalog ID or differ when the upstream’s published name diverges (example shape: catalog `zai-org/glm-5.2` vs upstream `zai-org/glm-5.2`).
+Model ID the chosen provider binding sends on the wire to that upstream. May match the catalog ID or differ when the upstream’s published name diverges (example: catalog `moonshotai/kimi-k2.7` vs upstream `moonshotai/kimi-k2.7-code`).
 _Avoid_: Treating every client-facing string as an upstream ID; inventing Claude upstream IDs for aiand
 
 **ClientModelAlias**:
-Client-supplied Claude-era (and short) model strings remapped onto existing aiand **CatalogModelID**s (Appendix F style). Examples only: `claude-fable-5` → `moonshotai/kimi-k3`; `claude-opus-5` / `claude-opus-4-8` → `zai-org/glm-5.2`; `claude-sonnet-5` → `moonshotai/kimi-k2.7`; `claude-sonnet-4-6` → `deepseek-ai/deepseek-v4-pro`; `claude-haiku-4-5` → `deepseek-ai/deepseek-v4-flash`. Aliases are remap inputs, not catalog rows.
-_Avoid_: Calling aliases “models in the catalog”; using aliases as a reason to retain Claude catalog entries
+Retired **catalog** IDs kept resolvable via `catalog.aliases` (e.g. `zai-org/glm-5.2` → `zai-org/glm-5.3`). Not a Claude-era short-name table — those remap inputs were deleted; unknown force-model values 400.
+_Avoid_: Documenting Appendix-F Claude→catalog remaps that no longer exist in code; treating Claude harness names as catalog rows
 
 **ClientHarness**:
-Optional client tool that speaks a peripheral wire (notably Claude Code on Anthropic Messages). A harness is not a provider and not a reason to keep Claude catalog rows; it reaches aiand through translation and aliases.
+Optional client tool that speaks a peripheral wire (notably Claude Code on Anthropic Messages). A harness is not a provider and not a reason to keep Claude catalog rows; it reaches aiand through translation. Pin with catalog IDs, not Claude short names.
 _Avoid_: Treating Claude Code as deploy baseline; equating harness presence with Anthropic-as-upstream
 
 **IngressSurface**:
@@ -34,23 +34,23 @@ _Avoid_: Treating `/v1/messages` as a second upstream; leading with Anthropic in
 
 ## Identity & login
 
-**selfserve**:
-`ROUTER_DEPLOYMENT_MODE=selfserve` deployment mode. Dashboard authenticates by aiand user key (not an operator password); each aiand user maps 1:1 to their own router installation. Sits between `selfhosted` (operator-password dashboard, env-var provider keys) and `managed` (no dashboard; control plane owns keys/config).
-_Avoid_: Treating selfserve as a flavor of managed (it mounts the dashboard) or of selfhosted (no operator password)
+**hosted mode**:
+The single deployment mode. Dashboard authenticates by aiand user key; each aiand user maps 1:1 to their own router installation.
+_Avoid_: Inventing additional deployment modes (selfhosted/managed are gone)
 
 **Account**:
-The selfserve dashboard identity. One Account per aiand user, created/looked-up at login via the aiand identity probe. Soft-deleted when the user revokes their aiand key (the router can no longer prove the installation is theirs).
+The dashboard identity. One Account per aiand user, created/looked-up at login via the aiand identity probe. Soft-deleted when the user revokes their aiand key (the router can no longer prove the installation is theirs).
 _Avoid_: Equating Account with Installation; the account is the login identity, the installation is the tenancy row
 
 **Account ↔ Installation invariant**:
-`account.id` doubles as the installation `external_id` — a 1:1 mapping. Every dashboard row (metrics, API keys, BYOK, config, exclusions) is scoped to that installation; there is no account-without-installation or installation-without-account state in selfserve.
+`account.id` doubles as the installation `external_id` — a 1:1 mapping. Every dashboard row (metrics, API keys, BYOK, config, exclusions) is scoped to that installation; there is no account-without-installation or installation-without-account state.
 _Avoid_: Introducing a many-accounts-per-installation or many-installations-per-account shape
 
 **LoginSession**:
 The 7-day TTL session cookie (`router_account_session`, HttpOnly) minted by `POST /account/v1/login` after the aiand probe succeeds. `POST /account/v1/logout` clears it; `WithAccountCookie` rejects requests without a valid one with 401.
-_Avoid_: Treating the `rk_` data-plane bearer as a dashboard credential; it never authorizes `/admin/v1/*` in selfserve
+_Avoid_: Treating the `rk_` data-plane bearer as a dashboard credential; it never authorizes the dashboard data plane
 
 **WithAccountCookie**:
-The selfserve-mode counterpart to `WithAdminOnly`. Resolves the LoginSession cookie to the Account, then to its installation, and stashes both on ctx so the existing per-installation admin handlers scope unchanged. A valid `rk_` data-plane key does **not** satisfy it.
-_Avoid_: Adding `rk_`-bearer acceptance to the selfserve `/admin/v1/*` group; that would blur the dashboard-vs-data-plane credential boundary
+Resolves the LoginSession cookie to the Account, then to its installation, and stashes both on ctx so the existing per-installation admin handlers scope unchanged. A valid `rk_` data-plane key does **not** satisfy it.
+_Avoid_: Adding `rk_`-bearer acceptance to the dashboard `/v1/*` group; that would blur the dashboard-vs-data-plane credential boundary
 

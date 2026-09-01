@@ -162,7 +162,6 @@ func (r *TelemetryRepo) InsertRequestTelemetry(ctx context.Context, p proxy.Inse
 		CredentialKeyPrefix:                      stringPtrOrNil(p.CredentialKeyPrefix),
 		CredentialKeySuffix:                      stringPtrOrNil(p.CredentialKeySuffix),
 		CredentialSource:                         stringPtrOrNil(p.CredentialSource),
-		UnifiedLimitHeaders:                      p.UnifiedLimitHeaders,
 		PlannerOutcome:                           stringPtrOrNil(p.PlannerOutcome),
 		PlannerReason:                            stringPtrOrNil(p.PlannerReason),
 		PlannerPinModel:                          stringPtrOrNil(p.PlannerPinModel),

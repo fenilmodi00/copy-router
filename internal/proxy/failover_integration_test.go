@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 
+	"workweave/router/internal/flags"
+
 	"workweave/router/internal/providers"
 	"workweave/router/internal/providers/openaicompat"
 	"workweave/router/internal/proxy"
@@ -75,15 +77,15 @@ func TestProxyMessages_FireworksFailureFallbackToOpenRouter(t *testing.T) {
 	defer openrouter.Close()
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek-ai/deepseek-v4-pro"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-pro"}},
 		map[string]providers.Client{
-			"fireworks":  openaicompat.NewClient("test-fw-key", fireworks.URL),
-			"openrouter": openaicompat.NewClient("test-or-key", openrouter.URL),
+			providers.ProviderAiand: openaicompat.NewClient("test-fw-key", fireworks.URL),
+			"upstream-fallback":     openaicompat.NewClient("test-or-key", openrouter.URL),
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
+		nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
-		"fireworks":  {},
-		"openrouter": {},
+		providers.ProviderAiand: {},
+		"upstream-fallback":     {},
 	})
 
 	rec := httptest.NewRecorder()
@@ -148,15 +150,15 @@ func TestProxyMessages_BothBindingsFail(t *testing.T) {
 	defer openrouter.Close()
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek-ai/deepseek-v4-pro"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-pro"}},
 		map[string]providers.Client{
-			"fireworks":  openaicompat.NewClient("test-fw-key", fireworks.URL),
-			"openrouter": openaicompat.NewClient("test-or-key", openrouter.URL),
+			providers.ProviderAiand: openaicompat.NewClient("test-fw-key", fireworks.URL),
+			"upstream-fallback":     openaicompat.NewClient("test-or-key", openrouter.URL),
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
+		nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
-		"fireworks":  {},
-		"openrouter": {},
+		providers.ProviderAiand: {},
+		"upstream-fallback":     {},
 	})
 
 	rec := httptest.NewRecorder()
@@ -184,21 +186,24 @@ func TestProxyMessages_BothBindingsFail(t *testing.T) {
 // main #220's TTFB win. The preludeBuffer is not engaged because
 // resolveBindingsForDispatch returns a single-element slice.
 func TestProxyMessages_SingleBindingPreservesEagerPrelude(t *testing.T) {
-	// An Anthropic-shape upstream that emits SSE chunks. We don't assert
-	// the chunks here; we assert that the response is committed (200) and
-	// the client sees message_start before message_stop — i.e. the
+	// Broad promotion would move this tool-less turn onto /v1/responses;
+	// pin chat/completions so the Anthropic SSE prelude stays the surface.
+	ctx := flags.WithOverrides(context.Background(), flags.Overrides{
+		Bools: map[flags.Key]bool{flags.KeyOpenAIResponsesBroad: false},
+	})
+
+	// An upstream that emits OpenAI chat SSE chunks (aiand is OpenAI-compat, so
+	// the cross-format AnthropicSSETranslator consumes this wire). We don't
+	// assert the chunks here; we assert that the response is committed (200)
+	// and the client sees message_start before message_stop — i.e. the
 	// translator's Prelude wasn't swallowed by an inadvertent buffer.
 	anth := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
-		// Minimal valid Anthropic-shape stream.
 		for _, c := range []string{
-			"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_x\",\"role\":\"assistant\",\"content\":[],\"model\":\"deepseek-ai/deepseek-v4-flash\"}}\n\n",
-			"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
-			"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hi\"}}\n\n",
-			"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
-			"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n\n",
-			"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+			`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-flash","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}` + "\n\n",
+			`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-flash","choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":1}}` + "\n\n",
+			"data: [DONE]\n\n",
 		} {
 			_, _ = w.Write([]byte(c))
 		}
@@ -207,25 +212,26 @@ func TestProxyMessages_SingleBindingPreservesEagerPrelude(t *testing.T) {
 
 	// deepseek-ai/deepseek-v4-flash is single-binding (Anthropic only).
 	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash"},
+		router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash"},
 		map[string]providers.Client{
-			providers.ProviderAnthropic: &fakeProvider{
+			providers.ProviderAiand: &fakeProvider{
 				proxyResponse: func(w http.ResponseWriter) {
-					// Mirror the translator's expected SSE shape.
+					// Mirror the chat wire the cross-format translator consumes.
 					w.Header().Set("Content-Type", "text/event-stream")
 					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_x\",\"role\":\"assistant\",\"content\":[],\"model\":\"deepseek-ai/deepseek-v4-flash\"}}\n\n"))
-					_, _ = w.Write([]byte("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"))
+					_, _ = w.Write([]byte(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-flash","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}` + "\n\n"))
+					_, _ = w.Write([]byte(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-flash","choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":1}}` + "\n\n"))
+					_, _ = w.Write([]byte("data: [DONE]\n\n"))
 				},
 			},
 		},
-	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}})
+	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAiand: {}})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	body := []byte(`{"model":"deepseek-ai/deepseek-v4-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 
-	require.NoError(t, svc.ProxyMessages(context.Background(), body, rec, req))
+	require.NoError(t, svc.ProxyMessages(ctx, body, rec, req))
 	assert.Equal(t, http.StatusOK, rec.Code)
 	respBody := rec.Body.String()
 	assert.Contains(t, respBody, "message_start")
@@ -255,12 +261,12 @@ func TestProxyMessages_SingleBindingStreamingPreCommitError(t *testing.T) {
 	// inbound Anthropic Messages request so the cross-format
 	// AnthropicSSETranslator + Prelude path runs.
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "gpt-5"}},
 		map[string]providers.Client{
-			providers.ProviderOpenAI: openaicompat.NewClient("test-key", stub.URL),
+			providers.ProviderAiand: openaicompat.NewClient("test-key", stub.URL),
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderOpenAI: {}})
+		nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil,
+	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAiand: {}})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))

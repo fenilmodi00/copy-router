@@ -15,7 +15,7 @@ import { api } from "@/lib/api";
 export type LoginSessionState = "checking" | "authed" | "anonymous";
 
 /** Which login cookie surface authenticated this shell. */
-export type AuthSurface = "account" | "admin";
+export type AuthSurface = "account";
 
 export type LoginSession = {
   state: LoginSessionState;
@@ -27,13 +27,7 @@ const defaultSession: LoginSession = { state: "checking", surface: null };
 const LoginSessionContext = createContext<LoginSession>(defaultSession);
 
 /**
- * Probes the active login surface once at shell mount.
- *
- * Selfserve mounts /account/v1/me and does NOT mount /admin/v1/auth/me.
- * Selfhosted is the reverse. Trying admin-only here 404s in selfserve and
- * the catch-path bounced to /login while login's accountMe saw an authed
- * cookie and bounced back — a dashboard↔login loop. Probe account first;
- * fall back to admin me when the account surface is absent.
+ * Probes the account login surface once at shell mount.
  *
  * Path changes only swap sidebar/children — 401 bounce for expired
  * sessions stays in api.request.
@@ -52,21 +46,7 @@ export function useLoginSessionGate(): LoginSession {
     }> {
       try {
         const res = await api.auth.accountMe();
-        if (res.authenticated) {
-          return { authed: true, surface: "account" };
-        }
-        // Account surface mounted but anonymous — do not fall through to
-        // admin me (selfserve never mounts it).
-        return { authed: false, surface: "account" };
-      } catch {
-        // Account surface not mounted (selfhosted / managed).
-      }
-      try {
-        const res = await api.auth.me();
-        return {
-          authed: res.authenticated,
-          surface: res.authenticated ? "admin" : null,
-        };
+        return { authed: res.authenticated, surface: "account" };
       } catch {
         return { authed: false, surface: null };
       }

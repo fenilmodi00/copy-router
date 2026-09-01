@@ -42,7 +42,7 @@ func (s *authoritativeHandoverSummarizer) Summarize(
 }
 
 func (s *authoritativeHandoverSummarizer) Provider() string {
-	return providers.ProviderAnthropic
+	return providers.ProviderAiand
 }
 
 func TestAuthoritativePolicySelectsEveryEligibleTurn(t *testing.T) {
@@ -99,7 +99,7 @@ func TestAuthoritativePolicySelectsEveryEligibleTurn(t *testing.T) {
 			store := newStubPinStore()
 			store.getFound = test.pinFound
 			store.getPin = sessionpin.Pin{
-				Provider:         providers.ProviderAnthropic,
+				Provider:         providers.ProviderAiand,
 				Model:            "moonshotai/kimi-k3",
 				Reason:           "cluster:v0.2",
 				TurnCount:        7,
@@ -110,7 +110,7 @@ func TestAuthoritativePolicySelectsEveryEligibleTurn(t *testing.T) {
 				HasEverSwitched:  true,
 			}
 			policyRouter := &authoritativeTestRouter{decision: router.Decision{
-				Provider: providers.ProviderAnthropic,
+				Provider: providers.ProviderAiand,
 				Model:    "moonshotai/kimi-k3",
 				Reason:   "authoritative-test_policy",
 			}}
@@ -178,7 +178,7 @@ func TestAuthoritativePolicySelectsEveryEligibleTurn(t *testing.T) {
 			if test.pinFound {
 				assert.Equal(t, 7, turnContext.SessionTurnCount)
 				assert.Equal(t, "moonshotai/kimi-k3", turnContext.PreviousServedModel)
-				assert.Equal(t, providers.ProviderAnthropic, turnContext.PreviousProvider)
+				assert.Equal(t, providers.ProviderAiand, turnContext.PreviousProvider)
 				expectedCacheState := router.PolicyCacheStateWarm
 				if test.historyTruncated {
 					expectedCacheState = router.PolicyCacheStateCold
@@ -220,13 +220,13 @@ func TestAuthoritativePolicyPreservesExplicitForceModel(t *testing.T) {
 	store := newStubPinStore()
 	store.getFound = true
 	store.getPin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "moonshotai/kimi-k3",
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(time.Hour),
 	}
 	policyRouter := &authoritativeTestRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "moonshotai/kimi-k3",
 	}}
 	svc := NewService(
@@ -292,7 +292,7 @@ func TestAuthoritativeUpgradeConfidenceGate(t *testing.T) {
 			pinFound: true,
 			pinModel: "deepseek-ai/deepseek-v4-flash",
 			fresh: router.Decision{
-				Provider: providers.ProviderAnthropic,
+				Provider: providers.ProviderAiand,
 				Model:    "moonshotai/kimi-k3",
 				Reason:   "hmm_policy(tool-result communication reroute: classifier 'maximum' (p=0.180))",
 				Metadata: &router.RoutingMetadata{ChosenScore: 0.18},
@@ -306,7 +306,7 @@ func TestAuthoritativeUpgradeConfidenceGate(t *testing.T) {
 			pinFound: true,
 			pinModel: "deepseek-ai/deepseek-v4-flash",
 			fresh: router.Decision{
-				Provider: providers.ProviderAnthropic,
+				Provider: providers.ProviderAiand,
 				Model:    "moonshotai/kimi-k3",
 				Reason:   "hmm_policy(classifier 'maximum' (p=0.91))",
 				Metadata: &router.RoutingMetadata{ChosenScore: 0.91},
@@ -320,7 +320,7 @@ func TestAuthoritativeUpgradeConfidenceGate(t *testing.T) {
 			pinFound: true,
 			pinModel: "moonshotai/kimi-k3",
 			fresh: router.Decision{
-				Provider: providers.ProviderAnthropic,
+				Provider: providers.ProviderAiand,
 				Model:    "deepseek-ai/deepseek-v4-flash",
 				Reason:   "hmm_policy(classifier 'fast' (p=0.20))",
 				Metadata: &router.RoutingMetadata{ChosenScore: 0.20},
@@ -334,7 +334,7 @@ func TestAuthoritativeUpgradeConfidenceGate(t *testing.T) {
 			pinFound: true,
 			pinModel: "deepseek-ai/deepseek-v4-flash",
 			fresh: router.Decision{
-				Provider: providers.ProviderAnthropic,
+				Provider: providers.ProviderAiand,
 				Model:    "moonshotai/kimi-k3",
 				Reason:   "authoritative-test_policy",
 			},
@@ -346,7 +346,7 @@ func TestAuthoritativeUpgradeConfidenceGate(t *testing.T) {
 			name:     "first turn without pin serves fresh",
 			pinFound: false,
 			fresh: router.Decision{
-				Provider: providers.ProviderAnthropic,
+				Provider: providers.ProviderAiand,
 				Model:    "moonshotai/kimi-k3",
 				Reason:   "hmm_policy(classifier 'maximum' (p=0.18))",
 				Metadata: &router.RoutingMetadata{ChosenScore: 0.18},
@@ -361,7 +361,7 @@ func TestAuthoritativeUpgradeConfidenceGate(t *testing.T) {
 			pinFound: true,
 			pinModel: "deepseek-ai/deepseek-v4-flash",
 			fresh: router.Decision{
-				Provider: providers.ProviderAnthropic,
+				Provider: providers.ProviderAiand,
 				Model:    "moonshotai/kimi-k3",
 				Reason:   "hmm_policy(classifier 'maximum' (p=0.18))",
 				Metadata: &router.RoutingMetadata{ChosenScore: 0.18},
@@ -377,7 +377,7 @@ func TestAuthoritativeUpgradeConfidenceGate(t *testing.T) {
 			store := newStubPinStore()
 			store.getFound = test.pinFound
 			store.getPin = sessionpin.Pin{
-				Provider:    providers.ProviderAnthropic,
+				Provider:    providers.ProviderAiand,
 				Model:       test.pinModel,
 				Reason:      "hmm_policy(classifier 'fast' (p=0.60))",
 				PinnedUntil: time.Now().Add(time.Hour),

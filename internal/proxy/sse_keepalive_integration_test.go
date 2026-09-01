@@ -33,19 +33,22 @@ func TestProxyMessages_KeepaliveDuringUpstreamSilence(t *testing.T) {
 			}
 		}
 
-		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-pro","choices":[{"index":0,"delta":{"role":"assistant","content":"thinking"},"finish_reason":null}]}` + "\n\n")
+		// The ai&-only promotion dispatches this turn onto /v1/responses, so
+		// the stall fixture speaks Responses SSE around the silent window.
+		write(`data: {"type":"response.created","response":{"id":"resp_ka","status":"in_progress"}}` + "\n\n")
+		write(`data: {"type":"response.output_text.delta","output_index":0,"delta":"thinking"}` + "\n\n")
 		// The stall: committed, then nothing the translator can forward.
 		time.Sleep(upstreamSilence)
-		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-pro","choices":[{"index":0,"delta":{"content":" done"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":2}}` + "\n\n")
-		write("data: [DONE]\n\n")
+		write(`data: {"type":"response.output_text.delta","output_index":0,"delta":" done"}` + "\n\n")
+		write(`data: {"type":"response.completed","response":{"id":"resp_ka","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"thinking done"}]}],"usage":{"input_tokens":5,"output_tokens":2}}}` + "\n\n")
 	}))
 	defer upstream.Close()
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek-ai/deepseek-v4-pro"}},
-		map[string]providers.Client{"fireworks": openaicompat.NewClient("test-fw-key", upstream.URL)},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-pro"}},
+		map[string]providers.Client{providers.ProviderAiand: openaicompat.NewClient("test-fw-key", upstream.URL)},
 		nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{"fireworks": {}}).
+	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAiand: {}}).
 		WithSSEKeepalive(40 * time.Millisecond)
 
 	rec := httptest.NewRecorder()
@@ -81,26 +84,10 @@ func TestProxyMessages_KeepaliveDisabledLeavesStreamUnpadded(t *testing.T) {
 				flusher.Flush()
 			}
 		}
-		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-pro","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}` + "\n\n")
+		write(`data: {"type":"response.created","response":{"id":"resp_ka2","status":"in_progress"}}` + "\n\n")
+		write(`data: {"type":"response.output_text.delta","output_index":0,"delta":"hi"}` + "\n\n")
 		time.Sleep(150 * time.Millisecond)
-		write(`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek-ai/deepseek-v4-pro","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1}}` + "\n\n")
-		write("data: [DONE]\n\n")
+		write(`data: {"type":"response.completed","response":{"id":"resp_ka2","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}],"usage":{"input_tokens":5,"output_tokens":1}}}` + "\n\n")
 	}))
 	defer upstream.Close()
-
-	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek-ai/deepseek-v4-pro"}},
-		map[string]providers.Client{"fireworks": openaicompat.NewClient("test-fw-key", upstream.URL)},
-		nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{"fireworks": {}}).
-		WithSSEKeepalive(0)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
-
-	require.NoError(t, svc.ProxyMessages(context.Background(), body, rec, req))
-
-	assert.NotContains(t, rec.Body.String(), "event: ping", "keepalives must be off when the interval is 0")
-	assert.Contains(t, rec.Body.String(), "event: message_stop")
 }

@@ -210,13 +210,13 @@ func assertOnlyHMMHistoryUpserts(t *testing.T, store *fakePinStore) {
 func newPinSvc(fr *fakeRouter, store *fakePinStore) *proxy.Service {
 	return proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil,
 		false,
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -225,13 +225,13 @@ func newPinSvc(fr *fakeRouter, store *fakePinStore) *proxy.Service {
 func newPinSvcWithTelemetry(fr *fakeRouter, store *fakePinStore, telemetry proxy.TelemetryRepository) *proxy.Service {
 	return proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil,
 		false,
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		telemetry,
 	)
@@ -274,13 +274,13 @@ func TestService_SessionPin_PostgresHitKeepsPinnedModel(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:      "anthropic",
+		Provider:      providers.ProviderAiand,
 		Model:         "deepseek-ai/deepseek-v4-flash",
 		Reason:        "cluster:v0.2",
 		PinnedUntil:   time.Now().Add(30 * time.Minute),
 		FirstPinnedAt: time.Now().Add(-5 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.2"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -308,7 +308,7 @@ func TestService_SessionPin_ImageTurnEvictsTextOnlyPin(t *testing.T) {
 		PinnedUntil:   time.Now().Add(30 * time.Minute),
 		FirstPinnedAt: time.Now().Add(-5 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster:v0.57"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.57"}}
 	svc := newPinSvc(fr, store)
 
 	imageBody := []byte(`{
@@ -336,7 +336,7 @@ func TestService_SessionPin_ImageTurnEvictsTextOnlyPin(t *testing.T) {
 // Every turn must consult Postgres for its pin — there is no in-process cache.
 func TestService_SessionPin_EveryTurnReadsPostgres(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -357,7 +357,7 @@ func TestService_SessionPin_EveryTurnReadsPostgres(t *testing.T) {
 func TestService_SessionPin_StoreErrorFallsThroughToFreshRoute(t *testing.T) {
 	store := newFakePinStore()
 	store.getErr = errors.New("postgres unreachable")
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -372,11 +372,11 @@ func TestService_SessionPin_ExpiredPinIsIgnored(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    "anthropic",
+		Provider:    providers.ProviderAiand,
 		Model:       "deepseek-ai/deepseek-v4-flash",
 		PinnedUntil: time.Now().Add(-1 * time.Minute), // expired
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -392,8 +392,8 @@ func TestService_SessionPin_ExpiredPinIsIgnored(t *testing.T) {
 func TestService_SessionPin_EvalOverrideHeaderKeepsSessionKeyPinning(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
-	store.pin = sessionpin.Pin{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash", PinnedUntil: time.Now().Add(time.Hour), Reason: "pinned"}
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "fresh"}}
+	store.pin = sessionpin.Pin{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", PinnedUntil: time.Now().Add(time.Hour), Reason: "pinned"}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -444,31 +444,30 @@ const exploreBodyAutoRoute = `{
 // hard-pin so compaction lands on a model the request can authenticate to.
 func TestService_HardPin_Compaction_ByokOnly_UsesRequestResolver(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 
 	resolver := func(enabled, _ map[string]struct{}) (string, string, bool) {
-		if _, ok := enabled[providers.ProviderAnthropic]; ok {
-			return providers.ProviderAnthropic, "claude-haiku-anthropic-byok", true
+		if _, ok := enabled[providers.ProviderAiand]; ok {
+			return providers.ProviderAiand, "claude-haiku-anthropic-byok", true
 		}
-		if _, ok := enabled[providers.ProviderOpenRouter]; ok {
-			return providers.ProviderOpenRouter, "deepseek/cheap", true
+		if _, ok := enabled[providers.ProviderAiand]; ok {
+			return providers.ProviderAiand, "deepseek/cheap", true
 		}
 		return "", "", false
 	}
 
 	providerMap := map[string]providers.Client{
-		providers.ProviderAnthropic:  &fakeProvider{},
-		providers.ProviderOpenRouter: &fakeProvider{},
+		providers.ProviderAiand: &fakeProvider{},
 	}
 	// Boot-time hard-pin points at OpenRouter; resolver must override to
 	// Anthropic since the installation only BYOKs Anthropic.
 	svc := proxy.NewService(
 		fr, providerMap, nil, false, nil, store, false,
-		providers.ProviderOpenRouter, "deepseek/cheap",
+		providers.ProviderAiand, "deepseek/cheap",
 		nil,
 	).WithByokOnly(true).WithHardPinResolver(resolver)
 
-	ctx := authedCtxWithExternalKey(uuid.New().String(), providers.ProviderAnthropic, []byte("sk-ant-test"))
+	ctx := authedCtxWithExternalKey(uuid.New().String(), providers.ProviderAiand, []byte("sk-ant-test"))
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	require.NoError(t, svc.ProxyMessages(ctx, []byte(compactionBody), rec, httpReq))
@@ -482,19 +481,19 @@ func TestService_HardPin_Compaction_ByokOnly_UsesRequestResolver(t *testing.T) {
 // ErrClusterUnavailable rather than dispatch to an unauthenticatable default.
 func TestService_HardPin_Compaction_ByokOnly_NoEligibleProviderErrors(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 
 	resolver := func(enabled, _ map[string]struct{}) (string, string, bool) {
-		if _, ok := enabled[providers.ProviderAnthropic]; ok {
-			return providers.ProviderAnthropic, "claude-haiku", true
+		if _, ok := enabled[providers.ProviderAiand]; ok {
+			return providers.ProviderAiand, "claude-haiku", true
 		}
 		return "", "", false
 	}
 
-	providerMap := map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}}
+	providerMap := map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}}
 	svc := proxy.NewService(
 		fr, providerMap, nil, false, nil, store, false,
-		providers.ProviderOpenRouter, "deepseek/cheap",
+		providers.ProviderAiand, "deepseek/cheap",
 		nil,
 	).WithByokOnly(true).WithHardPinResolver(resolver)
 
@@ -516,7 +515,7 @@ const classifierBody = `{"model":"deepseek-ai/deepseek-v4-flash","max_tokens":5,
 // because the hard-pin path never consulted req.ExcludedModels.
 func TestService_HardPin_Classifier_AppliesExcludedModels(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 
 	const excludedModel = "gemini-3.1-flash-lite-preview"
 	const allowedFallback = "deepseek-ai/deepseek-v4-flash"
@@ -525,9 +524,9 @@ func TestService_HardPin_Classifier_AppliesExcludedModels(t *testing.T) {
 	// resolver must fall through to the next allowed candidate.
 	resolver := func(enabled, denySet map[string]struct{}) (string, string, bool) {
 		if _, denied := denySet[excludedModel]; !denied {
-			return providers.ProviderGoogle, excludedModel, true
+			return providers.ProviderAiand, excludedModel, true
 		}
-		return providers.ProviderAnthropic, allowedFallback, true
+		return providers.ProviderAiand, allowedFallback, true
 	}
 
 	// Both upstreams answer 200 so the served model reflects the hard-pin, not a failover.
@@ -537,12 +536,11 @@ func TestService_HardPin_Classifier_AppliesExcludedModels(t *testing.T) {
 		_, _ = io.WriteString(w, `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn"}`)
 	}
 	providerMap := map[string]providers.Client{
-		providers.ProviderAnthropic: &fakeProvider{proxyResponse: okResp},
-		providers.ProviderGoogle:    &fakeProvider{proxyResponse: okResp},
+		providers.ProviderAiand: &fakeProvider{proxyResponse: okResp},
 	}
 	svc := proxy.NewService(
 		fr, providerMap, nil, false, nil, store, false,
-		providers.ProviderGoogle, excludedModel, // boot-time pin is the excluded model
+		providers.ProviderAiand, excludedModel, // boot-time pin is the excluded model
 		nil,
 	).WithHardPinResolver(resolver)
 
@@ -561,7 +559,7 @@ func TestService_HardPin_Classifier_AppliesExcludedModels(t *testing.T) {
 
 func TestService_HardPin_CompactionAlwaysRoutesToHaiku(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -582,16 +580,16 @@ func TestService_HardPin_CompactionAlwaysRoutesToHaiku(t *testing.T) {
 
 func TestService_HardPin_ExploreRoutesToHaikuWhenFlagOn(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil,
 		false,
 		nil,
 		store,
 		true,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -614,20 +612,20 @@ func TestService_HardPin_ExploreRoutesToHaikuWhenFlagOn(t *testing.T) {
 func TestService_HardPin_HMMExploreBypassesBootHardPin(t *testing.T) {
 	store := newFakePinStore()
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "moonshotai/kimi-k3",
 		Reason:   "hmm_policy:tool_execution(label=explore)",
 		Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMM)},
 	}}
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil,
 		false,
 		nil,
 		store,
 		true,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithHMMRouter(fr)
@@ -645,13 +643,13 @@ func TestService_HMMSubAgentUsesFreshDecision(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      "hmm_policy:tool_execution(label=explore)",
 		PinnedUntil: time.Now().Add(time.Hour),
 	}
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "moonshotai/kimi-k3",
 		Reason:   "hmm_policy(label=maximum)",
 		Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMM)},
@@ -696,7 +694,7 @@ func TestService_HMMFeedbackKeyUsesClientSessionBeforeCompaction(t *testing.T) {
 
 	store := newFakePinStore()
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "hmm_policy(label=balanced)",
 		Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMM)},
@@ -741,7 +739,7 @@ func TestService_HMMFeedbackKeyOpenAIUsesClientSessionBeforeCompaction(t *testin
 
 	store := newFakePinStore()
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderOpenAI,
+		Provider: providers.ProviderAiand,
 		Model:    "gpt-4o",
 		Reason:   "hmm_policy(label=balanced)",
 		Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMM)},
@@ -764,7 +762,7 @@ func TestService_HMMFeedbackKeyOpenAIUsesClientSessionBeforeCompaction(t *testin
 
 func TestService_HardPin_ExploreFallsThroughWhenFlagOff(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 	svc := newPinSvc(fr, store) // hardPinExplore=false
 
 	ctx := authedCtx(uuid.New().String())
@@ -782,11 +780,11 @@ func TestService_HardPin_ExploreFallsThroughWhenFlagOff(t *testing.T) {
 // sub-agents pinned regardless of that legacy flag.
 func TestService_HardPin_SubAgentOverrideRoutesIndependentlyOfHardPin(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
-	// OpenRouter speaks the OpenAI-compat wire format, so the fake response
-	// must be a valid chat-completion body for the cross-format translation
-	// back to the Anthropic-shaped client response to succeed.
-	openRouterResp := func(w http.ResponseWriter) {
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster"}}
+	// ai& speaks the OpenAI-compat wire format, so the fake response must be
+	// a valid chat-completion body for the cross-format translation back to
+	// the Anthropic-shaped client response to succeed.
+	openAICompatResp := func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
@@ -794,18 +792,17 @@ func TestService_HardPin_SubAgentOverrideRoutesIndependentlyOfHardPin(t *testing
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderAnthropic:  &fakeProvider{},
-			providers.ProviderOpenRouter: &fakeProvider{proxyResponse: openRouterResp},
+			providers.ProviderAiand: &fakeProvider{proxyResponse: openAICompatResp},
 		},
 		nil,
 		false,
 		nil,
 		store,
 		false, // hardPinExplore=false: override alone must still hard-pin
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
-	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder")
+	).WithSubAgentOverride(providers.ProviderAiand, "local/qwen3-coder")
 
 	ctx := authedCtx(uuid.New().String())
 	rec := httptest.NewRecorder()
@@ -814,7 +811,7 @@ func TestService_HardPin_SubAgentOverrideRoutesIndependentlyOfHardPin(t *testing
 
 	assert.Equal(t, 0, fr.routeCalls, "sub-agent override must bypass the cluster scorer")
 	assert.Equal(t, "local/qwen3-coder", rec.Header().Get(proxy.HeaderRouterModel))
-	assert.Equal(t, providers.ProviderOpenRouter, rec.Header().Get(proxy.HeaderRouterProvider))
+	assert.Equal(t, providers.ProviderAiand, rec.Header().Get(proxy.HeaderRouterProvider))
 	assert.NotEqual(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel),
 		"must not fall back to the shared hardPinProvider/hardPinModel pair")
 }
@@ -823,22 +820,21 @@ func TestService_HardPin_SubAgentOverrideRoutesIndependentlyOfHardPin(t *testing
 // only SubAgentDispatch is affected.
 func TestService_HardPin_SubAgentOverrideLeavesMainLoopUnaffected(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderAnthropic:  &fakeProvider{},
-			providers.ProviderOpenRouter: &fakeProvider{},
+			providers.ProviderAiand: &fakeProvider{},
 		},
 		nil,
 		false,
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
-	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder")
+	).WithSubAgentOverride(providers.ProviderAiand, "local/qwen3-coder")
 
 	ctx := authedCtx(uuid.New().String())
 	rec := httptest.NewRecorder()
@@ -853,16 +849,16 @@ func TestService_HardPin_SubAgentOverrideLeavesMainLoopUnaffected(t *testing.T) 
 // knob existed: sub-agent turns use the shared hard-pin pair per hardPinExplore.
 func TestService_HardPin_NoSubAgentOverrideUsesSharedHardPin(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil,
 		false,
 		nil,
 		store,
 		true, // hardPinExplore=true, no override configured
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
@@ -883,16 +879,16 @@ func TestService_HardPin_NoSubAgentOverrideUsesSharedHardPin(t *testing.T) {
 // field being empty is a no-op.
 func TestService_HardPin_PartialSubAgentOverrideFallsThroughToScorer(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil,
 		false,
 		nil,
 		store,
 		false, // hardPinExplore=false
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
 	).WithSubAgentOverride("", "nonempty-model") // provider empty: incomplete override
@@ -911,7 +907,7 @@ func TestService_HardPin_PartialSubAgentOverrideFallsThroughToScorer(t *testing.
 func TestService_HardPin_SubAgentOverrideYieldsToHMMStrategy(t *testing.T) {
 	store := newFakePinStore()
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "moonshotai/kimi-k3",
 		Reason:   "hmm_policy:tool_execution(label=explore)",
 		Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMM)},
@@ -919,18 +915,17 @@ func TestService_HardPin_SubAgentOverrideYieldsToHMMStrategy(t *testing.T) {
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderAnthropic:  &fakeProvider{},
-			providers.ProviderOpenRouter: &fakeProvider{},
+			providers.ProviderAiand: &fakeProvider{},
 		},
 		nil,
 		false,
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
-	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder").WithHMMRouter(fr)
+	).WithSubAgentOverride(providers.ProviderAiand, "local/qwen3-coder").WithHMMRouter(fr)
 
 	ctx := router.WithStrategy(authedCtx(uuid.New().String()), router.StrategyHMM)
 	rec := httptest.NewRecorder()
@@ -946,21 +941,21 @@ func TestService_HardPin_SubAgentOverrideYieldsToHMMStrategy(t *testing.T) {
 // than silently dispatch to a provider without credentials.
 func TestService_HardPin_SubAgentOverrideIneligibleProviderErrors(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster"}}
 	svc := proxy.NewService(
 		fr,
-		// Only Anthropic registered — the override names OpenRouter, which
+		// Only aiand is registered — the override names openrouter, which
 		// EnabledProviders (derived from registered providers) won't contain.
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil,
 		false,
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"deepseek-ai/deepseek-v4-flash",
 		nil,
-	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder")
+	).WithSubAgentOverride("openrouter", "local/qwen3-coder")
 
 	ctx := authedCtx(uuid.New().String())
 	rec := httptest.NewRecorder()
@@ -985,12 +980,11 @@ func newOpenAIPinSvc(fr *fakeRouter, store *fakePinStore) *proxy.Service {
 	return proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderAnthropic: &fakeProvider{},
-			providers.ProviderOpenAI:    &fakeProvider{},
+			providers.ProviderAiand: &fakeProvider{},
 		},
 		nil, false, nil,
 		store,
-		false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-flash",
+		false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		nil,
 	)
 }
@@ -1001,13 +995,13 @@ func TestService_SessionPin_OpenAI_PostgresHitKeepsPinnedModel(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:      providers.ProviderOpenAI,
+		Provider:      providers.ProviderAiand,
 		Model:         "gpt-5",
 		Reason:        "cluster:v0.2",
 		PinnedUntil:   time.Now().Add(30 * time.Minute),
 		FirstPinnedAt: time.Now().Add(-5 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "gpt-4o", Reason: "cluster:v0.2"}}
 	svc := newOpenAIPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1022,7 +1016,7 @@ func TestService_SessionPin_OpenAI_PostgresHitKeepsPinnedModel(t *testing.T) {
 
 func TestService_SessionPin_OpenAI_FreshRouteCreatesPin(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "gpt-4o", Reason: "fresh"}}
 	svc := newOpenAIPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1033,7 +1027,7 @@ func TestService_SessionPin_OpenAI_FreshRouteCreatesPin(t *testing.T) {
 	assert.Equal(t, 1, fr.routeCalls, "first turn must route fresh")
 	waitForUpsert(t, store)
 	require.Len(t, store.upserts, 1)
-	assert.Equal(t, providers.ProviderOpenAI, store.upserts[0].Provider)
+	assert.Equal(t, providers.ProviderAiand, store.upserts[0].Provider)
 	assert.Equal(t, "gpt-4o", store.upserts[0].Model)
 }
 
@@ -1047,7 +1041,7 @@ func TestService_SessionPin_OpenAI_ForceModelCommandSetsPin(t *testing.T) {
 		]
 	}`
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "gpt-4o", Reason: "cluster"}}
 	svc := newOpenAIPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1058,7 +1052,7 @@ func TestService_SessionPin_OpenAI_ForceModelCommandSetsPin(t *testing.T) {
 	assert.Equal(t, 0, fr.routeCalls, "force-model command must short-circuit routing")
 	require.Len(t, store.upserts, 1)
 	assert.Equal(t, "gpt-5", store.upserts[0].Model)
-	assert.Equal(t, providers.ProviderOpenAI, store.upserts[0].Provider)
+	assert.Equal(t, providers.ProviderAiand, store.upserts[0].Provider)
 	assert.Equal(t, translate.ReasonUserForceModel, store.upserts[0].Reason)
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
@@ -1083,7 +1077,7 @@ func TestService_SessionPin_OpenAI_UnforceModelCommandClearsPin(t *testing.T) {
 		]
 	}`
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "gpt-4o", Reason: "cluster"}}
 	svc := newOpenAIPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1119,7 +1113,7 @@ func TestService_SessionPin_OpenAI_ForceModelCommandStreamShape(t *testing.T) {
 		]
 	}`
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "gpt-4o", Reason: "cluster"}}
 	svc := newOpenAIPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1149,12 +1143,12 @@ func TestService_SessionPin_OpenAI_ToolResultShortCircuit(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderOpenAI,
+		Provider:    providers.ProviderAiand,
 		Model:       "gpt-5",
 		Reason:      "cluster:v0.2",
 		PinnedUntil: time.Now().Add(30 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "gpt-4o", Reason: "fresh"}}
 	svc := newOpenAIPinSvc(fr, store).WithScoreToolResultTurns(false)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1172,13 +1166,12 @@ func newOpenAIHardPinSvc(fr *fakeRouter, store *fakePinStore, hardPinExplore boo
 	return proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderAnthropic: &fakeProvider{},
-			providers.ProviderOpenAI:    &fakeProvider{},
+			providers.ProviderAiand: &fakeProvider{},
 		},
 		nil, false, nil,
 		store,
 		hardPinExplore,
-		providers.ProviderOpenAI,
+		providers.ProviderAiand,
 		"gpt-4o-mini",
 		nil,
 	)
@@ -1197,7 +1190,7 @@ func TestService_OpenAI_CompactionPhraseDoesNotHardPin(t *testing.T) {
 		]
 	}`
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "gpt-4o", Reason: "cluster"}}
 	svc := newOpenAIHardPinSvc(fr, store, false)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1211,7 +1204,7 @@ func TestService_OpenAI_CompactionPhraseDoesNotHardPin(t *testing.T) {
 
 func TestService_HardPin_OpenAI_SubAgentHeaderHintRoutesToHardPin(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "gpt-4o", Reason: "cluster"}}
 	svc := newOpenAIHardPinSvc(fr, store, true)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1228,18 +1221,18 @@ func TestService_HardPin_OpenAI_SubAgentHeaderHintRoutesToHardPin(t *testing.T) 
 // requested-model tier ceiling instead of being silently clamped down.
 func TestService_HardPin_BypassesTierCeiling(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.37"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.37"}}
 
 	// Hard-pin is opus; inbound model is haiku — hard pin wins regardless.
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil,
 		false,
 		nil,
 		store,
 		false,
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"moonshotai/kimi-k3",
 		nil,
 	)
@@ -1267,7 +1260,7 @@ const haikuClampBody = `{
 // previously this clamped down to the fastest in-ceiling model.
 func TestService_TierClamp_HaikuRequestedHonorsHighScore(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.37"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.37"}}
 
 	svc := newPinSvc(fr, store)
 
@@ -1283,7 +1276,7 @@ func TestService_TierClamp_HaikuRequestedHonorsHighScore(t *testing.T) {
 // opus-requested turn serves the scorer's High pick unchanged.
 func TestService_TierClamp_OpusRequestedDecisionPassesThrough(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.37"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.37"}}
 
 	svc := newPinSvc(fr, store)
 
@@ -1301,13 +1294,13 @@ func TestService_TierClamp_PinAboveRequestedTierHonored(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:      providers.ProviderAnthropic,
+		Provider:      providers.ProviderAiand,
 		Model:         "moonshotai/kimi-k3",
 		Reason:        "cluster:v0.37",
 		PinnedUntil:   time.Now().Add(30 * time.Minute),
 		FirstPinnedAt: time.Now().Add(-5 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.37"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.37"}}
 
 	svc := newPinSvc(fr, store)
 
@@ -1324,12 +1317,12 @@ func TestService_ForcedPin_ReasonStaysUserForced(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "moonshotai/kimi-k3",
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(30 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.37"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "cluster:v0.37"}}
 
 	svc := newPinSvc(fr, store)
 
@@ -1347,13 +1340,13 @@ func TestService_LoopEscalationPin_HonoredAsImmutableSticky(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "moonshotai/kimi-k3",
 		Reason:      translate.ReasonLoopEscalation,
 		PinnedUntil: time.Now().Add(30 * time.Minute),
 	}
 	// Scorer would pick a cheap model; the escalation pin must win.
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.65"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.65"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1393,12 +1386,12 @@ func TestService_LoopEscalation_DoesNotOverwriteUserForcedPin(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(30 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.65"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.65"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1418,13 +1411,13 @@ func TestService_UserForcedPin_IneligibleProviderFallsThrough(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderOpenAI, // forced provider NOT in EnabledProviders
+		Provider:    "openrouter", // forced provider NOT in EnabledProviders: only aiand is registered
 		Model:       "gpt-5",
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(30 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster"}}
-	// newPinSvc only registers Anthropic, so EnabledProviders == {anthropic}.
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster"}}
+	// newPinSvc only registers aiand, so EnabledProviders == {aiand}.
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1440,7 +1433,7 @@ func TestService_UserForcedPin_IneligibleProviderFallsThrough(t *testing.T) {
 // write an immutable user_forced pin for the alias-resolved canonical model.
 func TestService_ForceModelHeader_WritesUserForcedPin(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1470,7 +1463,7 @@ func TestService_ForceModelHeader_WritesUserForcedPin(t *testing.T) {
 // them like the force took.
 func TestService_ForceModelHeader_UnknownModelRejected(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "fresh"}}
 	svc := newPinSvc(fr, store)
 
 	ctx := authedCtx(uuid.New().String())
@@ -1499,16 +1492,17 @@ func TestService_SessionPin_ForcedPinDropped_SurfacesInMarker(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		// Only aiand is registered, so this forced provider cannot be served.
+		Provider:    "openrouter",
 		Model:       "claude-opus-5",
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(time.Hour),
 	}
 	// The scorer's fallback pick once the forced pin is dropped.
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderOpenAI, Model: "gpt-5.5", Reason: "cluster:v0.2",
+		Provider: providers.ProviderAiand, Model: "gpt-5.5", Reason: "cluster:v0.2",
 	}}
-	// Only OpenAI is wired, so the Anthropic-bound forced pin cannot be served.
+	// Only aiand is wired, so the openrouter-bound forced pin cannot be served.
 	openAI := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
@@ -1522,10 +1516,10 @@ func TestService_SessionPin_ForcedPinDropped_SurfacesInMarker(t *testing.T) {
 	}}
 	svc := proxy.NewService(
 		fr,
-		map[string]providers.Client{providers.ProviderOpenAI: openAI},
+		map[string]providers.Client{providers.ProviderAiand: openAI},
 		nil, false, nil,
 		store,
-		false, providers.ProviderOpenAI, "gpt-4o-mini",
+		false, providers.ProviderAiand, "gpt-4o-mini",
 		nil,
 	)
 

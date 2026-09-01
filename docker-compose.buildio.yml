@@ -1,5 +1,5 @@
 # Production Docker Compose for build.io deployment
-# All services containerized: Postgres + Pub/Sub + Router
+# All services containerized: Postgres + Router
 version: "3.8"
 
 services:
@@ -14,6 +14,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Init script runs once on first DB creation and applies the canonical
+      # schema (router.*-qualified DDL).
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U router -d router"]
@@ -28,40 +30,6 @@ services:
           - node.role == manager
     restart: unless-stopped
 
-  # Pub/Sub emulator for cross-replica cache invalidation
-  # In production, consider using GCP Pub/Sub add-on or Redis-based solution
-  pubsub-emulator:
-    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
-    entrypoint: ["/entrypoint.sh"]
-    ports:
-      - "8085:8085"
-    environment:
-      PUBSUB_PROJECT_ID: router-prod
-      PUBSUB_TOPIC_ROUTER_INVALIDATION: router-installation-invalidate
-    volumes:
-      - ./db/pubsub/entrypoint.sh:/entrypoint.sh:ro
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8085 >/dev/null || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-    restart: unless-stopped
-
-  # Migration runner - applies DB schema updates
-  migrate:
-    image: migrate/migrate:v4.17.1
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./db/migrations:/migrations
-    command:
-      - "-path=/migrations"
-      - "-database=postgres://router:${POSTGRES_PASSWORD:-router_production}@postgres:5432/router?sslmode=disable&search_path=router"
-      - "up"
-    restart: "no"
-    profiles:
-      - migrate
 
   # Router server - the main AI model router
   server:
@@ -74,14 +42,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-      pubsub-emulator:
-        condition: service_healthy
     environment:
       # Server
       PORT: "8080"
-      ROUTER_DEPLOYMENT_MODE: ${ROUTER_DEPLOYMENT_MODE:-selfhosted}
       ROUTER_CLUSTER_VERSION: ${ROUTER_CLUSTER_VERSION:-v0.76}
       ROUTER_CLUSTER_BUILD_ALL_VERSIONS: ${ROUTER_CLUSTER_BUILD_ALL_VERSIONS:-false}
       ROUTER_EMBED_ONLY_USER_MESSAGE: ${ROUTER_EMBED_ONLY_USER_MESSAGE:-false}
@@ -92,27 +55,18 @@ services:
       ROUTER_SEMANTIC_CACHE_ENABLED: ${ROUTER_SEMANTIC_CACHE_ENABLED:-true}
       ROUTER_SSE_KEEPALIVE_INTERVAL_SECONDS: ${ROUTER_SSE_KEEPALIVE_INTERVAL_SECONDS:-15}
       ROUTER_EXCLUDED_MODELS: ${ROUTER_EXCLUDED_MODELS:-}
-      ROUTER_EXCLUDED_PROVIDERS: ${ROUTER_EXCLUDED_PROVIDERS:-}
-      
-      # Provider keys (required for selfhosted mode)
+
+      # Provider keys
       AIAND_API_KEY: ${AIAND_API_KEY}
       AIAND_API_URL: ${AIAND_API_URL:-https://api.aiand.com/v1}
       
       # Database
       DATABASE_URL: postgres://router:${POSTGRES_PASSWORD:-router_production}@postgres:5432/router?sslmode=disable
-      
-      # Pub/Sub for cache invalidation
-      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
-      PUBSUB_PROJECT_ID: ${PUBSUB_PROJECT_ID:-router-prod}
-      PUBSUB_TOPIC_ROUTER_INVALIDATION: ${PUBSUB_TOPIC_ROUTER_INVALIDATION:-router-installation-invalidate}
-      PUBSUB_SUBSCRIPTION_ROUTER_INVALIDATION: ${PUBSUB_SUBSCRIPTION_ROUTER_INVALIDATION:-router-installation-invalidate}
+
       
       # OTel / Telemetry
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-router}
-      
-      # Admin
-      ROUTER_ADMIN_PASSWORD: ${ROUTER_ADMIN_PASSWORD}
       
       # BYOK encryption (required for production with customer keys)
       EXTERNAL_KEY_ENCRYPTION_KEY: ${EXTERNAL_KEY_ENCRYPTION_KEY}
@@ -131,7 +85,7 @@ services:
     ports:
       - "8080:8080"
     deploy:
-      replicas: ${SERVER_REPLICAS:-1}
+      replicas: 1
       placement:
         constraints:
           - node.role == worker

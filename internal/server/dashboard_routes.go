@@ -7,7 +7,6 @@ import (
 	"workweave/router/internal/analytics"
 	"workweave/router/internal/api/admin"
 	"workweave/router/internal/auth"
-	"workweave/router/internal/billing"
 	"workweave/router/internal/proxy"
 	"workweave/router/internal/router/policy"
 	"workweave/router/internal/server/middleware"
@@ -25,11 +24,10 @@ type Services struct {
 	Proxy            *proxy.Service
 	DeployedModels   admin.DeployedModelsSource
 	HMMModels        admin.HMMRosterSource
-	Billing          *billing.Service
 	ReadinessChecker admin.HealthChecker
 	HMMRosterSource  policy.RosterSource
 	Analytics        *analytics.Service
-	// AiandCatalogHandler, when non-nil, mounts GET /admin/v1/aiand/models.
+	// AiandCatalogHandler, when non-nil, mounts GET /v1/aiand/models.
 	// nil means no catalog route (self-hosted without AIAND_API_KEY).
 	// Self-serve always wires a handler that uses per-user BYOK keys.
 	AiandCatalogHandler gin.HandlerFunc
@@ -54,85 +52,72 @@ const (
 	needsAiandCatalog
 )
 
-// routeModes is a bitmask of deployment modes a row mounts in. Rows that
-// are not yet wired into selfserve are gated to modeSelfHosted only; adding
-// modeSelfServe to a row's modes is what extends it to the selfserve dashboard.
-type routeModes uint8
-
-const (
-	modeSelfHosted routeModes = 1 << iota
-	modeSelfServe
-)
-
 // dashboardRoute is one row in the shared dashboard data-plane table. Paths
-// are relative to the /admin/v1 prefix; the mounter prefixes them.
+// are relative to the /v1 prefix; the mounter prefixes them.
 type dashboardRoute struct {
 	method  string
 	path    string
 	section routeSection
 	needs   routeNeed
-	modes   routeModes
 	handler gin.HandlerFunc
 }
 
-// dashboardRoutes is the single source of truth for the /admin/v1/* data
+// dashboardRoutes is the single source of truth for the /v1/* dashboard data
 // plane in both selfhosted and selfserve. New dashboard endpoints are added as
 // a row here, not as a new route inside a mode block.
 func dashboardRoutes(s Services) []dashboardRoute {
 	return []dashboardRoute{
 		// Metrics — read-only; dashboard cookie OR rk_ bearer (selfhosted),
 		// account cookie (selfserve). Per-installation scoping inside handlers.
-		{method: "GET", path: "/metrics/summary", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.MetricsSummaryHandler(s.Proxy, s.Auth)},
-		{method: "GET", path: "/metrics/timeseries", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.MetricsTimeseriesHandler(s.Proxy, s.Auth)},
-		{method: "GET", path: "/metrics/details", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.MetricsDetailsHandler(s.Proxy, s.Auth)},
-		{method: "GET", path: "/metrics/model-breakdown", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.MetricsModelBreakdownHandler(s.Proxy, s.Auth)},
+		{method: "GET", path: "/metrics/summary", section: sectionMetrics, handler: admin.MetricsSummaryHandler(s.Proxy, s.Auth)},
+		{method: "GET", path: "/metrics/timeseries", section: sectionMetrics, handler: admin.MetricsTimeseriesHandler(s.Proxy, s.Auth)},
+		{method: "GET", path: "/metrics/details", section: sectionMetrics, handler: admin.MetricsDetailsHandler(s.Proxy, s.Auth)},
+		{method: "GET", path: "/metrics/model-breakdown", section: sectionMetrics, handler: admin.MetricsModelBreakdownHandler(s.Proxy, s.Auth)},
 
 		// Live ai& catalog for the Models section; display source-of-truth
 		// only (the routing catalog is untouched). Mounts when a handler is
 		// wired (deployment key and/or self-serve per-user BYOK).
-		{method: "GET", path: "/aiand/models", section: sectionMetrics, needs: needsAiandCatalog, modes: modeSelfHosted | modeSelfServe, handler: s.AiandCatalogHandler},
+		{method: "GET", path: "/aiand/models", section: sectionMetrics, needs: needsAiandCatalog, handler: s.AiandCatalogHandler},
 
 		// API keys — installation-scoped via resolveInstallation.
-		{method: "GET", path: "/keys", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.ListAPIKeysHandler(s.Auth)},
-		{method: "POST", path: "/keys", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.IssueAPIKeyHandler(s.Auth)},
-		{method: "POST", path: "/keys/:id/rotate", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.RotateAPIKeyHandler(s.Auth)},
-		{method: "DELETE", path: "/keys/:id", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.DeleteAPIKeyHandler(s.Auth)},
+		{method: "GET", path: "/keys", section: sectionMgmt, handler: admin.ListAPIKeysHandler(s.Auth)},
+		{method: "POST", path: "/keys", section: sectionMgmt, handler: admin.IssueAPIKeyHandler(s.Auth)},
+		{method: "POST", path: "/keys/:id/rotate", section: sectionMgmt, handler: admin.RotateAPIKeyHandler(s.Auth)},
+		{method: "DELETE", path: "/keys/:id", section: sectionMgmt, handler: admin.DeleteAPIKeyHandler(s.Auth)},
 
 		// Provider (BYOK) keys. List/upsert/delete plus aliases,
 		// :id/models, and discover-models mount in both dashboard modes;
 		// the aliases handler tolerates a nil DeployedModels (alias
 		// validation skips), and discovery/list never needed it.
-		{method: "GET", path: "/provider-keys", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.ListExternalKeysHandler(s.Auth)},
-		{method: "POST", path: "/provider-keys", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.UpsertExternalKeyHandler(s.Auth, s.DeployedModels)},
-		{method: "PUT", path: "/provider-keys/:id/model-aliases", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.UpdateExternalKeyAliasesHandler(s.Auth, s.DeployedModels)},
-		{method: "GET", path: "/provider-keys/:id/models", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.ListUpstreamModelsHandler(s.Auth, s.Proxy)},
-		{method: "POST", path: "/provider-keys/discover-models", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.DiscoverModelsHandler(s.Proxy)},
-		{method: "DELETE", path: "/provider-keys/:id", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.DeleteExternalKeyHandler(s.Auth)},
+		{method: "GET", path: "/provider-keys", section: sectionMgmt, handler: admin.ListExternalKeysHandler(s.Auth)},
+		{method: "POST", path: "/provider-keys", section: sectionMgmt, handler: admin.UpsertExternalKeyHandler(s.Auth, s.DeployedModels)},
+		{method: "PUT", path: "/provider-keys/:id/model-aliases", section: sectionMgmt, handler: admin.UpdateExternalKeyAliasesHandler(s.Auth, s.DeployedModels)},
+		{method: "GET", path: "/provider-keys/:id/models", section: sectionMgmt, handler: admin.ListUpstreamModelsHandler(s.Auth, s.Proxy)},
+		{method: "POST", path: "/provider-keys/discover-models", section: sectionMgmt, handler: admin.DiscoverModelsHandler(s.Proxy)},
+		{method: "DELETE", path: "/provider-keys/:id", section: sectionMgmt, handler: admin.DeleteExternalKeyHandler(s.Auth)},
 
 		// Config + onboarding + routing preferences.
-		{method: "GET", path: "/config", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.ConfigHandler},
-		{method: "GET", path: "/onboarding", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.OnboardingHandler(s.Auth)},
-		{method: "GET", path: "/routing-preferences", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.GetRoutingPreferencesHandler(s.Auth)},
-		{method: "PUT", path: "/routing-preferences", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.UpdateRoutingPreferencesHandler(s.Auth)},
+		{method: "GET", path: "/config", section: sectionMgmt, handler: admin.ConfigHandler},
+		{method: "GET", path: "/onboarding", section: sectionMgmt, handler: admin.OnboardingHandler(s.Auth)},
+		{method: "GET", path: "/routing-preferences", section: sectionMgmt, handler: admin.GetRoutingPreferencesHandler(s.Auth)},
+		{method: "PUT", path: "/routing-preferences", section: sectionMgmt, handler: admin.UpdateRoutingPreferencesHandler(s.Auth)},
 
 		// Content capture — installation-scoped; capture source is *proxy.Service.
-		{method: "GET", path: "/content-capture", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.GetContentCaptureHandler(s.Auth, s.Proxy)},
-		{method: "PUT", path: "/content-capture", section: sectionMgmt, modes: modeSelfHosted | modeSelfServe, handler: admin.UpdateContentCaptureHandler(s.Auth, s.Proxy)},
+		{method: "GET", path: "/content-capture", section: sectionMgmt, handler: admin.GetContentCaptureHandler(s.Auth, s.Proxy)},
+		{method: "PUT", path: "/content-capture", section: sectionMgmt, handler: admin.UpdateContentCaptureHandler(s.Auth, s.Proxy)},
 
-		// Excluded/allowed models + providers. The 6 rows need a non-nil
-		// DeployedModels (the handlers use it, or its 3-arg form); they mount
-		// only when one is wired. The override/routable source is *proxy.Service.
-		{method: "GET", path: "/excluded-models", section: sectionMgmt, needs: needsDeployedModels, modes: modeSelfHosted | modeSelfServe, handler: admin.GetExcludedModelsHandler(s.Auth, s.DeployedModels, s.Proxy)},
-		{method: "PUT", path: "/excluded-models", section: sectionMgmt, needs: needsDeployedModels, modes: modeSelfHosted | modeSelfServe, handler: admin.UpdateExcludedModelsHandler(s.Auth, s.DeployedModels, s.Proxy)},
-		{method: "GET", path: "/allowed-models", section: sectionMgmt, needs: needsDeployedModels, modes: modeSelfHosted | modeSelfServe, handler: admin.GetAllowedModelsHandler(s.Auth, s.DeployedModels)},
-		{method: "PUT", path: "/allowed-models", section: sectionMgmt, needs: needsDeployedModels, modes: modeSelfHosted | modeSelfServe, handler: admin.UpdateAllowedModelsHandler(s.Auth, s.DeployedModels, s.Proxy)},
-		{method: "GET", path: "/excluded-providers", section: sectionMgmt, needs: needsDeployedModels, modes: modeSelfHosted | modeSelfServe, handler: admin.GetExcludedProvidersHandler(s.Auth, s.DeployedModels, s.Proxy)},
-		{method: "PUT", path: "/excluded-providers", section: sectionMgmt, needs: needsDeployedModels, modes: modeSelfHosted | modeSelfServe, handler: admin.UpdateExcludedProvidersHandler(s.Auth, s.DeployedModels, s.Proxy)},
+		// Excluded/allowed models. The rows need a non-nil DeployedModels
+		// (the handlers use it, or its 3-arg form); they mount only when one
+		// is wired. The override/routable source is *proxy.Service.
+		{method: "GET", path: "/excluded-models", section: sectionMgmt, needs: needsDeployedModels, handler: admin.GetExcludedModelsHandler(s.Auth, s.DeployedModels, s.Proxy)},
+		{method: "PUT", path: "/excluded-models", section: sectionMgmt, needs: needsDeployedModels, handler: admin.UpdateExcludedModelsHandler(s.Auth, s.DeployedModels, s.Proxy)},
+		{method: "GET", path: "/allowed-models", section: sectionMgmt, needs: needsDeployedModels, handler: admin.GetAllowedModelsHandler(s.Auth, s.DeployedModels)},
+		{method: "PUT", path: "/allowed-models", section: sectionMgmt, needs: needsDeployedModels, handler: admin.UpdateAllowedModelsHandler(s.Auth, s.DeployedModels, s.Proxy)},
 
 		// Playground preview — returns a decision payload with requested/actual cost + id.
 		// cache_savings_usd is 0 for non-cached decisions. Mounts in both admin modes.
-		{method: "POST", path: "/playground/route", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.PlaygroundRouteHandler(s.Proxy, s.Auth)},
-		{method: "POST", path: "/playground/chat", section: sectionMetrics, modes: modeSelfHosted | modeSelfServe, handler: admin.PlaygroundChatHandler(s.Proxy, s.Auth)},
+		{method: "POST", path: "/playground/route", section: sectionMetrics, handler: admin.PlaygroundRouteHandler(s.Proxy, s.Auth)},
+		{method: "POST", path: "/playground/chat", section: sectionMetrics, handler: admin.PlaygroundChatHandler(s.Proxy, s.Auth)},
 	}
 }
 
@@ -154,60 +139,21 @@ func routeNeeds(s Services, needs routeNeed) bool {
 // too) and is passed in; selfhosted uses WithAdminOrAuth/WithAdminOnly,
 // selfserve uses WithAccountCookie. The login surfaces (operator password vs
 // account cookie) are genuinely different and stay in Register, not here.
-func mountDashboardRoutes(engine *gin.Engine, s Services, mode DeploymentMode, byokRequiresOptIn bool) {
-	var modeBit routeModes
-	switch mode {
-	case DeploymentModeSelfHosted:
-		modeBit = modeSelfHosted
-	case DeploymentModeSelfServe:
-		modeBit = modeSelfServe
-	default:
-		return
-	}
-
+func mountDashboardRoutes(engine *gin.Engine, s Services) {
 	// Shared shell: root redirect + static dashboard at /ui.
 	engine.GET("/", func(c *gin.Context) { c.Redirect(http.StatusFound, "/ui") })
 	registerUIStatic(engine, "./assets/ui")
 
-	routes := dashboardRoutes(s)
-
-	switch mode {
-	case DeploymentModeSelfHosted:
-		metrics := engine.Group("/admin/v1", middleware.WithTimeout(adminTimeout), middleware.WithAdminOrAuth(s.Auth, byokRequiresOptIn))
-		playgroundChat := engine.Group("/admin/v1", middleware.WithTimeout(playgroundChatTimeout), middleware.WithAdminOrAuth(s.Auth, byokRequiresOptIn))
-		mgmt := engine.Group("/admin/v1", middleware.WithTimeout(adminTimeout), middleware.WithAdminOnly(s.Auth))
-		for _, r := range routes {
-			if r.modes&modeBit == 0 {
-				continue
-			}
-			if !routeNeeds(s, r.needs) {
-				continue
-			}
-			if r.path == "/playground/chat" {
-				playgroundChat.Handle(r.method, r.path, r.handler)
-				continue
-			}
-			if r.section == sectionMetrics {
-				metrics.Handle(r.method, r.path, r.handler)
-			} else {
-				mgmt.Handle(r.method, r.path, r.handler)
-			}
+	accountAuthed := engine.Group("/v1", middleware.WithTimeout(adminTimeout), middleware.WithAccountCookie(s.Auth))
+	playgroundChat := engine.Group("/v1", middleware.WithTimeout(playgroundChatTimeout), middleware.WithAccountCookie(s.Auth))
+	for _, r := range dashboardRoutes(s) {
+		if !routeNeeds(s, r.needs) {
+			continue
 		}
-	case DeploymentModeSelfServe:
-		accountAuthed := engine.Group("/admin/v1", middleware.WithTimeout(adminTimeout), middleware.WithAccountCookie(s.Auth))
-		playgroundChat := engine.Group("/admin/v1", middleware.WithTimeout(playgroundChatTimeout), middleware.WithAccountCookie(s.Auth))
-		for _, r := range routes {
-			if r.modes&modeBit == 0 {
-				continue
-			}
-			if !routeNeeds(s, r.needs) {
-				continue
-			}
-			if r.path == "/playground/chat" {
-				playgroundChat.Handle(r.method, r.path, r.handler)
-				continue
-			}
-			accountAuthed.Handle(r.method, r.path, r.handler)
+		if r.path == "/playground/chat" {
+			playgroundChat.Handle(r.method, r.path, r.handler)
+			continue
 		}
+		accountAuthed.Handle(r.method, r.path, r.handler)
 	}
 }

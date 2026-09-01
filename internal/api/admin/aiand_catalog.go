@@ -118,7 +118,7 @@ func resolveAiandCatalogCredential(ctx context.Context, c *gin.Context, deployme
 	return "", "", false
 }
 
-// AiandCatalogHandler builds the authenticated GET /admin/v1/aiand/models
+// AiandCatalogHandler builds the authenticated GET /v1/aiand/models
 // handler. deploymentKey is the optional boot-time AIAND_API_KEY fallback for
 // self-hosted installs; self-serve callers authenticate with their own aiand
 // BYOK key from the account session. baseURL is the full upstream base

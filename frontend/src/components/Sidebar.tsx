@@ -59,11 +59,7 @@ export function Sidebar() {
 
   async function handleSignOut() {
     try {
-      if (surface === "account") {
-        await api.auth.accountLogout();
-      } else {
-        await api.auth.logout();
-      }
+      await api.auth.accountLogout();
     } catch {
       // Best-effort: even if the network call fails, redirect to /login so
       // the user is no longer in a half-authed state.

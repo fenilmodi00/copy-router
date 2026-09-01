@@ -648,26 +648,14 @@ TOML
   chmod 600 "$config_file"
 }
 
-# write_opencode_config merges the managed Weave provider(s) into opencode's
-# opencode.json plus the bundled subscription plugin:
-#   - provider.weave        : OpenAI/Responses-shaped (@ai-sdk/openai → /v1/responses).
-#                             The single request provider. The router routes every
-#                             turn across all models the caller's subscriptions +
-#                             Weave key can pay for, and bills the plan matching the
-#                             model it served. The default.
-#   - provider.weave-claude : login-only storage for a Claude (Pro/Max) subscription
-#                             (no models, never serves requests). Written only when
-#                             the bundled plugin is present, since the Claude login
-#                             method lives in the plugin. The `weave` loader reads
-#                             this slot and attaches the Claude sub.
-# The plugin (src bundled at $script_dir/opencode-weave/src/index.ts) is dropped
-# into $opencode_dir/.weave/ and registered via opencode.json's `plugin` array
-# by absolute path — scope-independent (no reliance on an auto-load dir). It owns
-# both the ChatGPT (on `weave`) and Claude (on `weave-claude`) logins and attaches
-# whichever subscriptions are connected to every request via the router's
-# dedicated X-Weave-*-Subscription headers. Re-running rewrites the blocks
-# in-place via jq (and strips the legacy `weave-codex` provider); uninstall
-# strips them.
+# write_opencode_config merges the managed Weave provider into opencode's
+# opencode.json:
+#   - provider.weave : OpenAI/Responses-shaped (@ai-sdk/openai → /v1/responses).
+#                      The single request provider. The router routes every
+#                      turn across all models the caller's Weave key can pay
+#                      for. The default.
+# Re-running rewrites the block in-place via jq (and strips the legacy
+# `weave-codex` and `weave-claude` providers); uninstall strips them.
 #
 # Usage: write_opencode_config <config_file_path> <base_url> <api_key> [user_email] [user_name]
 write_opencode_config() {
@@ -694,17 +682,14 @@ write_opencode_config() {
 
   # Surface one Auto choice in opencode's picker. The router chooses the
   # upstream model for every request, so presenting pinned model names would
-  # imply a choice that the router intentionally does not honor. Whichever
-  # model serves a turn uses its matching subscription when one is connected.
+  # imply a choice that the router intentionally does not honor.
   #
   # npm is @ai-sdk/openai and baseURL KEEPS its /v1 here: opencode's
   # @ai-sdk/openai provider appends /responses, yielding the router's
   # /v1/responses surface (the canonical inbound — the router translates to
-  # Anthropic/OSS as it routes, and ships verbatim to the Codex backend for GPT
-  # turns). apiKey is the router key as a parse-time placeholder; the router
-  # authenticates off X-Weave-Router-Key (planted in headers) and the plugin's
-  # loader attaches subscriptions via the dedicated X-Weave-*-Subscription
-  # headers, so the apiKey value is never used upstream.
+  # Anthropic/OSS as it routes). apiKey is the router key as a parse-time
+  # placeholder; the router authenticates off X-Weave-Router-Key (planted in
+  # headers), so the apiKey value is never used upstream.
   local block
   block="$(jq -n \
     --arg url "$block_url/v1" \
@@ -720,81 +705,25 @@ write_opencode_config() {
     }
   ')"
 
-  # Login-only storage provider for a Claude (Pro/Max) subscription. It serves
-  # no requests (no models), so its npm/baseURL are inert — opencode just needs
-  # it registered so the plugin's Claude login method has a home and `opencode
-  # auth login` lists it. The `weave` loader reads this slot off disk and
-  # attaches the Claude sub. Reuses the same router key + identity headers.
-  local claude_block
-  claude_block="$(jq -n \
-    --arg url "$block_url/v1" \
-    --arg key "$block_key" \
-    --argjson headers "$headers_json" '
-    {
-      npm: "@ai-sdk/openai",
-      name: "Weave Router — Claude plan",
-      options: { apiKey: $key, baseURL: $url, headers: $headers },
-      models: {}
-    }
-  ')"
-
-  # Drop the Codex-subscription plugin next to the config and capture the
-  # absolute path we'll register in opencode.json's `plugin` array (so it loads
-  # regardless of scope). $config_file's dir is the already-created
-  # opencode_dir, so the `cd … && pwd` canonicalization is safe — uninstall.sh
-  # must canonicalize identically so the array entry matches on removal.
-  #
-  # Only register the path when the bundled source is actually present and
-  # copied: registering a path with no file on disk makes opencode fail to load
-  # a missing plugin. The plugin holds no secrets (router key lives in the
-  # config; ChatGPT tokens live in opencode's own auth store), so 644 is fine.
-  # Source is bundled alongside install.sh by the npm prepack
-  # (scripts/copy-installer.js), same as commands/ + pi-router/.
-  local plugin_dir plugin_spec plugin_src plugin_arg=""
-  plugin_dir="$(cd "$(dirname "$config_file")" && pwd)/.weave"
-  plugin_spec="$plugin_dir/opencode-weave.ts"
-  plugin_src="$script_dir/opencode-weave/src/index.ts"
-  if [ -f "$plugin_src" ]; then
-    mkdir -p "$plugin_dir"
-    cp "$plugin_src" "$plugin_spec"
-    chmod 644 "$plugin_spec"
-    plugin_arg="$plugin_spec"
-  else
-    warn "opencode subscription plugin source not found at $plugin_src — skipping the Claude login + subscription routing. (Use a packaged 'npx @workweave/router' install.)"
-  fi
-
   # Merge into any existing opencode.json. We always overwrite provider.weave
   # so re-install reflects the latest key/identity, but we leave the rest of the
   # file (other providers, mcp, agent settings) untouched. A previously
   # installed `weave/*` model is migrated to `weave/auto`; unrelated provider
-  # choices stay untouched.
-  #
-  # The weave-claude login provider AND the plugin entry are written together
-  # only when the bundled plugin was present and copied ($plugin non-empty): the
-  # Claude login method lives in the plugin, so registering the provider without
-  # it (e.g. the `curl | sh` path, which carries no plugin source) would leave a
-  # non-working login — instead we omit it (and strip any stale one). The legacy
-  # `weave-codex` provider is always stripped: the single Responses `weave`
-  # provider supersedes it.
+  # choices stay untouched. The legacy `weave-codex` and `weave-claude`
+  # providers are always stripped: the single Responses `weave` provider
+  # supersedes them, and a stale `plugin` entry from a prior install is
+  # removed with them.
   local merged
   if [ -f "$config_file" ]; then
     merged="$(jq \
-      --argjson block "$block" \
-      --argjson claude "$claude_block" \
-      --arg plugin "$plugin_arg" \
-      --arg pluginspec "$plugin_spec" '
+      --argjson block "$block" '
       .provider = ((.provider // {}) | .weave = $block)
       | (.provider |= del(."weave-codex"))
-      | (if $plugin != "" then .provider["weave-claude"] = $claude else .provider |= del(."weave-claude") end)
-      # Register the managed plugin path when we installed it; otherwise strip a
-      # stale entry left by a prior install (the provider was just removed, so a
-      # lingering plugin reference would be dead weight).
-      | (if $plugin != ""
-           then .plugin = ((.plugin // []) | if index($plugin) then . else . + [$plugin] end)
-           else (if (.plugin | type) == "array"
-                   then (.plugin -= [$pluginspec]) | (if (.plugin | length) == 0 then del(.plugin) else . end)
-                   else . end)
-         end)
+      | (.provider |= del(."weave-claude"))
+      | (if (.plugin | type) == "array"
+          then (.plugin |= map(select(startswith("opencode-weave") | not)))
+             | (if (.plugin | length) == 0 then del(.plugin) else . end)
+          else del(.plugin) end)
       | (if (.model // "") == "" then .model = "weave/auto" else . end)
       # Replace any legacy Weave model choice with the single auto-routing
       # choice. Models from unrelated providers remain unchanged.
@@ -805,15 +734,12 @@ write_opencode_config() {
     ' "$config_file")"
   else
     merged="$(jq -n \
-      --argjson block "$block" \
-      --argjson claude "$claude_block" \
-      --arg plugin "$plugin_arg" '
+      --argjson block "$block" '
       {
         "$schema": "https://opencode.ai/config.json",
         model: "weave/auto",
         provider: { weave: $block }
       }
-      | (if $plugin != "" then .provider["weave-claude"] = $claude | .plugin = [$plugin] else . end)
     ')"
   fi
   printf '%s\n' "$merged" >"$config_file"
@@ -2133,12 +2059,12 @@ toggle_opencode() {
 # ---------- model selection ----------
 #
 # `models` reads and edits the installation's model/provider selection through
-# the router's /admin/v1 API — the same lists the router dashboard's settings
+# the router's /v1 API — the same lists the router dashboard's settings
 # page renders, backed by the same columns. Nothing local is written: the
 # endpoint and router key are read out of the install already on disk so a
 # self-hosted install talks to its own router with its own key.
 #
-# The Weave-hosted router runs in `managed` mode and mounts no /admin/v1 at
+# The Weave-hosted router runs in `managed` mode and mounts no /v1 at
 # all — there model selection belongs to the organization and is edited in the
 # Weave dashboard. That surfaces as a 404, which reads (for a list) as "fall
 # back to the public catalog and say where to edit" and (for an edit) as a
@@ -2206,7 +2132,7 @@ models_fail() {
       err "This router does not expose the model-selection API, so $what is not available here."
       printf "  %sWeave-hosted routers keep model selection with the organization — edit it at %s%s\n" \
         "$C_DIM" "$MODELS_DASHBOARD_URL" "$C_RESET" >&2
-      printf "  %sSelf-hosted? Update the router to a build that serves /admin/v1/models.%s\n" \
+      printf "  %sSelf-hosted? Update the router to a build that serves /v1/models.%s\n" \
         "$C_DIM" "$C_RESET" >&2
       ;;
     *)
@@ -2254,7 +2180,7 @@ models_render_providers() {
 # models_print_preferred appends the priority ranking when one is set. Absent
 # is the norm (the router picks per turn), so silence is the right output.
 models_print_preferred() {
-  models_api GET "/admin/v1/preferred-models" || return 0
+  models_api GET "/v1/preferred-models" || return 0
   local list
   list="$(printf '%s' "$models_http_body" | jq -r '(.preferred // []) | join(" > ")' 2>/dev/null || true)"
   [ -n "$list" ] || return 0
@@ -2299,7 +2225,7 @@ models_list_catalog() {
 }
 
 models_list() {
-  if ! models_api GET "/admin/v1/models"; then
+  if ! models_api GET "/v1/models"; then
     # Only a missing API is worth degrading for; anything else is a real error.
     [ "$models_http_status" = "404" ] || models_fail "listing models"
     models_list_catalog models
@@ -2316,7 +2242,7 @@ models_list() {
 }
 
 models_providers_list() {
-  if ! models_api GET "/admin/v1/providers"; then
+  if ! models_api GET "/v1/providers"; then
     # Same 404 degrade as models_list: a router with no model-selection API
     # still answers the unauthed catalog, and this is a read-only listing
     # command same as `models list` — no reason to hard-fail one and not
@@ -2339,8 +2265,8 @@ models_toggle() {
   local kind="$1" action="$2" ids="$3"
   local path body id label doing
   case "$kind" in
-    model)    path="/admin/v1/excluded-models"    ; label="model"    ;;
-    provider) path="/admin/v1/excluded-providers" ; label="provider" ;;
+    model)    path="/v1/excluded-models"    ; label="model"    ;;
+    provider) path="/v1/excluded-providers" ; label="provider" ;;
   esac
   # Enabling means dropping the id from the exclusion list, disabling means
   # adding it — the API's remove/add endpoints, inverted here so the CLI reads
@@ -2382,7 +2308,7 @@ models_prefer() {
   else
     body="$(printf '%s' "$ids" | jq -c -R -s '{preferred: (split("\n") | map(select(length > 0)))}')"
   fi
-  models_api PUT "/admin/v1/preferred-models" "$body" || models_fail "setting the preferred-model ranking"
+  models_api PUT "/v1/preferred-models" "$body" || models_fail "setting the preferred-model ranking"
   if [ "$models_json" = "true" ]; then
     printf '%s\n' "$models_http_body"
     return 0

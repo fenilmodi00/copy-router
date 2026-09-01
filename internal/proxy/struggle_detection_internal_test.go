@@ -285,7 +285,7 @@ func TestRunTurnLoop_PinTurnCountsCurrentTurnInclusively(t *testing.T) {
 	store := newStubPinStore()
 	store.getFound = true
 	store.getPin = sessionpin.Pin{
-		Provider:        providers.ProviderAnthropic,
+		Provider:        providers.ProviderAiand,
 		Model:           "deepseek-ai/deepseek-v4-pro",
 		Reason:          "fake",
 		PinnedUntil:     time.Now().Add(time.Hour),

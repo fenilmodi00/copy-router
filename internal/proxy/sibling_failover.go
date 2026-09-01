@@ -21,7 +21,11 @@ func (s *Service) siblingFailoverDecision(ctx context.Context, failed router.Dec
 	if md == nil || s.deploymentKeyedProviders == nil {
 		return router.Decision{}, false
 	}
-	available := s.keyedProvidersExcluding(s.excludedProvidersForRequest(ctx))
+	excluded := make(map[string]struct{})
+	for _, p := range sessionDisabledProvidersFromContext(ctx) {
+		excluded[p] = struct{}{}
+	}
+	available := s.keyedProvidersExcluding(excluded)
 	excludedModels := s.excludedModelsForRequest(ctx)
 
 	var sameProvider []router.Decision

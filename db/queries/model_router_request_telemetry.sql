@@ -101,7 +101,6 @@ INSERT INTO router.model_router_request_telemetry (
     credential_key_prefix,
     credential_key_suffix,
     credential_source,
-    unified_limit_headers,
     planner_outcome,
     planner_reason,
     planner_pin_model,
@@ -192,7 +191,6 @@ INSERT INTO router.model_router_request_telemetry (
     sqlc.narg('credential_key_prefix')::varchar,
     sqlc.narg('credential_key_suffix')::varchar,
     sqlc.narg('credential_source')::varchar,
-    sqlc.narg('unified_limit_headers')::jsonb,
     sqlc.narg('planner_outcome')::varchar,
     sqlc.narg('planner_reason')::varchar,
     sqlc.narg('planner_pin_model')::varchar,
@@ -671,12 +669,6 @@ SELECT
     t.output_tokens,
     t.cache_creation_tokens,
     t.cache_read_tokens,
-    -- The turn ran on the caller's own Claude/Codex subscription, so its
-    -- quota already paid for it and the export reports $0 against the real
-    -- token counts. credential_source itself stays internal.
-    -- COALESCE because credential_source is NULL on deployment-key turns, and
-    -- NULL IN (...) is NULL, which cannot scan into the generated bool.
-    COALESCE(t.credential_source IN ('subscription', 'codex_subscription'), false)::boolean AS subscription_served,
     t.actual_input_cost_usd,
     t.actual_output_cost_usd,
     t.route_latency_ms,

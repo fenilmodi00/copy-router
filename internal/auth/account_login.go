@@ -104,8 +104,7 @@ func (s *Service) ClearLoginFailures(remoteIP string) {
 // account AND its router installation, mints a session token, and returns
 // (account, installation, raw token, expiry, nil). When the same aiand user logs
 // in with a NEW key, the existing account + installation are returned (data
-// retention across rotation lives entirely on aiand's side — see the migration's
-// data-retention comment).
+// retention across rotation lives entirely on aiand's side).
 func (s *Service) LoginWithKey(ctx context.Context, rawKey string) (*Account, *Installation, string, time.Time, error) {
 	if !s.LoginEnabled() {
 		return nil, nil, "", time.Time{}, ErrLoginDisabled

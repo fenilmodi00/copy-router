@@ -5,12 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"workweave/router/internal/flags"
 	"workweave/router/internal/observability"
-	"workweave/router/internal/providers"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 )
@@ -34,9 +32,9 @@ var ErrInvalidModelAlias = errors.New("auth: invalid model alias")
 // unnamed, reserved, or in an unknown format.
 var ErrInvalidIdentityHeader = errors.New("auth: invalid identity header")
 
-// ErrInvalidKeypairAuth is returned for a key-pair credential whose auth type,
-// principal, or private key is unusable.
-var ErrInvalidKeypairAuth = errors.New("auth: invalid keypair auth")
+// ErrInvalidAuthType is returned for a BYOK auth type the router no longer
+// supports (bearer is the only stored credential type).
+var ErrInvalidAuthType = errors.New("auth: invalid auth type")
 
 type Clock func() time.Time
 
@@ -66,24 +64,12 @@ type Service struct {
 	notifier              InstallationChangeNotifier
 	now                   Clock
 	encryptor             Encryptor
-	keypairTokens         *KeypairTokenCache
-	// wifTokens is nil unless the deployment runs with a workload identity;
-	// WIF keys are then dropped rather than sent without a credential.
-	wifTokens WIFTokenSource
 
 	// flagOverridesDisabled is the deployment-wide escape hatch
 	// (ROUTER_FLAG_OVERRIDES_DISABLED). When set, per-organization flag
 	// overrides are not applied to any request, so an incident rollback via env
 	// var cannot be defeated by a stored per-org row.
 	flagOverridesDisabled bool
-
-	// adminPassword and adminSessionKey are empty when admin login is disabled.
-	adminPassword   string
-	adminSessionKey []byte
-
-	// adminLoginFailures throttles per-IP brute-force login attempts.
-	adminLoginFailures *expirable.LRU[string, int]
-	adminLoginMu       sync.Mutex
 
 	// accounts + loginSessions back the self-service aiand-key login; nil
 	// (default) means login is disabled. keyVerifier is the I/O boundary for
@@ -119,18 +105,11 @@ func NewService(
 		notifier:         NoOpInstallationChangeNotifier{},
 		now:              now,
 		encryptor:        NoOpEncryptor{},
-		keypairTokens:    NewKeypairTokenCache(now),
 	}
 }
 
 func (s *Service) WithEncryptor(e Encryptor) *Service {
 	s.encryptor = e
-	return s
-}
-
-// WithWIFTokenSource wires the attestation source backing AuthTypeWIF keys.
-func (s *Service) WithWIFTokenSource(src WIFTokenSource) *Service {
-	s.wifTokens = src
 	return s
 }
 
@@ -290,7 +269,28 @@ func (s *Service) ResolvedExternalAPIKeysForInstallation(ctx context.Context, in
 		observability.FromContext(ctx).Warn("Failed to fetch external API keys", "installation_id", installationID, "err", err)
 		return nil
 	}
-	return s.resolveUpstreamSecrets(ctx, keys)
+	return keys
+}
+
+// ExternalAPIKeyWithCredential returns one stored BYOK key with its decrypted
+// secret, for pre-flight probes such as upstream model listing.
+func (s *Service) ExternalAPIKeyWithCredential(ctx context.Context, installationID, id string) (*ExternalAPIKey, error) {
+	if s.externalKeys == nil || installationID == "" || id == "" {
+		return nil, ErrExternalAPIKeyNotFound
+	}
+	keys, err := s.externalKeys.GetForInstallation(ctx, installationID)
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range keys {
+		if k.ID == id {
+			if len(k.Plaintext) == 0 {
+				return nil, ErrUpstreamCredentialUnavailable
+			}
+			return k, nil
+		}
+	}
+	return nil, ErrExternalAPIKeyNotFound
 }
 
 // UpsertExternalAPIKeyParams carries one BYOK key's stored configuration plus
@@ -310,7 +310,6 @@ type UpsertExternalAPIKeyParams struct {
 	IdentityHeader       *string
 	IdentityHeaderFormat *string
 	// AuthType selects how RawKey authenticates upstream; empty means AuthTypeBearer.
-	// AuthTypeKeypairJWT makes RawKey an RSA private key issued for AuthAccount/AuthUser.
 	AuthType    string
 	AuthAccount *string
 	AuthUser    *string
@@ -335,30 +334,6 @@ func (s *Service) UpsertExternalAPIKey(ctx context.Context, installationID strin
 	authType, authAccount, authUser, err := NormalizeAuthType(params.AuthType, params.AuthAccount, params.AuthUser)
 	if err != nil {
 		return nil, err
-	}
-	if authType == AuthTypeWIF {
-		if !providers.RequiresBaseURL(provider) {
-			return nil, fmt.Errorf("%w: %s does not accept workload identity credentials", ErrInvalidKeypairAuth, provider)
-		}
-		// The attestation is minted per request from the router's own identity, so a
-		// pasted secret here would be stored and never used.
-		if rawKey != "" {
-			return nil, fmt.Errorf("%w: %s takes no key material", ErrInvalidKeypairAuth, AuthTypeWIF)
-		}
-	}
-	if authType == AuthTypeKeypairJWT {
-		if !providers.RequiresBaseURL(provider) {
-			return nil, fmt.Errorf("%w: %s does not accept key-pair credentials", ErrInvalidKeypairAuth, provider)
-		}
-		// Reject an unusable private key here rather than at the first upstream
-		// call, where the only symptom is a 401 nobody can trace to the paste.
-		if _, err := ParseKeypairPrivateKey([]byte(rawKey)); err != nil {
-			return nil, err
-		}
-	}
-	// Checked after normalization: a slash-only value normalizes away to nil.
-	if normalizedBaseURL == nil && providers.RequiresBaseURL(provider) {
-		return nil, fmt.Errorf("%w: %s", ErrBaseURLRequired, provider)
 	}
 	// Generate external ID first so it binds into the ciphertext as AAD.
 	externalID := GenerateID("ekid")
@@ -481,54 +456,12 @@ func (s *Service) SetInstallationAllowedModels(ctx context.Context, externalID, 
 	return out, nil
 }
 
-// SetInstallationExcludedProviders replaces the per-installation provider exclusion list.
-// allowed is the set of valid provider names; passing nil skips validation.
-func (s *Service) SetInstallationExcludedProviders(ctx context.Context, externalID, installationID string, providerNames []string, allowed map[string]struct{}) ([]string, error) {
-	if providerNames == nil {
-		providerNames = []string{}
-	}
-	if allowed != nil {
-		for _, p := range providerNames {
-			if _, ok := allowed[p]; !ok {
-				return nil, fmt.Errorf("%w: %q", ErrUnknownProvider, p)
-			}
-		}
-	}
-	// De-dupe while preserving order so the persisted list is stable.
-	seen := make(map[string]struct{}, len(providerNames))
-	out := make([]string, 0, len(providerNames))
-	for _, p := range providerNames {
-		if _, dup := seen[p]; dup {
-			continue
-		}
-		seen[p] = struct{}{}
-		out = append(out, p)
-	}
-	if err := s.installations.UpdateExcludedProviders(ctx, externalID, installationID, out); err != nil {
-		return nil, err
-	}
-	s.invalidateInstallation(installationID)
-	return out, nil
-}
-
 // SetInstallationRoutingPreference persists the routing quality weight (a
 // normalized fraction in [0, 1]). Passing nil clears it so the scorer reverts
 // to its tuned per-cluster defaults. Invalidates the cache so the change
 // applies on the next request instead of waiting out the TTL.
 func (s *Service) SetInstallationRoutingPreference(ctx context.Context, externalID, installationID string, qualityWeight *float64) error {
 	if err := s.installations.UpdateRoutingPreference(ctx, externalID, installationID, qualityWeight); err != nil {
-		return err
-	}
-	s.invalidateInstallation(installationID)
-	return nil
-}
-
-// SetInstallationSubscriptionRoutingDisabled toggles subscription-aware
-// routing. When true, the scorer's subscription subsidy bonus is suppressed
-// so non-Claude models compete fairly. Invalidates the cache so the change
-// applies on the next request instead of waiting out the TTL.
-func (s *Service) SetInstallationSubscriptionRoutingDisabled(ctx context.Context, externalID, installationID string, disabled bool) error {
-	if err := s.installations.UpdateSubscriptionRoutingDisabled(ctx, externalID, installationID, disabled); err != nil {
 		return err
 	}
 	s.invalidateInstallation(installationID)
@@ -616,7 +549,7 @@ func (s *Service) VerifyAPIKey(ctx context.Context, rawToken string) (*Installat
 			}
 			s.fireMarkUsed(cached.APIKey.ID)
 			s.fireMarkFirstRequestServed(cached.APIKey.InstallationID)
-			return cached.Installation, cached.APIKey, s.resolveUpstreamSecrets(ctx, cached.ExternalKeys), cached.ClusterModelLists, nil
+			return cached.Installation, cached.APIKey, cached.ExternalKeys, cached.ClusterModelLists, nil
 		}
 		// Malformed positive entry (nil APIKey): fall through to DB lookup.
 	}
@@ -664,7 +597,7 @@ func (s *Service) VerifyAPIKey(ctx context.Context, rawToken string) (*Installat
 	}
 	s.fireMarkUsed(apiKey.ID)
 	s.fireMarkFirstRequestServed(apiKey.InstallationID)
-	return installation, apiKey, s.resolveUpstreamSecrets(ctx, externalKeys), clusterModelLists, nil
+	return installation, apiKey, externalKeys, clusterModelLists, nil
 }
 
 // ResolveAndStashUser upserts a router user and stashes the ID on ctx. Email

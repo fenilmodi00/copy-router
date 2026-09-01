@@ -347,7 +347,7 @@ func TestApplyPlannerAttrs_EmitsDetailsWhenEvaluated(t *testing.T) {
 		Decision:     router.Decision{Model: "deepseek-ai/deepseek-v4-flash"},
 		Fresh:        router.Decision{Model: "moonshotai/kimi-k3"},
 		PinModel:     "deepseek-ai/deepseek-v4-flash",
-		PinProvider:  providers.ProviderAnthropic,
+		PinProvider:  providers.ProviderAiand,
 		PrefixBroken: true,
 		PlannerDecision: planner.Decision{
 			Outcome:             planner.OutcomeStay,
@@ -369,7 +369,7 @@ func TestApplyPlannerAttrs_EmitsDetailsWhenEvaluated(t *testing.T) {
 	assert.Equal(t, "stay", attrs["planner.outcome"].GetStringValue())
 	assert.Equal(t, planner.ReasonEVNegative, attrs["planner.reason"].GetStringValue())
 	assert.True(t, attrs["planner.pin_cache_warm"].GetBoolValue())
-	assert.Equal(t, providers.ProviderAnthropic, attrs["cache.pin_provider"].GetStringValue())
+	assert.Equal(t, providers.ProviderAiand, attrs["cache.pin_provider"].GetStringValue())
 	assert.False(t, attrs["cache.prefix_stable"].GetBoolValue())
 	assert.InDelta(t, 0.003, attrs["planner.eviction_cost_usd"].GetDoubleValue(), 1e-12)
 	assert.Equal(t, "switch", attrs["planner.shadow_outcome"].GetStringValue())

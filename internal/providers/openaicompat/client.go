@@ -67,13 +67,6 @@ func NewClientWithModelIDMap(apiKey, baseURL string, modelIDMap map[string]strin
 	return newClient(apiKey, baseURL, modelIDMap)
 }
 
-// NewGatewayClient builds a client for a customer-supplied OpenAI-spec endpoint.
-// Unlike NewClient, no default base URL is applied: an unconfigured gateway must
-// fail rather than silently dispatch the tenant's token to DefaultBaseURL.
-func NewGatewayClient(apiKey, baseURL string) *Client {
-	return newClient(apiKey, baseURL, nil)
-}
-
 func newClient(apiKey, baseURL string, modelIDMap map[string]string) *Client {
 	return &Client{
 		apiKey:     apiKey,
@@ -189,7 +182,6 @@ func (c *Client) Proxy(ctx context.Context, decision router.Decision, prep provi
 		upstream.Header[http.CanonicalHeaderKey(k)] = vs
 	}
 	c.setAuth(ctx, upstream)
-	proxy.ApplyWIFTokenType(ctx, upstream)
 	proxy.ApplyIdentityHeader(ctx, upstream)
 	if v := r.Header.Get("Accept"); v != "" {
 		upstream.Header.Set("Accept", v)
@@ -308,7 +300,6 @@ func (c *Client) Passthrough(ctx context.Context, prep providers.PreparedRequest
 		upstream.Header[http.CanonicalHeaderKey(k)] = vs
 	}
 	c.setAuth(ctx, upstream)
-	proxy.ApplyWIFTokenType(ctx, upstream)
 	if v := r.Header.Get("Accept"); v != "" {
 		upstream.Header.Set("Accept", v)
 	}

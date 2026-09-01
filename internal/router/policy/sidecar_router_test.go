@@ -129,35 +129,26 @@ func TestSidecarRouterOnboardsFutureStrategyWithoutProxyChanges(t *testing.T) {
 func TestSidecarRouterDispatchesSidecarSelectedArm(t *testing.T) {
 	resolver := policy.NewArmResolver(
 		set("deepseek-ai/deepseek-v4-flash"),
-		set(providers.ProviderAiand, providers.ProviderOpenAIGateway),
+		set(providers.ProviderAiand),
 		func(model catalog.Model) string { return model.ID },
 		policy.ManagedProviderPolicy(),
 	)
-	resolved := resolver.Resolve(router.Request{
-		CustomBindings: map[string][]string{
-			"deepseek-ai/deepseek-v4-flash": {providers.ProviderOpenAIGateway},
-		},
-	})
-	require.Len(t, resolved.Candidates, 2)
-	selected := resolved.Candidates[1]
+	resolved := resolver.Resolve(router.Request{})
+	require.Len(t, resolved.Candidates, 1)
+	selected := resolved.Candidates[0]
 	decider := &recordingPolicy{result: policy.Result{
 		ArmID:    selected.ArmID,
 		Provider: selected.Provider,
 		Score:    0.9,
 		CandidateScores: map[string]float32{
-			resolved.Candidates[0].ArmID: 0.1,
-			resolved.Candidates[1].ArmID: 0.9,
+			resolved.Candidates[0].ArmID: 0.9,
 		},
 	}}
 	adapter := policy.NewSidecarRouter(policy.SidecarRouterConfig{
 		Strategy: router.Strategy("future-policy"),
 	}, decider, resolver)
 
-	decision, err := adapter.Route(context.Background(), router.Request{
-		CustomBindings: map[string][]string{
-			"deepseek-ai/deepseek-v4-flash": {providers.ProviderOpenAIGateway},
-		},
-	})
+	decision, err := adapter.Route(context.Background(), router.Request{})
 
 	require.NoError(t, err)
 	assert.Equal(t, selected.CatalogID, decision.Model)
@@ -165,11 +156,9 @@ func TestSidecarRouterDispatchesSidecarSelectedArm(t *testing.T) {
 	assert.Equal(t, selected.ArmID, decision.Metadata.SelectedArmID)
 	assert.Equal(t, map[string]string{
 		resolved.Candidates[0].ArmID: resolved.Candidates[0].Provider,
-		resolved.Candidates[1].ArmID: resolved.Candidates[1].Provider,
 	}, decision.Metadata.CandidateArmProviders)
 	assert.Equal(t, map[string]float32{
-		resolved.Candidates[0].ArmID: 0.1,
-		resolved.Candidates[1].ArmID: 0.9,
+		resolved.Candidates[0].ArmID: 0.9,
 	}, decision.Metadata.CandidateArmScores)
 	assert.Equal(t, policy.SchemaVersionV2, decider.query.SchemaVersion)
 }
@@ -243,6 +232,7 @@ func TestSidecarRouterPreviewReturnsAllEligibleArmsWithoutLifecycleCallbacks(t *
 	assert.False(t, decider.previewQuery.TrainingAllowed)
 	assert.True(t, decider.previewQuery.DebugEnabled)
 	assert.Len(t, decider.previewQuery.Candidates, 2)
+	// aiand-only catalog: both kimi-k3 and qwen3.8-27b resolve, one candidate each.
 	assert.Nil(t, decider.outcome)
 	assert.Nil(t, decider.feedback)
 }
@@ -250,16 +240,12 @@ func TestSidecarRouterPreviewReturnsAllEligibleArmsWithoutLifecycleCallbacks(t *
 func TestSidecarRouterPreviewUsesArmSchemaAndIDs(t *testing.T) {
 	resolver := policy.NewArmResolver(
 		set("deepseek-ai/deepseek-v4-flash"),
-		set(providers.ProviderAiand, providers.ProviderOpenAIGateway),
+		set(providers.ProviderAiand),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
-	resolved := resolver.Resolve(router.Request{
-		CustomBindings: map[string][]string{
-			"deepseek-ai/deepseek-v4-flash": {providers.ProviderOpenAIGateway},
-		},
-	})
-	require.Len(t, resolved.Candidates, 2)
+	resolved := resolver.Resolve(router.Request{})
+	require.Len(t, resolved.Candidates, 1)
 	selectedArmID := resolved.Candidates[0].ArmID
 	decider := &recordingPolicy{preview: policy.PreviewResult{
 		SchemaVersion:         policy.SchemaVersionV2,
@@ -283,11 +269,7 @@ func TestSidecarRouterPreviewUsesArmSchemaAndIDs(t *testing.T) {
 		Strategy: router.Strategy("temporal-q"),
 	}, decider, resolver).WithCapabilities(policy.Capabilities{SupportsPreview: true})
 
-	result, err := adapter.PreviewRoute(context.Background(), router.Request{
-		CustomBindings: map[string][]string{
-			"deepseek-ai/deepseek-v4-flash": {providers.ProviderOpenAIGateway},
-		},
-	})
+	result, err := adapter.PreviewRoute(context.Background(), router.Request{})
 
 	require.NoError(t, err)
 	assert.Equal(t, policy.SchemaVersionV2, decider.previewQuery.SchemaVersion)
@@ -652,7 +634,7 @@ func TestSidecarRouterForcedClusterKeepsProviderAgreementCheck(t *testing.T) {
 	decider := &recordingPolicy{result: policy.Result{
 		SchemaVersion: policy.SchemaVersionV1,
 		Model:         "aiand/moonshotai/kimi-k3",
-		Provider:      providers.ProviderAnthropic,
+		Provider:      "unregistered-provider",
 		RankedFallback: []policy.PreviewGroup{{
 			Group:        "maximum",
 			EligibleArms: []string{"aiand/moonshotai/kimi-k3"},

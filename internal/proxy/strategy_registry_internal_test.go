@@ -35,7 +35,7 @@ func (r *registryRouter) Route(_ context.Context, request router.Request) (route
 
 func TestPolicyStrategyRegistryRoutesFutureStrategyWithoutServiceChanges(t *testing.T) {
 	defaultRouter := &registryRouter{}
-	futureRouter := &registryRouter{decision: router.Decision{Model: "moonshotai/kimi-k3", Provider: providers.ProviderAnthropic}}
+	futureRouter := &registryRouter{decision: router.Decision{Model: "moonshotai/kimi-k3", Provider: providers.ProviderAiand}}
 	strategy := router.Strategy("future-policy")
 	svc := (&Service{router: defaultRouter}).WithPolicyStrategy(policy.StrategySpec{
 		Strategy: strategy,

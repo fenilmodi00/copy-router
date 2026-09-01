@@ -9,13 +9,18 @@ const nextConfig: NextConfig = {
   ...(isDev
     ? {
         async rewrites() {
-          // Proxy API calls to the Go router so the dashboard can hit
-          // /admin/v1/* and /account/v1/* without CORS or absolute URLs.
+          // Proxy dashboard API calls to the Go router. `/v1` is listed
+          // twice: origin-root fetch("/v1/...") (basePath: false) and
+          // /ui/v1/* (Next basePath), which otherwise renders as a page 404.
           return [
             {
-              source: "/admin/:path*",
-              destination: `${ROUTER_DEV_TARGET}/admin/:path*`,
+              source: "/v1/:path*",
+              destination: `${ROUTER_DEV_TARGET}/v1/:path*`,
               basePath: false,
+            },
+            {
+              source: "/v1/:path*",
+              destination: `${ROUTER_DEV_TARGET}/v1/:path*`,
             },
             {
               source: "/account/:path*",

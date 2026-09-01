@@ -26,6 +26,9 @@ concurrency:
 
 jobs:
   review:
+    # Forks without the Claude Code GitHub App + WEAVE_BOT_TOKEN PAT cannot
+    # exchange OIDC for an app token — skip rather than fail the workflow.
+    if: secrets.WEAVE_BOT_TOKEN != '' && secrets.ANTHROPIC_API_KEY != ''
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

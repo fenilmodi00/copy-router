@@ -132,14 +132,14 @@ func TestWithAccountCookie_UsesCachedSessionInstallation(t *testing.T) {
 	require.NoError(t, err)
 
 	engine := gin.New()
-	engine.GET("/admin/v1/ping", WithAccountCookie(svc), func(c *gin.Context) {
+	engine.GET("/v1/ping", WithAccountCookie(svc), func(c *gin.Context) {
 		got := InstallationFrom(c)
 		require.NotNil(t, got)
 		assert.Equal(t, "inst-cached", got.ID)
 		c.Status(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/ping", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/ping", nil)
 	req.AddCookie(&http.Cookie{Name: auth.LoginSessionCookieName, Value: token})
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)

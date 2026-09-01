@@ -86,18 +86,13 @@ type ResponsesRoute struct {
 // only — because most mount no Responses surface; one without it is downgraded
 // by the caller.
 func UseOpenAIResponsesAPI(rt ResponsesRoute) bool {
-	narrow := rt.Capabilities.Supports(router.CapReasoning) && rt.HasTools
-	switch rt.Provider {
-	case providers.ProviderOpenAI, providers.ProviderAiand:
-		if rt.ChatOnlyParams {
-			return false
-		}
-		return rt.Broad || narrow
-	case providers.ProviderOpenAIGateway:
-		return narrow
-	default:
+	if rt.Provider != providers.ProviderAiand {
 		return false
 	}
+	if rt.ChatOnlyParams {
+		return false
+	}
+	return rt.Broad || (rt.Capabilities.Supports(router.CapReasoning) && rt.HasTools)
 }
 
 // RequiresChatCompletionsParams reports whether the request asks for something

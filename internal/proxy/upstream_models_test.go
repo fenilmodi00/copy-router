@@ -58,9 +58,9 @@ func TestListUpstreamModels_PassesCredentialsToLister(t *testing.T) {
 }
 
 func TestListUpstreamModels_UnsupportedProvider(t *testing.T) {
-	svc := upstreamModelsService(map[string]providers.Client{providers.ProviderGoogle: nonListerClient{}})
+	svc := upstreamModelsService(map[string]providers.Client{providers.ProviderAiand: nonListerClient{}})
 
-	_, err := svc.ListUpstreamModels(context.Background(), providers.ProviderGoogle, nil)
+	_, err := svc.ListUpstreamModels(context.Background(), providers.ProviderAiand, nil)
 	assert.ErrorIs(t, err, proxy.ErrModelListingUnsupported)
 }
 

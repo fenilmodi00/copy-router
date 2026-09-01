@@ -31,15 +31,8 @@ export function PlaygroundHeader() {
 		surface === "account" ? ["account-me"] : null,
 		() => api.auth.accountMe(),
 	);
-	const adminQ = useSWR(
-		surface === "admin" ? ["admin-me"] : null,
-		() => api.auth.me(),
-	);
 
-	const displayName =
-		accountQ.data?.display_name ??
-		adminQ.data?.subject ??
-		"User";
+	const displayName = accountQ.data?.display_name ?? "User";
 	const avatarInitials = initialsFromName(displayName);
 
 	function startNewSession() {

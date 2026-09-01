@@ -10,18 +10,9 @@ import (
 )
 
 var rosterAliases = map[string]string{
-	"claude-sonnet-4-6":    "anthropic/claude-sonnet-4.6",
-	"claude-haiku-4-5":     "anthropic/claude-haiku-4.5",
-	"claude-sonnet-5":      "anthropic/claude-sonnet-5",
-	"claude-opus-4-8":      "anthropic/claude-opus-4.8",
-	"claude-fable-5":       "anthropic/claude-fable-5",
+	// The roster ID for kimi-k2.7 is ai&'s served upstream name, not the
+	// canonical catalog ID.
 	"moonshotai/kimi-k2.7": "moonshotai/kimi-k2.7-code",
-	// Bare first-party xAI IDs have no provider prefix to inherit, and the
-	// switch below deliberately stays empty for them (a bare ID whose primary
-	// provider is a hosting platform would be ambiguous). An explicit alias is
-	// what makes an xAI-native model roster-addressable.
-	"grok-4.5": "x-ai/grok-4.5",
-	"grok-4.6": "x-ai/grok-4.6",
 }
 
 func rosterIDFor(m catalog.Model) string {
@@ -32,12 +23,10 @@ func rosterIDFor(m catalog.Model) string {
 		return m.ID
 	}
 	switch m.PrimaryProvider() {
-	case providers.ProviderAnthropic:
-		return "anthropic/" + m.ID
-	case providers.ProviderOpenAI:
-		return "openai/" + m.ID
-	case providers.ProviderGoogle:
-		return "google/" + m.ID
+	case providers.ProviderAiand:
+		// ai& serves each model under its catalog (upstream) ID, so no
+		// vendor prefix applies.
+		return m.ID
 	}
 	return ""
 }

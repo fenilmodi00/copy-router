@@ -102,10 +102,10 @@ func apiKeysEngine(svc *auth.Service) *gin.Engine {
 	inject := func(c *gin.Context) {
 		c.Set("router_installation", &auth.Installation{ID: testInstallationID})
 	}
-	engine.GET("/admin/v1/keys", inject, admin.ListAPIKeysHandler(svc))
-	engine.POST("/admin/v1/keys", inject, admin.IssueAPIKeyHandler(svc))
-	engine.POST("/admin/v1/keys/:id/rotate", inject, admin.RotateAPIKeyHandler(svc))
-	engine.GET("/admin/v1/provider-keys", inject, admin.ListExternalKeysHandler(svc))
+	engine.GET("/v1/keys", inject, admin.ListAPIKeysHandler(svc))
+	engine.POST("/v1/keys", inject, admin.IssueAPIKeyHandler(svc))
+	engine.POST("/v1/keys/:id/rotate", inject, admin.RotateAPIKeyHandler(svc))
+	engine.GET("/v1/provider-keys", inject, admin.ListExternalKeysHandler(svc))
 	return engine
 }
 
@@ -123,7 +123,7 @@ func TestListAPIKeysHandler_ReturnsKeysForInstallation(t *testing.T) {
 	require.NoError(t, err)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/keys", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/keys", nil)
 	apiKeysEngine(svc).ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -141,7 +141,7 @@ func TestIssueAPIKeyHandler_ReturnsTokenMatchingFingerprint(t *testing.T) {
 	svc := newAuthServiceForKeyTests(repo, nil)
 
 	body, _ := json.Marshal(map[string]string{"name": "ci-key"})
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/keys", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	apiKeysEngine(svc).ServeHTTP(rec, req)
@@ -185,7 +185,7 @@ func TestIssueAPIKeyHandler_ScopeSelectsCredentialKind(t *testing.T) {
 			svc := newAuthServiceForKeyTests(&fakeAPIKeyRepository{}, nil)
 
 			body, _ := json.Marshal(map[string]string{"scope": tt.bodyScope})
-			req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/keys", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 			apiKeysEngine(svc).ServeHTTP(rec, req)
@@ -209,7 +209,7 @@ func TestIssueAPIKeyHandler_RejectsUnknownScope(t *testing.T) {
 	svc := newAuthServiceForKeyTests(&fakeAPIKeyRepository{}, nil)
 
 	body, _ := json.Marshal(map[string]string{"scope": "admin"})
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/keys", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	apiKeysEngine(svc).ServeHTTP(rec, req)
@@ -225,7 +225,7 @@ func TestRotateAPIKeyHandler_PreservesScope(t *testing.T) {
 	oldKey, _, err := svc.IssueScopedAPIKey(context.Background(), testInstallationID, auth.ScopeAnalyticsRead, nil, nil)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys/"+oldKey.ID+"/rotate", nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/keys/"+oldKey.ID+"/rotate", nil)
 	rec := httptest.NewRecorder()
 	apiKeysEngine(svc).ServeHTTP(rec, req)
 
@@ -247,7 +247,7 @@ func TestRotateAPIKeyHandler_SoftDeletesOldKeyAndIssuesNew(t *testing.T) {
 	oldKey, _, err := svc.IssueAPIKey(context.Background(), testInstallationID, nil, nil)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys/"+oldKey.ID+"/rotate", nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/keys/"+oldKey.ID+"/rotate", nil)
 	rec := httptest.NewRecorder()
 	apiKeysEngine(svc).ServeHTTP(rec, req)
 
@@ -272,7 +272,7 @@ func TestRotateAPIKeyHandler_ForeignKeyIDReturnsNotFound(t *testing.T) {
 	foreignKey, _, err := svc.IssueAPIKey(context.Background(), "other-inst", nil, nil)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys/"+foreignKey.ID+"/rotate", nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/keys/"+foreignKey.ID+"/rotate", nil)
 	rec := httptest.NewRecorder()
 	apiKeysEngine(svc).ServeHTTP(rec, req)
 
@@ -293,7 +293,7 @@ func TestListExternalKeysHandler_ReturnsProviderKeysForInstallation(t *testing.T
 	repo := &fakeExternalAPIKeyRepo{keys: []*auth.ExternalAPIKey{externalKey}}
 	svc := newAuthServiceForKeyTests(&fakeAPIKeyRepository{}, repo)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/provider-keys", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/provider-keys", nil)
 	rec := httptest.NewRecorder()
 	apiKeysEngine(svc).ServeHTTP(rec, req)
 
@@ -373,7 +373,7 @@ func upsertKeyEngine(svc *auth.Service) *gin.Engine {
 func upsertKeyEngineWithModels(svc *auth.Service, models admin.DeployedModelsSource) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.POST("/admin/v1/provider-keys", func(c *gin.Context) {
+	engine.POST("/v1/provider-keys", func(c *gin.Context) {
 		c.Set("router_installation", &auth.Installation{ID: "inst-1"})
 	}, admin.UpsertExternalKeyHandler(svc, models))
 	return engine
@@ -390,7 +390,7 @@ func postProviderKeyWithBaseURL(engine *gin.Engine, provider, baseURL string) *h
 }
 
 func postProviderKeyBody(engine *gin.Engine, body []byte) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/provider-keys", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/provider-keys", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -401,40 +401,23 @@ func newUpsertKeyService(repo auth.ExternalAPIKeyRepository) *auth.Service {
 	return auth.NewService(nil, nil, repo, nil, auth.NoOpAPIKeyCache{}, nil, func() time.Time { return time.Unix(0, 0) })
 }
 
-func TestUpsertExternalKeyHandler_RejectsEnvShadowedProvider(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropic), "sk-ant-deployment-key")
+func TestUpsertExternalKeyHandler_PersistsPlainKey(t *testing.T) {
 
 	repo := &fakeExternalAPIKeyRepo{}
 	svc := auth.NewService(nil, nil, repo, nil, auth.NoOpAPIKeyCache{}, nil, func() time.Time { return time.Unix(0, 0) })
 
-	rec := postProviderKey(upsertKeyEngine(svc), providers.ProviderAnthropic)
-
-	assert.Equal(t, http.StatusConflict, rec.Code,
-		"a provider with a deployment env key must not accept a dashboard BYOK key")
-	assert.Equal(t, 0, repo.created,
-		"the BYOK key must not be persisted when the env guard fires")
-}
-
-func TestUpsertExternalKeyHandler_AllowsProviderWithoutEnvKey(t *testing.T) {
-	// No env var set for the provider — the guard must let the write through.
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropic), "")
-
-	repo := &fakeExternalAPIKeyRepo{}
-	svc := auth.NewService(nil, nil, repo, nil, auth.NoOpAPIKeyCache{}, nil, func() time.Time { return time.Unix(0, 0) })
-
-	rec := postProviderKey(upsertKeyEngine(svc), providers.ProviderAnthropic)
+	rec := postProviderKey(upsertKeyEngine(svc), providers.ProviderAiand)
 
 	require.Equal(t, http.StatusCreated, rec.Code)
 	assert.Equal(t, 1, repo.created, "the BYOK key must be persisted when no env key shadows it")
 }
 
 func TestUpsertExternalKeyHandler_PersistsAndReturnsBaseURL(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropicGateway), "")
 
 	repo := &fakeExternalAPIKeyRepo{}
 	rec := postProviderKeyWithBaseURL(
 		upsertKeyEngine(newUpsertKeyService(repo)),
-		providers.ProviderAnthropicGateway,
+		providers.ProviderAiand,
 		"https://gateway.example.com/llm/",
 	)
 
@@ -451,41 +434,12 @@ func TestUpsertExternalKeyHandler_PersistsAndReturnsBaseURL(t *testing.T) {
 		"the response must echo the stored endpoint so the dashboard can show where the key points")
 }
 
-func TestUpsertExternalKeyHandler_RejectsGatewayKeyWithoutBaseURL(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropicGateway), "")
-
-	repo := &fakeExternalAPIKeyRepo{}
-	rec := postProviderKey(upsertKeyEngine(newUpsertKeyService(repo)), providers.ProviderAnthropicGateway)
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code,
-		"a gateway has no default endpoint, so a key without one could never be dispatched")
-	assert.Equal(t, 0, repo.created, "the undispatchable key must not be persisted")
-}
-
-func TestUpsertExternalKeyHandler_RejectsGatewayKeyWithSlashOnlyBaseURL(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropicGateway), "")
-
-	repo := &fakeExternalAPIKeyRepo{}
-	rec := postProviderKeyWithBaseURL(
-		upsertKeyEngine(newUpsertKeyService(repo)),
-		providers.ProviderAnthropicGateway,
-		"///",
-	)
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code,
-		"a value that normalizes away to nothing leaves the same undispatchable key as omitting it")
-	assert.Equal(t, 0, repo.created)
-	assert.Equal(t, 0, repo.softDeletedByProvider,
-		"a rejected upsert must not take out the working key it would have replaced")
-}
-
 func TestUpsertExternalKeyHandler_RejectsRelativeBaseURL(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropic), "")
 
 	repo := &fakeExternalAPIKeyRepo{}
 	rec := postProviderKeyWithBaseURL(
 		upsertKeyEngine(newUpsertKeyService(repo)),
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		"gateway.example.com",
 	)
 
@@ -500,15 +454,14 @@ func postProviderKeyWithAliases(engine *gin.Engine, provider string, aliases map
 }
 
 func TestUpsertExternalKeyHandler_PersistsAndReturnsModelAliases(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropic), "")
 
 	repo := &fakeExternalAPIKeyRepo{}
 	models := fakeDeployedModels{entries: []cluster.DeployedEntry{
-		{Model: "claude-fable-5", Provider: providers.ProviderAnthropic},
+		{Model: "claude-fable-5", Provider: providers.ProviderAiand},
 	}}
 	rec := postProviderKeyWithAliases(
 		upsertKeyEngineWithModels(newUpsertKeyService(repo), models),
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		map[string]string{"claude-fable-5": " gateway-claude-fable-5 "},
 	)
 
@@ -525,15 +478,14 @@ func TestUpsertExternalKeyHandler_PersistsAndReturnsModelAliases(t *testing.T) {
 }
 
 func TestUpsertExternalKeyHandler_RejectsAliasForUnknownModel(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropic), "")
 
 	repo := &fakeExternalAPIKeyRepo{}
 	models := fakeDeployedModels{entries: []cluster.DeployedEntry{
-		{Model: "claude-fable-5", Provider: providers.ProviderAnthropic},
+		{Model: "claude-fable-5", Provider: providers.ProviderAiand},
 	}}
 	rec := postProviderKeyWithAliases(
 		upsertKeyEngineWithModels(newUpsertKeyService(repo), models),
-		providers.ProviderAnthropic,
+		providers.ProviderAiand,
 		map[string]string{"claude-fabel-5": "gateway-claude-fable-5"},
 	)
 
@@ -553,12 +505,11 @@ func postProviderKeyWithIdentityHeader(engine *gin.Engine, provider, header, for
 }
 
 func TestUpsertExternalKeyHandler_PersistsAndReturnsIdentityHeader(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropic), "")
 
 	repo := &fakeExternalAPIKeyRepo{}
 	rec := postProviderKeyWithIdentityHeader(
 		upsertKeyEngine(newUpsertKeyService(repo)),
-		providers.ProviderAnthropic, " X-Caller-Identity ", "JSON",
+		providers.ProviderAiand, " X-Caller-Identity ", "JSON",
 	)
 
 	require.Equal(t, http.StatusCreated, rec.Code)
@@ -575,12 +526,11 @@ func TestUpsertExternalKeyHandler_PersistsAndReturnsIdentityHeader(t *testing.T)
 }
 
 func TestUpsertExternalKeyHandler_RejectsReservedIdentityHeader(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropic), "")
 
 	repo := &fakeExternalAPIKeyRepo{}
 	rec := postProviderKeyWithIdentityHeader(
 		upsertKeyEngine(newUpsertKeyService(repo)),
-		providers.ProviderAnthropic, "Authorization", "email",
+		providers.ProviderAiand, "Authorization", "email",
 	)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code,
@@ -593,7 +543,7 @@ func TestUpsertExternalKeyHandler_RejectsReservedIdentityHeader(t *testing.T) {
 func aliasUpdateEngine(svc *auth.Service, models admin.DeployedModelsSource) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.PUT("/admin/v1/provider-keys/:id/model-aliases", func(c *gin.Context) {
+	engine.PUT("/v1/provider-keys/:id/model-aliases", func(c *gin.Context) {
 		c.Set("router_installation", &auth.Installation{ID: "inst-1"})
 	}, admin.UpdateExternalKeyAliasesHandler(svc, models))
 	return engine
@@ -601,7 +551,7 @@ func aliasUpdateEngine(svc *auth.Service, models admin.DeployedModelsSource) *gi
 
 func putModelAliases(engine *gin.Engine, id string, aliases map[string]string) *httptest.ResponseRecorder {
 	body, _ := json.Marshal(map[string]any{"model_aliases": aliases})
-	req := httptest.NewRequest(http.MethodPut, "/admin/v1/provider-keys/"+id+"/model-aliases", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/v1/provider-keys/"+id+"/model-aliases", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -610,9 +560,9 @@ func putModelAliases(engine *gin.Engine, id string, aliases map[string]string) *
 
 func TestUpdateExternalKeyAliasesHandler_ReplacesAliasesWithoutTheSecret(t *testing.T) {
 	repo := &fakeExternalAPIKeyRepo{keys: []*auth.ExternalAPIKey{
-		{ID: "ext-1", InstallationID: "inst-1", Provider: providers.ProviderOpenAIGateway},
+		{ID: "ext-1", InstallationID: "inst-1", Provider: providers.ProviderAiand},
 	}}
-	models := fakeDeployedModels{entries: []cluster.DeployedEntry{{Model: "gpt-5", Provider: providers.ProviderOpenAI}}}
+	models := fakeDeployedModels{entries: []cluster.DeployedEntry{{Model: "gpt-5", Provider: providers.ProviderAiand}}}
 
 	rec := putModelAliases(aliasUpdateEngine(newUpsertKeyService(repo), models), "ext-1", map[string]string{"gpt-5": "openai-gpt-5"})
 
@@ -628,9 +578,9 @@ func TestUpdateExternalKeyAliasesHandler_ReplacesAliasesWithoutTheSecret(t *test
 
 func TestUpdateExternalKeyAliasesHandler_RejectsUnknownCatalogModel(t *testing.T) {
 	repo := &fakeExternalAPIKeyRepo{keys: []*auth.ExternalAPIKey{
-		{ID: "ext-1", InstallationID: "inst-1", Provider: providers.ProviderOpenAIGateway},
+		{ID: "ext-1", InstallationID: "inst-1", Provider: providers.ProviderAiand},
 	}}
-	models := fakeDeployedModels{entries: []cluster.DeployedEntry{{Model: "gpt-5", Provider: providers.ProviderOpenAI}}}
+	models := fakeDeployedModels{entries: []cluster.DeployedEntry{{Model: "gpt-5", Provider: providers.ProviderAiand}}}
 
 	rec := putModelAliases(aliasUpdateEngine(newUpsertKeyService(repo), models), "ext-1", map[string]string{"gpt-6": "openai-gpt-6"})
 
@@ -640,9 +590,9 @@ func TestUpdateExternalKeyAliasesHandler_RejectsUnknownCatalogModel(t *testing.T
 
 func TestUpdateExternalKeyAliasesHandler_ForeignKeyIsNotFound(t *testing.T) {
 	repo := &fakeExternalAPIKeyRepo{keys: []*auth.ExternalAPIKey{
-		{ID: "ext-1", InstallationID: "inst-2", Provider: providers.ProviderOpenAIGateway},
+		{ID: "ext-1", InstallationID: "inst-2", Provider: providers.ProviderAiand},
 	}}
-	models := fakeDeployedModels{entries: []cluster.DeployedEntry{{Model: "gpt-5", Provider: providers.ProviderOpenAI}}}
+	models := fakeDeployedModels{entries: []cluster.DeployedEntry{{Model: "gpt-5", Provider: providers.ProviderAiand}}}
 
 	rec := putModelAliases(aliasUpdateEngine(newUpsertKeyService(repo), models), "ext-1", map[string]string{"gpt-5": "openai-gpt-5"})
 

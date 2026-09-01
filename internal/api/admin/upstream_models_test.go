@@ -53,7 +53,7 @@ func (plainClient) Passthrough(context.Context, providers.PreparedRequest, http.
 func upstreamModelsEngine(authSvc *auth.Service, proxySvc *proxy.Service) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.GET("/admin/v1/provider-keys/:id/models", func(c *gin.Context) {
+	engine.GET("/v1/provider-keys/:id/models", func(c *gin.Context) {
 		c.Set("router_installation", &auth.Installation{ID: testInstallationID})
 	}, admin.ListUpstreamModelsHandler(authSvc, proxySvc))
 	return engine
@@ -72,18 +72,18 @@ func TestListUpstreamModelsHandler_ReturnsEndpointModels(t *testing.T) {
 	key := &auth.ExternalAPIKey{
 		ID:             "ext-1",
 		InstallationID: testInstallationID,
-		Provider:       providers.ProviderOpenAIGateway,
+		Provider:       providers.ProviderAiand,
 		Plaintext:      []byte("sk-byok"),
 		BaseURL:        "https://cortex.example/api/v2/cortex/v1",
 	}
 	lister := &modelListingClient{models: []string{"claude-fable-5", "snowflake-llama-70b"}}
 	engine := upstreamModelsEngine(
 		upstreamModelsAuthService([]*auth.ExternalAPIKey{key}),
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: lister}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: lister}),
 	)
 
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/v1/provider-keys/ext-1/models", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/provider-keys/ext-1/models", nil))
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	var body struct {
@@ -99,11 +99,11 @@ func TestListUpstreamModelsHandler_ReturnsEndpointModels(t *testing.T) {
 func TestListUpstreamModelsHandler_UnknownKeyIs404(t *testing.T) {
 	engine := upstreamModelsEngine(
 		upstreamModelsAuthService(nil),
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: &modelListingClient{}}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: &modelListingClient{}}),
 	)
 
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/v1/provider-keys/missing/models", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/provider-keys/missing/models", nil))
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
@@ -112,16 +112,16 @@ func TestListUpstreamModelsHandler_UnsupportedProviderIs501(t *testing.T) {
 	key := &auth.ExternalAPIKey{
 		ID:             "ext-1",
 		InstallationID: testInstallationID,
-		Provider:       providers.ProviderGoogle,
+		Provider:       providers.ProviderAiand,
 		Plaintext:      []byte("sk-byok"),
 	}
 	engine := upstreamModelsEngine(
 		upstreamModelsAuthService([]*auth.ExternalAPIKey{key}),
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderGoogle: plainClient{}}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: plainClient{}}),
 	)
 
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/v1/provider-keys/ext-1/models", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/provider-keys/ext-1/models", nil))
 
 	assert.Equal(t, http.StatusNotImplemented, rec.Code,
 		"a provider with no model-listing surface must tell the dashboard to keep manual entry")
@@ -130,22 +130,22 @@ func TestListUpstreamModelsHandler_UnsupportedProviderIs501(t *testing.T) {
 func discoverModelsEngine(proxySvc *proxy.Service) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.POST("/admin/v1/provider-keys/discover-models", admin.DiscoverModelsHandler(proxySvc))
+	engine.POST("/v1/provider-keys/discover-models", admin.DiscoverModelsHandler(proxySvc))
 	return engine
 }
 
 func TestDiscoverModelsHandler_UsesBodyCredentials(t *testing.T) {
 	lister := &modelListingClient{models: []string{"cortex-a"}}
 	engine := discoverModelsEngine(
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: lister}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: lister}),
 	)
 
 	body, _ := json.Marshal(map[string]string{
-		"provider": providers.ProviderOpenAIGateway,
+		"provider": providers.ProviderAiand,
 		"key":      "sk-unsaved",
 		"base_url": "https://cortex.example/api/v2/cortex/v1/",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/provider-keys/discover-models", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/provider-keys/discover-models", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -159,11 +159,11 @@ func TestDiscoverModelsHandler_UsesBodyCredentials(t *testing.T) {
 
 func TestDiscoverModelsHandler_RejectsMissingKey(t *testing.T) {
 	engine := discoverModelsEngine(
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: &modelListingClient{}}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: &modelListingClient{}}),
 	)
 
-	body, _ := json.Marshal(map[string]string{"provider": providers.ProviderOpenAIGateway})
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/provider-keys/discover-models", bytes.NewReader(body))
+	body, _ := json.Marshal(map[string]string{"provider": providers.ProviderAiand})
+	req := httptest.NewRequest(http.MethodPost, "/v1/provider-keys/discover-models", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -175,18 +175,18 @@ func TestListUpstreamModelsHandler_EndpointFailureIs502(t *testing.T) {
 	key := &auth.ExternalAPIKey{
 		ID:             "ext-1",
 		InstallationID: testInstallationID,
-		Provider:       providers.ProviderOpenAIGateway,
+		Provider:       providers.ProviderAiand,
 		Plaintext:      []byte("sk-byok"),
 		BaseURL:        "https://cortex.example/api/v2/cortex/v1",
 	}
 	lister := &modelListingClient{err: errors.New("model listing returned status 401")}
 	engine := upstreamModelsEngine(
 		upstreamModelsAuthService([]*auth.ExternalAPIKey{key}),
-		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderOpenAIGateway: lister}),
+		upstreamModelsProxyService(map[string]providers.Client{providers.ProviderAiand: lister}),
 	)
 
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/v1/provider-keys/ext-1/models", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/provider-keys/ext-1/models", nil))
 
 	assert.Equal(t, http.StatusBadGateway, rec.Code)
 }

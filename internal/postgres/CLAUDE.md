@@ -18,7 +18,7 @@ Postgres adapter: SQLC over pgx, plus the session-pin store impl. Read [root CLA
 
 ## Adding a column or query
 
-1. **Migration first.** Add `db/migrations/NNNN_<name>.up.sql` + `.down.sql` in sequential numbering. Wrap in `BEGIN`/`COMMIT`. Down migration must be a precise rollback — no `IF EXISTS` guards. See [`../../db/CLAUDE.md`](../../db/CLAUDE.md).
+1. **Canonical + migration.** Edit `db/init/00-create-schema.sql` and add `db/migrations/NNNN_<name>.up.sql` + `.down.sql` via `make migrate-create NAME=...`. Wrap migrations in `BEGIN`/`COMMIT`. Down migration must be a precise rollback — no `IF EXISTS` guards. See [`../../db/CLAUDE.md`](../../db/CLAUDE.md).
 2. **Add the query** to the appropriate `db/queries/<table>.sql`. Use named params with type casts (`@param::varchar`). Use `sqlc.embed(t)` for JOINs.
 3. **Run `make generate`** to regenerate `internal/sqlc/`. Commit the generated code alongside changes.
 4. **Update [`repository.go`](repository.go)** (and [`converters.go`](converters.go) if a new column needs domain mapping).

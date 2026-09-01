@@ -5,5 +5,3 @@ build:
     web: Dockerfile
   config:
     TARGETARCH: amd64
-    PUBSUB_DISABLED: "true"
-    SERVER_REPLICAS: "1"

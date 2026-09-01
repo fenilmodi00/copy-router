@@ -161,29 +161,6 @@ func (r *installationRepo) UpdateAllowedModels(ctx context.Context, externalID, 
 	return nil
 }
 
-func (r *installationRepo) UpdateExcludedProviders(ctx context.Context, externalID, id string, providerNames []string) error {
-	parsed, err := uuid.Parse(id)
-	if err != nil {
-		return err
-	}
-	if providerNames == nil {
-		providerNames = []string{}
-	}
-	q := sqlc.New(r.tx)
-	rows, err := q.UpdateModelRouterInstallationExcludedProviders(ctx, sqlc.UpdateModelRouterInstallationExcludedProvidersParams{
-		ID:                parsed,
-		ExternalID:        externalID,
-		ExcludedProviders: providerNames,
-	})
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return auth.ErrInstallationNotFound
-	}
-	return nil
-}
-
 func (r *installationRepo) UpdateRoutingPreference(ctx context.Context, externalID, id string, qualityWeight *float64) error {
 	parsed, err := uuid.Parse(id)
 	if err != nil {
@@ -194,47 +171,6 @@ func (r *installationRepo) UpdateRoutingPreference(ctx context.Context, external
 		ID:                   parsed,
 		ExternalID:           externalID,
 		RoutingQualityWeight: qualityWeight,
-	})
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return auth.ErrInstallationNotFound
-	}
-	return nil
-}
-
-func (r *installationRepo) UpdateUsageBypass(ctx context.Context, externalID, id string, enabled bool, threshold *float64) error {
-	parsed, err := uuid.Parse(id)
-	if err != nil {
-		return err
-	}
-	q := sqlc.New(r.tx)
-	rows, err := q.UpdateModelRouterInstallationUsageBypass(ctx, sqlc.UpdateModelRouterInstallationUsageBypassParams{
-		ID:                   parsed,
-		ExternalID:           externalID,
-		UsageBypassEnabled:   enabled,
-		UsageBypassThreshold: threshold,
-	})
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return auth.ErrInstallationNotFound
-	}
-	return nil
-}
-
-func (r *installationRepo) UpdateSubscriptionRoutingDisabled(ctx context.Context, externalID, id string, disabled bool) error {
-	parsed, err := uuid.Parse(id)
-	if err != nil {
-		return err
-	}
-	q := sqlc.New(r.tx)
-	rows, err := q.UpdateModelRouterInstallationSubscriptionRoutingDisabled(ctx, sqlc.UpdateModelRouterInstallationSubscriptionRoutingDisabledParams{
-		ID:                          parsed,
-		ExternalID:                  externalID,
-		SubscriptionRoutingDisabled: disabled,
 	})
 	if err != nil {
 		return err

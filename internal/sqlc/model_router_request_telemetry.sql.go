@@ -99,12 +99,6 @@ SELECT
     t.output_tokens,
     t.cache_creation_tokens,
     t.cache_read_tokens,
-    -- The turn ran on the caller's own Claude/Codex subscription, so its
-    -- quota already paid for it and the export reports $0 against the real
-    -- token counts. credential_source itself stays internal.
-    -- COALESCE because credential_source is NULL on deployment-key turns, and
-    -- NULL IN (...) is NULL, which cannot scan into the generated bool.
-    COALESCE(t.credential_source IN ('subscription', 'codex_subscription'), false)::boolean AS subscription_served,
     t.actual_input_cost_usd,
     t.actual_output_cost_usd,
     t.route_latency_ms,
@@ -168,7 +162,6 @@ type GetRoutingDecisionsForExportRow struct {
 	OutputTokens          *int32
 	CacheCreationTokens   *int32
 	CacheReadTokens       *int32
-	SubscriptionServed    bool
 	ActualInputCostUsd    *int64
 	ActualOutputCostUsd   *int64
 	RouteLatencyMs        *int64
@@ -219,12 +212,6 @@ type GetRoutingDecisionsForExportRow struct {
 //	    t.output_tokens,
 //	    t.cache_creation_tokens,
 //	    t.cache_read_tokens,
-//	    -- The turn ran on the caller's own Claude/Codex subscription, so its
-//	    -- quota already paid for it and the export reports $0 against the real
-//	    -- token counts. credential_source itself stays internal.
-//	    -- COALESCE because credential_source is NULL on deployment-key turns, and
-//	    -- NULL IN (...) is NULL, which cannot scan into the generated bool.
-//	    COALESCE(t.credential_source IN ('subscription', 'codex_subscription'), false)::boolean AS subscription_served,
 //	    t.actual_input_cost_usd,
 //	    t.actual_output_cost_usd,
 //	    t.route_latency_ms,
@@ -293,7 +280,6 @@ func (q *Queries) GetRoutingDecisionsForExport(ctx context.Context, arg GetRouti
 			&i.OutputTokens,
 			&i.CacheCreationTokens,
 			&i.CacheReadTokens,
-			&i.SubscriptionServed,
 			&i.ActualInputCostUsd,
 			&i.ActualOutputCostUsd,
 			&i.RouteLatencyMs,
@@ -2008,7 +1994,6 @@ INSERT INTO router.model_router_request_telemetry (
     credential_key_prefix,
     credential_key_suffix,
     credential_source,
-    unified_limit_headers,
     planner_outcome,
     planner_reason,
     planner_pin_model,
@@ -2099,28 +2084,27 @@ INSERT INTO router.model_router_request_telemetry (
     $66::varchar,
     $67::varchar,
     $68::varchar,
-    $69::jsonb,
+    $69::varchar,
     $70::varchar,
     $71::varchar,
     $72::varchar,
-    $73::varchar,
+    $73::bigint,
     $74::bigint,
-    $75::bigint,
-    $76::boolean,
-    $77::varchar,
-    $78::bigint,
-    $79::varchar,
-    $80::boolean,
+    $75::boolean,
+    $76::varchar,
+    $77::bigint,
+    $78::varchar,
+    $79::boolean,
+    $80::varchar,
     $81::varchar,
     $82::varchar,
-    $83::varchar,
+    $83::bigint,
     $84::bigint,
-    $85::bigint,
-    $86::boolean,
-    $87::varchar,
-    $88::bigint,
-    $89::double precision,
-    $90::double precision
+    $85::boolean,
+    $86::varchar,
+    $87::bigint,
+    $88::double precision,
+    $89::double precision
 )
 ON CONFLICT (installation_id, request_id, span_type) DO NOTHING
 `
@@ -2194,7 +2178,6 @@ type InsertRequestTelemetryParams struct {
 	CredentialKeyPrefix                      *string
 	CredentialKeySuffix                      *string
 	CredentialSource                         *string
-	UnifiedLimitHeaders                      []byte
 	PlannerOutcome                           *string
 	PlannerReason                            *string
 	PlannerPinModel                          *string
@@ -2321,7 +2304,6 @@ type InsertRequestTelemetryParams struct {
 //	    credential_key_prefix,
 //	    credential_key_suffix,
 //	    credential_source,
-//	    unified_limit_headers,
 //	    planner_outcome,
 //	    planner_reason,
 //	    planner_pin_model,
@@ -2412,28 +2394,27 @@ type InsertRequestTelemetryParams struct {
 //	    $66::varchar,
 //	    $67::varchar,
 //	    $68::varchar,
-//	    $69::jsonb,
+//	    $69::varchar,
 //	    $70::varchar,
 //	    $71::varchar,
 //	    $72::varchar,
-//	    $73::varchar,
+//	    $73::bigint,
 //	    $74::bigint,
-//	    $75::bigint,
-//	    $76::boolean,
-//	    $77::varchar,
-//	    $78::bigint,
-//	    $79::varchar,
-//	    $80::boolean,
+//	    $75::boolean,
+//	    $76::varchar,
+//	    $77::bigint,
+//	    $78::varchar,
+//	    $79::boolean,
+//	    $80::varchar,
 //	    $81::varchar,
 //	    $82::varchar,
-//	    $83::varchar,
+//	    $83::bigint,
 //	    $84::bigint,
-//	    $85::bigint,
-//	    $86::boolean,
-//	    $87::varchar,
-//	    $88::bigint,
-//	    $89::double precision,
-//	    $90::double precision
+//	    $85::boolean,
+//	    $86::varchar,
+//	    $87::bigint,
+//	    $88::double precision,
+//	    $89::double precision
 //	)
 //	ON CONFLICT (installation_id, request_id, span_type) DO NOTHING
 func (q *Queries) InsertRequestTelemetry(ctx context.Context, arg InsertRequestTelemetryParams) error {
@@ -2506,7 +2487,6 @@ func (q *Queries) InsertRequestTelemetry(ctx context.Context, arg InsertRequestT
 		arg.CredentialKeyPrefix,
 		arg.CredentialKeySuffix,
 		arg.CredentialSource,
-		arg.UnifiedLimitHeaders,
 		arg.PlannerOutcome,
 		arg.PlannerReason,
 		arg.PlannerPinModel,

@@ -12,32 +12,13 @@
       "description": "AI& API key for model routing",
       "required": true
     },
-    "ROUTER_ADMIN_PASSWORD": {
-      "description": "Admin dashboard password",
-      "required": true
-    },
     "EXTERNAL_KEY_ENCRYPTION_KEY": {
       "description": "Tink AES-256-GCM keyset JSON for BYOK encryption",
       "required": true
     },
-    "PUBSUB_DISABLED": {
-      "description": "Skip GCP Pub/Sub (required for single-replica Build.io without GCP)",
-      "default": "true",
-      "required": false
-    },
-    "ROUTER_DEPLOYMENT_MODE": {
-      "description": "Deployment mode (selfhosted or managed)",
-      "default": "selfhosted",
-      "required": false
-    },
     "ROUTER_CLUSTER_VERSION": {
       "description": "Cluster artifact version to serve",
       "default": "v0.76",
-      "required": false
-    },
-    "SERVER_REPLICAS": {
-      "description": "Number of router replicas (keep 1 while Pub/Sub is disabled)",
-      "default": "1",
       "required": false
     },
     "OTEL_EXPORTER_OTLP_ENDPOINT": {

@@ -5,7 +5,7 @@
 //
 // It is a separate main package (not a _test.go), so `go test ./...` never
 // touches Postgres. It is gated on ROUTER_TEST_DATABASE_URL (a DSN to a
-// database with the router migrations applied) and is a no-op without it.
+// database with the canonical router schema applied) and is a no-op without it.
 //
 // Timing note: a start-only barrier misses the race — List→SoftDelete is
 // microseconds, so one goroutine soft-deletes before the others List. A second

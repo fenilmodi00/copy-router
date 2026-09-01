@@ -146,7 +146,7 @@ func TestDecisionSpan_SidecarStats_SurvivesPlannerStay(t *testing.T) {
 	store := newStubPinStore()
 	store.getFound = true
 	store.getPin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      "cluster",
 		PinnedUntil: time.Now().Add(time.Hour),

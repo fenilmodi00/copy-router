@@ -53,9 +53,8 @@ only**. The full rules live in [AGENTS.md](AGENTS.md). The summary:
   constructs concrete adapters and wires them in.
 
 Cross-layer violations are review-blocking. AGENTS.md has step-by-step
-recipes for adding endpoints, providers, migrations, queries, and
-routing strategies — please read the relevant section before starting
-non-trivial work.
+recipes for adding endpoints, queries, and routing strategies — please
+read the relevant section before starting non-trivial work.
 
 ## What we won't accept
 
@@ -95,8 +94,8 @@ For iterating on router code with `CompileDaemon`.
 
 ```bash
 # .env.local: Supabase session pooler DATABASE_URL (:5432), AIAND_API_KEY,
-# PUBSUB_DISABLED=true, ONNX paths. Skip make db and make full-setup.
-make setup                             # migrate + seed an rk_ key against Supabase
+# ONNX paths. Skip make db and make full-setup.
+make setup                             # init DB + schema, seed an rk_ key against Supabase
 make dev                               # hot reload on the host
 ```
 
@@ -105,11 +104,11 @@ make dev                               # hot reload on the host
 ```bash
 make db                                # start Postgres only (port 5433)
 echo "DATABASE_URL=postgresql://router:router@localhost:5433/router?sslmode=disable" >> .env.local
-make setup                             # init schema + migrate + seed an rk_ key
+make setup                             # init DB + schema, seed an rk_ key
 make dev                               # run the server with hot reload
 ```
 
-Prerequisites: Go 1.25+, [golang-migrate](https://github.com/golang-migrate/migrate),
+Prerequisites: Go 1.25+,
 [CompileDaemon](https://github.com/githubnemo/CompileDaemon).
 
 The cluster scorer uses an ONNX embedder; on Apple Silicon you also need:
@@ -164,27 +163,30 @@ shape (caught by the nightly `Refresh cassettes` workflow). See
 
 ## Database changes
 
-Migrations and queries are SQLC-driven. Don't write raw SQL outside
-`db/queries/` and don't call `pgx.Pool` from anywhere outside
-`internal/postgres/`.
+Hybrid model: `db/init/00-create-schema.sql` is the canonical fresh-install
+schema; `db/migrations/` holds incremental golang-migrate pairs after the
+`0001_init` baseline. Don't write raw SQL outside `db/queries/` and don't
+call `pgx.Pool` from anywhere outside `internal/postgres/`.
+
+Schema changes edit the canonical file **and** add a migration:
 
 ```bash
-make migrate-create NAME=add-xyz
-$EDITOR db/migrations/<ts>_add-xyz.up.sql
-$EDITOR db/migrations/<ts>_add-xyz.down.sql
-make migrate-up
-make generate     # regenerate SQLC after migration changes
+$EDITOR db/init/00-create-schema.sql
+make migrate-create NAME=add-foo   # requires golang-migrate
+$EDITOR db/migrations/NNNN_add-foo.{up,down}.sql
+$EDITOR db/queries/<table>.sql
+make generate     # regenerate SQLC after schema/query changes
 ```
+
+Fresh install: `make initdb` (or compose first boot). Incremental on an
+already-initialized DB: stamp `force 1` once, then `make migrate-up`. See
+[db/CLAUDE.md](db/CLAUDE.md).
 
 Rules:
 
-- Wrap migrations in `BEGIN; ... COMMIT;`.
-- Down migrations must be precise rollbacks of the up — no `IF EXISTS`
-  guards.
 - Use named parameters (`@param::type`), never numbered (`$1`).
 - `organization_id` and `created_by` are opaque external strings — do
   not add foreign keys to tables outside the router's own schema.
-- Soft-delete via `deleted_at TIMESTAMP` on tables that need lifecycle.
 
 ## Logging
 
@@ -206,7 +208,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 feat(proxy): add session pinning for multi-turn coherence
 fix(auth): clear API key cache on installation deletion
 refactor(translate): extract OpenAI envelope builder
-docs: clarify ROUTER_ADMIN_PASSWORD requirement
+docs: clarify EXTERNAL_KEY_ENCRYPTION_KEY requirement
 ```
 
 Common types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`.
@@ -215,7 +217,7 @@ Common types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`.
 
 1. Open the PR against `main`. Include the DCO sign-off on every commit.
 2. Fill in the PR template — what changed, why, and how it was tested.
-3. Make sure CI is green (`make check` + the migration-timestamp check).
+3. Make sure CI is green (`make check`).
    If your PR touches a path-gated surface (see the smoke suite section
    in Tests above), the `Smoke (replay-only)` check also runs — it
    replays committed cassettes with no key needed. If CI shows

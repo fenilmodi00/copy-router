@@ -166,8 +166,9 @@ func TestService_ProxyOpenAIChatCompletion_ResponsesEndpointSelection(t *testing
 }
 
 // An `openai`-named endpoint with no Responses surface falls back to
-// chat/completions pre-commit, and the answer is memoized so the next turn
-// skips the probe.
+// chat/completions pre-commit, re-probing every turn: the probe memo
+// (noResponsesGateways) went away with the gateway-provider prune, and ai&
+// documents /v1/responses so the per-turn 404 only exists in this fixture.
 func TestService_ProxyOpenAIChatCompletion_FallsBackWhenEndpointLacksResponses(t *testing.T) {
 	provider := &fakeProvider{
 		proxyErrByEndpoint: map[providers.Endpoint]error{
@@ -187,7 +188,7 @@ func TestService_ProxyOpenAIChatCompletion_FallsBackWhenEndpointLacksResponses(t
 
 	for _, want := range [][]providers.Endpoint{
 		{providers.EndpointResponses, providers.EndpointChatCompletions},
-		{providers.EndpointChatCompletions},
+		{providers.EndpointResponses, providers.EndpointChatCompletions},
 	} {
 		provider.proxyEndpoints = nil
 		provider.proxyBodies = nil
@@ -287,29 +288,6 @@ func TestService_ProxyOpenAIChatCompletion_LogsToolCallIssues(t *testing.T) {
 
 	assert.Contains(t, logBuf.String(), "router.tool_call_invalid")
 	assert.Contains(t, logBuf.String(), "read_file")
-}
-
-// A gateway provider keeps its own narrow rule: a plain chat turn must not be
-// promoted onto a Responses surface most gateways don't mount.
-func TestService_ProxyOpenAIChatCompletion_GatewayKeepsChatCompletions(t *testing.T) {
-	provider := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
-	}}
-	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAIGateway, Model: "moonshotai/kimi-k3", Reason: "test"}},
-		map[string]providers.Client{providers.ProviderOpenAIGateway: provider},
-		nil, false, nil, nil, false, providers.ProviderAiand, "moonshotai/kimi-k2.7", nil,
-	)
-
-	body := `{"model":"auto","messages":[{"role":"user","content":"hi"}]}`
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
-	require.NoError(t, svc.ProxyOpenAIChatCompletion(context.Background(), []byte(body), rec, req))
-
-	require.Len(t, provider.proxyEndpoints, 1)
-	assert.Equal(t, providers.EndpointChatCompletions, provider.proxyEndpoints[0])
 }
 
 // Broad-rollout promotion sends a /v1/responses ingress turn to the upstream

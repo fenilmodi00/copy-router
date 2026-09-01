@@ -118,13 +118,10 @@ func playgroundErrorCode(cls proxy.DispatchErrorClass) string {
 			return "provider_error"
 		}
 		return "routing_failed"
-	case proxy.DispatchErrorCreditsExhausted, proxy.DispatchErrorUserSpendLimitReached:
-		return "insufficient_credits"
 	case proxy.DispatchErrorTranslationProviderUnavailable,
 		proxy.DispatchErrorRLPolicyUnavailable,
 		proxy.DispatchErrorBanditUnavailable,
-		proxy.DispatchErrorHMMUnavailable,
-		proxy.DispatchErrorSpendLimitUnavailable:
+		proxy.DispatchErrorHMMUnavailable:
 		return "unavailable"
 	default:
 		if cls.RetryAfter || cls.Status == http.StatusTooManyRequests {

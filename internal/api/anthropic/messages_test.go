@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -87,6 +88,12 @@ type fakeProviderClient struct {
 
 func (f *fakeProviderClient) Proxy(_ context.Context, _ router.Decision, _ providers.PreparedRequest, w http.ResponseWriter, _ *http.Request) error {
 	if f.proxyErr != nil {
+		if f.proxyStatus != 0 {
+			w.WriteHeader(f.proxyStatus)
+		}
+		if f.proxyBody != "" {
+			_, _ = w.Write([]byte(f.proxyBody))
+		}
 		return f.proxyErr
 	}
 	status := f.proxyStatus
@@ -223,7 +230,7 @@ func TestMessagesHandler_ClusterUnavailableReturns503WithRetryAfter(t *testing.T
 
 func TestMessagesHandler_RLPolicyUnavailableReturns503(t *testing.T) {
 	// No RL router wired — strategy fails closed rather than falling back to cluster scorer.
-	svc := newTestService(&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-5"}}, "", nil)
+	svc := newTestService(&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "claude-sonnet-4-5"}}, "", nil)
 	engine := messagesEngine(svc)
 
 	rec := httptest.NewRecorder()
@@ -240,7 +247,7 @@ func TestMessagesHandler_RLPolicyUnavailableReturns503(t *testing.T) {
 
 func TestMessagesHandler_BanditUnavailableReturns503(t *testing.T) {
 	// No bandit router wired, mirroring the RL case above.
-	svc := newTestService(&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-5"}}, "", nil)
+	svc := newTestService(&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "claude-sonnet-4-5"}}, "", nil)
 	engine := messagesEngine(svc)
 
 	rec := httptest.NewRecorder()
@@ -274,11 +281,19 @@ func TestMessagesHandler_ProviderNotConfiguredReturns502(t *testing.T) {
 	assert.Equal(t, "Provider not configured.", errObj["message"])
 }
 
+// UpstreamStatusError carries no body, so the cross-format translator can only
+// render a bare error envelope with the upstream status. Streaming proxies the
+// upstream body before failing (openaicompat.WritePassthroughError shape), so
+// simulate a buffered non-2xx: body first, then the sentinel error.
 func TestMessagesHandler_UpstreamStatusErrorPassesThroughStatus(t *testing.T) {
-	client := &fakeProviderClient{proxyErr: &providers.UpstreamStatusError{Status: http.StatusTooManyRequests}}
+	client := &fakeProviderClient{
+		proxyStatus: http.StatusTooManyRequests,
+		proxyBody:   `{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}`,
+		proxyErr:    &providers.UpstreamStatusError{Status: http.StatusTooManyRequests},
+	}
 	svc := newTestService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-5", Reason: "test"}},
-		providers.ProviderAnthropic, client,
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "claude-sonnet-4-5", Reason: "test"}},
+		providers.ProviderAiand, client,
 	)
 	engine := messagesEngine(svc)
 
@@ -286,14 +301,14 @@ func TestMessagesHandler_UpstreamStatusErrorPassesThroughStatus(t *testing.T) {
 
 	require.Equal(t, http.StatusTooManyRequests, rec.Code)
 	errObj := errorEnvelope(t, rec.Body.Bytes())
-	assert.Equal(t, "api_error", errObj["type"])
+	assert.Equal(t, "rate_limit_error", errObj["type"])
 }
 
 func TestMessagesHandler_UnknownErrorReturns502(t *testing.T) {
 	client := &fakeProviderClient{proxyErr: errors.New("boom: transport exploded")}
 	svc := newTestService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-5", Reason: "test"}},
-		providers.ProviderAnthropic, client,
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "claude-sonnet-4-5", Reason: "test"}},
+		providers.ProviderAiand, client,
 	)
 	engine := messagesEngine(svc)
 
@@ -305,19 +320,21 @@ func TestMessagesHandler_UnknownErrorReturns502(t *testing.T) {
 }
 
 func TestMessagesHandler_HappyPathServesUpstreamResponse(t *testing.T) {
-	client := &fakeProviderClient{proxyStatus: http.StatusOK, proxyBody: `{"id":"msg_1","type":"message"}`}
+	client := &fakeProviderClient{proxyStatus: http.StatusOK, proxyBody: "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"status\":\"in_progress\"}}\n\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\"hi\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}],\"usage\":{\"input_tokens\":12,\"output_tokens\":3}}}\n\n"}
 	svc := newTestService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-5", Reason: "test_reason"}},
-		providers.ProviderAnthropic, client,
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "claude-sonnet-4-5", Reason: "test_reason"}},
+		providers.ProviderAiand, client,
 	)
 	engine := messagesEngine(svc)
 
 	rec := postMessages(engine, []byte(validAnthropicBody))
 
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, `{"id":"msg_1","type":"message"}`, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), `"type":"message"`)
+	assert.Contains(t, rec.Body.String(), `{"type":"text","text":"hi"}`)
+	assert.Contains(t, rec.Body.String(), `"stop_reason":"end_turn"`)
 	assert.Equal(t, "claude-sonnet-4-5", rec.Header().Get("x-router-model"))
-	assert.Equal(t, providers.ProviderAnthropic, rec.Header().Get("x-router-provider"))
+	assert.Equal(t, providers.ProviderAiand, rec.Header().Get("x-router-provider"))
 	assert.Equal(t, "test_reason", rec.Header().Get("x-router-decision"))
 }
 
@@ -391,7 +408,7 @@ func TestRouteHandler_RequestTooLarge(t *testing.T) {
 }
 
 func TestRouteHandler_HappyPathReturnsDecision(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5", Reason: "cheap_and_cheerful"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "claude-haiku-4-5", Reason: "cheap_and_cheerful"}
 	svc := newTestService(&fakeRouter{decision: decision}, "", nil)
 	engine := routeEngine(svc)
 
@@ -402,7 +419,7 @@ func TestRouteHandler_HappyPathReturnsDecision(t *testing.T) {
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
 	assert.Equal(t, "claude-haiku-4-5", got["model"])
-	assert.Equal(t, providers.ProviderAnthropic, got["provider"])
+	assert.Equal(t, providers.ProviderAiand, got["provider"])
 	assert.Equal(t, "cheap_and_cheerful", got["reason"])
 }
 
@@ -424,20 +441,54 @@ func TestRouteHandler_ClientModelAliasRoutesLikeChat(t *testing.T) {
 	assert.Equal(t, "claude-sonnet-4-20250514", got.RequestedModel)
 }
 
+// WithByokOnly the eligible set starts empty; a non-router-keyed request
+// carrying an OpenAI-compat bearer pays the aiand passthrough back into the
+// eligibility set via ExtractClientCredentials.
 func TestRouteHandler_ForwardsAuthorizationForProviderEligibility(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "claude-haiku-4-5"}
 	var got router.Request
-	svc := newTestService(&fakeRouter{decision: decision, got: &got}, providers.ProviderAnthropic, &fakeProviderClient{}).
+	svc := newTestService(&fakeRouter{decision: decision, got: &got}, "", nil).
 		WithByokOnly(true)
 	engine := routeEngine(svc)
 	req := httptest.NewRequest(http.MethodPost, "/v1/route", bytes.NewReader([]byte(validAnthropicBody)))
-	req.Header.Set("Authorization", "Bearer sk-ant-oat01-claude-code-token")
+	req.Header.Set("Authorization", "Bearer sk-aiand-client-key")
 	rec := httptest.NewRecorder()
 
 	engine.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, got.EnabledProviders, providers.ProviderAnthropic)
+	assert.Contains(t, got.EnabledProviders, providers.ProviderAiand)
+}
+
+// GoesSecond: PassthroughToProvider answers count_tokens locally from the
+// body's byte-length token estimate — no upstream dispatch, no passthrough —
+// so the response number reflects len(validAnthropicBody)/4, not a fake reply.
+func TestPassthroughHandler_CountTokensAnswersLocally(t *testing.T) {
+	client := &fakeProviderClient{passthroughErr: providers.ErrNotImplemented}
+	svc := newTestService(&fakeRouter{}, providers.ProviderAiand, client)
+	engine := passthroughEngine(svc)
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", bytes.NewReader([]byte(validAnthropicBody))))
+
+	require.Equal(t, http.StatusOK, rec.Code, "count_tokens must answer locally even when the upstream passthrough is unimplemented")
+	assert.Equal(t, fmt.Sprintf(`{"input_tokens":%d}`, len(validAnthropicBody)/4), rec.Body.String())
+}
+
+// Model listing is answered locally from the deployed registry in the
+// Anthropic list shape, again without touching the upstream.
+func TestPassthroughHandler_ModelListAnswersLocally(t *testing.T) {
+	client := &fakeProviderClient{passthroughErr: providers.ErrNotImplemented}
+	svc := newTestService(&fakeRouter{}, providers.ProviderAiand, client).
+		WithLocalModelList(func() []string { return []string{"moonshotai/kimi-k2.7"} })
+	engine := gin.New()
+	engine.GET("/v1/models", anthropicapi.PassthroughHandler(svc))
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"id":"moonshotai/kimi-k2.7"`)
 }
 
 func previewRouteEngine(svc *proxy.Service, authorized bool) *gin.Engine {
@@ -498,7 +549,7 @@ func TestPreviewRouteHandler_ReturnsFrozenPolicyPlan(t *testing.T) {
 
 func TestRouteAnthropicRequest_ForwardsValidInstallationIDUUIDVerbatim(t *testing.T) {
 	installID := uuid.New()
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "claude-haiku-4-5"}
 	var got router.Request
 	svc := newTestService(&fakeRouter{decision: decision, got: &got}, "", nil)
 
@@ -510,7 +561,7 @@ func TestRouteAnthropicRequest_ForwardsValidInstallationIDUUIDVerbatim(t *testin
 }
 
 func TestRouteAnthropicRequest_DropsMalformedInstallationIDInsteadOfForwardingRaw(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "claude-haiku-4-5"}
 	var got router.Request
 	svc := newTestService(&fakeRouter{decision: decision, got: &got}, "", nil)
 
@@ -525,7 +576,7 @@ func TestRouteAnthropicRequest_DropsMalformedInstallationIDInsteadOfForwardingRa
 }
 
 func TestRouteAnthropicRequest_DropsEmptyInstallationIDInsteadOfForwardingRaw(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "claude-haiku-4-5"}
 	var got router.Request
 	svc := newTestService(&fakeRouter{decision: decision, got: &got}, "", nil)
 
@@ -537,7 +588,7 @@ func TestRouteAnthropicRequest_DropsEmptyInstallationIDInsteadOfForwardingRaw(t 
 }
 
 func TestRouteAnthropicRequest_DropsMissingInstallationIDInsteadOfForwardingRaw(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}
+	decision := router.Decision{Provider: providers.ProviderAiand, Model: "claude-haiku-4-5"}
 	var got router.Request
 	svc := newTestService(&fakeRouter{decision: decision, got: &got}, "", nil)
 
@@ -558,19 +609,6 @@ func passthroughEngine(svc *proxy.Service) *gin.Engine {
 	return engine
 }
 
-func TestPassthroughHandler_NotImplementedReturns501(t *testing.T) {
-	client := &fakeProviderClient{passthroughErr: providers.ErrNotImplemented}
-	svc := newTestService(&fakeRouter{}, providers.ProviderAnthropic, client)
-	engine := passthroughEngine(svc)
-
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", bytes.NewReader([]byte(validAnthropicBody))))
-
-	require.Equal(t, http.StatusNotImplemented, rec.Code)
-	errObj := errorEnvelope(t, rec.Body.Bytes())
-	assert.Equal(t, "api_error", errObj["type"])
-}
-
 func TestPassthroughHandler_RequestTooLarge(t *testing.T) {
 	svc := newTestService(&fakeRouter{}, "", nil)
 	engine := passthroughEngine(svc)
@@ -580,16 +618,4 @@ func TestPassthroughHandler_RequestTooLarge(t *testing.T) {
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", bytes.NewReader(oversized)))
 
 	require.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
-}
-
-func TestPassthroughHandler_HappyPath(t *testing.T) {
-	client := &fakeProviderClient{proxyBody: `{"input_tokens":42}`}
-	svc := newTestService(&fakeRouter{}, providers.ProviderAnthropic, client)
-	engine := passthroughEngine(svc)
-
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", bytes.NewReader([]byte(validAnthropicBody))))
-
-	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, `{"input_tokens":42}`, rec.Body.String())
 }

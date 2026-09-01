@@ -7,7 +7,7 @@ Opt-in `router.Router` that delegates model selection to a trained RL/DPO policy
 ## What it does (and does not do)
 
 - **Does:** build the eligible candidate set from this router's own `catalog` (deployed models ∩ request's enabled providers, minus exclusions, minus `ToolUseLow` on tool turns), ask the policy to pick one, and map the choice back to a `router.Decision`.
-- **Does NOT:** dispatch, translate, embed, or talk to OpenRouter. Dispatch stays in `proxy.Service` over Weave's own providers; the sidecar only answers "which eligible model?". The prompt embedding the policy needs is computed inside the sidecar (against a Weave Google/Vertex key), never here.
+- **Does NOT:** dispatch, translate, embed, or talk to OpenRouter. Dispatch stays in `proxy.Service` over this deploy's registered providers (aiand only at boot); the sidecar only answers "which eligible model?". The prompt embedding the policy needs is computed inside the sidecar (against its own embedder credentials), never here.
 
 ## Load-bearing invariants
 

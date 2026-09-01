@@ -1,4 +1,4 @@
-const BASE = "/admin/v1";
+const BASE = "/v1";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
@@ -35,7 +35,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // Absolute-path variant of request() — used for /account/v1/* which lives
-// outside the /admin/v1 BASE group. Shares the 401 bounce + error shape so
+// outside the /v1 BASE group. Shares the 401 bounce + error shape so
 // callers don't observe a difference in failure handling.
 async function requestRaw<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
@@ -195,16 +195,8 @@ export interface OnboardingStatus {
   first_request_served_at: string | null;
 }
 
-export interface MeResponse {
-  authenticated: boolean;
-  subject?: string;
-}
-
-// Self-service (aiand key) login session probe. `authenticated:false` with
-// a 200 means the account endpoints exist and the caller is logged out —
-// the login page shows the aiand-key form. A thrown response (404 etc.)
-// means the deployment is selfhosted/managed with no account surface, so
-// the login page falls back to the admin-password form.
+// Account (aiand key) login session probe. `authenticated:false` with a 200
+// means the caller is logged out — the login page shows the aiand-key form.
 export interface AccountMeResponse {
   authenticated: boolean;
   account_id?: string;
@@ -223,11 +215,6 @@ export interface ExcludedModelsResponse {
   env_override_active: boolean;
 }
 
-export interface ExcludedProvidersResponse {
-  available: string[];
-  excluded: string[];
-  env_override_active: boolean;
-}
 
 export interface RoutingPreferencesResponse {
   quality: number;
@@ -257,15 +244,8 @@ export interface AiandModel {
 
 export const api = {
   auth: {
-    me: () => request<MeResponse>("/auth/me"),
-    login: (password: string) =>
-      request<{ ok: boolean; expires_at: string }>("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ password }),
-      }),
-    logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
-    // Self-service (aiand key) login surface. Lives under /account/v1/*
-    // (outside BASE=/admin/v1), so these route through requestRaw.
+    // Account (aiand key) login surface. Lives under /account/v1/*, outside
+    // BASE=/v1, so these route through requestRaw.
     accountMe: () => requestRaw<AccountMeResponse>("/account/v1/me"),
     loginWithKey: (key: string) =>
       requestRaw<{ ok: boolean; expires_at: string }>("/account/v1/login", {
@@ -327,14 +307,6 @@ export const api = {
     get: () => request<ExcludedModelsResponse>("/excluded-models"),
     update: (excluded: string[]) =>
       request<ExcludedModelsResponse>("/excluded-models", {
-        method: "PUT",
-        body: JSON.stringify({ excluded }),
-      }),
-  },
-  excludedProviders: {
-    get: () => request<ExcludedProvidersResponse>("/excluded-providers"),
-    update: (excluded: string[]) =>
-      request<ExcludedProvidersResponse>("/excluded-providers", {
         method: "PUT",
         body: JSON.stringify({ excluded }),
       }),

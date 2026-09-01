@@ -206,13 +206,12 @@ func translationConstraints(req router.TranslationRequirements) ([]translationCo
 func sourceNativeConstraint(req router.TranslationRequirements, code string) (translationConstraint, bool) {
 	switch req.SourceFormat {
 	case router.WireFormatAnthropic:
-		return translationConstraint{Code: code, TargetFamily: providers.FamilyAnthropic, ExactProviders: singletonProviderSet(providers.ProviderAnthropic)}, true
+		// No anthropic-family provider is registered — /v1/messages serves via
+		// cross-format translation — so a native-shape constraint on the
+		// Anthropic wire honestly reports no match.
+		return translationConstraint{Code: code, TargetFamily: providers.FamilyAnthropic}, true
 	case router.WireFormatOpenAI:
-		constraint := translationConstraint{Code: code, TargetFamily: providers.FamilyOpenAICompat}
-		if req.Endpoint == router.EndpointOpenAIResponses {
-			constraint.ExactProviders = singletonProviderSet(providers.ProviderOpenAI)
-		}
-		return constraint, true
+		return translationConstraint{Code: code, TargetFamily: providers.FamilyOpenAICompat}, true
 	default:
 		return translationConstraint{}, false
 	}

@@ -7,17 +7,15 @@ This page is the exhaustive reference; the [README](../README.md) has the
 ## Table of contents
 
 - [Provider API keys](#provider-api-keys)
-  - [Client Claude aliases → catalog IDs](#client-claude-aliases--catalog-ids)
+  - [Client model strings → catalog IDs](#client-model-strings--catalog-ids)
   - [Routing intent via the `model` field](#routing-intent-via-the-model-field)
-  - [Peripheral gateway / BYOK env](#peripheral-gateway--byok-env)
-  - [Key-pair auth](#key-pair-auth)
-  - [Workload identity federation](#workload-identity-federation)
+  - [BYOK provider keys](#byok-provider-keys)
 - [Postgres](#postgres)
 - [Server](#server)
   - [Playground (`/ui/playground`)](#playground-uiplayground)
-  - [Self-service mode (`ROUTER_DEPLOYMENT_MODE=selfserve`)](#self-service-mode-router_deployment_modeselfserve)
+  - [Dashboard](#dashboard)
 - [Routing](#routing)
-- [Provider and model exclusions](#provider-and-model-exclusions)
+- [Model exclusions](#model-exclusions)
 - [Policy sidecars](#policy-sidecars)
 - [BYOK encryption](#byok-encryption)
 - [Telemetry (OpenTelemetry)](#telemetry-opentelemetry)
@@ -43,21 +41,21 @@ above, each installation can supply its own provider keys via the dashboard.
 Those are stored in Postgres and used only for that installation's traffic.
 See [BYOK encryption](#byok-encryption).
 
-### Client Claude aliases → catalog IDs
+### Client model strings → catalog IDs
 
-Clients may still send Claude-era model names on **force-model** paths
-(`claude-sonnet-5`, `/force-model opus`, `x-weave-force-model`, `model="opus"`,
-…). Those strings are **remap inputs only** — they are not catalog rows.
-Force-model resolution maps them onto existing aiand catalog IDs:
+Force-model / `model` field resolution accepts **exact catalog IDs**, binding
+`UpstreamID`s, and **retired catalog aliases** from `catalog.aliases`
+(e.g. `zai-org/glm-5.2` → `zai-org/glm-5.3`, `qwen/qwen3.6-27b` →
+`qwen/qwen3.8-27b`). An optional `:level` effort suffix is stripped first.
 
-| Client alias | Catalog ID |
-| --- | --- |
-| `claude-fable-5` (+ fable shorts) | `moonshotai/kimi-k3` |
-| `claude-opus-4-8` (+ `opus-4-8` / `claude-4-8`) | `zai-org/glm-5.2` |
-| `claude-opus-5` / `opus` / `claude-5` | `zai-org/glm-5.2` |
-| `claude-sonnet-5` / `sonnet` | `moonshotai/kimi-k2.7` |
-| `claude-sonnet-4-6` | `deepseek-ai/deepseek-v4-pro` |
-| `claude-haiku-4-5` / `haiku` | `deepseek-ai/deepseek-v4-flash` |
+There is **no** Claude-era short-name remap table anymore
+(`forceModelAliases` was deleted). Strings like `claude-opus-5`, `opus`, or
+`claude-sonnet-5` do **not** resolve to catalog rows — they fail force-model /
+non-`auto` `model` with HTTP 400 (`ErrForcedModelUnknown`). Clients that still
+send Claude-era names should pin a catalog ID instead
+(`moonshotai/kimi-k3`, `zai-org/glm-5.3`, `deepseek-ai/deepseek-v4-flash`, …).
+
+`model="auto"` never clears an existing pin; only `/unforce-model` does.
 
 ### Routing intent via the `model` field
 
@@ -68,14 +66,15 @@ values plus everything in between:
   action.
 - `model="<catalog-id-or-alias>"` — force exactly that model: a canonical
   catalog ID (`moonshotai/kimi-k2.7`, `deepseek-ai/deepseek-v4-flash`), a bare
-  tail (`kimi-k2.7`), an alias (`opus`, `kimi-k3`, `claude-sonnet-5`,
-  `claude-haiku-4-5`), an `openai/…` provider prefix, optionally with a
-  `:level` effort suffix (`opus:high`). This is **exactly equivalent** to the
+  tail when unique (`kimi-k2.7`), a retired catalog alias (`zai-org/glm-5.2`),
+  an `openai/…` provider prefix strip, optionally with a `:level` effort suffix
+  (`moonshotai/kimi-k3:high`). This is **exactly equivalent** to the
   `x-weave-force-model` header / `/force-model` command: it writes the same
   user-forced session pin (`ReasonUserForceModel`, never expires), serves that
   model on the same turn, and 400s on values that name no catalog model. A
   Claude Code `[1m]` context-window variant tag on the field
-  (`kimi-k2.7[1m]`) is stripped before resolution.
+  (`kimi-k2.7[1m]`) is stripped before resolution. Claude-era short names
+  (`opus`, `claude-sonnet-5`) are **not** remapped — they 400.
 
 Precedence, when more than one carrier names a model:
 `/force-model` chat command > `model` field > `x-weave-force-model` header. All
@@ -98,210 +97,39 @@ through the same forced-model resolver as the header and command. A `:level`
 suffix on the winning value is honored exactly as it is on `x-weave-force-model`
 (effort lands in `router.Overrides.ForceEffort`).
 
-### Peripheral gateway / BYOK env
+### BYOK provider keys
 
-OpenRouter, Anthropic, OpenAI, Google, and gateway vars are **not** the deploy
-baseline. Composition root does not register those providers for the aiand-only
-deploy. Keep them only when wiring enterprise gateways or BYOK that still speak
-those surfaces. Host WSL / Build.io paths stay aiand-only — do not add Anthropic
-or OpenAI provider keys there.
-
-| Variable              | Default                                                   | Effect |
-| --------------------- | --------------------------------------------------------- | ------ |
-| `OPENROUTER_API_KEY`  | *(none)*                                                  | Peripheral. Enables OpenRouter / any OpenAI-compatible pool when registered (not aiand-only boot). |
-| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1`                            | Override for OpenRouter or any OpenAI-compatible endpoint (vLLM, Together, Fireworks, self-hosted). |
-| `ANTHROPIC_API_KEY`   | *(none — passthrough)*                                    | Peripheral. Router's own Anthropic key for BYOK / gateway paths. When unset, client `Authorization` headers may pass through on Anthropic-family bindings. |
-| `OPENAI_API_KEY`      | *(none)*                                                  | Peripheral. Enables an OpenAI provider binding when registered. |
-| `OPENAI_BASE_URL`     | `https://api.openai.com`                                  | Override for OpenAI (e.g. Azure OpenAI). |
-| `GOOGLE_API_KEY`      | *(none)*                                                  | Peripheral. Used by optional HMM sidecar embeddings; not an aiand deploy upstream. |
-| `GOOGLE_BASE_URL`     | `https://generativelanguage.googleapis.com/v1beta/openai` | Override for Gemini-shaped OpenAI-compat endpoints. |
-| `ANTHROPIC_GATEWAY_BASE_URL` | *(none)*                                           | Base URL of an Anthropic-compatible gateway; `/v1/messages` is appended to it. |
-| `ANTHROPIC_GATEWAY_TOKEN`    | *(none)*                                           | Token for that gateway, sent as `Authorization: Bearer`. Only used when `ANTHROPIC_GATEWAY_BASE_URL` is also set. |
-| `OPENAI_GATEWAY_BASE_URL`    | *(none)*                                           | Base URL of an OpenAI-compatible gateway; `/chat/completions` is appended to it. |
-| `OPENAI_GATEWAY_TOKEN`       | *(none)*                                           | Token for that gateway, sent as `Authorization: Bearer`. Only used when `OPENAI_GATEWAY_BASE_URL` is also set. |
-
-**Anthropic-compatible gateway.** Some enterprises front an Anthropic Messages
-gateway that authenticates with a bearer token instead of `x-api-key`. There is
-no default endpoint: an unconfigured gateway does *not* fall back to
-`api.anthropic.com`. The provider name stays available so BYOK installations can
-point at their own gateway without deployment-level credentials.
-
-**OpenAI-compatible gateway.** `openai_gateway` is the same arrangement one wire
-family over: a customer endpoint speaking OpenAI Chat Completions, bearer auth,
-no default endpoint.
-
-An endpoint that publishes both surfaces is configured as two keys pointing at
-the same base URL. Snowflake Cortex, for example, serves an Anthropic surface at
-`/api/v2/cortex/v1/messages` and Chat Completions at
-`/api/v2/cortex/v1/chat/completions`:
+Each installation supplies its own upstream provider keys (BYOK) via the
+dashboard: **Settings → Provider API keys**. Keys are stored in Postgres and
+used only for that installation's traffic. A key may point at an
+OpenAI-compatible or Anthropic-compatible endpoint by giving its base URL; the
+provider appends its own API path (`/v1/messages` for the Anthropic family,
+`/chat/completions` for the OpenAI one), so give the base only — a trailing
+slash is stripped.
 
 ```bash
-# Anthropic Messages surface (BYOK / gateway).
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"anthropic_gateway","key":"<snowflake PAT>",
-       "base_url":"https://<account>.snowflakecomputing.com/api/v2/cortex/v1"}'
-
-# Chat Completions surface, under Cortex's own IDs.
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"openai_gateway","key":"<snowflake PAT>",
-       "base_url":"https://<account>.snowflakecomputing.com/api/v2/cortex/v1",
-       "model_aliases":{"gpt-5":"openai-gpt-5"}}'
-```
-
-Both keys carry the same PAT; per model, the catalog's binding order decides
-which surface serves it. A tenant that can't issue a long-lived PAT configures
-each key with an RSA private key instead — see [Key-pair auth](#key-pair-auth)
-— or with no secret at all, see
-[Workload identity federation](#workload-identity-federation).
-
-Each key may also carry its own endpoint, which overrides the deployment's base
-URL for that provider on that installation's requests. Set it in **Settings →
-Provider API keys → Endpoint URL**, or through the admin API:
-
-```bash
-# /admin/v1 mutations take the dashboard cookie, not an rk_ bearer.
-curl -sS -c jar -X POST https://<router>/admin/v1/auth/login \
-  -H 'content-type: application/json' -d '{"password":"<admin password>"}'
-
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
+curl -sS -b jar -X POST https://<router>/v1/provider-keys \
   -H 'content-type: application/json' \
   -d '{"provider":"openai_gateway","key":"<token>","base_url":"https://gateway.example.com/api"}'
 ```
 
-The value must be an absolute `http(s)` URL; anything else is rejected with
-`400`. A trailing slash is stripped, and the provider appends its own API path
-(`/v1/messages` for the Anthropic family, `/chat/completions` for the OpenAI
-one), so give the base only. Omit the field to keep the deployment endpoint —
-except for `anthropic_gateway` and `openai_gateway`, which have no default to
-fall back to and reject a key without one.
-
 A key may also carry a model alias map for endpoints that publish the catalog's
-models under their own names:
+models under their own names (`{"model_aliases":{"moonshotai/kimi-k3":"internal.kimi-k3"}}`).
+Keys are catalog model IDs and values are what goes on the wire; routing,
+pricing, and analytics stay keyed on the catalog ID. Edit the map in
+**Settings → Provider API keys → Edit aliases**, or replace it wholesale via
+`PUT /v1/provider-keys/<key id>/model-aliases`.
 
-```bash
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"openai_gateway","key":"<token>","base_url":"https://gateway.example.com/api",
-       "model_aliases":{"moonshotai/kimi-k3":"internal.kimi-k3"}}'
-```
-
-Keys are catalog model IDs (an ID outside the deployed catalog is rejected with
-`400`) and values are what goes on the wire to that endpoint. Only the outbound
-model name changes: routing, pricing, and analytics stay keyed on the catalog
-ID. Omit the field to send catalog IDs unchanged.
-
-The map is editable in **Settings → Provider API keys → Edit aliases**, or on
-its own endpoint, which replaces the whole map and leaves the stored secret
-alone — so retargeting model names doesn't need the credential re-entered:
-
-```bash
-curl -sS -b jar -X PUT https://<router>/admin/v1/provider-keys/<key id>/model-aliases \
-  -H 'content-type: application/json' \
-  -d '{"model_aliases":{"moonshotai/kimi-k3":"internal.kimi-k3"}}'
-```
-
-### Key-pair auth
-
-A gateway whose tenant forbids long-lived tokens can be given an RSA private
-key instead: the router signs a short-lived RS256 JWT for the configured
-principal and sends it as the bearer, re-signing well before the one-hour
-ceiling upstreams like Snowflake impose on such tokens. The key is stored in
-the same encrypted column as a PAT (see [BYOK encryption](#byok-encryption))
-and is never returned by the API or rendered back in the dashboard.
-
-```bash
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"openai_gateway","auth_type":"keypair_jwt",
-       "auth_account":"MYORG-MYACCOUNT","auth_user":"SERVICE_USER",
-       "key":"-----BEGIN PRIVATE KEY-----\n...",
-       "base_url":"https://<account>.snowflakecomputing.com/api/v2/cortex/v1"}'
-```
-
-The key must be an unencrypted PKCS#1 or PKCS#8 RSA key of at least 2048 bits —
-passphrase-protected keys are rejected, since there is nobody to prompt. Its
-public half must already be assigned to the upstream user (Snowflake:
-`ALTER USER ... SET RSA_PUBLIC_KEY`), whose default role needs
-`SNOWFLAKE.CORTEX_USER` (or `SNOWFLAKE.CORTEX_REST_API_USER`). Account locators
-drop their region and cloud suffixes (`xy12345.us-east-1.aws` → `XY12345`);
-org-qualified identifiers (`myorg-myaccount`) are used as they are. The same
-fields are available in **Settings → Provider API keys → Authentication**;
-`auth_type` defaults to `bearer`, which sends the stored secret verbatim as
-today.
-
-The minted token claims `iss = ACCOUNT.USER.SHA256:<public key fingerprint>`
-and `sub = ACCOUNT.USER`, uppercased, valid 55 minutes and re-signed after 45,
-so rotating the stored key takes effect on the next request rather than at the
-old token's expiry. Only the auth type and principal are readable back:
-
-```bash
-curl -sS -b jar https://<router>/admin/v1/provider-keys
-# {"keys":[{"provider":"openai_gateway","auth_type":"keypair_jwt",
-#           "auth_account":"MYORG-MYACCOUNT","auth_user":"SERVICE_USER", ...}]}
-```
-
-A key whose token can't be signed (wrong secret pasted, unreadable key) is
-dropped from that request's credentials rather than sent upstream as-is, so
-routing falls back to another binding instead of leaking the key. Misconfigured
-input is rejected at write time with a `400`: a non-RSA or under-2048-bit key,
-a passphrase-protected key, a missing account or user, or key-pair auth on a
-vendor provider (only `anthropic_gateway` and `openai_gateway` accept it).
-
-### Workload identity federation
-
-A tenant that wants no credential in the router's database at all can trust the
-router's *own* cloud identity instead. The router attests itself per request —
-a Google-signed ID token for the service account it runs as, or a projected
-OIDC token mounted into its pod — and sends the attestation as the bearer:
-
-```text
-Authorization: Bearer WIF.GCP.<attestation>
-X-Snowflake-Authorization-Token-Type: WORKLOAD_IDENTITY_FEDERATION
-```
-
-The attestation source is deployment-wide, not per key, because it identifies
-the router process rather than a tenant:
-
-| Variable                     | Default                  | Effect |
-| ---------------------------- | ------------------------ | ------ |
-| `ROUTER_WIF_PROVIDER`        | *(none)*                 | `GCP` or `OIDC`. Unset disables workload identity: a `wif` key is dropped from that request's credentials. Any other value aborts boot. |
-| `ROUTER_WIF_AUDIENCE`        | `snowflakecomputing.com` | Audience of the minted GCP ID token. Snowflake requires the default; override only for a non-Snowflake upstream. |
-| `ROUTER_WIF_OIDC_TOKEN_FILE` | *(none)*                 | Path to the projected token, re-read per request so a rotated token is picked up. Required when `ROUTER_WIF_PROVIDER=OIDC`; boot aborts without it. |
-
-A key then carries no secret at all:
-
-```bash
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"openai_gateway","auth_type":"wif",
-       "base_url":"https://<account>.snowflakecomputing.com/api/v2/cortex/v1"}'
-```
-
-Upstream, the service user is created without a password or key and is bound to
-the workload's identity (Snowflake:
-`CREATE SECURITY INTEGRATION ... TYPE = WORKLOAD_IDENTITY` plus a
-`WORKLOAD_IDENTITY` on the user; see Snowflake's
-[workload identity federation](https://docs.snowflake.com/en/user-guide/workload-identity-federation)
-guide), with the same `SNOWFLAKE.CORTEX_USER` grant key-pair auth needs. Note
-that every installation using `wif` authenticates as the *same* workload — the
-router's — so spend attribution upstream is per deployment, not per tenant; use
-`identity_header` below if the endpoint needs the calling user.
-
-As with key-pair auth, a key whose attestation can't be obtained (no source
-wired, metadata server unreachable, token file missing) is dropped from that
-request's credentials rather than dispatched with an empty bearer. Passing
-`key`, `auth_account`, or `auth_user` alongside `auth_type: "wif"` is rejected
-with a `400` — the principal lives in the attestation, and a stored secret would
-never be used. The mode is also available in **Settings → Provider API keys →
-Authentication**.
+The value must be an absolute `http(s)` URL; anything else is rejected with
+`400`. Omit the field to keep the deployment endpoint — except for
+`anthropic_gateway` and `openai_gateway`, which have no default to fall back
+to and reject a key without one.
 
 An endpoint that authenticates the org rather than the person can be given the
 calling user in a header of its choosing:
 
 ```bash
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
+curl -sS -b jar -X POST https://<router>/v1/provider-keys \
   -H 'content-type: application/json' \
   -d '{"provider":"anthropic_gateway","key":"<token>",
        "identity_header":"X-Caller-Identity","identity_header_format":"json"}'
@@ -316,15 +144,8 @@ request depends on (`Authorization`, `x-api-key`, `Host`, `Content-Type`,
 `Content-Length`, `Accept`) is rejected with `400`. Omit both fields to forward
 nothing — identity only ever reaches the endpoint configured to receive it.
 
-In `selfhosted` mode BYOK is always active (it's the only credentialing path).
-In `managed` mode it is opt-in per installation: the control plane sets
-`byok_enabled` on the installation row, and until it does, the auth middleware
-strips BYOK keys so a stored key can't spend against a deployment that bills
-prepaid credits. Once enabled, a BYOK turn debits no inference cost (the
-customer paid their own provider). A platform fee can be charged on top,
-recorded as a separate `byok_fee` ledger row: set `BYOK_FEE_RATE` to a
-fraction of upstream cost (e.g. `0.05` for 5%). The default is `0` — no
-fee, and no `byok_fee` row is written.
+BYOK is the only credentialing path: each installation's keys pay for its own
+usage, priced against the catalog.
 
 ## Postgres
 
@@ -346,8 +167,7 @@ Set `DATABASE_URL` directly, or compose it from the individual vars:
 For local WSL or Build.io-parity runs without Compose Postgres:
 
 - Point `DATABASE_URL` at the Supabase **session** pooler on port **5432** (`sslmode=require`).
-- Do **not** use the **transaction** pooler on port **6543** for migrate or the Go `pgx` pool.
-- Set `PUBSUB_DISABLED=true` and leave `PUBSUB_PROJECT_ID` unset. Setting `PUBSUB_PROJECT_ID` alone panics at boot.
+- Do **not** use the **transaction** pooler on port **6543** for the Go `pgx` pool.
 - Run `make setup` then `make dev`. Skip `make db` and `make full-setup`.
 
 Step-by-step: [HOST_WSL_SUPABASE.md](HOST_WSL_SUPABASE.md).
@@ -357,26 +177,28 @@ Step-by-step: [HOST_WSL_SUPABASE.md](HOST_WSL_SUPABASE.md).
 | Variable                 | Default      | Purpose |
 | ------------------------ | ------------ | ------- |
 | `PORT`                   | `8080`       | HTTP listen port. |
-| `ROUTER_DEPLOYMENT_MODE` | `selfhosted` | `selfhosted` mounts `/ui/*` and `/admin/v1/*`. `managed` skips both (for SaaS deployments with a separate admin UI). `selfserve` mounts a self-service dashboard plane instead. |
-| `ROUTER_RESTRICT_UPSTREAM_EGRESS` | follows `ROUTER_DEPLOYMENT_MODE` | When true, provider adapters refuse to dial an upstream that resolves outside the public internet (loopback, private, link-local, CGNAT). Defaults to true in `managed` mode and false in `selfhosted`/`selfserve`, where pointing a provider at an in-cluster or loopback gateway is normal. While on, provider adapters also ignore `HTTP_PROXY`/`HTTPS_PROXY` — a proxied connection makes the destination unverifiable, so a proxy set alongside `managed` mode is silently bypassed (traffic dials DIRECT). |
-| `ROUTER_ADMIN_PASSWORD`  | `admin`      | Dashboard password. Defaults to `admin` with a startup warning when unset — **set this for any internet-facing deployment**. Not used in `selfserve` mode (see below). |
+| `ROUTER_RESTRICT_UPSTREAM_EGRESS` | `false` | When true, provider adapters refuse to dial an upstream that resolves outside the public internet (loopback, private, link-local, CGNAT). While on, provider adapters also ignore `HTTP_PROXY`/`HTTPS_PROXY` — a proxied connection makes the destination unverifiable, so a proxy set alongside this flag is silently bypassed (traffic dials DIRECT). |
+
+The deployment runs in a single "hosted" mode: the dashboard is mounted at
+`/ui/*` and its data plane at `/v1/*`. There is no operator password and no
+separate admin API — users log in with their ai& `sk-` key (see
+[Dashboard](#dashboard)).
 
 ### Playground (`/ui/playground`)
 
-The dashboard **Playground** (`/ui/playground`) is an interactive routing lab
-available in `selfhosted` and `selfserve` modes only — it is **not** mounted in
-`managed` deployments. Use it to preview routing decisions and send test chat
-turns without leaving the dashboard.
+The dashboard **Playground** (`/ui/playground`) is an interactive routing lab.
+Use it to preview routing decisions and send test chat turns without leaving
+the dashboard.
 
-**Auth.** Both playground endpoints live on the `/admin/v1/*` data plane and
-require the same credentials as other dashboard mutations: an admin session
-cookie (`selfhosted`) or account session cookie (`selfserve`). They do **not**
-accept an `rk_` bearer alone.
+**Auth.** Both playground endpoints live on the `/v1/*` dashboard data plane
+and require the account session cookie obtained from
+`POST /account/v1/login` (the ai& `sk-` key). They do **not** accept an `rk_`
+bearer alone.
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /admin/v1/playground/route` | Decision-only preview — no upstream call. |
-| `POST /admin/v1/playground/chat` | Full chat dispatch through `ProxyOpenAIChatCompletion`. |
+| `POST /v1/playground/route` | Decision-only preview — no upstream call. |
+| `POST /v1/playground/chat` | Full chat dispatch through `ProxyOpenAIChatCompletion`. |
 
 **Request shape (both endpoints).** OpenAI Chat Completions JSON:
 `{"model":"auto","messages":[{"role":"user","content":"…"}]}`. Optional
@@ -417,46 +239,30 @@ HTTP status mirrors the classification. `429` responses include `Retry-After`
 `code:"insufficient_credits"`; `503` maps to `code:"unavailable"`.
 
 **Metrics.** Dashboard cost summaries include additive
-`cache_input_savings_usd` on `GET /admin/v1/metrics/summary` (prompt-cache read
+`cache_input_savings_usd` on `GET /v1/metrics/summary` (prompt-cache read
 savings aggregated from telemetry).
 
 **Smoke script.** `scripts/playground_smoke.sh` exercises login, route preview,
-and a classified chat error against a local `selfhosted` router.
+and a classified chat error against a local hosted router.
 
-### Self-service mode (`ROUTER_DEPLOYMENT_MODE=selfserve`)
+### Dashboard
 
-`selfserve` lets any user log into their own dashboard with their aiand `sk-`
-API key instead of an operator password. Each aiand user authenticates against
-aiand's public `GET /api/v1/me` identity endpoint and is mapped to their own
-router installation (the account id doubles as the installation
-`external_id`), so every row they see — metrics, API keys, BYOK provider keys,
-config, model exclusions — is scoped to that installation.
+Any user logs into their own dashboard with their ai& `sk-` API key. Each user
+is mapped to their own router installation (the account id doubles as the
+installation `external_id`), so every row they see — metrics, API keys, BYOK
+provider keys, config, model exclusions — is scoped to that installation.
 
-What mounts, versus `selfhosted`:
+| Surface | Mount |
+| --- | --- |
+| Static dashboard at `/ui/*` | Yes |
+| `POST /account/v1/login` + `/logout`, `GET /account/v1/me` (aiand-key auth) | Yes |
+| `/v1/*` dashboard data plane (metrics, keys, provider-keys, config, onboarding, routing-preferences, content-capture, excluded/allowed models, aiand/models, playground) | Account cookie only |
 
-| Surface | `selfhosted` | `selfserve` |
-| --- | --- | --- |
-| Static dashboard at `/ui/*` | Yes | Yes |
-| `POST /admin/v1/auth/login` + `GET /admin/v1/auth/me` (operator password) | Yes | **Not mounted** |
-| `POST /account/v1/login` + `/logout`, `GET /account/v1/me` (aiand-key) | No | Yes |
-| `/admin/v1/*` dashboard data plane | Admin cookie or `rk_` bearer | Account cookie only |
-
-The `/admin/v1/*` dashboard data plane has full parity between the two
-modes: metrics, API keys, BYOK provider keys (including model-alias editing,
-per-key model discovery, and the pre-save discover-models probe), routing
-preferences, content-capture controls, and the excluded/allowed models +
-providers surfaces all mount in `selfserve` exactly as they do in
-`selfhosted`. The only intentional difference is the auth frontier
-(operator password vs account cookie) and the login surface itself.
-
-The operator password admin surface is deliberately absent in `selfserve`:
-the dashboard authenticates through the account cookie, and `WithAccountCookie`
-(not `WithAdminOnly`) gates the `/admin/v1/*` group. A valid `rk_` data-plane
-key does **not** authorize it, and `/admin/v1/auth/login` isn't registered, so
-there is no password avenue into the dashboard.
+The dashboard authenticates through the account cookie; a valid `rk_`
+data-plane key does **not** authorize the dashboard data plane.
 
 The account session cookie is `router_account_session`, HttpOnly with a
-7-day TTL; `POST /account/v1/logout` clears it, after which `/admin/v1/*`
+7-day TTL; `POST /account/v1/logout` clears it, after which `/v1/*`
 returns 401.
 
 #### aiand identity probe
@@ -467,17 +273,16 @@ returns 401.
 
 The probe validates an arbitrary user `sk-` key as a bearer token against
 `/v1/models` — it never uses the deployment's own `AIAND_API_KEY`, so a
-self-serve login can't spend platform budget. The same user key is stored as
-installation BYOK and is what powers `GET /admin/v1/aiand/models` (Models page)
-and the Playground — **`AIAND_API_KEY` is not required in env for those
-surfaces in `selfserve`**. Responses map to the login outcomes: `200` → authenticated (identity stored), `401`/`403` → `invalid_key`,
+login can't spend platform budget. The same user key is stored as
+installation BYOK and is what powers `GET /v1/aiand/models` (Models page)
+and the Playground. Responses map to the login outcomes: `200` → authenticated (identity stored), `401`/`403` → `invalid_key`,
 `402` → `insufficient_credits`, `429` → rate-limited, anything else (including
 a network failure) → `503 key_validation_unavailable`. Failed logins are
 rate-limited per source IP (5 failures / 5 minutes).
 
 #### Wipe on key revocation
 
-`selfserve` treats key revocation as an account wipe. aiand's API exposes no
+Key revocation is treated as an account wipe. aiand's API exposes no
 endpoint to retrieve a user's data or re-instantiate an account from a revoked
 key, so when the user revokes their aiand key the router has no way to prove the
 installation is still theirs and the account row is soft-deleted — with it, the
@@ -504,10 +309,8 @@ returned unchanged, so the dashboard shows the same data.
 | `ROUTER_STICKY_DECISION_TTL_MS`   | `0` (disabled)               | Reuse a routing decision per API key for this many ms. |
 | `ROUTER_SESSION_PIN_ENABLED`      | `true`                       | Pin a session to its first-routed model so multi-turn conversations stay coherent. |
 | `ROUTER_HARD_PIN_MODEL`           | *(none)*                     | Force every request to a specific model, bypassing the cluster scorer. Debugging only. |
-| `ROUTER_HARD_PIN_PROVIDER`        | *(none)*                     | Pair with `ROUTER_HARD_PIN_MODEL`. |
-| `ROUTER_HARD_PIN_EXPLORE`         | `true`                       | Pin Claude Code Task-tool sub-agent turns to `ROUTER_HARD_PIN_MODEL`/`ROUTER_HARD_PIN_PROVIDER` (or the cheapest deployed model, if those are unset). Set `false` to route sub-agents through the scorer like any other turn. |
-| `ROUTER_SUBAGENT_MODEL`           | *(none)*                     | Route Task-tool sub-agent turns to a distinct catalog model, independent of `ROUTER_HARD_PIN_MODEL` — e.g. a local OpenAI-compatible endpoint while the main loop keeps using whatever the scorer picks. Requires `ROUTER_SUBAGENT_PROVIDER`; either alone is ignored. Takes effect regardless of `ROUTER_HARD_PIN_EXPLORE`, but the HMM strategy keeps its own sub-agent handling and isn't affected. |
-| `ROUTER_SUBAGENT_PROVIDER`        | *(none)*                     | Pair with `ROUTER_SUBAGENT_MODEL`. |
+| `ROUTER_HARD_PIN_EXPLORE`         | `true`                       | Pin Claude Code Task-tool sub-agent turns to `ROUTER_HARD_PIN_MODEL` (or the cheapest deployed model, if those are unset). Set `false` to route sub-agents through the scorer like any other turn. |
+| `ROUTER_SUBAGENT_MODEL`           | *(none)*                     | Route Task-tool sub-agent turns to a distinct catalog model, independent of `ROUTER_HARD_PIN_MODEL` — e.g. a local OpenAI-compatible endpoint while the main loop keeps using whatever the scorer picks. The model's catalog binding supplies the provider. Takes effect regardless of `ROUTER_HARD_PIN_EXPLORE`, but the HMM strategy keeps its own sub-agent handling and isn't affected. |
 | `ROUTER_TRANSLATION_COMPATIBILITY_MODE` | `shadow` | Translation representability rollout: `off` disables broad filtering, `shadow` records candidate exclusions without changing routes, and `enforce` makes declared semantic requirements hard routing constraints. Native-only safety paths (such as unsupported Responses tool unions and native Gemini ingress) remain protected unless mode is `off`. |
 | `ROUTER_SCOPED_SEARCH_REQUIREMENT` | `true` | Scopes the citations/search native-capability requirement to sessions that actually used a web-search tool this turn or recently, instead of every turn that merely advertises one. Advertised-only turns return to normal policy routing. |
 | `ROUTER_SEARCH_REQUIREMENT_DECAY_TURNS` | `3` | With `ROUTER_SCOPED_SEARCH_REQUIREMENT`, how many routed turns after the last actual search-tool use keep the requirement before it decays. |
@@ -519,34 +322,33 @@ If the cluster scorer can't run (missing model, embed timeout, etc.), the
 router returns HTTP 503 — it does *not* silently fall back to a default
 model. Failures are loud by design.
 
-## Provider and model exclusions
+## Model exclusions
 
-Exclusions keep traffic away from a provider or model — the control to reach
-for when an installation may only talk to, say, its own enterprise gateway.
+Exclusions keep traffic away from a model — the control to reach for when an
+installation may only talk to, say, its own enterprise gateway.
 
 | Variable                     | Default  | Purpose |
 | ---------------------------- | -------- | ------- |
-| `ROUTER_EXCLUDED_PROVIDERS`  | *(none)* | Comma-separated provider names no request may be routed to. Pins the list deployment-wide: per-installation edits are refused (403) while it is set. |
-| `ROUTER_EXCLUDED_MODELS`     | *(none)* | Comma-separated model IDs no request may be routed to, same deployment-wide pinning. |
+| `ROUTER_EXCLUDED_MODELS`     | *(none)* | Comma-separated model IDs no request may be routed to, deployment-wide pinning. |
 
-Without either env var the lists come from the installation, editable in the
-dashboard or through `PUT /admin/v1/excluded-providers` and
-`PUT /admin/v1/excluded-models`.
+Without the env var the list comes from the installation, editable in the
+dashboard or through `PUT /v1/excluded-models` and `PUT /v1/allowed-models`.
 
 From a terminal, `npx @workweave/router models --claude` lists every deployed
 model with its on/off state and `models enable` / `models disable` edit it,
 reading the endpoint and key from the Claude Code install already on disk.
 Claude Code gets the same thing as `/router-models` (alias `/models`). While
-either env var is set the CLI surfaces the 403 verbatim rather than pretending
+the env var is set the CLI surfaces the 403 verbatim rather than pretending
 the edit landed. See [install/README.md](../install/README.md#choosing-which-models-the-router-may-pick).
 
-Exclusions are authoritative, not a preference. An excluded provider is
+Exclusions are authoritative, not a preference. An excluded model is
 subtracted from the request's eligible set before anything routes, so the
 scorer, the turn-type hard pins, session pins, and cross-binding failover all
 stay off it — including when the caller holds their own BYOK key for it.
 
 That extends to explicit forcing. `/force-model` and the `x-weave-force-model`
-header are refused when every provider that could serve the model is excluded:
+header are refused when the model is excluded and no other binding can serve
+it:
 the command answers with the reason and leaves routing (and any prior pin)
 alone, and the header fails the request with HTTP 400. A model with one
 permitted binding left is forced normally and served through that binding. A
@@ -556,8 +358,9 @@ same holds a level up: exclusions that empty a forced routing cluster fail the
 request too (see [Forcing a model or a routing
 cluster](#forcing-a-model-or-a-routing-cluster)).
 
-Excluding every provider that serves the models you route to leaves requests
+Excluding every model you route to leaves requests
 with nowhere to go (HTTP 503 from the scorer), so exclude deliberately.
+
 
 ## Forcing a model or a routing cluster
 
@@ -736,12 +539,10 @@ log records are emitted and behavior is unchanged.
 | `WV_CAPTURE_MAX_BYTES` | `1048576` | Max buffered response bytes; larger responses are dropped and flagged `io.truncated=true` (the client still receives the full stream). |
 
 Captured bodies are in the client's native wire format (Anthropic / OpenAI /
-Gemini, matching the inbound surface). The `router.deployment_mode` resource
-attribute (`selfhosted` / `managed`) is stamped on every export so a collector
-can branch redaction or content-opt-out by deployment.
+Gemini, matching the inbound surface).
 
 `WV_CAPTURE_CONTENT` is the deployment-wide **ceiling**. An installation can
-tighten it below that (`GET`/`PUT /admin/v1/content-capture`, body
+tighten it below that (`GET`/`PUT /v1/content-capture`, body
 `{"mode": "off" | "hashed" | "full"}`; `{"mode": null}` clears the override),
 and the effective mode for a request is the stricter of the two — so a tenant
 on a `full` deployment can opt down to `hashed` or `off`, but an installation

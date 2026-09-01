@@ -281,43 +281,6 @@ func TestProxy_4xxStillBuffered(t *testing.T) {
 		"sanity: 400 must classify as non-retryable")
 }
 
-// TestGatewayClient_UnconfiguredBaseURLDoesNotFallBackToDefaultHost: an
-// unconfigured gateway must fail, not silently spend the tenant's token on
-// DefaultBaseURL (aiand).
-func TestGatewayClient_UnconfiguredBaseURLDoesNotFallBackToDefaultHost(t *testing.T) {
-	c := openaicompat.NewGatewayClient("gateway-token", "")
-	rec := httptest.NewRecorder()
-	clientReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
-	prep := providers.PreparedRequest{Body: []byte(`{"model":"gpt-5","messages":[]}`), Headers: make(http.Header)}
-
-	err := c.Proxy(context.Background(), router.Decision{Model: "gpt-5"}, prep, rec, clientReq)
-
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "aiand.com")
-}
-
-// TestGatewayClient_DispatchesToConfiguredEndpoint: the gateway path is
-// otherwise the plain Chat Completions one, bearer-authenticated.
-func TestGatewayClient_DispatchesToConfiguredEndpoint(t *testing.T) {
-	var gotPath, gotAuth string
-
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath, gotAuth = r.URL.Path, r.Header.Get("Authorization")
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"chatcmpl-gw","object":"chat.completion"}`))
-	}))
-	defer upstream.Close()
-
-	c := openaicompat.NewGatewayClient("gateway-token", upstream.URL+"/api/v2/cortex/v1")
-	rec := httptest.NewRecorder()
-	clientReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
-	prep := providers.PreparedRequest{Body: []byte(`{"model":"gpt-5","messages":[]}`), Headers: make(http.Header)}
-
-	require.NoError(t, c.Proxy(context.Background(), router.Decision{Model: "gpt-5"}, prep, rec, clientReq))
-	assert.Equal(t, "/api/v2/cortex/v1/chat/completions", gotPath)
-	assert.Equal(t, "Bearer gateway-token", gotAuth)
-}
-
 // A Responses-endpoint request must go to /responses, not chat/completions,
 // while keeping the version-probe fallback on a 404.
 func TestProxy_ResponsesEndpointUsesResponsesPath(t *testing.T) {

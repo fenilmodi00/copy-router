@@ -50,6 +50,15 @@ func (f *fakeVerifier) Validate(ctx context.Context, rawKey string) (*AiandIdent
 	return f.identity, f.err
 }
 
+// mutableClock is a Clock whose returned time can be advanced mid-test.
+type mutableClock struct {
+	t time.Time
+}
+
+func (c *mutableClock) now() time.Time {
+	return c.t
+}
+
 func newLoginTestService(t *testing.T, repo *inMemoryAccountRepo) (*Service, *mutableClock, *stubInstallRepo) {
 	t.Helper()
 	return newLoginTestServiceWithExternal(t, repo, nil)

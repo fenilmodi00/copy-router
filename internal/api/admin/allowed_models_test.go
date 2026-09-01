@@ -27,13 +27,13 @@ func putAllowedModels(t *testing.T, routable admin.RoutableModelsSource, allowed
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.PUT("/admin/v1/allowed-models", func(c *gin.Context) {
+	engine.PUT("/v1/allowed-models", func(c *gin.Context) {
 		c.Set("router_installation", &auth.Installation{ID: "inst-1"})
 	}, admin.UpdateAllowedModelsHandler(nil, nil, routable))
 
 	body, err := json.Marshal(map[string][]string{"allowed": allowed})
 	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodPut, "/admin/v1/allowed-models", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/v1/allowed-models", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)

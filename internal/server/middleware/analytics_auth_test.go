@@ -105,7 +105,7 @@ func TestWithAuthRejectsAnalyticsKey(t *testing.T) {
 	svc := auth.NewService(fakeInstallationRepository{}, repo, nil, nil, auth.NoOpAPIKeyCache{}, nil, func() time.Time { return time.Now() })
 
 	engine := gin.New()
-	engine.Use(middleware.WithAuth(svc, false))
+	engine.Use(middleware.WithAuth(svc))
 	engine.POST("/v1/messages", func(c *gin.Context) {
 		t.Error("an analytics key must never reach an inference route")
 	})

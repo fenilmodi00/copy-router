@@ -235,11 +235,11 @@ func TestOpenAISameFormat_ReasoningEffortDeletedForGPT5OnChatCompletions(t *test
 	}`)
 	opts := translate.EmitOptions{
 		TargetModel:    "gpt-5.6-luna",
-		TargetProvider: providers.ProviderOpenAIGateway,
+		TargetProvider: providers.ProviderAiand,
 		Capabilities:   router.Lookup("gpt-5.6-luna"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
-	assert.NotContains(t, out, "reasoning_effort")
+	assert.Equal(t, "none", out["reasoning_effort"], "gpt-5.6 tool turns must opt out of reasoning explicitly on chat/completions")
 	assert.Contains(t, out, "tools")
 }
 
@@ -286,7 +286,7 @@ func TestOpenAISameFormat_ToolTurnOptsOutOfReasoningForDirectGPT56(t *testing.T)
 		t.Run(tc.name, func(t *testing.T) {
 			provider := tc.provider
 			if provider == "" {
-				provider = providers.ProviderOpenAI
+				provider = providers.ProviderAiand
 			}
 			opts := translate.EmitOptions{
 				TargetModel:    tc.model,

@@ -10,7 +10,7 @@ Single source of truth for per-model data: capability tier, ordered list of prov
 - `ProviderBinding` — one `(Provider, UpstreamID, Price)` tuple. A model's bindings are ordered: the first whose `Provider` name is in the deploy's available set wins.
 - `Pricing` — per-binding input / output / cache-read pricing.
 - `Tier` — Low / Mid / High (capability bucket for routing, distinct from effort).
-- `ReasoningEfforts` — ordered ai& `reasoning_effort` menu for the model (`none` / `low` / `high` / `max`, plus `medium` on a few OpenAI-compat rows). Empty = no effort parameter. Looked up via `CapabilitiesFor` / `ReasoningEffortsFor`.
+- `ReasoningEfforts` — ordered ai& `reasoning_effort` menu for the model (`none` / `low` / `medium` / `high` / `xhigh` / `max` as the model publishes). Empty = no effort parameter. Looked up via `CapabilitiesFor` / `ReasoningEffortsFor`.
 - `ContextWindow` — model's total input+output token budget in tokens. 0 falls back to `DefaultContextWindow` (128K).
 - Lookup helpers: `ByID`, `ResolveBinding`, `PriceFor(provider, id)`, `PrimaryPriceFor(id)`, `TierFor`, `IsAtOrBelow`, `AllowedAtOrBelow`, `AllPrimaryPricing`, `ValidateDeployed`, `ContextWindowFor`, `CapabilitiesFor`, `ReasoningEffortsFor`.
 - Cost math: `EffectiveInputCost`, `EffectiveOutputCost` — the OTel emitter, telemetry write path, and billing debit hook all funnel through these.
@@ -25,7 +25,7 @@ That's it. Nothing else needs editing — the planner, scorer, OTel emitter, ins
 
 ## aiand-only bindings
 
-This deploy's catalog keeps only models with an `ProviderAiand` binding. `ResolveBinding` / `ValidateDeployed` accept catalog IDs or binding `UpstreamID`s so v0.76 registry fields (`deepseek-ai/...`, `zai-org/...`) resolve without renaming rows. Provider adapter packages for other vendors may still exist until later strip PRs; they must not appear in `Models`.
+This deploy's catalog keeps only models with an `ProviderAiand` binding. Current six-model roster and how to add/replace rows: [docs/adding-glm-5-3.md](../../../docs/adding-glm-5-3.md). `ResolveBinding` / `ValidateDeployed` accept catalog IDs or binding `UpstreamID`s so registry fields (`deepseek-ai/...`, `zai-org/...`) resolve without renaming rows. Other `Provider*` names may still appear in tests/fixtures; they must not appear in `Models`.
 
 The cluster scorer resolves each routable model's binding at boot via `ResolveBinding(id, availableProviders)`. The chosen binding's `Provider` becomes the `router.Decision.Provider`; the planner then uses `catalog.PriceFor(provider, id)` so STAY-vs-SWITCH EV math is correct.
 

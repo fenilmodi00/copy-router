@@ -28,7 +28,7 @@ type embedTestRouter struct {
 
 func (r *embedTestRouter) Route(context.Context, router.Request) (router.Decision, error) {
 	return router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "cluster",
 		Metadata: r.metadata,
@@ -83,7 +83,7 @@ func newEmbedTestService(t *testing.T, collector *bypassSpanCollector, rt router
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = emitter.Shutdown(context.Background()) })
-	return NewService(rt, map[string]providers.Client{providers.ProviderAnthropic: embedTestProvider{}}, emitter, false, nil, pins, false,
+	return NewService(rt, map[string]providers.Client{providers.ProviderAiand: embedTestProvider{}}, emitter, false, nil, pins, false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil)
 }
 
@@ -165,7 +165,7 @@ func TestDecisionSpan_EmbedMs_SurvivesPlannerStay(t *testing.T) {
 	store := newStubPinStore()
 	store.getFound = true
 	store.getPin = sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
+		Provider:    providers.ProviderAiand,
 		Model:       "deepseek-ai/deepseek-v4-flash",
 		Reason:      "cluster",
 		PinnedUntil: time.Now().Add(time.Hour),
@@ -229,7 +229,7 @@ func TestDecisionSpan_SidecarTimings_OnlySelectMsSet(t *testing.T) {
 // replay: pins must rehydrate with Metadata nil.
 func TestPinDecision_NeverRehydratesMetadata(t *testing.T) {
 	dec := pinDecision(sessionpin.Pin{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "compaction",
 	})

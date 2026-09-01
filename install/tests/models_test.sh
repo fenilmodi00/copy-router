@@ -4,7 +4,7 @@
 # behind the /models slash command.
 #
 # Fully offline: an isolated $HOME keeps real config untouched, and a fake curl
-# on PATH answers the router's /admin/v1 endpoints from canned JSON while
+# on PATH answers the router's /v1 endpoints from canned JSON while
 # logging every request so the assertions can check method, path, and body.
 # Run directly or via `make test-install`.
 
@@ -24,7 +24,7 @@ mkdir -p "$fake_bin"
 # -o, -w, --header @-) and routes on the request path. $ROUTER_MODE decides which
 # router it impersonates:
 #   full    — serves the model-selection API
-#   managed — 404s /admin/v1/* (the Weave-hosted router) but serves the catalog
+#   managed — 404s /v1/* (the Weave-hosted router) but serves the catalog
 #   down    — connection failure
 # Requests are appended to $REQUEST_LOG as "METHOD PATH BODY".
 cat >"$fake_bin/curl" <<'FAKE_CURL'
@@ -70,9 +70,9 @@ if [ "${ROUTER_MODE:-full}" = "managed" ]; then
 fi
 
 case "$path" in
-  /admin/v1/models)                  emit 200 "$models" ;;
-  /admin/v1/providers)               emit 200 "$providers" ;;
-  /admin/v1/preferred-models)        emit 200 '{"preferred":["claude-opus-5"]}' ;;
+  /v1/models)                  emit 200 "$models" ;;
+  /v1/providers)               emit 200 "$providers" ;;
+  /v1/preferred-models)        emit 200 '{"preferred":["claude-opus-5"]}' ;;
 esac
 
 # The router validates ids against the deployed set, so a typo comes back 400.
@@ -81,8 +81,8 @@ case "$body" in
 esac
 
 case "$path" in
-  /admin/v1/excluded-models*)        emit 200 '{"available":[],"excluded":["gpt-5.6"],"env_override_active":false}' ;;
-  /admin/v1/excluded-providers*)     emit 200 '{"available":[],"excluded":["openai"],"env_override_active":false}' ;;
+  /v1/excluded-models*)        emit 200 '{"available":[],"excluded":["gpt-5.6"],"env_override_active":false}' ;;
+  /v1/excluded-providers*)     emit 200 '{"available":[],"excluded":["openai"],"env_override_active":false}' ;;
   *)                                 emit 404 '{"error":"404 page not found"}' ;;
 esac
 FAKE_CURL
@@ -159,7 +159,7 @@ contains "list groups by provider" "$out" "openai"
 contains "list reports the enabled count" "$out" "2 of 3 enabled"
 contains "list shows the preferred ranking" "$out" "Preferred order: claude-opus-5"
 check "list reads the installed endpoint, not the hosted default" \
-  "$(grep -c '^GET /admin/v1/models ' "$REQUEST_LOG")" "1"
+  "$(grep -c '^GET /v1/models ' "$REQUEST_LOG")" "1"
 
 run_models_stdout "$home" -- --claude --json
 check "--json emits the raw payload" \
@@ -179,13 +179,13 @@ run_models "$home" -- disable gpt-5.6 --claude
 check "disable exits 0" "$rc" "0"
 contains "disable reports the model" "$out" "model gpt-5.6 is disabled"
 check "disable adds to the exclusion list" \
-  "$(grep -c '^POST /admin/v1/excluded-models {"model":"gpt-5.6"}$' "$REQUEST_LOG")" "1"
+  "$(grep -c '^POST /v1/excluded-models {"model":"gpt-5.6"}$' "$REQUEST_LOG")" "1"
 
 : >"$REQUEST_LOG"
 run_models "$home" -- enable gpt-5.6 --claude
 contains "enable reports the model" "$out" "model gpt-5.6 is enabled"
 check "enable removes from the exclusion list" \
-  "$(grep -c '^POST /admin/v1/excluded-models/remove {"model":"gpt-5.6"}$' "$REQUEST_LOG")" "1"
+  "$(grep -c '^POST /v1/excluded-models/remove {"model":"gpt-5.6"}$' "$REQUEST_LOG")" "1"
 
 # A flag may appear before, after, or between operands — the slash wrapper's
 # first call is `models --claude` (flag before any sub-verb), so a follow-up
@@ -194,33 +194,33 @@ check "enable removes from the exclusion list" \
 run_models "$home" -- --claude enable gpt-5.6
 check "enable with the client flag before the sub-verb exits 0" "$rc" "0"
 check "enable with the client flag before the sub-verb still calls the API" \
-  "$(grep -c '^POST /admin/v1/excluded-models/remove {"model":"gpt-5.6"}$' "$REQUEST_LOG")" "1"
+  "$(grep -c '^POST /v1/excluded-models/remove {"model":"gpt-5.6"}$' "$REQUEST_LOG")" "1"
 
 : >"$REQUEST_LOG"
 run_models "$home" -- disable --claude gpt-5.6
 check "disable with the client flag between the verb and the id exits 0" "$rc" "0"
 check "disable with the client flag between the verb and the id still calls the API" \
-  "$(grep -c '^POST /admin/v1/excluded-models {"model":"gpt-5.6"}$' "$REQUEST_LOG")" "1"
+  "$(grep -c '^POST /v1/excluded-models {"model":"gpt-5.6"}$' "$REQUEST_LOG")" "1"
 
 : >"$REQUEST_LOG"
 run_models "$home" -- disable claude-haiku-4-5 gpt-5.6 --claude
 check "disable accepts several models in one call" \
-  "$(grep -c '^POST /admin/v1/excluded-models ' "$REQUEST_LOG")" "2"
+  "$(grep -c '^POST /v1/excluded-models ' "$REQUEST_LOG")" "2"
 
 : >"$REQUEST_LOG"
 run_models "$home" -- providers disable openai --claude
 check "providers disable hits the provider endpoint" \
-  "$(grep -c '^POST /admin/v1/excluded-providers {"provider":"openai"}$' "$REQUEST_LOG")" "1"
+  "$(grep -c '^POST /v1/excluded-providers {"provider":"openai"}$' "$REQUEST_LOG")" "1"
 
 : >"$REQUEST_LOG"
 run_models "$home" -- prefer claude-opus-5 gpt-5.6 --claude
 check "prefer replaces the whole ranking" \
-  "$(grep -c '^PUT /admin/v1/preferred-models {"preferred":\["claude-opus-5","gpt-5.6"\]}$' "$REQUEST_LOG")" "1"
+  "$(grep -c '^PUT /v1/preferred-models {"preferred":\["claude-opus-5","gpt-5.6"\]}$' "$REQUEST_LOG")" "1"
 
 : >"$REQUEST_LOG"
 run_models "$home" -- prefer clear --claude
 check "prefer clear empties the ranking" \
-  "$(grep -c '^PUT /admin/v1/preferred-models {"preferred":\[\]}$' "$REQUEST_LOG")" "1"
+  "$(grep -c '^PUT /v1/preferred-models {"preferred":\[\]}$' "$REQUEST_LOG")" "1"
 
 # --json is a contract about stdout: a scripted caller parses it. A mutation
 # that succeeds but prints prose makes that caller report a parse failure for
@@ -299,7 +299,7 @@ export REQUEST_LOG="$work/selfhosted.log"
 : >"$REQUEST_LOG"
 run_models "$selfhosted" -- --claude
 check "a self-hosted install talks to its own router" \
-  "$(grep -c '^GET /admin/v1/models ' "$REQUEST_LOG")" "1"
+  "$(grep -c '^GET /v1/models ' "$REQUEST_LOG")" "1"
 
 # `off` parks the router URL + key in the sidecar and points settings.json at
 # Anthropic. models must read the sidecar, or it would treat api.anthropic.com
@@ -316,7 +316,7 @@ export REQUEST_LOG="$work/parked.log"
 run_models "$parked" -- --claude
 check "models works while the router is toggled off" "$rc" "0"
 check "models reads the parked endpoint, not api.anthropic.com" \
-  "$(grep -c '^GET /admin/v1/models ' "$REQUEST_LOG")" "1"
+  "$(grep -c '^GET /v1/models ' "$REQUEST_LOG")" "1"
 
 empty="$work/empty"; mkdir -p "$empty"
 run_models "$empty" -- --claude
@@ -387,7 +387,7 @@ export REQUEST_LOG="$work/legit.log"
 run_models_project "$legit/repo"
 check "the installer's own committed-hosted layout still works" "$rc" "0"
 check "the hosted-default endpoint is actually called" \
-  "$(grep -c '^GET /admin/v1/models ' "$REQUEST_LOG")" "1"
+  "$(grep -c '^GET /v1/models ' "$REQUEST_LOG")" "1"
 
 # A self-hosted project endpoint gets the same marker from a real installer
 # run, so the split layout is accepted after installation rather than only for
@@ -403,7 +403,7 @@ export REQUEST_LOG="$work/selfhosted-project.log"
 run_models_project "$selfhosted_project/repo"
 check "the installer's committed self-hosted layout still works" "$rc" "0"
 check "the trusted self-hosted endpoint is actually called" \
-  "$(grep -c '^GET /admin/v1/models ' "$REQUEST_LOG")" "1"
+  "$(grep -c '^GET /v1/models ' "$REQUEST_LOG")" "1"
 
 # An explicit --base-url is the user vouching out-of-band, so it overrides the
 # committed value rather than being refused.
@@ -414,7 +414,7 @@ export REQUEST_LOG="$work/override.log"
 run_models_project "$override/repo" --base-url http://127.0.0.1:8080
 check "an explicit --base-url overrides a committed endpoint" "$rc" "0"
 check "the explicit endpoint is the one called" \
-  "$(grep -c '^GET /admin/v1/models ' "$REQUEST_LOG")" "1"
+  "$(grep -c '^GET /v1/models ' "$REQUEST_LOG")" "1"
 
 # ---------- argument handling ----------
 

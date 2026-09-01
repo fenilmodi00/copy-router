@@ -1,25 +1,17 @@
 package catalog
 
-import (
-	"math"
-
-	"workweave/router/internal/providers"
-)
+import "math"
 
 // EffectiveInputCost returns the true USD input cost after applying cache
 // pricing. Fresh tokens at base rate; cache-creation at the binding's
 // effective write multiplier; cache-read at the binding's effective read
-// multiplier. upstreamProvider distinguishes
-// Anthropic (input_tokens is fresh-only) from OpenAI / Gemini
-// (prompt_tokens includes cached tokens — must subtract).
+// multiplier. aiand is OpenAI-compatible, so prompt_tokens includes cached
+// tokens and they are always subtracted.
 //
 // Single source of truth for the proxy's OTel emitter, telemetry write
 // path, and the billing debit hook.
 func EffectiveInputCost(inputTokens, cacheCreation, cacheRead int, pricePer1M float64, p Pricing, upstreamProvider string) float64 {
-	fresh := inputTokens
-	if upstreamProvider != providers.ProviderAnthropic {
-		fresh = inputTokens - cacheCreation - cacheRead
-	}
+	fresh := inputTokens - cacheCreation - cacheRead
 	if fresh < 0 {
 		fresh = 0
 	}

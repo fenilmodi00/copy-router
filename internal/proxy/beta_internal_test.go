@@ -584,7 +584,7 @@ func TestProxyEntrypointsStripHistoricalBetaArtifactsBeforeRouting(t *testing.T)
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			decisionProvider := providers.ProviderAnthropic
+			decisionProvider := providers.ProviderAiand
 			decisionModel := "moonshotai/kimi-k3"
 			if tt.openAI {
 				decisionProvider = providers.ProviderAiand
@@ -598,11 +598,10 @@ func TestProxyEntrypointsStripHistoricalBetaArtifactsBeforeRouting(t *testing.T)
 			svc := NewService(
 				routing,
 				map[string]providers.Client{
-					providers.ProviderAnthropic: embedTestProvider{},
-					providers.ProviderAiand:     embedTestProvider{},
+					providers.ProviderAiand: embedTestProvider{},
 				},
 				nil, false, nil, nil, false,
-				providers.ProviderAnthropic, "moonshotai/kimi-k3", nil,
+				providers.ProviderAiand, "moonshotai/kimi-k3", nil,
 			)
 			body, err := json.Marshal(map[string]any{
 				"model": "moonshotai/kimi-k3",
@@ -646,16 +645,16 @@ func TestHistoricalBetaArtifactsStripStaleThinkingSignatures(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			routing := &betaTestRouter{decision: router.Decision{
-				Provider: providers.ProviderAnthropic,
+				Provider: providers.ProviderAiand,
 				Model:    "moonshotai/kimi-k2.7",
 				Reason:   "test",
 			}}
 			provider := &betaCaptureProvider{}
 			svc := NewService(
 				routing,
-				map[string]providers.Client{providers.ProviderAnthropic: provider},
+				map[string]providers.Client{providers.ProviderAiand: provider},
 				nil, false, nil, nil, false,
-				providers.ProviderAnthropic, "moonshotai/kimi-k2.7", nil,
+				providers.ProviderAiand, "moonshotai/kimi-k2.7", nil,
 			)
 			body := []byte(`{
 				"model":"moonshotai/kimi-k2.7",

@@ -5,7 +5,6 @@ package policy
 import (
 	"sort"
 
-	"workweave/router/internal/providers"
 	"workweave/router/internal/router"
 	"workweave/router/internal/router/catalog"
 	"workweave/router/internal/translate"
@@ -20,9 +19,10 @@ type ProviderPolicy struct {
 	Denied map[string]struct{}
 }
 
-// ManagedProviderPolicy excludes OpenRouter from managed policy candidates.
+// ManagedProviderPolicy currently denies nothing: the roster is aiand-only
+// and multi-provider routing is gone with the gateway lanes.
 func ManagedProviderPolicy() ProviderPolicy {
-	return ProviderPolicy{Denied: map[string]struct{}{providers.ProviderOpenRouter: {}}}
+	return ProviderPolicy{}
 }
 
 // Allows reports whether provider may be offered to the policy.
@@ -302,20 +302,15 @@ func (r *Resolver) Resolve(req router.Request) ResolvedCandidates {
 		if providerSet == nil {
 			providerSet = r.available
 		}
-		allowedBindings := catalog.EnumerateBindingsWithCustom(
-			id,
-			r.allowedProviders(providerSet),
-			req.CustomBindings,
-		)
+		allowedBindings := catalog.EnumerateBindings(id, r.allowedProviders(providerSet))
 		if len(allowedBindings) == 0 {
 			reason := ExclusionNoProvider
-			if unrestrictedBindings := catalog.EnumerateBindingsWithCustom(id, providerSet, req.CustomBindings); len(unrestrictedBindings) > 0 {
+			if unrestrictedBindings := catalog.EnumerateBindings(id, providerSet); len(unrestrictedBindings) > 0 {
 				reason = ExclusionProviderPolicy
 			}
 			diagnostics = append(diagnostics, Diagnostic{CatalogID: id, RosterID: rosterID, Reason: reason})
 			continue
 		}
-
 		if !r.enumerateBindings {
 			allowedBindings = allowedBindings[:1]
 		}

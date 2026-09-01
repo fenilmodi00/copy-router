@@ -32,7 +32,7 @@ VALUES (
     $7,
     $8::varchar
 )
-RETURNING id, installation_id, external_id, name, key_prefix, key_hash, key_suffix, last_used_at, created_at, deleted_at, created_by, spend_cap_usd_micros, spent_usd_micros, scope
+RETURNING id, installation_id, external_id, name, key_prefix, key_hash, key_suffix, last_used_at, created_at, deleted_at, created_by, scope
 `
 
 type CreateModelRouterAPIKeyParams struct {
@@ -69,7 +69,7 @@ type CreateModelRouterAPIKeyParams struct {
 //	    $7,
 //	    $8::varchar
 //	)
-//	RETURNING id, installation_id, external_id, name, key_prefix, key_hash, key_suffix, last_used_at, created_at, deleted_at, created_by, spend_cap_usd_micros, spent_usd_micros, scope
+//	RETURNING id, installation_id, external_id, name, key_prefix, key_hash, key_suffix, last_used_at, created_at, deleted_at, created_by, scope
 func (q *Queries) CreateModelRouterAPIKey(ctx context.Context, arg CreateModelRouterAPIKeyParams) (RouterModelRouterAPIKey, error) {
 	row := q.db.QueryRow(ctx, createModelRouterAPIKey,
 		arg.InstallationID,
@@ -94,15 +94,13 @@ func (q *Queries) CreateModelRouterAPIKey(ctx context.Context, arg CreateModelRo
 		&i.CreatedAt,
 		&i.DeletedAt,
 		&i.CreatedBy,
-		&i.SpendCapUsdMicros,
-		&i.SpentUsdMicros,
 		&i.Scope,
 	)
 	return i, err
 }
 
 const getActiveModelRouterAPIKeyWithInstallationByHash = `-- name: GetActiveModelRouterAPIKeyWithInstallationByHash :one
-SELECT k.id, k.installation_id, k.external_id, k.name, k.key_prefix, k.key_hash, k.key_suffix, k.last_used_at, k.created_at, k.deleted_at, k.created_by, k.spend_cap_usd_micros, k.spent_usd_micros, k.scope, i.id, i.external_id, i.name, i.created_at, i.updated_at, i.deleted_at, i.created_by, i.excluded_models, i.excluded_providers, i.routing_quality_weight, i.usage_bypass_enabled, i.usage_bypass_threshold, i.preferred_models, i.subscription_routing_disabled, i.routing_strategy, i.routing_rollout_id, i.policy_shadow_strategy, i.policy_debug_enabled, i.policy_header_overrides_enabled, i.policy_routing_intent, i.ai_training_allowed, i.byok_enabled, i.content_capture_mode, i.hide_terminal_surfaces, i.allowed_models, i.first_request_served_at, i.flag_overrides
+SELECT k.id, k.installation_id, k.external_id, k.name, k.key_prefix, k.key_hash, k.key_suffix, k.last_used_at, k.created_at, k.deleted_at, k.created_by, k.scope, i.id, i.external_id, i.name, i.created_at, i.updated_at, i.deleted_at, i.created_by, i.excluded_models, i.routing_quality_weight, i.preferred_models, i.routing_strategy, i.routing_rollout_id, i.policy_shadow_strategy, i.policy_debug_enabled, i.policy_header_overrides_enabled, i.policy_routing_intent, i.ai_training_allowed, i.content_capture_mode, i.hide_terminal_surfaces, i.allowed_models, i.first_request_served_at, i.flag_overrides
 FROM router.model_router_api_keys k
 INNER JOIN router.model_router_installations i ON i.id = k.installation_id
 WHERE k.key_hash = $1::varchar
@@ -121,7 +119,7 @@ type GetActiveModelRouterAPIKeyWithInstallationByHashRow struct {
 // both sides so a soft-deleted installation invalidates all its keys without per-key
 // updates.
 //
-//	SELECT k.id, k.installation_id, k.external_id, k.name, k.key_prefix, k.key_hash, k.key_suffix, k.last_used_at, k.created_at, k.deleted_at, k.created_by, k.spend_cap_usd_micros, k.spent_usd_micros, k.scope, i.id, i.external_id, i.name, i.created_at, i.updated_at, i.deleted_at, i.created_by, i.excluded_models, i.excluded_providers, i.routing_quality_weight, i.usage_bypass_enabled, i.usage_bypass_threshold, i.preferred_models, i.subscription_routing_disabled, i.routing_strategy, i.routing_rollout_id, i.policy_shadow_strategy, i.policy_debug_enabled, i.policy_header_overrides_enabled, i.policy_routing_intent, i.ai_training_allowed, i.byok_enabled, i.content_capture_mode, i.hide_terminal_surfaces, i.allowed_models, i.first_request_served_at, i.flag_overrides
+//	SELECT k.id, k.installation_id, k.external_id, k.name, k.key_prefix, k.key_hash, k.key_suffix, k.last_used_at, k.created_at, k.deleted_at, k.created_by, k.scope, i.id, i.external_id, i.name, i.created_at, i.updated_at, i.deleted_at, i.created_by, i.excluded_models, i.routing_quality_weight, i.preferred_models, i.routing_strategy, i.routing_rollout_id, i.policy_shadow_strategy, i.policy_debug_enabled, i.policy_header_overrides_enabled, i.policy_routing_intent, i.ai_training_allowed, i.content_capture_mode, i.hide_terminal_surfaces, i.allowed_models, i.first_request_served_at, i.flag_overrides
 //	FROM router.model_router_api_keys k
 //	INNER JOIN router.model_router_installations i ON i.id = k.installation_id
 //	WHERE k.key_hash = $1::varchar
@@ -142,8 +140,6 @@ func (q *Queries) GetActiveModelRouterAPIKeyWithInstallationByHash(ctx context.C
 		&i.RouterModelRouterAPIKey.CreatedAt,
 		&i.RouterModelRouterAPIKey.DeletedAt,
 		&i.RouterModelRouterAPIKey.CreatedBy,
-		&i.RouterModelRouterAPIKey.SpendCapUsdMicros,
-		&i.RouterModelRouterAPIKey.SpentUsdMicros,
 		&i.RouterModelRouterAPIKey.Scope,
 		&i.RouterModelRouterInstallation.ID,
 		&i.RouterModelRouterInstallation.ExternalID,
@@ -153,12 +149,8 @@ func (q *Queries) GetActiveModelRouterAPIKeyWithInstallationByHash(ctx context.C
 		&i.RouterModelRouterInstallation.DeletedAt,
 		&i.RouterModelRouterInstallation.CreatedBy,
 		&i.RouterModelRouterInstallation.ExcludedModels,
-		&i.RouterModelRouterInstallation.ExcludedProviders,
 		&i.RouterModelRouterInstallation.RoutingQualityWeight,
-		&i.RouterModelRouterInstallation.UsageBypassEnabled,
-		&i.RouterModelRouterInstallation.UsageBypassThreshold,
 		&i.RouterModelRouterInstallation.PreferredModels,
-		&i.RouterModelRouterInstallation.SubscriptionRoutingDisabled,
 		&i.RouterModelRouterInstallation.RoutingStrategy,
 		&i.RouterModelRouterInstallation.RoutingRolloutID,
 		&i.RouterModelRouterInstallation.PolicyShadowStrategy,
@@ -166,7 +158,6 @@ func (q *Queries) GetActiveModelRouterAPIKeyWithInstallationByHash(ctx context.C
 		&i.RouterModelRouterInstallation.PolicyHeaderOverridesEnabled,
 		&i.RouterModelRouterInstallation.PolicyRoutingIntent,
 		&i.RouterModelRouterInstallation.AiTrainingAllowed,
-		&i.RouterModelRouterInstallation.ByokEnabled,
 		&i.RouterModelRouterInstallation.ContentCaptureMode,
 		&i.RouterModelRouterInstallation.HideTerminalSurfaces,
 		&i.RouterModelRouterInstallation.AllowedModels,
@@ -176,37 +167,8 @@ func (q *Queries) GetActiveModelRouterAPIKeyWithInstallationByHash(ctx context.C
 	return i, err
 }
 
-const getModelRouterAPIKeySpend = `-- name: GetModelRouterAPIKeySpend :one
-SELECT spend_cap_usd_micros, spent_usd_micros
-FROM router.model_router_api_keys
-WHERE id = $1::uuid
-  AND deleted_at IS NULL
-`
-
-type GetModelRouterAPIKeySpendRow struct {
-	SpendCapUsdMicros *int64
-	SpentUsdMicros    int64
-}
-
-// Fresh per-request read of a key's lifetime spend cap and spend-to-date for
-// the spend-cap gate. Read straight from Postgres (not the auth cache) so a
-// hot cached key cannot overrun its cap within the cache TTL window — mirrors
-// the per-request balance read in WithBalanceCheck. Returns sql.ErrNoRows when
-// the key is missing/soft-deleted.
-//
-//	SELECT spend_cap_usd_micros, spent_usd_micros
-//	FROM router.model_router_api_keys
-//	WHERE id = $1::uuid
-//	  AND deleted_at IS NULL
-func (q *Queries) GetModelRouterAPIKeySpend(ctx context.Context, id uuid.UUID) (GetModelRouterAPIKeySpendRow, error) {
-	row := q.db.QueryRow(ctx, getModelRouterAPIKeySpend, id)
-	var i GetModelRouterAPIKeySpendRow
-	err := row.Scan(&i.SpendCapUsdMicros, &i.SpentUsdMicros)
-	return i, err
-}
-
 const listModelRouterAPIKeysForInstallation = `-- name: ListModelRouterAPIKeysForInstallation :many
-SELECT id, installation_id, external_id, name, key_prefix, key_hash, key_suffix, last_used_at, created_at, deleted_at, created_by, spend_cap_usd_micros, spent_usd_micros, scope
+SELECT id, installation_id, external_id, name, key_prefix, key_hash, key_suffix, last_used_at, created_at, deleted_at, created_by, scope
 FROM router.model_router_api_keys
 WHERE installation_id = $1::uuid
   AND deleted_at IS NULL
@@ -215,7 +177,7 @@ ORDER BY created_at DESC
 
 // Lists active keys for an installation (dashboard / CRUD; not on the request path).
 //
-//	SELECT id, installation_id, external_id, name, key_prefix, key_hash, key_suffix, last_used_at, created_at, deleted_at, created_by, spend_cap_usd_micros, spent_usd_micros, scope
+//	SELECT id, installation_id, external_id, name, key_prefix, key_hash, key_suffix, last_used_at, created_at, deleted_at, created_by, scope
 //	FROM router.model_router_api_keys
 //	WHERE installation_id = $1::uuid
 //	  AND deleted_at IS NULL
@@ -241,8 +203,6 @@ func (q *Queries) ListModelRouterAPIKeysForInstallation(ctx context.Context, ins
 			&i.CreatedAt,
 			&i.DeletedAt,
 			&i.CreatedBy,
-			&i.SpendCapUsdMicros,
-			&i.SpentUsdMicros,
 			&i.Scope,
 		); err != nil {
 			return nil, err

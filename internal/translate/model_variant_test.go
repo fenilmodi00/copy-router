@@ -71,13 +71,13 @@ func TestStripProviderPrefix(t *testing.T) {
 		stripped string
 		had      bool
 	}{
-		{"anthropic qualified", "anthropic/claude-opus-4-8", providers.ProviderAnthropic, "claude-opus-4-8", true},
-		{"already bare", "claude-opus-4-8", providers.ProviderAnthropic, "claude-opus-4-8", false},
-		{"other provider left alone", "openai/gpt-5.6-luna", providers.ProviderAnthropic, "openai/gpt-5.6-luna", false},
-		{"prefix not at start", "x-anthropic/claude-opus-4-8", providers.ProviderAnthropic, "x-anthropic/claude-opus-4-8", false},
+		{"aiand qualified", "aiand/claude-opus-4-8", providers.ProviderAiand, "claude-opus-4-8", true},
+		{"already bare", "claude-opus-4-8", providers.ProviderAiand, "claude-opus-4-8", false},
+		{"other provider left alone", "openai/gpt-5.6-luna", providers.ProviderAiand, "openai/gpt-5.6-luna", false},
+		{"prefix not at start", "x-anthropic/claude-opus-4-8", providers.ProviderAiand, "x-anthropic/claude-opus-4-8", false},
 		{"empty provider is a no-op", "anthropic/claude-opus-4-8", "", "anthropic/claude-opus-4-8", false},
-		{"empty model", "", providers.ProviderAnthropic, "", false},
-		{"only the first segment is dropped", "anthropic/vendor/model", providers.ProviderAnthropic, "vendor/model", true},
+		{"empty model", "", providers.ProviderAiand, "", false},
+		{"only the first segment is dropped", "aiand/vendor/model", providers.ProviderAiand, "vendor/model", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -90,9 +90,9 @@ func TestStripProviderPrefix(t *testing.T) {
 
 func TestStripProviderPrefixInBody(t *testing.T) {
 	t.Run("rewrites a qualified id and preserves the rest of the body", func(t *testing.T) {
-		body := []byte(`{"model":"anthropic/claude-opus-4-8","messages":[{"role":"user","content":"hi"}]}`)
+		body := []byte(`{"model":"aiand/claude-opus-4-8","messages":[{"role":"user","content":"hi"}]}`)
 
-		out, had, err := translate.StripProviderPrefixInBody(body, providers.ProviderAnthropic)
+		out, had, err := translate.StripProviderPrefixInBody(body, providers.ProviderAiand)
 
 		require.NoError(t, err)
 		assert.True(t, had)
@@ -103,7 +103,7 @@ func TestStripProviderPrefixInBody(t *testing.T) {
 	t.Run("leaves a bare id untouched", func(t *testing.T) {
 		body := []byte(`{"model":"claude-opus-4-8"}`)
 
-		out, had, err := translate.StripProviderPrefixInBody(body, providers.ProviderAnthropic)
+		out, had, err := translate.StripProviderPrefixInBody(body, providers.ProviderAiand)
 
 		require.NoError(t, err)
 		assert.False(t, had)
@@ -113,7 +113,7 @@ func TestStripProviderPrefixInBody(t *testing.T) {
 	t.Run("leaves a body with no model field untouched", func(t *testing.T) {
 		body := []byte(`{"messages":[]}`)
 
-		out, had, err := translate.StripProviderPrefixInBody(body, providers.ProviderAnthropic)
+		out, had, err := translate.StripProviderPrefixInBody(body, providers.ProviderAiand)
 
 		require.NoError(t, err)
 		assert.False(t, had)
@@ -122,13 +122,13 @@ func TestStripProviderPrefixInBody(t *testing.T) {
 
 	t.Run("composes with the variant tag as the passthrough does", func(t *testing.T) {
 		// Claude Code can send both at once: a qualified id carrying the 1M tag.
-		body := []byte(`{"model":"anthropic/claude-opus-4-8[1m]"}`)
+		body := []byte(`{"model":"aiand/claude-opus-4-8[1m]"}`)
 
 		canon, hadTag, err := translate.CanonicalizeModelInBody(body)
 		require.NoError(t, err)
 		require.True(t, hadTag)
 
-		out, hadPrefix, err := translate.StripProviderPrefixInBody(canon, providers.ProviderAnthropic)
+		out, hadPrefix, err := translate.StripProviderPrefixInBody(canon, providers.ProviderAiand)
 		require.NoError(t, err)
 		require.True(t, hadPrefix)
 

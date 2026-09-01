@@ -18,10 +18,6 @@ func toAuthInstallation(row sqlc.RouterModelRouterInstallation) *auth.Installati
 	if excluded == nil {
 		excluded = []string{}
 	}
-	excludedProviders := row.ExcludedProviders
-	if excludedProviders == nil {
-		excludedProviders = []string{}
-	}
 	preferred := row.PreferredModels
 	if preferred == nil {
 		preferred = []string{}
@@ -53,12 +49,8 @@ func toAuthInstallation(row sqlc.RouterModelRouterInstallation) *auth.Installati
 		CreatedBy:                    row.CreatedBy,
 		ExcludedModels:               excluded,
 		AllowedModels:                allowed,
-		ExcludedProviders:            excludedProviders,
 		PreferredModels:              preferred,
 		RoutingQualityWeight:         row.RoutingQualityWeight,
-		UsageBypassEnabled:           row.UsageBypassEnabled,
-		UsageBypassThreshold:         row.UsageBypassThreshold,
-		SubscriptionRoutingDisabled:  row.SubscriptionRoutingDisabled,
 		RoutingStrategy:              router.Strategy(derefString(row.RoutingStrategy)),
 		RoutingRolloutID:             derefString(row.RoutingRolloutID),
 		PolicyShadowStrategy:         router.Strategy(derefString(row.PolicyShadowStrategy)),
@@ -66,7 +58,6 @@ func toAuthInstallation(row sqlc.RouterModelRouterInstallation) *auth.Installati
 		PolicyHeaderOverridesEnabled: row.PolicyHeaderOverridesEnabled,
 		PolicyRoutingIntent:          derefString(row.PolicyRoutingIntent),
 		AITrainingAllowed:            row.AiTrainingAllowed,
-		ByokEnabled:                  row.ByokEnabled,
 		ContentCaptureMode:           row.ContentCaptureMode,
 		HideTerminalSurfaces:         row.HideTerminalSurfaces,
 		FirstRequestServedAt:         timestamptzPtr(row.FirstRequestServedAt),

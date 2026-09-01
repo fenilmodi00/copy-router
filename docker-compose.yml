@@ -1,5 +1,6 @@
-# Local docker stack for the router. Brings up Postgres, applies migrations, and
-# starts the server end-to-end. Suitable for `docker compose up` smoke tests.
+# Local docker stack for the router. Brings up Postgres with the canonical
+# schema and starts the server end-to-end. Suitable for `docker compose up`
+# smoke tests.
 #
 # DEV ONLY — not tuned for production (single-instance Postgres, no resource
 # limits, default credentials below). Do not deploy this compose file to any
@@ -35,29 +36,16 @@ services:
       retries: 30
     volumes:
       - router_postgres_data:/var/lib/postgresql/data
-      # Init script runs once on first DB creation. Creates the `router` schema
-      # so the migrate sidecar can land its `schema_migrations` table there.
+      # Init script runs once on first DB creation and applies the canonical
+      # schema (all router.* tables, indexes, and constraints). The DDL is
+      # router-schema-qualified, so it lands correctly regardless of the
+      # entrypoint's default search_path.
+      #
+      # No migrate sidecar: first boot is the dump, not 0001_init (which
+      # would fail on already-created tables). Incremental migrations after
+      # baseline are host-side: stamp version 1, then `make migrate-up`.
+      # Supabase / WSL uses the same host path — see db/CLAUDE.md.
       - ./db/init:/docker-entrypoint-initdb.d:ro
-
-  # One-shot migration runner. Exits with status 0 once all pending migrations
-  # are applied. The `server` service waits on this via service_completed_successfully
-  # so it never starts against an unmigrated DB.
-  migrate:
-    image: migrate/migrate:v4.17.1
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./db/migrations:/migrations
-    # `search_path=router` makes both the migrations themselves and the
-    # `schema_migrations` bookkeeping table land in the router schema, so
-    # nothing leaks into public. The migrations create the schema themselves
-    # (CREATE SCHEMA IF NOT EXISTS router) before any table DDL runs.
-    command:
-      - "-path=/migrations"
-      - "-database=postgres://router:router@postgres:5432/router?sslmode=disable&search_path=router"
-      - "up"
-    restart: "no"
 
   server:
     build:
@@ -65,8 +53,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     # Load API keys from the same .env files `make dev` uses, so
     # docker compose up and make dev resolve identically. Compose
     # evaluates env_file entries in order; .env.local wins on
@@ -137,8 +123,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     environment:
       CGO_ENABLED: "0"
       DATABASE_URL: postgres://router:router@postgres:5432/router?sslmode=disable

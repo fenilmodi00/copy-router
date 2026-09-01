@@ -38,45 +38,20 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
-      - name: Install golang-migrate
-        run: |
-          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz \
-            | tar xvz
-          sudo mv migrate /usr/local/bin/migrate
-
       - name: Install sqlc
         run: |
           curl -L https://downloads.sqlc.dev/sqlc_1.30.0_linux_amd64.tar.gz | tar xvz
           sudo mv sqlc /usr/local/bin/sqlc
 
-      # The docker-compose stack pre-creates the router schema via an init
-      # script mounted into postgres. CI's service container has no such
-      # init hook, so we recreate that step explicitly here.
-      - name: Pre-create router schema
+      # cmd/initdb creates the router schema and applies the canonical schema
+      # (db/init/00-create-schema.sql) to an empty schema — DB-backed tests get
+      # the same schema the docker-compose stack provisions via its init script.
+      - name: Apply canonical schema
+        run: go run ./cmd/initdb
         env:
-          PGPASSWORD: router
-        run: |
-          psql -h localhost -p 5432 -U router -d router \
-            -c "CREATE SCHEMA IF NOT EXISTS router;"
+          DATABASE_URL: postgres://router:router@localhost:5432/router?sslmode=disable
 
-      - name: Apply migrations
-        run: |
-          migrate -path ./db/migrations \
-            -database 'postgres://router:router@localhost:5432/router?sslmode=disable&search_path=router' \
-            up
-
-      # Round-trip catches reversible-migration regressions: a broken
-      # down.sql would silently rot until someone tries to roll back.
-      - name: Roll migrations down then back up
-        run: |
-          migrate -path ./db/migrations \
-            -database 'postgres://router:router@localhost:5432/router?sslmode=disable&search_path=router' \
-            down -all
-          migrate -path ./db/migrations \
-            -database 'postgres://router:router@localhost:5432/router?sslmode=disable&search_path=router' \
-            up
-
-      # Detects schema/query drift: if migrations or queries change
+      # Detects schema/query drift: if the canonical schema or queries change
       # without regenerating internal/sqlc/, this fails the build.
       - name: Check sqlc generation is up to date
         working-directory: db

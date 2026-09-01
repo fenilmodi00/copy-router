@@ -1,23 +1,32 @@
 BEGIN;
 
--- Reverse the squashed initial schema. Drop order matters: tables with
--- FKs to model_router_installations are dropped first so the parent
--- can be dropped without ON DELETE bookkeeping.
+-- Reverse the baseline schema. Drop order: view, then children, then
+-- parents. Indexes go with their tables.
 --
--- We deliberately do NOT drop the `router` schema here. golang-migrate's
--- `schema_migrations` bookkeeping table lives in this schema (we pin it
--- via `?search_path=router` on the migrate URL), and migrate updates
--- that table *after* this down migration runs. Dropping the schema
--- would yank the table out from under migrate and abort the run. The
--- schema itself is created with `IF NOT EXISTS` in the up migration, so
--- leaving it as an empty namespace here is harmless and idempotent on
--- the next `up`.
+-- Do not DROP SCHEMA router. golang-migrate's schema_migrations table
+-- lives here (search_path=router on the migrate URL) and is updated
+-- after this file runs.
 
-DROP TABLE router.model_router_users;
+DROP VIEW router.production_request_telemetry;
+
+DROP TABLE router.cluster_model_lists;
+DROP TABLE router.model_router_user_cluster_model_lists;
+DROP TABLE router.account_sessions;
+DROP TABLE router.loop_escalation_events;
 DROP TABLE router.model_router_request_telemetry;
-DROP TABLE router.session_pins;
 DROP TABLE router.model_router_external_api_keys;
 DROP TABLE router.model_router_api_keys;
+DROP TABLE router.model_router_users;
+DROP TABLE router.policy_shadow_decisions;
+DROP TABLE router.request_feedback;
+DROP TABLE router.router_feedback;
+DROP TABLE router.session_pins;
+DROP TABLE router.session_strategy_preferences;
+DROP TABLE router.spiral_shadow_events;
+DROP TABLE router.struggle_escalation_events;
+DROP TABLE router.struggle_shadow_events;
 DROP TABLE router.model_router_installations;
+DROP TABLE router.accounts;
+DROP TABLE router.flag_definitions;
 
 COMMIT;

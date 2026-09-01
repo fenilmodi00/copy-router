@@ -12,15 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// multiBindingModel is served by Bedrock (primary) and OpenRouter (fallback),
-// so excluding one provider must not be enough to refuse a force of it.
-const multiBindingModel = "qwen/qwen3-235b-a22b-2507"
-
-func excludedProvidersCtx(names ...string) context.Context {
-	return context.WithValue(context.Background(),
-		InstallationExcludedProvidersContextKey{}, names)
-}
-
 func keyed(names ...string) map[string]struct{} {
 	out := make(map[string]struct{}, len(names))
 	for _, n := range names {
@@ -40,15 +31,16 @@ func forceCommandEnv(t *testing.T) *translate.RequestEnvelope {
 }
 
 // TestForceModelCommand_SessionStrikeOutDoesNotReject keeps transient 529
-// evidence from masquerading as operator policy.
+// evidence from masquerading as operator policy: a provider struck out for
+// overload must not refuse a force onto one of its models.
 func TestForceModelCommand_SessionStrikeOutDoesNotReject(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
-		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic))
+		WithDeploymentKeyedProviders(keyed(providers.ProviderAiand))
 
 	ctx := context.WithValue(context.Background(),
-		SessionDisabledProvidersContextKey{}, []string{providers.ProviderAnthropic})
+		SessionDisabledProvidersContextKey{}, []string{providers.ProviderAiand})
 	env := forceCommandEnv(t)
 	rec := httptest.NewRecorder()
 	require.NoError(t, svc.handleForceModelCommand(ctx, rec, env,

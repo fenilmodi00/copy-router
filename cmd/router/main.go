@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -21,7 +20,6 @@ import (
 	"workweave/router/internal/analytics"
 	"workweave/router/internal/api/admin"
 	"workweave/router/internal/auth"
-	"workweave/router/internal/billing"
 	"workweave/router/internal/config"
 	"workweave/router/internal/flags"
 	"workweave/router/internal/observability"
@@ -33,7 +31,6 @@ import (
 	aiandProvider "workweave/router/internal/providers/aiand"
 	openaiCompatProvider "workweave/router/internal/providers/openaicompat"
 	"workweave/router/internal/proxy"
-	"workweave/router/internal/proxy/usage"
 	"workweave/router/internal/router"
 	"workweave/router/internal/router/bandit"
 	"workweave/router/internal/router/banditexplore"
@@ -50,7 +47,6 @@ import (
 	"workweave/router/internal/router/sessionpin"
 	"workweave/router/internal/router/sessionstrategy"
 	"workweave/router/internal/server"
-	"workweave/router/internal/wif"
 
 	_ "time/tzdata"
 
@@ -102,19 +98,6 @@ func main() {
 		logger.Warn("Postgres ping at boot failed; early requests may be slow", "err", pingErr)
 	}
 
-	// Gates the self-hoster dashboard + /admin/v1/* API. Defaults to selfhosted
-	// so docker-compose/bare-binary deploys work out of the box; managed Cloud
-	// Run services set ROUTER_DEPLOYMENT_MODE=managed to drop that surface.
-	deploymentMode := server.DeploymentMode(config.GetOr("ROUTER_DEPLOYMENT_MODE", string(server.DeploymentModeSelfHosted)))
-	switch deploymentMode {
-	case server.DeploymentModeSelfHosted, server.DeploymentModeManaged, server.DeploymentModeSelfServe:
-	default:
-		err := fmt.Errorf("Invalid ROUTER_DEPLOYMENT_MODE %q (expected %q, %q, or %q)", deploymentMode, server.DeploymentModeSelfHosted, server.DeploymentModeManaged, server.DeploymentModeSelfServe)
-		logger.Error("Refusing to boot with invalid deployment mode", "err", err)
-		panic(err)
-	}
-	logger.Info("Router deployment mode", "mode", deploymentMode)
-
 	translationCompatibilityMode, err := config.TranslationCompatibilityMode()
 	if err != nil {
 		logger.Error("Invalid translation compatibility mode", "err", err)
@@ -146,46 +129,27 @@ func main() {
 	// auth actually exists — a BYOK/passthrough-only provider would 401.
 	envKeyedProviders := make(map[string]struct{})
 
-	// Wired by default in managed mode. A boot-time health-check error (e.g.
-	// transient pool unreadiness) defaults to billing-enabled rather than
-	// silently falling to BYOK-only, which would 400 every request.
-	var billingSvc *billing.Service
-	if deploymentMode == server.DeploymentModeManaged {
-		byokFeeRate := parseEnvFloat("BYOK_FEE_RATE", billing.DefaultByokFeeRate)
-		billingRepo := postgres.NewBillingRepo(pool)
-		bootCtx, bootCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		tablesExist, billingCheckErr := billingRepo.BillingTablesExist(bootCtx)
-		bootCancel()
-		switch {
-		case billingCheckErr != nil:
-			logger.Warn("Boot billing health check errored; defaulting to billing-enabled in managed mode", "err", billingCheckErr)
-			billingSvc = billing.NewService(billingRepo).WithByokFeeRate(byokFeeRate)
-		case !tablesExist:
-			logger.Warn("Billing tables missing from router schema; staying in BYOK-only mode. Apply db migration 0006_credit_billing to enable billing.")
-		default:
-			billingSvc = billing.NewService(billingRepo).WithByokFeeRate(byokFeeRate)
-			logger.Info("Router billing enabled", "min_balance_usd_micros", billing.MinBalanceMicros, "byok_fee_rate", byokFeeRate)
-		}
-	}
-
-	// Managed without billing stays BYOK-only (avoids spending platform-key
-	// budget if billing fails to wire); managed with billing flips to
-	// platform-key mode gated by balance checks. Self-hosted is never BYOK-only.
-	byokOnly := deploymentMode == server.DeploymentModeManaged && billingSvc == nil
+	// Deployment-level ai& key: optional. Requests with no BYOK credential
+	// fall back to it when set; without it the router is BYOK-only (a
+	// credential-less request 400s instead of spending anything).
+	aiandDeployKey := strings.TrimSpace(config.GetOr("AIAND_API_KEY", ""))
 
 	// ai& is the sole upstream provider of this deployment.
+
+	// With no deployment-level AIAND_API_KEY there is nothing to fall back to
+	// when a request carries no BYOK credential — same 400-on-no-BYOK
+	// semantics today's WithByokOnly provides.
+	byokOnly := aiandDeployKey == ""
 
 	// ai& (aiand.com) OpenAI-compatible inference surface for open-weight
 	// models (GLM, DeepSeek, Kimi, Qwen, Gemma, gpt-oss). Registration and
 	// the dashboard's live-catalog endpoint share the deployment's key/URL.
 	aiandBaseURL := config.GetOr("AIAND_API_URL", openaiCompatProvider.AiandBaseURL)
-	{
-		registerDeploymentKeyedProvider(providerMap, envKeyedProviders, logger,
-			providers.ProviderAiand, "ai&", "AIAND_API_KEY", aiandBaseURL, byokOnly,
-			func(key, baseURL string) providers.Client {
-				return openaiCompatProvider.NewClientWithModelIDMap(key, baseURL, upstreamIDsForProvider(providers.ProviderAiand))
-			})
-	}
+	registerDeploymentKeyedProvider(providerMap, envKeyedProviders, logger,
+		providers.ProviderAiand, "ai&", "AIAND_API_KEY", aiandBaseURL,
+		func(key, baseURL string) providers.Client {
+			return openaiCompatProvider.NewClientWithModelIDMap(key, baseURL, upstreamIDsForProvider(providers.ProviderAiand))
+		})
 
 	availableProviders := make(map[string]struct{}, len(providerMap))
 	for name := range providerMap {
@@ -232,43 +196,29 @@ func main() {
 		WithInstallationChangeNotifier(notifier).
 		WithClusterModelLists(repo.ClusterModelLists).
 		WithUserClusterModelLists(repo.UserClusterModelLists, userClusterCache).
-		WithWIFTokenSource(buildWIFTokenSource(logger)).
 		WithFlagOverridesDisabled(flagOverridesDisabled)
-
-	// Self-serve mode: the dashboard is secured by an aiand-key login instead
-	// of the operator password. Each aiand user gets their own installation
-	// (account id = installation external_id). The login probe validates user
-	// keys against aiand's identity API; Models + Playground bill the stored
-	// per-user BYOK key — AIAND_API_KEY is optional in selfserve.
-	if deploymentMode == server.DeploymentModeSelfServe {
-		if repo.Accounts == nil || repo.LoginSessions == nil {
-			logger.Error("Self-serve mode requires account SQLC repos; refusing to boot", "err", nil)
-			panic("selfserve mode: account repos not wired")
-		}
-		keyVerifier := &aiandProvider.KeyVerifier{
-			Client: &http.Client{
-				Timeout: 15 * time.Second,
-				// Verifies user sk- keys as Bearer; never follow a redirect
-				// carrying them. The refused 3xx fails the identity probe.
-				CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-					return http.ErrUseLastResponse
-				},
+	// Hosted mode: the dashboard is secured by an aiand-key login. Each aiand
+	// user gets their own installation (account id = installation external_id).
+	// The login probe validates user keys against aiand's identity API; Models
+	// + Playground bill the stored per-user BYOK key — AIAND_API_KEY is
+	// optional.
+	if repo.Accounts == nil || repo.LoginSessions == nil {
+		logger.Error("Hosted mode requires account SQLC repos; refusing to boot", "err", nil)
+		panic("hosted mode: account repos not wired")
+	}
+	keyVerifier := &aiandProvider.KeyVerifier{
+		Client: &http.Client{
+			Timeout: 15 * time.Second,
+			// Verifies user sk- keys as Bearer; never follow a redirect
+			// carrying them. The refused 3xx fails the identity probe.
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
 			},
-			IdentityURL: config.GetOr("AIAND_IDENTITY_URL", aiandProvider.DefaultBaseURL),
-		}
-		authSvc.WithAccountRepos(repo.Accounts, repo.LoginSessions).WithKeyVerifier(keyVerifier)
-		logger.Info("Self-serve login enabled", "aiand_identity_url", keyVerifier.IdentityURL)
+		},
+		IdentityURL: config.GetOr("AIAND_IDENTITY_URL", aiandProvider.DefaultBaseURL),
 	}
-
-	// Managed mode doesn't mount the dashboard, so this only matters selfhosted.
-	if deploymentMode == server.DeploymentModeSelfHosted {
-		adminPassword := config.GetOr("ROUTER_ADMIN_PASSWORD", "")
-		if adminPassword == "" {
-			adminPassword = "admin"
-			logger.Warn("ROUTER_ADMIN_PASSWORD not set; using default 'admin'. Set ROUTER_ADMIN_PASSWORD to secure the dashboard.")
-		}
-		authSvc.WithAdminPassword(adminPassword)
-	}
+	authSvc.WithAccountRepos(repo.Accounts, repo.LoginSessions).WithKeyVerifier(keyVerifier)
+	logger.Info("Hosted account login enabled", "aiand_identity_url", keyVerifier.IdentityURL)
 	embedOnlyUser := config.GetOr("ROUTER_EMBED_ONLY_USER_MESSAGE", "true") == "true"
 	if embedOnlyUser {
 		logger.Info("Cluster scorer embedding user-role text only (ROUTER_EMBED_ONLY_USER_MESSAGE=true)")
@@ -279,7 +229,7 @@ func main() {
 	if escapeNormalize {
 		logger.Info("Edit-tool escape-sequence repair enabled (ROUTER_DEEPSEEK_ESCAPE_NORMALIZE=true)")
 	}
-	emitter, err := buildOtelEmitter(string(deploymentMode))
+	emitter, err := buildOtelEmitter()
 	if err != nil {
 		logger.Error("Failed to create OTel emitter", "err", err)
 		panic(err)
@@ -344,19 +294,20 @@ func main() {
 		logger.Info("Hard-pin resolver not wired: ROUTER_HARD_PIN_MODEL operator override is set and absolute by design", "model", hardPinModel)
 	}
 
-	// ROUTER_SUBAGENT_PROVIDER + ROUTER_SUBAGENT_MODEL pin SubAgentDispatch
-	// turns to a distinct provider/model; both must be set together.
-	subAgentProvider := config.GetOr("ROUTER_SUBAGENT_PROVIDER", "")
+	// ROUTER_SUBAGENT_MODEL pins SubAgentDispatch turns to a distinct model;
+	// its provider is the model's catalog binding (aiand).
 	subAgentModel := config.GetOr("ROUTER_SUBAGENT_MODEL", "")
-	switch {
-	case subAgentModel != "" && subAgentProvider == "":
-		logger.Warn("ROUTER_SUBAGENT_MODEL set without ROUTER_SUBAGENT_PROVIDER; ignoring sub-agent override")
-		subAgentModel = ""
-	case subAgentProvider != "" && subAgentModel == "":
-		logger.Warn("ROUTER_SUBAGENT_PROVIDER set without ROUTER_SUBAGENT_MODEL; ignoring sub-agent override")
-		subAgentProvider = ""
-	case subAgentModel != "":
-		logger.Info("Sub-agent routing override enabled", "provider", subAgentProvider, "model", subAgentModel)
+	subAgentProvider := ""
+	if subAgentModel != "" {
+		if m, ok := catalog.ByID(subAgentModel); ok && len(m.Providers) > 0 {
+			subAgentProvider = m.Providers[0].Provider
+		}
+		if subAgentProvider == "" {
+			logger.Warn("ROUTER_SUBAGENT_MODEL has no catalog binding; ignoring sub-agent override", "model", subAgentModel)
+			subAgentModel = ""
+		} else {
+			logger.Info("Sub-agent routing override enabled", "provider", subAgentProvider, "model", subAgentModel)
+		}
 	}
 
 	// Default-eligible set: env-keyed providers only. BYOK/client credentials
@@ -445,7 +396,7 @@ func main() {
 	policyDeadlineFallback := config.GetOr("ROUTER_POLICY_DEADLINE_FALLBACK", "false") == "true"
 	// policyDeadlineDefaultModel is the tier-3 static fallback on a deadline miss with no pin; empty = fail-closed.
 	policyDeadlineDefaultModel := config.GetOr("ROUTER_POLICY_DEADLINE_DEFAULT_MODEL", "")
-	handoverProviderName := config.GetOr("ROUTER_HANDOVER_PROVIDER", providers.ProviderAiand)
+	handoverProviderName := providers.ProviderAiand
 	handoverModel := config.GetOr("ROUTER_HANDOVER_MODEL", "deepseek-ai/deepseek-v4-flash")
 	handoverTimeout := parseEnvDurationMs("ROUTER_HANDOVER_TIMEOUT_MS", proxy.DefaultHandoverTimeout)
 	// Kept as the interface type: a typed-nil *ProviderSummarizer would defeat
@@ -799,8 +750,7 @@ func main() {
 		WithSummarizer(summarizer).
 		WithCompaction(compactionSz, compactionPct).
 		WithAvailableModels(proxyRoutableModels(routingTargets, availableProviders, hmmRouter != nil)).
-		WithDefaultBaselineModel(resolveDefaultBaselineModel()).
-		WithBillingService(billingSvc)
+		WithDefaultBaselineModel(resolveDefaultBaselineModel())
 	for _, spec := range configuredPolicySpecs {
 		proxySvc = proxySvc.WithPolicyStrategy(spec)
 		logger.Info("Generic policy sidecar wired", "strategy", spec.Strategy, "candidate_models", len(routingTargets))
@@ -840,63 +790,6 @@ func main() {
 		logger.Info("Model exclusion override active", "excluded_models", cleaned)
 	}
 
-	// ROUTER_EXCLUDED_PROVIDERS pins a deployment-wide provider exclusion
-	// list, overriding per-installation DB state. Empty / unset → DB takes over.
-	if excludedRaw := strings.TrimSpace(config.GetOr("ROUTER_EXCLUDED_PROVIDERS", "")); excludedRaw != "" {
-		parts := strings.Split(excludedRaw, ",")
-		cleaned := make([]string, 0, len(parts))
-		for _, p := range parts {
-			if trimmed := strings.TrimSpace(p); trimmed != "" {
-				cleaned = append(cleaned, trimmed)
-			}
-		}
-		proxySvc = proxySvc.WithExcludedProvidersOverride(cleaned)
-		logger.Info("Provider exclusion override active", "excluded_providers", cleaned)
-	}
-
-	// The usage observer is always wired (cheap, side-effect-free) even though
-	// the cost discount below is env-gated: it also feeds the per-installation
-	// usage-bypass gate, which is DB-gated and can't know the env flag's state.
-	subscriptionTTL := 10 * time.Minute
-	if v, err := time.ParseDuration(config.GetOr("ROUTER_SUBSCRIPTION_OBSERVATION_TTL", "10m")); err == nil {
-		subscriptionTTL = v
-	}
-	observerSalt := make([]byte, 16)
-	if _, err := rand.Read(observerSalt); err != nil {
-		logger.Error("Failed to seed subscription usage observer salt", "err", err)
-		panic(err)
-	}
-	usageObserver := usage.NewObserver(observerSalt, subscriptionTTL, time.Now)
-	// Bound memory: evict expired observations periodically (the usage package
-	// spawns no goroutines of its own).
-	go func() {
-		t := time.NewTicker(time.Minute)
-		defer t.Stop()
-		for range t.C {
-			usageObserver.Sweep()
-		}
-	}()
-	proxySvc = proxySvc.WithUsageObserver(usageObserver)
-
-	// Discounts a covered model's cost term by the caller's observed
-	// subscription rate-limit headroom (~epsilon with slack, →1 as it binds).
-	// Defaults ON; only affects turns with an observed subscription, so
-	// blast radius is narrow. Disabling here leaves the observer/bypass gate wired.
-	if config.GetOr("ROUTER_SUBSCRIPTION_AWARE_ROUTING", "true") == "true" {
-		epsilon := 0.05
-		if v, err := strconv.ParseFloat(config.GetOr("ROUTER_SUBSCRIPTION_COST_EPSILON", "0.05"), 64); err == nil {
-			epsilon = v
-		}
-		gamma := 2.0
-		if v, err := strconv.ParseFloat(config.GetOr("ROUTER_SUBSCRIPTION_COST_GAMMA", "2"), 64); err == nil {
-			gamma = v
-		}
-		proxySvc = proxySvc.WithSubscriptionAwareRouting(usageObserver, epsilon, gamma)
-		logger.Info("Subscription-aware routing configured", "epsilon", epsilon, "gamma", gamma, "observation_ttl", subscriptionTTL)
-	} else {
-		logger.Info("Usage observer wired; subscription-aware cost discount disabled", "observation_ttl", subscriptionTTL)
-	}
-
 	// No-op when WV_APM_OTLP_ENDPOINT is unset. Flushed explicitly in the
 	// shutdown path below since a defer would run after SIGKILL.
 	apm.Init()
@@ -930,14 +823,13 @@ func main() {
 		Proxy:            proxySvc,
 		DeployedModels:   deployedModels,
 		HMMModels:        hmmRosterModels,
-		Billing:          billingSvc,
 		ReadinessChecker: hmmReadinessChecker,
 		HMMRosterSource:  hmmRosterSource,
 		Analytics:        analyticsSvc,
 		// Built straight into the Services literal so the route can never be
 		// silently dropped — mounting is keyed on this field being non-nil.
-		AiandCatalogHandler: buildAiandCatalogHandler(config.GetOr("AIAND_API_KEY", ""), aiandBaseURL, deploymentMode, logger),
-	}, deploymentMode)
+		AiandCatalogHandler: buildAiandCatalogHandler(config.GetOr("AIAND_API_KEY", ""), aiandBaseURL, logger),
+	})
 
 	srv := &http.Server{
 		Addr:    ":" + config.GetOr("PORT", "8080"),
@@ -1125,7 +1017,7 @@ func buildClusterScorer(availableProviders map[string]struct{}) (router.Router, 
 				"cluster_version", v,
 				"missing_provider", prov,
 				"affected_models", models,
-				"hint", "set "+envVarHint(prov)+" to keep these in the routing pool",
+				"hint", "set AIAND_API_KEY to keep these in the routing pool",
 			)
 		}
 
@@ -1202,37 +1094,9 @@ func buildClusterScorer(availableProviders map[string]struct{}) (router.Router, 
 	return multi, defaultEmbedderID, nil
 }
 
-// buildWIFTokenSource constructs the workload attestation source backing BYOK
-// keys with auth_type=wif. Returns nil when ROUTER_WIF_PROVIDER is unset — the
-// identity is the deployment's own, so only the operator can configure it.
-func buildWIFTokenSource(logger *slog.Logger) auth.WIFTokenSource {
-	provider := strings.ToUpper(strings.TrimSpace(config.GetOr("ROUTER_WIF_PROVIDER", "")))
-	audience := config.GetOr("ROUTER_WIF_AUDIENCE", auth.WIFAudience)
-	switch provider {
-	case "":
-		return nil
-	case auth.WIFProviderGCP:
-		logger.Info("Workload identity federation enabled", "provider", provider, "audience", audience)
-		return wif.NewGoogleTokenSource(audience)
-	case auth.WIFProviderOIDC:
-		path := config.GetOr("ROUTER_WIF_OIDC_TOKEN_FILE", "")
-		if path == "" {
-			err := fmt.Errorf("ROUTER_WIF_PROVIDER=%s requires ROUTER_WIF_OIDC_TOKEN_FILE", provider)
-			logger.Error("Refusing to boot with incomplete workload identity configuration", "err", err)
-			panic(err)
-		}
-		logger.Info("Workload identity federation enabled", "provider", provider, "token_file", path)
-		return wif.NewFileTokenSource(path)
-	default:
-		err := fmt.Errorf("Invalid ROUTER_WIF_PROVIDER %q (expected %q or %q)", provider, auth.WIFProviderGCP, auth.WIFProviderOIDC)
-		logger.Error("Refusing to boot with invalid workload identity provider", "err", err)
-		panic(err)
-	}
-}
-
 // buildOtelEmitter constructs the OTel span emitter from environment
 // variables. Returns (nil, nil) when OTEL_EXPORTER_OTLP_ENDPOINT is unset.
-func buildOtelEmitter(deploymentMode string) (*otel.Emitter, error) {
+func buildOtelEmitter() (*otel.Emitter, error) {
 	logger := observability.Get()
 
 	endpoint := config.GetOr("OTEL_EXPORTER_OTLP_ENDPOINT", "")
@@ -1240,13 +1104,7 @@ func buildOtelEmitter(deploymentMode string) (*otel.Emitter, error) {
 		return nil, nil
 	}
 
-	// router.deployment_mode lets the collector branch ingest behavior
-	// (e.g. redaction / content-opt-out) without inspecting per-record attrs.
 	resourceAttrs := parseOtelHeaders(config.GetOr("OTEL_RESOURCE_ATTRIBUTES", ""))
-	if resourceAttrs == nil {
-		resourceAttrs = map[string]string{}
-	}
-	resourceAttrs["router.deployment_mode"] = deploymentMode
 
 	cfg := otel.EmitterConfig{
 		Endpoint:      endpoint,
@@ -1531,8 +1389,10 @@ func resolveDefaultBaselineModel() string {
 // model in the default bundle, else (defaultHardPinProvider, defaultHardPinModel).
 func resolveHardPinModel(available map[string]struct{}, logger *slog.Logger) (provider, model string) {
 	if m := config.GetOr("ROUTER_HARD_PIN_MODEL", ""); m != "" {
-		p := config.GetOr("ROUTER_HARD_PIN_PROVIDER", defaultHardPinProvider)
-		return p, m
+		if mm, ok := catalog.ByID(m); ok && len(mm.Providers) > 0 {
+			return mm.Providers[0].Provider, m
+		}
+		return defaultHardPinProvider, m
 	}
 
 	reqVersion := config.GetOr("ROUTER_CLUSTER_VERSION", cluster.LatestVersion)
@@ -1554,51 +1414,8 @@ func resolveHardPinModel(available map[string]struct{}, logger *slog.Logger) (pr
 	return p, m
 }
 
-// envVarHint returns the env var name for a provider's API key, for log
-// warnings; falls back to a readable "unknown provider" string.
-func envVarHint(provider string) string {
-	if v := providers.APIKeyEnvVar(provider); v != "" {
-		return v
-	}
-	return "<unknown provider " + provider + ">"
-}
-
-// upstreamIDsForProvider maps public model ID -> upstream model ID for a
-// provider's bindings with a non-empty UpstreamID; nil if no rewriting is
-// needed (e.g. OpenRouter, where the slug IS the upstream ID).
-// registerDeploymentKeyedProvider resolves a provider's deployment-level API
-// key (respecting byokOnly), constructs its client via newClient, registers
-// it in providerMap, and logs its BYOK/keyed/passthrough state. Shared by the
-// providers whose registration collapses to "resolve key -> build client ->
-// three-way log switch" (Fireworks, Makora, Together, Bedrock, Google);
-// OpenRouter and Anthropic/OpenAI have genuinely different gating
-// logic and stay bespoke. extraLogAttrs are appended only to the
-// deployment-keyed log line (e.g. Bedrock's region).
-func registerDeploymentKeyedProvider(
-	providerMap map[string]providers.Client,
-	envKeyedProviders map[string]struct{},
-	logger *slog.Logger,
-	name, displayName, keyEnvVar, baseURL string,
-	byokOnly bool,
-	newClient func(key, baseURL string) providers.Client,
-	extraLogAttrs ...any,
-) {
-	key := ""
-	if !byokOnly {
-		key = config.GetOr(keyEnvVar, "")
-	}
-	providerMap[name] = newClient(key, baseURL)
-	switch {
-	case byokOnly:
-		logger.Info(displayName+" provider enabled (BYOK only)", "base_url", baseURL)
-	case key != "":
-		envKeyedProviders[name] = struct{}{}
-		logger.Info(displayName+" provider enabled", append([]any{"base_url", baseURL}, extraLogAttrs...)...)
-	default:
-		logger.Info(displayName+" provider registered (BYOK only — set "+keyEnvVar+" for deployment-level use)", "base_url", baseURL)
-	}
-}
-
+// upstreamIDsForProvider maps public model ID -> upstream model ID for the
+// provider's bindings with a non-empty UpstreamID; nil if no rewriting needed.
 func upstreamIDsForProvider(provider string) map[string]string {
 	out := make(map[string]string)
 	for _, m := range catalog.Models {
@@ -1614,17 +1431,29 @@ func upstreamIDsForProvider(provider string) map[string]string {
 	return out
 }
 
-// buildAiandCatalogHandler wires the dashboard's live ai& model-catalog route
-// for the given deployment mode. It returns the handler (nil when the route
-// must not mount) plus whether it mounted, so the composition root can log
-// accurately. Self-serve mounts the route even without a deployment key —
-// each signed-in user supplies their own aiand BYOK credential from login.
-// Self-hosted mounts it only when AIAND_API_KEY is set.
-func buildAiandCatalogHandler(deploymentKey, baseURL string, mode server.DeploymentMode, logger *slog.Logger) gin.HandlerFunc {
-	if deploymentKey == "" && mode != server.DeploymentModeSelfServe {
-		logger.Info("ai& catalog endpoint disabled (AIAND_API_KEY not set)")
-		return nil
+// registerDeploymentKeyedProvider reads the deployment-level API key directly
+// from AIAND_API_KEY, builds the client, and logs its deployment-keyed state.
+func registerDeploymentKeyedProvider(
+	providerMap map[string]providers.Client,
+	envKeyedProviders map[string]struct{},
+	logger *slog.Logger,
+	name, displayName, keyEnvVar, baseURL string,
+	newClient func(key, baseURL string) providers.Client,
+) {
+	key := strings.TrimSpace(config.GetOr(keyEnvVar, ""))
+	providerMap[name] = newClient(key, baseURL)
+	if key != "" {
+		envKeyedProviders[name] = struct{}{}
+		logger.Info(displayName+" provider enabled", "base_url", baseURL)
+	} else {
+		logger.Info(displayName+" provider registered (BYOK only)", "base_url", baseURL)
 	}
+}
+
+// buildAiandCatalogHandler wires the dashboard's live ai& model-catalog route.
+// Always mounted: each signed-in user supplies their own aiand BYOK
+// credential from login, so the catalog works even without a deployment key.
+func buildAiandCatalogHandler(deploymentKey, baseURL string, logger *slog.Logger) gin.HandlerFunc {
 	if deploymentKey != "" {
 		logger.Info("ai& catalog endpoint enabled", "base_url", baseURL)
 	} else {

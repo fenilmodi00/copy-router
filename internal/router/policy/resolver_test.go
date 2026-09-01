@@ -21,10 +21,10 @@ const (
 
 func catalogRosterID(model catalog.Model) string { return model.ID }
 
-func TestManagedResolverUsesCurrentProvidersAndNeverOpenRouter(t *testing.T) {
+func TestManagedResolverIgnoresUnavailableProviders(t *testing.T) {
 	resolver := policy.NewResolver(
 		set(modelMotif, "fictional-not-in-catalog"),
-		set(providers.ProviderAiand, providers.ProviderOpenRouter),
+		set(providers.ProviderAiand, "unregistered-provider"),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
@@ -34,7 +34,6 @@ func TestManagedResolverUsesCurrentProvidersAndNeverOpenRouter(t *testing.T) {
 	require.Len(t, resolved.Candidates, 1)
 	assert.Equal(t, modelMotif, resolved.Candidates[0].CatalogID)
 	assert.Equal(t, providers.ProviderAiand, resolved.Candidates[0].Provider)
-	assert.NotEqual(t, providers.ProviderOpenRouter, resolved.Candidates[0].Provider)
 	assert.Equal(t, modelMotif, resolved.Candidates[0].UpstreamID)
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
 		CatalogID: "fictional-not-in-catalog",
@@ -58,72 +57,6 @@ func TestResolverDefaultsUpstreamIDToCatalogID(t *testing.T) {
 	assert.Equal(t, resolved.Candidates[0].RosterID, resolved.Candidates[0].ArmID)
 }
 
-func TestArmResolverEnumeratesEachAllowedProviderBinding(t *testing.T) {
-	resolver := policy.NewArmResolver(
-		set(modelFlash),
-		set(providers.ProviderAiand, providers.ProviderOpenAIGateway),
-		catalogRosterID,
-		policy.ManagedProviderPolicy(),
-	)
-
-	resolved := resolver.Resolve(router.Request{
-		CustomBindings: map[string][]string{modelFlash: {providers.ProviderOpenAIGateway}},
-	})
-
-	require.Len(t, resolved.Candidates, 2)
-	assert.Equal(t, modelFlash, resolved.Candidates[0].RosterID)
-	assert.Equal(t, modelFlash, resolved.Candidates[1].RosterID)
-	assert.NotEqual(t, resolved.Candidates[0].ArmID, resolved.Candidates[1].ArmID)
-	assert.Empty(t, resolved.ByRosterID)
-	assert.Equal(t, []string{modelFlash}, resolved.CandidateModels())
-	assert.Equal(t, map[string]string{
-		resolved.Candidates[0].ArmID: resolved.Candidates[0].Provider,
-		resolved.Candidates[1].ArmID: resolved.Candidates[1].Provider,
-	}, resolved.CandidateArmProviders())
-	armScores := map[string]float32{
-		resolved.Candidates[0].ArmID: 0.1,
-		resolved.Candidates[1].ArmID: 0.2,
-	}
-	assert.Equal(t, armScores, resolved.ArmCandidateScores(armScores))
-	assert.Equal(t, map[string]string{
-		resolved.Candidates[0].CatalogID: resolved.Candidates[0].Provider,
-	}, resolved.CandidateProviders())
-	assert.Equal(t, map[string]float32{
-		resolved.Candidates[0].CatalogID: 0.1,
-	}, resolved.CatalogCandidateScores(armScores))
-	for _, candidate := range resolved.Candidates {
-		binding, ok := resolved.BindingForSelection(candidate.ArmID, "")
-		require.True(t, ok)
-		assert.Equal(t, candidate.Provider, binding.Provider)
-		assert.Equal(t, candidate.UpstreamID, binding.UpstreamID)
-		assert.Equal(t, candidate.UpstreamID, candidate.ModelRevision)
-	}
-}
-
-func TestArmResolverRejectsRosterOnlySelectionForThreeBindings(t *testing.T) {
-	resolver := policy.NewArmResolver(
-		set(modelFlash),
-		set(
-			providers.ProviderAiand,
-			providers.ProviderOpenAIGateway,
-			providers.ProviderTogether,
-		),
-		func(catalog.Model) string { return "shared/arm" },
-		policy.ProviderPolicy{},
-	)
-
-	resolved := resolver.Resolve(router.Request{
-		CustomBindings: map[string][]string{
-			modelFlash: {providers.ProviderOpenAIGateway, providers.ProviderTogether},
-		},
-	})
-
-	require.Len(t, resolved.Candidates, 3)
-	assert.Empty(t, resolved.ByRosterID)
-	_, ok := resolved.BindingForSelection("", "shared/arm")
-	assert.False(t, ok)
-}
-
 func TestResolverAppliesHardFiltersAndPreferenceRanks(t *testing.T) {
 	resolver := policy.NewResolver(
 		set(modelKimi3, modelQwen),
@@ -143,7 +76,7 @@ func TestResolverAppliesHardFiltersAndPreferenceRanks(t *testing.T) {
 	assert.Equal(t, 1, *resolved.Candidates[0].PreferenceRank)
 
 	none := resolver.Resolve(router.Request{
-		EnabledProviders: set(providers.ProviderAnthropic),
+		EnabledProviders: set("unregistered-provider"),
 		PreferredModels:  []string{modelQwen, modelKimi3},
 	})
 	assert.Empty(t, none.Candidates)
