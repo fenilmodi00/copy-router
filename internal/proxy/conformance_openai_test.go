@@ -78,22 +78,6 @@ func TestConformance_OpenAIChat(t *testing.T) {
 			upstreamFixture: "openai_chat/degenerate_toolcall.upstream.sse",
 		},
 		{
-			// deepseek/* must carry the provider-pin hint and
-			// reasoning:{enabled:false} to pin a caching host and avoid
-			// burning max_tokens on hidden thinking.
-			name:            "openai_chat/openrouter_gates",
-			provider:        providers.ProviderAiand,
-			model:           "deepseek-ai/deepseek-v4-pro",
-			newClient:       openRouterClient,
-			inbound:         `{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`,
-			stream:          true,
-			upstreamFixture: "openai_chat/basic_text.upstream.sse",
-			wantUpstream: func(t *testing.T, _ string, body []byte, _ http.Header) {
-				assert.Equal(t, "deepseek", gjson.GetBytes(body, "provider.order.0").String(), "deepseek/* must pin the deepseek upstream on OpenRouter")
-				assert.False(t, gjson.GetBytes(body, "reasoning.enabled").Bool(), "reasoning must be disabled to avoid burning max_tokens on hidden thinking")
-			},
-		},
-		{
 			name:            "openai_chat/system_prompt",
 			provider:        providers.ProviderAiand,
 			model:           "deepseek-ai/deepseek-v4-pro",

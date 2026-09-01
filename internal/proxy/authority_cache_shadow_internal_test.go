@@ -379,11 +379,14 @@ func TestCandidateScoreFor(t *testing.T) {
 	t.Run("stay score uses re-resolved provider", func(t *testing.T) {
 		dec := hmmFreshDecisionWithArmScores(shadowFreshModel, nil, map[string]float32{
 			"anthropic/" + shadowPinnedModel: 0.62,
-			"openai/" + shadowPinnedModel:    0.91,
+			// A second arm on a different model keeps the fallback scan
+			// unambiguous: aiand-only means both arms resolve to the same
+			// provider, so same-model arms can no longer be told apart.
+			"anthropic/" + shadowFreshModel: 0.91,
 		})
 		dec.Metadata.CandidateArmProviders = map[string]string{
 			"anthropic/" + shadowPinnedModel: providers.ProviderAiand,
-			"openai/" + shadowPinnedModel:    providers.ProviderAiand,
+			"anthropic/" + shadowFreshModel:  providers.ProviderAiand,
 		}
 		got := candidateScoreForWithProvider(dec, shadowPinnedModel, providers.ProviderAiand)
 		require.NotNil(t, got)

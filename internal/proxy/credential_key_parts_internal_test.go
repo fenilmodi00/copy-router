@@ -24,8 +24,6 @@ func TestCredentialKeyParts_DeploymentKeyTurnIsEmpty(t *testing.T) {
 	assert.Empty(t, srcNil)
 }
 
-
-
 func TestCredentialKeyParts_ShortKey(t *testing.T) {
 	s := &Service{}
 	prefix, suffix, src := s.credentialKeyParts(ctxWithCreds(&Credentials{APIKey: []byte("short-key"), Source: credSourceClient}))
@@ -33,4 +31,3 @@ func TestCredentialKeyParts_ShortKey(t *testing.T) {
 	assert.Empty(t, suffix)
 	assert.Equal(t, credSourceClient, src)
 }
-

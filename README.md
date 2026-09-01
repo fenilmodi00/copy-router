@@ -61,7 +61,7 @@ exclusively around the ai& inference API, it:
   it pays. User-forced pins never expire.
 - 🔒 **BYOK by default, encrypted at rest.** Per-installation ai& keys ride
   the router encrypted with Tink AES-256-GCM; the deployment key is optional
-  in self-serve mode where each signed-in user's own key bills their usage.
+  where each signed-in user's own key bills their usage.
 - 🛡️ **Agentic failure handling.** Classifies upstream errors, retries with
   sibling-binding failover, detects output-cap runaways and cyclic loops
   (with escalation to a stronger tier), breaks text-repetition spirals, and
@@ -76,8 +76,7 @@ exclusively around the ai& inference API, it:
 - 🖥️ **Dashboard.** Metrics, per-model breakdown, usage/savings, model
   selection (excluded/allowed lists), playground for previewing routing
   decisions, live ai& catalog view, and BYOK provider-key management.
-  Self-hosted (operator password), self-serve (ai& key login), or managed
-  (no dashboard) modes.
+  Login is your ai& `sk-` key (`POST /account/v1/login`).
 
 ## How routing works
 
@@ -113,8 +112,8 @@ One request travels this path:
    stronger tier), and text-repetition spirals are detected and broken;
    handover summarization can bound SWITCH cost; stale thinking-block
    signatures are stripped on cross-model switch.
-8. **Record.** The decision, usage, and cost go to Postgres (billing debit,
-   metrics, analytics export) and OTel spans; the semantic cache may serve
+8. **Record.** The decision, usage, and cost go to Postgres (metrics,
+   analytics export) and OTel spans; the semantic cache may serve
    the next identical non-streaming request; usage updates the pin's cache
    telemetry for the next planner run.
 
@@ -164,10 +163,10 @@ make full-setup
 ```
 
 The router is up at <http://localhost:8080>, the dashboard at
-<http://localhost:8080/ui/> (password: `admin`), and your `rk_...` key
-prints in the logs. Open **Playground** at <http://localhost:8080/ui/playground>
-to preview routing decisions and send test chat turns (selfhosted/selfserve
-only).
+<http://localhost:8080/ui/> (log in with your ai& `sk-` key), and your
+`rk_...` key prints in the logs. Open **Playground** at
+<http://localhost:8080/ui/playground> to preview routing decisions and send
+test chat turns.
 
 ```bash
 # Lead surface: OpenAI Chat Completions (catalog IDs)
@@ -199,10 +198,11 @@ curl -sS http://localhost:8080/v1/messages \
 # Peek at the routing decision without proxying
 curl -sS http://localhost:8080/v1/route -H "Authorization: Bearer rk_..." -d '...'
 
-# Dashboard playground: preview a routing decision (admin cookie, not rk_)
-curl -sS -c jar -X POST http://localhost:8080/admin/v1/auth/login \
-  -H 'content-type: application/json' -d '{"password":"admin"}'
-curl -sS -b jar -X POST http://localhost:8080/admin/v1/playground/route \
+# Dashboard playground: preview a routing decision (account cookie, not rk_;
+# /account/v1/login takes your ai& sk- key)
+curl -sS -c jar -X POST http://localhost:8080/account/v1/login \
+  -H 'content-type: application/json' -d '{"key":"sk-..."}'
+curl -sS -b jar -X POST http://localhost:8080/v1/playground/route \
   -H 'content-type: application/json' \
   -d '{"model":"auto","messages":[{"role":"user","content":"hi"}]}'
 ```
@@ -229,7 +229,7 @@ flowchart LR
     scorer["Cluster scorer<br/>in-process ONNX embedder"]
     hmm["HMM policy sidecar :8093<br/>optional, make up-hmm"]
     pg[("Postgres<br/>installations, rk_ keys,<br/>encrypted BYOK keys, usage")]
-    ui["Dashboard /ui<br/>selfhosted or self-serve mode"]
+    ui["Dashboard /ui<br/>ai& key login"]
     providers["ai& (aiand.com)<br/>OpenAI-compatible open-weight"]
     otel["Your OTLP collector<br/>Honeycomb, Datadog, Grafana"]
 
@@ -244,9 +244,6 @@ flowchart LR
     classDef external fill:#f4f4f5,stroke:#a1a1aa,color:#3f3f46
     class providers,otel external
 ```
-
-Multi-replica deployments also need Pub/Sub (`PUBSUB_*`) for cache
-invalidation; `docker compose` runs the emulator for you.
 
 ### Optional: self-host the frozen HMM policy
 
@@ -338,8 +335,7 @@ See [install/README.md](install/README.md#choosing-which-models-the-router-may-p
 
 Ingress auth is the `rk_` router key (Bearer). Analytics export uses a
 separate read-only `ra_` key that can never reach an inference route. Dashboard
-data plane (`/admin/v1/*` or `/account/v1/*`) is cookie-authed via operator
-password (selfhosted) or ai& key login (selfserve).
+data plane is cookie-authed via ai& key login (`POST /account/v1/login`).
 
 Keep liveness probes on `/health`. Point startup or readiness probes at
 `/readyz` when configured policy sidecars must be ready before traffic arrives.
@@ -366,13 +362,11 @@ right row. Claude-era short names (`opus`, `sonnet`, `haiku`, …) are **not**
 remapped — pin a catalog ID instead (see
 [CONFIGURATION](docs/CONFIGURATION.md#client-model-strings--catalog-ids)).
 
-## Deployment modes
+## Deployment
 
-| Mode | Dashboard | Login | Upstream credential |
-|---|---|---|---|
-| `selfhosted` (default) | `/ui/*` + `/admin/v1/*` | operator password | `AIAND_API_KEY` or per-installation BYOK |
-| `selfserve` | `/ui/*` + `/account/v1/*` | ai& `sk-` key (probes `GET /v1/models`, org from `X-Org-Id`) | per-user stored ai& key; `AIAND_API_KEY` optional |
-| `managed` | none (control plane elsewhere) | — | BYOK-only; requests without a key 400 |
+Single "hosted" mode: the dashboard is mounted at `/ui/*` and its data plane
+at `/v1/*`. Login is your ai& `sk-` key (`POST /account/v1/login`). Upstream
+credential is `AIAND_API_KEY` from env or per-installation/per-user BYOK keys.
 
 ## Give routing feedback
 
@@ -384,7 +378,7 @@ were removed — `ROUTER_FEEDBACK_*` env vars are ignored.
 ## Deeper docs
 
 - 📐 [**Configuration reference**](docs/CONFIGURATION.md): every env var,
-  BYOK encryption, OTel knobs, cluster routing, selfserve.
+  BYOK encryption, OTel knobs, cluster routing, dashboard auth.
 - 🧭 [**Semantics and terminology**](docs/SEMANTICS.md): canonical definitions
   for session, round, turn, action, and step.
 - 🧩 [**Adding models (six-model roster)**](docs/adding-glm-5-3.md): catalog +

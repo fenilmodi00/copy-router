@@ -131,7 +131,7 @@ func TestService_ProxyMessages_HandoverSwitchToOpenAIEmitsResponses(t *testing.T
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderAiand: &fakeProvider{},
+			providers.ProviderAiand: openAI,
 		},
 		nil, false, nil, store, false, providers.ProviderAiand, "claude-haiku-4-5", nil,
 	).WithSummarizer(summarizer)

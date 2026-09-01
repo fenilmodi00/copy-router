@@ -32,7 +32,6 @@ export const queryKeys = {
   config: ["config"] as const,
   keys: ["keys"] as const,
   excludedModels: ["excluded-models"] as const,
-  excludedProviders: ["excluded-providers"] as const,
   routingPreferences: ["routing-preferences"] as const,
   metricsSummary: (rangeId: string, toISO: string) =>
     ["metrics", "summary", rangeId, quantizeKeyTime(toISO)] as const,
@@ -201,14 +200,6 @@ export function useRoutingPreferences(config?: SWRConfiguration) {
   });
 }
 
-
-export function useExcludedProviders(config?: SWRConfiguration) {
-  return useSWR(queryKeys.excludedProviders, () => api.excludedProviders.get(), {
-    ...swrDefaults,
-    ...config,
-  });
-}
-
 /**
  * Refetches the key list after a mutation. Must be called from a component
  * tree under DataCacheProvider — uses `useSWRConfig().mutate`, which targets
@@ -225,12 +216,6 @@ export function useInvalidateKeys() {
 export function useInvalidateExcludedModels() {
   const { mutate } = useSWRConfig();
   return () => mutate(queryKeys.excludedModels);
-}
-
-/** See useInvalidateKeys. */
-export function useInvalidateExcludedProviders() {
-  const { mutate } = useSWRConfig();
-  return () => mutate(queryKeys.excludedProviders);
 }
 
 /** See useInvalidateKeys. */

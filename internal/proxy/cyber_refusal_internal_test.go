@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"workweave/router/internal/providers"
 	"workweave/router/internal/router"
 	"workweave/router/internal/router/sessionpin"
 )
@@ -136,7 +137,7 @@ func TestMaybeRepinOnRefusal_RepinsToFallbackModel(t *testing.T) {
 	store := &repinFakeStore{} // no existing pin -> no PairedModel
 	s := &Service{pinStore: store, cyberRefusalFallbackModel: "moonshotai/kimi-k2.7"}
 	obs := &refusalObserver{refused: true}
-	served := router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3"}
+	served := router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3"}
 
 	s.maybeRepinOnRefusal(repinCtx(), obs, [sessionpin.SessionKeyLen]byte{1, 2, 3}, "main_loop", served)
 
@@ -158,11 +159,11 @@ func TestMaybeRepinOnRefusal_RepinsToFallbackModel(t *testing.T) {
 func TestMaybeRepinOnRefusal_PrefersPairedModel(t *testing.T) {
 	store := &repinFakeStore{
 		hasPin: true,
-		getPin: sessionpin.Pin{PairedModel: "deepseek-ai/deepseek-v4-flash", PairedProvider: "anthropic"},
+		getPin: sessionpin.Pin{PairedModel: "deepseek-ai/deepseek-v4-flash", PairedProvider: providers.ProviderAiand},
 	}
 	s := &Service{pinStore: store, cyberRefusalFallbackModel: "moonshotai/kimi-k2.7"}
 	obs := &refusalObserver{refused: true}
-	served := router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3"}
+	served := router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3"}
 
 	s.maybeRepinOnRefusal(repinCtx(), obs, [sessionpin.SessionKeyLen]byte{4, 5, 6}, "main_loop", served)
 
@@ -172,13 +173,13 @@ func TestMaybeRepinOnRefusal_PrefersPairedModel(t *testing.T) {
 	if got := store.upserts[0].Model; got != "deepseek-ai/deepseek-v4-flash" {
 		t.Fatalf("re-pinned to %q, want the pin's PairedModel deepseek-ai/deepseek-v4-flash", got)
 	}
-	if got := store.upserts[0].Provider; got != "anthropic" {
-		t.Fatalf("re-pin provider = %q, want anthropic (from PairedProvider)", got)
+	if got := store.upserts[0].Provider; got != providers.ProviderAiand {
+		t.Fatalf("re-pin provider = %q, want aiand (from PairedProvider)", got)
 	}
 }
 
 func TestMaybeRepinOnRefusal_NoOpCases(t *testing.T) {
-	served := router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3"}
+	served := router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3"}
 	key := [sessionpin.SessionKeyLen]byte{7}
 
 	t.Run("nil observer (flag off)", func(t *testing.T) {
@@ -202,7 +203,7 @@ func TestMaybeRepinOnRefusal_NoOpCases(t *testing.T) {
 	t.Run("served model already the fallback", func(t *testing.T) {
 		store := &repinFakeStore{}
 		s := &Service{pinStore: store, cyberRefusalFallbackModel: "moonshotai/kimi-k2.7"}
-		alreadyFallback := router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k2.7"}
+		alreadyFallback := router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k2.7"}
 		s.maybeRepinOnRefusal(repinCtx(), &refusalObserver{refused: true}, key, "main_loop", alreadyFallback)
 		if len(store.upserts) != 0 {
 			t.Fatalf("re-pin to the same model should be skipped, got %d upserts", len(store.upserts))

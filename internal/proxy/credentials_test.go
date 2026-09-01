@@ -75,17 +75,3 @@ func TestExtractClientCredentials_TrimsWhitespaceFromForwardedKey(t *testing.T) 
 	require.NotNil(t, creds)
 	assert.Equal(t, []byte("sk-aiand-padded"), creds.APIKey)
 }
-
-func TestCredentialsFromContext_ReturnsNilWhenAbsent(t *testing.T) {
-	assert.Nil(t, proxy.CredentialsFromContext(t.Context()))
-}
-
-func TestEffectiveBaseURL_FallsBackToDeploymentURL(t *testing.T) {
-	assert.Equal(t, "https://deploy.example/v1", proxy.EffectiveBaseURL(t.Context(), "https://deploy.example/v1/"))
-}
-
-func TestEffectiveBaseURL_PrefersByokBaseURL(t *testing.T) {
-	creds := &proxy.Credentials{BaseURL: "https://byok.example/v1/"}
-	ctx := proxy.ContextWithCredentials(t.Context(), creds)
-	assert.Equal(t, "https://byok.example/v1", proxy.EffectiveBaseURL(ctx, "https://deploy.example/v1"))
-}

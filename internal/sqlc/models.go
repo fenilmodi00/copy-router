@@ -94,13 +94,11 @@ type RouterModelRouterAPIKey struct {
 	// SHA-256 of the full rk_ token
 	KeyHash string
 	// Last 4 chars for display
-	KeySuffix         string
-	LastUsedAt        pgtype.Timestamp
-	CreatedAt         pgtype.Timestamp
-	DeletedAt         pgtype.Timestamp
-	CreatedBy         *string
-	SpendCapUsdMicros *int64
-	SpentUsdMicros    int64
+	KeySuffix  string
+	LastUsedAt pgtype.Timestamp
+	CreatedAt  pgtype.Timestamp
+	DeletedAt  pgtype.Timestamp
+	CreatedBy  *string
 	// routing = rk_ data-plane key (can proxy and spend); analytics_read = ra_ export key (read-only, non-billable)
 	Scope string
 }
@@ -131,32 +129,22 @@ type RouterModelRouterExternalAPIKey struct {
 	IdentityHeaderName *string
 	// email = bare address, json = URL-encoded JSON property bag
 	IdentityHeaderFormat *string
-	// bearer = send the stored secret as-is, keypair_jwt = the secret is an RSA private key the router signs short-lived JWTs with, wif = no stored secret, the router attests its own workload identity
-	AuthType string
-	// Account identifier the minted JWT is issued for; NULL unless auth_type is keypair_jwt
-	AuthAccount *string
-	// User the minted JWT authenticates as; NULL unless auth_type is keypair_jwt
-	AuthUser *string
 	// Weave account that soft-deleted or replaced this key; NULL when the router deleted it internally or attribution predates the column
 	DeletedBy *string
 }
 
 // Customer router installations; owns API keys
 type RouterModelRouterInstallation struct {
-	ID                          uuid.UUID
-	ExternalID                  string
-	Name                        string
-	CreatedAt                   pgtype.Timestamp
-	UpdatedAt                   pgtype.Timestamp
-	DeletedAt                   pgtype.Timestamp
-	CreatedBy                   *string
-	ExcludedModels              []string
-	ExcludedProviders           []string
-	RoutingQualityWeight        *float64
-	UsageBypassEnabled          bool
-	UsageBypassThreshold        *float64
-	PreferredModels             []string
-	SubscriptionRoutingDisabled bool
+	ID                   uuid.UUID
+	ExternalID           string
+	Name                 string
+	CreatedAt            pgtype.Timestamp
+	UpdatedAt            pgtype.Timestamp
+	DeletedAt            pgtype.Timestamp
+	CreatedBy            *string
+	ExcludedModels       []string
+	RoutingQualityWeight *float64
+	PreferredModels      []string
 	// Optional serving-strategy override. NULL follows the deployment default.
 	RoutingStrategy              *string
 	RoutingRolloutID             *string
@@ -166,8 +154,6 @@ type RouterModelRouterInstallation struct {
 	PolicyRoutingIntent          *string
 	// Privacy snapshot synced from the organization AI-training setting. False disables policy learning.
 	AiTrainingAllowed bool
-	// Managed-mode opt-in: honor this installation's BYOK provider keys
-	ByokEnabled bool
 	// Per-installation capture ceiling (off|hashed|full); NULL uses the deployment default
 	ContentCaptureMode   *string
 	HideTerminalSurfaces bool
@@ -256,7 +242,6 @@ type RouterModelRouterRequestTelemetry struct {
 	TrainingAllowed      *bool
 	CaptureMode          *string
 	DebugRef             *string
-	UnifiedLimitHeaders  []byte
 	// Planner verdict for this turn: stay or switch. NULL when the planner did not run.
 	PlannerOutcome *string
 	// Snake-case planner reason (ev_positive, ev_negative, same_model, no_pin, …). NULL when the planner did not run.
@@ -332,86 +317,6 @@ type RouterModelRouterUserClusterModelList struct {
 	CreatedBy      *string
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
-}
-
-type RouterModelRouterUserMonthlySpend struct {
-	RouterUserID   uuid.UUID
-	Month          pgtype.Date
-	SpentUsdMicros int64
-	UpdatedAt      pgtype.Timestamptz
-}
-
-type RouterModelRouterUserSpendLimit struct {
-	RouterUserID          uuid.UUID
-	MonthlyLimitUsdMicros *int64
-	CreatedBy             *string
-	CreatedAt             pgtype.Timestamptz
-	UpdatedAt             pgtype.Timestamptz
-}
-
-type RouterOrganizationAutopayConfig struct {
-	OrganizationID              string
-	Enabled                     bool
-	ThresholdUsdMicros          int64
-	RechargeUsdMicros           int64
-	HasPaymentMethod            bool
-	State                       string
-	ConsecutiveFailures         int32
-	LastAttemptID               pgtype.UUID
-	LastAttemptAt               pgtype.Timestamptz
-	LastSuccessAt               pgtype.Timestamptz
-	CooldownUntil               pgtype.Timestamptz
-	CreatedBy                   *string
-	CreatedAt                   pgtype.Timestamptz
-	UpdatedAt                   pgtype.Timestamptz
-	MonthlyRechargeCapUsdMicros *int64
-	RechargedMonth              pgtype.Date
-	RechargedMonthUsdMicros     int64
-}
-
-type RouterOrganizationBillingOverride struct {
-	OrganizationID string
-	Reason         string
-	ExpiresAt      pgtype.Timestamptz
-	CreatedBy      *string
-	CreatedAt      pgtype.Timestamptz
-}
-
-type RouterOrganizationCreditBalance struct {
-	OrganizationID       string
-	BalanceUsdMicros     int64
-	UpdatedAt            pgtype.Timestamptz
-	LowBalanceNotifiedAt pgtype.Timestamptz
-}
-
-type RouterOrganizationCreditLedger struct {
-	ID                    uuid.UUID
-	OrganizationID        string
-	DeltaUsdMicros        int64
-	NotionalCostMicros    int64
-	BalanceAfterMicros    int64
-	EntryType             string
-	StripePaymentIntentID *string
-	RouterRequestID       *string
-	RouterModel           *string
-	CreatedAt             pgtype.Timestamptz
-	Memo                  *string
-}
-
-type RouterOrganizationMonthlySpend struct {
-	OrganizationID string
-	Month          pgtype.Date
-	SpentUsdMicros int64
-	UpdatedAt      pgtype.Timestamptz
-}
-
-type RouterOrganizationSpendLimit struct {
-	OrganizationID            string
-	UserMonthlyLimitUsdMicros *int64
-	OrgMonthlyLimitUsdMicros  *int64
-	CreatedBy                 *string
-	CreatedAt                 pgtype.Timestamptz
-	UpdatedAt                 pgtype.Timestamptz
 }
 
 // Content-free serving-vs-shadow policy comparisons; shadow decisions never dispatch or enter online learning

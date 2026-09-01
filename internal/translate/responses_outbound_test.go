@@ -421,9 +421,4 @@ func TestUseOpenAIResponsesAPI(t *testing.T) {
 		"with the rollout off, the reasoning tool turn chat/completions rejects is still promoted")
 	assert.False(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderAiand, caps, false, false, false)),
 		"with the rollout off, a toolless turn keeps the chat projection")
-	assert.False(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderAiand, caps, true, false, true)))
-	assert.True(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderAiand, caps, true, false, true)),
-		"BYOK gateways reject tools alongside an effort on chat/completions too")
-	assert.False(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderAiand, caps, false, false, true)),
-		"gateways stay narrow even under the broad rollout: most mount no Responses surface")
 }

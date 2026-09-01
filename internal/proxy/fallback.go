@@ -406,9 +406,12 @@ func (s *Service) resolveBindingsForDispatch(ctx context.Context, decision route
 		// avoid retrying on providers whose keys aren't actually wired.
 		return []catalog.ProviderBinding{primary}
 	}
-	// Exclusions must hold during failover too, or a fallback binding could
-	// resurrect a provider the scorer already filtered out.
-	excluded := s.excludedProvidersForRequest(ctx)
+	// Session 529 strike-outs must hold during failover too, or a fallback
+	// binding could resurrect a provider the scorer already filtered out.
+	excluded := make(map[string]struct{})
+	for _, p := range sessionDisabledProvidersFromContext(ctx) {
+		excluded[p] = struct{}{}
+	}
 	if len(excluded) > 0 {
 		filtered := make(map[string]struct{}, len(available))
 		for p := range available {

@@ -60,9 +60,6 @@ func withAPIKey(svc *auth.Service) gin.HandlerFunc {
 			if len(installation.AllowedModels) > 0 {
 				ctx = context.WithValue(ctx, proxy.InstallationAllowedModelsContextKey{}, installation.AllowedModels)
 			}
-			if len(installation.ExcludedProviders) > 0 {
-				ctx = context.WithValue(ctx, proxy.InstallationExcludedProvidersContextKey{}, installation.ExcludedProviders)
-			}
 			if len(installation.PreferredModels) > 0 {
 				ctx = context.WithValue(ctx, proxy.InstallationPreferredModelsContextKey{}, installation.PreferredModels)
 			}

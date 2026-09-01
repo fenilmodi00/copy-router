@@ -456,54 +456,12 @@ func (s *Service) SetInstallationAllowedModels(ctx context.Context, externalID, 
 	return out, nil
 }
 
-// SetInstallationExcludedProviders replaces the per-installation provider exclusion list.
-// allowed is the set of valid provider names; passing nil skips validation.
-func (s *Service) SetInstallationExcludedProviders(ctx context.Context, externalID, installationID string, providerNames []string, allowed map[string]struct{}) ([]string, error) {
-	if providerNames == nil {
-		providerNames = []string{}
-	}
-	if allowed != nil {
-		for _, p := range providerNames {
-			if _, ok := allowed[p]; !ok {
-				return nil, fmt.Errorf("%w: %q", ErrUnknownProvider, p)
-			}
-		}
-	}
-	// De-dupe while preserving order so the persisted list is stable.
-	seen := make(map[string]struct{}, len(providerNames))
-	out := make([]string, 0, len(providerNames))
-	for _, p := range providerNames {
-		if _, dup := seen[p]; dup {
-			continue
-		}
-		seen[p] = struct{}{}
-		out = append(out, p)
-	}
-	if err := s.installations.UpdateExcludedProviders(ctx, externalID, installationID, out); err != nil {
-		return nil, err
-	}
-	s.invalidateInstallation(installationID)
-	return out, nil
-}
-
 // SetInstallationRoutingPreference persists the routing quality weight (a
 // normalized fraction in [0, 1]). Passing nil clears it so the scorer reverts
 // to its tuned per-cluster defaults. Invalidates the cache so the change
 // applies on the next request instead of waiting out the TTL.
 func (s *Service) SetInstallationRoutingPreference(ctx context.Context, externalID, installationID string, qualityWeight *float64) error {
 	if err := s.installations.UpdateRoutingPreference(ctx, externalID, installationID, qualityWeight); err != nil {
-		return err
-	}
-	s.invalidateInstallation(installationID)
-	return nil
-}
-
-// SetInstallationSubscriptionRoutingDisabled toggles subscription-aware
-// routing. When true, the scorer's subscription subsidy bonus is suppressed
-// so non-Claude models compete fairly. Invalidates the cache so the change
-// applies on the next request instead of waiting out the TTL.
-func (s *Service) SetInstallationSubscriptionRoutingDisabled(ctx context.Context, externalID, installationID string, disabled bool) error {
-	if err := s.installations.UpdateSubscriptionRoutingDisabled(ctx, externalID, installationID, disabled); err != nil {
 		return err
 	}
 	s.invalidateInstallation(installationID)

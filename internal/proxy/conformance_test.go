@@ -19,6 +19,7 @@ import (
 	"strings"
 	"testing"
 
+	"workweave/router/internal/flags"
 	"workweave/router/internal/providers"
 	"workweave/router/internal/proxy"
 	"workweave/router/internal/router"
@@ -57,6 +58,13 @@ type conformanceCase struct {
 
 func runConformanceCase(t *testing.T, c conformanceCase) {
 	t.Helper()
+	// Pin the dispatch to chat/completions. Broad promotion (aiand →
+	// /v1/responses for every turn it can express) would otherwise rewrite the
+	// wire these fixtures and goldens pin; the Responses wire is exercised by
+	// openai_responses_pipeline_test.go.
+	ctx := flags.WithOverrides(context.Background(), flags.Overrides{
+		Bools: map[flags.Key]bool{flags.KeyOpenAIResponsesBroad: false},
+	})
 	fixture := readFixture(t, c.upstreamFixture)
 	// The mock serves SSE iff the fixture is an SSE file. This is decoupled from
 	// the inbound stream flag on purpose: the OpenAI Responses path always streams
@@ -74,7 +82,7 @@ func runConformanceCase(t *testing.T, c conformanceCase) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	req.Header.Set(routingMarkerHeader, "off")
-	require.NoError(t, svc.ProxyMessages(context.Background(), []byte(c.inbound), rec, req),
+	require.NoError(t, svc.ProxyMessages(ctx, []byte(c.inbound), rec, req),
 		"ProxyMessages should succeed for a healthy upstream")
 
 	if c.wantUpstream != nil {

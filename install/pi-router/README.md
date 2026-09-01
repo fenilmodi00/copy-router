@@ -78,16 +78,17 @@ from npm on next start and loads this extension via its `pi.extensions` field.
 Internal: `WEAVE_PI_SUBAGENT=1` and `WEAVE_PI_SUBAGENT_ID` are set by `dispatch`
 on child processes; don't set them yourself.
 
-## Billing
+## Costs
 
-Routing through the router switches pi from Claude **subscription OAuth** to
-**per-token** billing on the router deployment's key (or your BYOK key). BYOK
-skips cross-provider failover; deployment-key billing is the default.
+Routing through the router charges your turn to the router deployment's key
+(or your BYOK key). BYOK skips cross-provider failover; the deployment key is
+the default.
 
 The displayed savings are a client-side estimate from the router's generated
 model-price catalog. Cache writes use 1.25× input price and cache reads use 0.1×
 input price, matching the Claude Code statusline. The ledger stores its catalog
 version with each response so resumed totals remain auditable.
+
 
 ## Notes
 

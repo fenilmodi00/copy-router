@@ -351,10 +351,20 @@ func TestProxyMessages_PersistsCacheTokens(t *testing.T) {
 		Reason:   "pin",
 	}
 	telem := newCaptureTelemetry()
+	// The routed model is reasoning-capable, so the turn promotes onto
+	// /v1/responses; the fake upstream speaks the Responses wire and reports
+	// cached-prefix usage via input_tokens_details (the extractor's source for
+	// cache_creation/cache_read on Responses dispatches).
 	provider := &fakeProvider{
 		proxyResponse: func(w http.ResponseWriter) {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"model":"deepseek-ai/deepseek-v4-flash","stop_reason":"end_turn","usage":{"input_tokens":120,"output_tokens":7,"cache_creation_input_tokens":512,"cache_read_input_tokens":2048}}`))
+			w.Header().Set("Content-Type", "text/event-stream")
+			for _, f := range []string{
+				`{"type":"response.created","response":{"id":"resp_1","status":"in_progress"}}`,
+				`{"type":"response.output_text.delta","output_index":0,"delta":"ok"}`,
+				`{"type":"response.completed","response":{"id":"resp_1","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":120,"output_tokens":7,"input_tokens_details":{"cached_tokens":2048,"cache_creation_tokens":512}}}}`,
+			} {
+				_, _ = w.Write([]byte("data: " + f + "\n\n"))
+			}
 		},
 	}
 	svc := proxy.NewService(

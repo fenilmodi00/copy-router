@@ -59,7 +59,7 @@ func anthropicBody(prompt string, stream bool) []byte {
 // decisionWithEmbedding builds a routing decision with metadata needed for cache eligibility.
 func decisionWithEmbedding(emb []float32, clusterIDs []int) router.Decision {
 	return router.Decision{
-		Provider: "anthropic",
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "test",
 		Metadata: &router.RoutingMetadata{
@@ -79,14 +79,27 @@ func proxyContextWithExternalID(t *testing.T, externalID string) context.Context
 	return ctx
 }
 
+// responsesCacheUpstream answers a text-only Responses stream whose terminal
+// completion carries the given text. The cache tests' tool-bearing bodies
+// promote onto /v1/responses (reasoning model + tools), so their fake
+// upstreams must speak the Responses wire.
+func responsesCacheUpstream(text string) func(http.ResponseWriter) {
+	return func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		frames := []string{
+			`{"type":"response.created","response":{"id":"resp_cache","status":"in_progress"}}`,
+			`{"type":"response.output_text.delta","output_index":0,"delta":"` + text + `"}`,
+			`{"type":"response.completed","response":{"id":"resp_cache","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"` + text + `"}]}],"usage":{"input_tokens":10,"output_tokens":2}}}`,
+		}
+		for _, f := range frames {
+			_, _ = w.Write([]byte("data: " + f + "\n\n"))
+		}
+	}
+}
+
 func TestService_Cache_HitShortCircuitsProvider(t *testing.T) {
 	emb := embeddingFixture(1)
-	provider := &fakeProvider{
-		proxyResponse: func(w http.ResponseWriter) {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"first","content":"hi"}`))
-		},
-	}
+	provider := &fakeProvider{proxyResponse: responsesCacheUpstream("hi")}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0, 1, 2, 3})}
 	c := cache.New(cache.DefaultConfig())
 	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAiand: provider}, nil, false, c, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil)
@@ -104,15 +117,13 @@ func TestService_Cache_HitShortCircuitsProvider(t *testing.T) {
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec2, httpReq2))
 	assert.Len(t, provider.proxyBodies, 1, "cache hit must not invoke provider a second time")
 
-	assert.Equal(t, `{"id":"first","content":"hi"}`, rec2.Body.String())
+	assert.Contains(t, rec2.Body.String(), "hi", "cached turn must replay the served text")
 	assert.Equal(t, proxy.RouterCacheHit, rec2.Header().Get(proxy.HeaderRouterCache))
 }
 
 func TestService_Cache_StreamingBypasses(t *testing.T) {
 	emb := embeddingFixture(2)
-	provider := &fakeProvider{
-		proxyResponse: func(w http.ResponseWriter) { _, _ = w.Write([]byte("event: stream-payload\n")) },
-	}
+	provider := &fakeProvider{proxyResponse: responsesCacheUpstream("stream-payload")}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0})}
 	c := cache.New(cache.DefaultConfig())
 	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAiand: provider}, nil, false, c, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil)
@@ -137,7 +148,7 @@ func TestService_Cache_HeuristicDecisionBypasses(t *testing.T) {
 		proxyResponse: func(w http.ResponseWriter) { _, _ = w.Write([]byte(`{"id":"x"}`)) },
 	}
 	// Decision with no Metadata — what the heuristic router produces.
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash", Reason: "heuristic"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "heuristic"}}
 	c := cache.New(cache.DefaultConfig())
 	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAiand: provider}, nil, false, c, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil)
 
@@ -187,10 +198,10 @@ func TestService_Cache_HitOmitsFeedbackLink(t *testing.T) {
 	emb := embeddingFixture(7)
 	provider := &fakeProvider{
 		proxyResponse: func(w http.ResponseWriter) {
-			// Echo a feedback header into the stored body to prove it is not
-			// replayed from cache on the hit.
+			// Echo a feedback header into the stored response to prove it is
+			// not replayed from cache on the hit.
 			w.Header().Set(proxy.HeaderRouterFeedbackURL, "https://router.example.com/f/STALE")
-			_, _ = w.Write([]byte(`{"id":"cached","content":"hi"}`))
+			responsesCacheUpstream("hi")(w)
 		},
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0, 1, 2, 3})}
@@ -215,11 +226,7 @@ func TestService_Cache_HitOmitsFeedbackLink(t *testing.T) {
 
 func TestService_Cache_HitRecordsSemanticCacheTelemetry(t *testing.T) {
 	emb := embeddingFixture(3)
-	provider := &fakeProvider{
-		proxyResponse: func(w http.ResponseWriter) {
-			_, _ = w.Write([]byte(`{"id":"miss","content":"hi"}`))
-		},
-	}
+	provider := &fakeProvider{proxyResponse: responsesCacheUpstream("hi")}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0, 1})}
 	c := cache.New(cache.DefaultConfig())
 	tel := newCaptureTelemetry()

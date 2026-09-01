@@ -1259,7 +1259,11 @@ func (s *Service) runTurnLoop(
 	// request is BYOK/client-keyed with no matching creds forwarded.
 	if pinFound && prefixBroken {
 		// Client already trimmed its own history — summarizing again is pure
-		// cost, so forward unchanged.
+		// cost, so forward unchanged. Invoked keeps the service layer's
+		// compaction-handover from issuing a second (redundant) summary pass on
+		// the same trim turn.
+		res.Handover.Invoked = true
+		res.Handover.FallbackToFullHistory = true
 		log.Info("Handover summarizer skipped: client history trim already bounded this switch turn",
 			"pin_model", pin.Model,
 			"fresh_model", fresh.Model,

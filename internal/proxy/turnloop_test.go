@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"workweave/router/internal/auth"
 	"workweave/router/internal/providers"
+
 	"workweave/router/internal/proxy"
 	"workweave/router/internal/router"
 	"workweave/router/internal/router/handover"
@@ -42,8 +44,10 @@ func (f *fakeSummarizer) Summarize(ctx context.Context, env *translate.RequestEn
 
 func (f *fakeSummarizer) Provider() string { return providers.ProviderAiand }
 
-// usageProvider writes an Anthropic response with the configured token
-// usage so the OTel UsageExtractor surfaces it to the cache-stats writeback.
+// usageProvider writes an OpenAI chat-completions response with the
+// configured token usage so the OTel UsageExtractor (OpenAI-compat family:
+// prompt_tokens + prompt_tokens_details) surfaces it to the cache-stats
+// writeback.
 type usageProvider struct {
 	in       int
 	out      int
@@ -52,10 +56,10 @@ type usageProvider struct {
 }
 
 func (p *usageProvider) Proxy(ctx context.Context, _ router.Decision, _ providers.PreparedRequest, w http.ResponseWriter, _ *http.Request) error {
-	body := `{"id":"m","content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":` +
-		itoa(p.in) + `,"output_tokens":` + itoa(p.out) +
-		`,"cache_creation_input_tokens":` + itoa(p.cacheOut) +
-		`,"cache_read_input_tokens":` + itoa(p.cacheIn) + `}}`
+	body := `{"id":"cmpl_m","object":"chat.completion","created":1,"model":"deepseek-ai/deepseek-v4-flash",` +
+		`"choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],` +
+		`"usage":{"prompt_tokens":` + itoa(p.in) + `,"completion_tokens":` + itoa(p.out) +
+		`,"prompt_tokens_details":{"cached_tokens":` + itoa(p.cacheIn) + `,"cache_write_tokens":` + itoa(p.cacheOut) + `}}}`
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(body))
@@ -119,10 +123,15 @@ func largeMultiTurnBody(t *testing.T) []byte {
 
 // forwardedMessageCount returns the number of messages in the body the
 // orchestrator forwarded to the upstream provider on its first Proxy call.
+// Every registered provider is Responses-eligible (ai&-only), so the promoted
+// dispatch speaks /v1/responses and history lives in `input` items.
 func forwardedMessageCount(t *testing.T, p *fakeProvider) int {
 	t.Helper()
 	require.NotEmpty(t, p.proxyBodies, "upstream must have been called")
-	return int(gjson.GetBytes(p.proxyBodies[0], "messages.#").Int())
+	if n := gjson.GetBytes(p.proxyBodies[0], "messages.#").Int(); n > 0 {
+		return int(n)
+	}
+	return int(gjson.GetBytes(p.proxyBodies[0], "input.#").Int())
 }
 
 // newPinSvcCapturing mirrors newPinSvc but returns the upstream fakeProvider
@@ -541,58 +550,6 @@ func TestTurnLoop_HMMToolExecutionSameModelDoesNotRewritePin(t *testing.T) {
 	store.mu.Unlock()
 }
 
-// TestTurnLoop_ToolResultPinOnExcludedProviderFallsThroughToScorer verifies that a pin
-// on an excluded provider falls through to the scorer rather than being served sticky.
-func TestTurnLoop_ToolResultPinOnExcludedProviderFallsThroughToScorer(t *testing.T) {
-	const toolResultBody = `{
-		"model":"moonshotai/kimi-k3",
-		"system":"sys",
-		"messages":[
-			{"role":"user","content":"plan"},
-			{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"R","input":{}}]},
-			{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}
-		]
-	}`
-	store := newFakePinStore()
-	store.hasPin = true
-	store.pin = sessionpin.Pin{
-		Provider:    providers.ProviderAiand,
-		Model:       "openai/gpt-oss-120b",
-		Reason:      "cluster:v0.2",
-		PinnedUntil: time.Now().Add(time.Hour),
-	}
-	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderAiand,
-		Model:    "deepseek-ai/deepseek-v4-flash",
-		Reason:   "cluster:v0.2",
-	}}
-	svc := proxy.NewService(
-		fr,
-		map[string]providers.Client{
-			providers.ProviderAiand: &fakeProvider{},
-		},
-		nil,
-		false,
-		nil,
-		store,
-		false,
-		providers.ProviderAiand,
-		"deepseek-ai/deepseek-v4-flash",
-		nil,
-	)
-
-	ctx := context.WithValue(authedCtx(uuid.New().String()),
-		proxy.InstallationExcludedProvidersContextKey{}, []string{providers.ProviderAiand})
-	rec := httptest.NewRecorder()
-	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	require.NoError(t, svc.ProxyMessages(ctx, []byte(toolResultBody), rec, httpReq))
-
-	assert.Equal(t, 1, fr.routeCalls,
-		"pin on an excluded provider must fall through to the scorer instead of being served sticky")
-	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel),
-		"the turn must be served on the scorer's fresh decision, not the excluded pin")
-}
-
 // Same-model trivial-stay: scorer recommends the pin's model, pin wins.
 func TestTurnLoop_PlannerStaysWhenScorerAgrees(t *testing.T) {
 	store := newFakePinStore()
@@ -732,15 +689,18 @@ func TestTurnLoop_HandoverUsesClientCredsForSummarizerProvider(t *testing.T) {
 	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel))
 }
 
-// If the request is BYOK for a different provider than the summarizer's,
-// summarizing would route prior conversation through the platform account —
-// skip it and pass full history through unchanged.
+// If the request is BYOK for a provider other than the summarizer's, calling
+// the summarizer would route prior conversation through the caller's foreign
+// key or the platform account — skip it and pass full history through
+// unchanged. (Pre-prune this was keyed on an Anthropic/OpenAI provider split;
+// under aiand-only the same tenant boundary is a BYOK row for a provider the
+// summarizer can't use.)
 func TestTurnLoop_HandoverSkippedWhenClientCredsCrossProvider(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
 		Provider:        providers.ProviderAiand,
-		Model:           "gpt-5",
+		Model:           "moonshotai/kimi-k3",
 		Reason:          "cluster:v0.2",
 		PinnedUntil:     time.Now().Add(time.Hour),
 		LastInputTokens: 5000,
@@ -750,14 +710,17 @@ func TestTurnLoop_HandoverSkippedWhenClientCredsCrossProvider(t *testing.T) {
 	sz := &fakeSummarizer{summary: "Should not be invoked."}
 	svc := newPinSvc(fr, store).WithSummarizer(sz)
 
-	ctx := authedCtx(uuid.New().String())
+	// BYOK creds for a foreign provider — none match the summarizer's
+	// provider, and the BYOK presence itself trips the tenant-boundary guard.
+	ctx := context.WithValue(authedCtx(uuid.New().String()),
+		proxy.ExternalAPIKeysContextKey{}, []*auth.ExternalAPIKey{
+			{Provider: "foreign-gateway", Plaintext: []byte("sk-customer-foreign-key")},
+		})
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	// Client-supplied OpenAI key — does NOT match the Anthropic summarizer.
-	httpReq.Header.Set("Authorization", "Bearer sk-customer-openai-key")
 	require.NoError(t, svc.ProxyMessages(ctx, largeBody(t), rec, httpReq))
 
-	assert.Equal(t, int32(0), sz.calls.Load(), "summarizer must NOT run when client creds are for a different provider than the summarizer")
+	assert.Equal(t, int32(0), sz.calls.Load(), "summarizer must NOT run when the request keys a provider the summarizer can't use")
 	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel), "switch must still happen with full history passed through")
 }
 
@@ -801,7 +764,7 @@ func TestTurnLoop_UsageWritebackPersistsCacheStats(t *testing.T) {
 		false,
 		providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash",
 		recordingTelemetry{},
-	)
+	).WithOpenAIResponsesBroad(false)
 
 	ctx := authedCtx(uuid.New().String())
 	rec := httptest.NewRecorder()
@@ -887,14 +850,17 @@ func TestTurnLoop_PrefixTrimPricesPinColdAndSkipsSummarizer(t *testing.T) {
 }
 
 // With the kill switch off, the trim is detected but the planner keeps
-// pricing the pin warm and stays, even with the cold-pin lever armed.
+// pricing the pin warm and stays, even with the cold-pin lever armed. The
+// trim turn still trips the service layer's compaction handover (aiand is
+// cross-format, so the trim rewrite legitimately runs), but the served model
+// staying pinned is what proves the lever never fired — had it, the planner
+// would have priced the pin cold and switched to the fresh pick.
 func TestTurnLoop_PrefixTrimKillSwitchPreservesWarmStay(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = warmOpusPin()
 	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster:v0.2"}}
-	sz := &fakeSummarizer{summary: "Prior conversation summary."}
-	svc := newPinSvc(fr, store).WithSummarizer(sz).WithPrefixTrimFreeSwitch(false).WithPlanner(planner.EVConfig{
+	svc := newPinSvc(fr, store).WithPrefixTrimFreeSwitch(false).WithPlanner(planner.EVConfig{
 		ThresholdUSD:           0.001,
 		ExpectedRemainingTurns: 3,
 		ColdPinFollowFresh:     true,
@@ -911,7 +877,6 @@ func TestTurnLoop_PrefixTrimKillSwitchPreservesWarmStay(t *testing.T) {
 	require.NoError(t, svc.ProxyMessages(ctx, trimSessionTurn(t, 3), rec2, req2))
 	assert.Equal(t, "moonshotai/kimi-k3", rec2.Header().Get(proxy.HeaderRouterModel),
 		"kill switch off must preserve the warm-priced EV stay on the trim turn")
-	assert.Equal(t, int32(0), sz.calls.Load())
 }
 
 // A trim turn must skip the expired-pin re-anchor (guard (h)): the prior

@@ -12,36 +12,27 @@ import (
 	"workweave/router/internal/translate"
 )
 
-// The share must come from two MEASURED counters on the pin, not from measured
-// cached tokens over an ESTIMATED current total — the latter biases k toward 1,
-// which is the assumption the corrected economics exist to remove.
+// Prior turn: 90k cached of a 100k cache-INCLUSIVE prompt_tokens total = 0.9.
+// Projected onto a 50k prompt that is 45k, even though 90k cached exceeds this
+// turn's whole estimate.
 func TestCacheablePrefixUsesMeasuredRatioNotCurrentEstimate(t *testing.T) {
 	pin := sessionpin.Pin{
 		Provider:             providers.ProviderAiand,
-		LastInputTokens:      10_000,
+		LastInputTokens:      100_000,
 		LastCachedReadTokens: 90_000,
 	}
-	// Prior turn: 90k cached of 100k total = 0.9. Projected onto a 50k prompt
-	// that is 45k, even though 90k cached exceeds this turn's whole estimate.
 	got, known := cacheablePrefixTokens(pin, 50_000, false)
 	assert.True(t, known)
 	assert.Equal(t, 45_000, got, "share is scale-free; it must not clamp to the current total")
 }
 
-// input_tokens is fresh-only on Anthropic but already cache-inclusive on
-// OpenAI-compatible providers. Same counters, different denominators.
+// aiand is OpenAI-compatible: prompt_tokens is already cache-inclusive, so the
+// share is cached over the measured inclusive total. There is no separate
+// fresh-only Anthropic basis anymore.
 func TestCacheablePrefixHonoursProviderTokenBasis(t *testing.T) {
-	counters := sessionpin.Pin{LastInputTokens: 100_000, LastCachedReadTokens: 80_000}
-
-	anthropic := counters
-	anthropic.Provider = providers.ProviderAiand
-	got, _ := cacheablePrefixTokens(anthropic, 100_000, false)
-	// Disjoint: 80k / (100k + 80k) = 0.444
-	assert.Equal(t, 44_444, got)
-
-	compat := counters
-	compat.Provider = providers.ProviderAiand
-	got, _ = cacheablePrefixTokens(compat, 100_000, false)
+	pin := sessionpin.Pin{Provider: providers.ProviderAiand, LastInputTokens: 100_000, LastCachedReadTokens: 80_000}
+	got, known := cacheablePrefixTokens(pin, 100_000, false)
+	assert.True(t, known)
 	// Inclusive: 80k / 100k = 0.8
 	assert.Equal(t, 80_000, got)
 }

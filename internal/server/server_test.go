@@ -159,8 +159,6 @@ func TestRegister_DashboardConditionalRoutes(t *testing.T) {
 		"PUT /v1/excluded-models",
 		"GET /v1/allowed-models",
 		"PUT /v1/allowed-models",
-		"GET /v1/excluded-providers",
-		"PUT /v1/excluded-providers",
 	}
 	// Routes that mount unconditionally (needs: 0) — must appear even with
 	// nil DeployedModels and nil AiandCatalogHandler.
@@ -208,7 +206,6 @@ func TestRegister_DashboardRouteSet(t *testing.T) {
 		"GET /v1/config",
 		"GET /v1/content-capture",
 		"GET /v1/excluded-models",
-		"GET /v1/excluded-providers",
 		"GET /v1/keys",
 		"GET /v1/metrics/details",
 		"GET /v1/metrics/model-breakdown",
@@ -227,7 +224,6 @@ func TestRegister_DashboardRouteSet(t *testing.T) {
 		"PUT /v1/allowed-models",
 		"PUT /v1/content-capture",
 		"PUT /v1/excluded-models",
-		"PUT /v1/excluded-providers",
 		"PUT /v1/provider-keys/:id/model-aliases",
 		"PUT /v1/routing-preferences",
 	}

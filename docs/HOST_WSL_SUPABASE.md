@@ -14,7 +14,7 @@ Do **not** run:
 | --- | --- |
 | `make db` | Starts Compose Postgres on port 5433. Host mode uses Supabase instead. |
 | `make full-setup` | Boots Compose, then seed, then Claude Code wiring. Wrong for Supabase host mode. |
-| `docker compose up` (Postgres / pubsub-emulator) | Local DB and Pub/Sub emulator are not part of this path. |
+| `docker compose up` (Postgres) | Local DB is not part of this path. |
 
 Use `make setup` (migrate + seed) and `make dev` only.
 
@@ -44,14 +44,10 @@ aiand-only minimal set. Do not add Anthropic or OpenAI provider keys for this pa
 # Required
 DATABASE_URL=postgresql://USER:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require
 AIAND_API_KEY=sk-your-aiand-api-key
-PUBSUB_DISABLED=true
 
-# Typical selfhosted knobs
-ROUTER_DEPLOYMENT_MODE=selfhosted
-ROUTER_ADMIN_PASSWORD=change-me
+# Typical knobs
 ROUTER_CLUSTER_VERSION=v0.76
 PORT=8080
-SERVER_REPLICAS=1
 
 # ONNX (WSL paths; adjust after you unpack the libs)
 ROUTER_ONNX_ASSETS_DIR=/absolute/path/to/repo/assets
@@ -59,23 +55,12 @@ ROUTER_ONNX_LIBRARY_DIR=/absolute/path/to/onnxruntime/lib
 CGO_LDFLAGS=-L/absolute/path/to/onnxruntime/lib -L/absolute/path/to/libtokenizers -lonnxruntime
 ```
 
-Leave `PUBSUB_PROJECT_ID` **empty / unset**. Empty `PUBSUB_PROJECT_ID` with `PUBSUB_DISABLED=true` is the safe single-replica shape.
 
 Optional override only when you need a non-default aiand base:
 
 ```bash
 # AIAND_API_URL=https://api.aiand.com/v1
 ```
-
-## Pub/Sub trap
-
-Half-configured Pub/Sub panics at boot.
-
-- Safe: `PUBSUB_DISABLED=true` and no other `PUBSUB_*` vars.
-- Safe: all `PUBSUB_*` unset (empty `PUBSUB_PROJECT_ID` also skips Pub/Sub).
-- **Forbidden:** set `PUBSUB_PROJECT_ID` alone (or project ID without topic, subscription, and GCP credentials). Boot panics; a load balancer sees **502**.
-
-Boot log when disabled looks like: `Pub/Sub invalidation disabled (PUBSUB_DISABLED=true or PUBSUB_PROJECT_ID unset); single-replica OK`.
 
 ## Commands
 
@@ -102,7 +87,6 @@ Check:
 ```bash
 curl -sf http://127.0.0.1:8080/health
 curl -sf -H "Authorization: Bearer rk_YOUR_SEEDED_KEY" http://127.0.0.1:8080/validate
-# Admin UI (selfhosted)
 curl -sf http://127.0.0.1:8080/ui/ | head
 ```
 
@@ -138,3 +122,4 @@ Without these, the cluster scorer fails closed at boot.
 ## Compose path (not this guide)
 
 Local Compose Postgres remains documented in [CONTRIBUTING.md](../CONTRIBUTING.md) (`make db` on port 5433). Use that only when you intentionally run a disposable local database. Host WSL + Supabase operators stay on this page.
+

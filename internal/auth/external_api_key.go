@@ -12,7 +12,7 @@ import (
 type ExternalAPIKey struct {
 	ID             string
 	InstallationID string
-	Provider       string // one of providers.Provider* — see providers.APIKeyEnvVars
+	Provider       string
 	Name           *string
 	KeyPrefix      string
 	KeySuffix      string
@@ -52,7 +52,8 @@ type CreateExternalAPIKeyParams struct {
 	IdentityHeader       *string
 	IdentityHeaderFormat *string
 	AuthType             string
-	// AuthAccount and AuthUser are required for AuthTypeKeypairJWT, nil otherwise.
+	// AuthAccount and AuthUser are legacy principal columns mapped by the
+	// postgres layer; new keys never populate them (bearer is the only type).
 	AuthAccount *string
 	AuthUser    *string
 	CreatedBy   *string

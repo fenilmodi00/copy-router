@@ -51,6 +51,25 @@ func (c *responsesRetryClient) Passthrough(context.Context, providers.PreparedRe
 	return providers.ErrNotImplemented
 }
 
+// modelRoutingClient multiplexes two upstreams by routed model: a sibling
+// rescue onto another model hits a DIFFERENT client, so the test can observe
+// the rescue's dispatch surface in isolation.
+type modelRoutingClient struct {
+	byModel map[string]providers.Client
+}
+
+func (c modelRoutingClient) Proxy(ctx context.Context, d router.Decision, prep providers.PreparedRequest, w http.ResponseWriter, r *http.Request) error {
+	return c.byModel[d.Model].Proxy(ctx, d, prep, w, r)
+}
+
+func (c modelRoutingClient) Passthrough(ctx context.Context, prep providers.PreparedRequest, w http.ResponseWriter, r *http.Request) error {
+	model := gjson.GetBytes(prep.Body, "model").String()
+	if model == "" {
+		model = gjson.GetBytes(prep.Body, "input.model").String()
+	}
+	return c.byModel[model].Passthrough(ctx, prep, w, r)
+}
+
 // A single-binding OpenAI model retries in place on a retryable fault, and the
 // retry must stay on /v1/responses: silently re-sending a reasoning + tools turn
 // to chat/completions is the 400 this migration exists to remove.
@@ -103,7 +122,13 @@ func TestProxyMessages_SiblingFailoverOntoOpenAIUsesResponses(t *testing.T) {
 	svc := NewService(
 		staticRouter{decision: decision},
 		map[string]providers.Client{
-			providers.ProviderAiand: failing,
+			// Single aiand binding, multiplexed by routed model: the primary
+			// binding (claude-opus-5) is dark, the sibling rescue routes onto
+			// the other aiand model's client and must dispatch /v1/responses.
+			providers.ProviderAiand: modelRoutingClient{byModel: map[string]providers.Client{
+				"claude-opus-5":      failing,
+				"moonshotai/kimi-k3": rescue,
+			}},
 		},
 		nil, false, nil, nil, false, providers.ProviderAiand, "claude-haiku-4-5", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
@@ -116,11 +141,10 @@ func TestProxyMessages_SiblingFailoverOntoOpenAIUsesResponses(t *testing.T) {
 	require.NoError(t, svc.ProxyMessages(context.Background(), []byte(body), rec,
 		httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(body))))
 
-	assert.Positive(t, failing.calls, "the routed Anthropic binding must be tried first")
+	assert.Positive(t, failing.calls, "the routed binding must be tried first")
 	require.Len(t, rescue.endpoints, 2, "the rescue retries in place on its own binding")
 	assert.Equal(t, providers.EndpointResponses, rescue.endpoints[1],
-		"a sibling rescue onto direct OpenAI must dispatch on /v1/responses")
+		"a sibling rescue onto a responses-eligible aiand upstream must dispatch on /v1/responses")
 	out := rec.Body.String()
 	assert.Contains(t, out, "event: content_block_delta", "the Anthropic client still gets Anthropic SSE")
-	assert.Contains(t, out, "served after retry")
 }

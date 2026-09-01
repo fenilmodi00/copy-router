@@ -197,7 +197,7 @@ func TestRecordTurnUsage_WritesToStore(t *testing.T) {
 	}
 
 	res := turnLoopResult{
-		Decision:   router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3"},
+		Decision:   router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3"},
 		SessionKey: sessionKey,
 		PinRole:    sessionpin.DefaultRole,
 	}
@@ -211,7 +211,7 @@ func TestRecordTurnUsage_WritesToStore(t *testing.T) {
 	assert.Equal(t, 200, store.lastUsage.CachedWriteTokens)
 	assert.Equal(t, 80, store.lastUsage.OutputTokens)
 	assert.Equal(t, "moonshotai/kimi-k3", store.lastUsage.ServedModel)
-	assert.Equal(t, "anthropic", store.lastUsage.ServedProvider)
+	assert.Equal(t, providers.ProviderAiand, store.lastUsage.ServedProvider)
 	assert.False(t, store.lastUsage.EndedAt.IsZero(), "EndedAt must be stamped — the planner uses IsZero() as its no-prior-usage gate")
 }
 
@@ -235,7 +235,7 @@ func TestRecordTurnUsage_ForwardsSwitchHistory(t *testing.T) {
 	}
 
 	res := turnLoopResult{
-		Decision:            router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3"},
+		Decision:            router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3"},
 		SessionKey:          sessionKey,
 		PinRole:             sessionpin.DefaultRole,
 		PriorServedModel:    "moonshotai/kimi-k3",
@@ -273,7 +273,7 @@ func TestRecordTurnUsage_HMMDecisionWritesHistoryOnly(t *testing.T) {
 		InstallationID: uuid.New(),
 		Strategy:       router.StrategyHMMBeta,
 		Decision: router.Decision{
-			Provider: "anthropic",
+			Provider: providers.ProviderAiand,
 			Model:    "moonshotai/kimi-k2.7",
 			Reason:   "hmm_policy(label=high)",
 			Metadata: &router.RoutingMetadata{
@@ -617,7 +617,7 @@ func TestLoadPin_DoesNotServeExpiredPostgresPinButKeepsEmitHistory(t *testing.T)
 	store.getPin = sessionpin.Pin{
 		SessionKey:      sessionKey,
 		Role:            sessionpin.DefaultRole,
-		Provider:        "anthropic",
+		Provider:        providers.ProviderAiand,
 		Model:           "moonshotai/kimi-k3",
 		Reason:          "fresh",
 		TurnCount:       1,
@@ -664,7 +664,7 @@ func TestLoadPin_ServesFreshPostgresPin(t *testing.T) {
 	store.getPin = sessionpin.Pin{
 		SessionKey:  sessionKey,
 		Role:        sessionpin.DefaultRole,
-		Provider:    "anthropic",
+		Provider:    providers.ProviderAiand,
 		Model:       "moonshotai/kimi-k3",
 		Reason:      "fresh",
 		TurnCount:   1,
@@ -675,7 +675,7 @@ func TestLoadPin_ServesFreshPostgresPin(t *testing.T) {
 	pin, found := svc.loadPin(context.Background(), sessionKey, sessionpin.DefaultRole)
 	require.True(t, found, "non-expired Postgres row must be returned")
 	assert.Equal(t, "moonshotai/kimi-k3", pin.Model)
-	assert.Equal(t, "anthropic", pin.Provider)
+	assert.Equal(t, providers.ProviderAiand, pin.Provider)
 }
 
 func TestLoadPin_RequiresBetaStrategyMatch(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"workweave/router/internal/observability/otel"
+	"workweave/router/internal/providers"
 	"workweave/router/internal/router"
 
 	"github.com/stretchr/testify/assert"
@@ -21,13 +22,13 @@ import (
 func TestBuildObservationContext_CapturesFreshOnStay(t *testing.T) {
 	// Final (served) decision = the pinned model, no metadata — the STAY shape.
 	served := router.Decision{
-		Provider: "anthropic",
+		Provider: providers.ProviderAiand,
 		Model:    "moonshotai/kimi-k3",
 		Reason:   "pin",
 	}
 	// Fresh scorer recommendation this turn: a cheaper model nearly ties opus.
 	fresh := router.Decision{
-		Provider: "anthropic",
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "cluster:v-test",
 		Metadata: &router.RoutingMetadata{
@@ -57,7 +58,7 @@ func TestBuildObservationContext_CapturesFreshOnStay(t *testing.T) {
 // run (hard-pin / tool_result), fresh is a zero Decision, so the fresh columns
 // stay NULL rather than logging a phantom model.
 func TestBuildObservationContext_NoScorerLeavesFreshNull(t *testing.T) {
-	served := router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "tool_result_sc"}
+	served := router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "tool_result_sc"}
 
 	obs := buildObservationContext(context.Background(), served, router.Decision{}, CaptureOff)
 
@@ -69,7 +70,7 @@ func TestBuildObservationContext_NoScorerLeavesFreshNull(t *testing.T) {
 // survive when the decision carries Propensity without a candidate-score vector.
 func TestBuildObservationContext_CapturesHMMStrategy(t *testing.T) {
 	served := router.Decision{
-		Provider: "anthropic",
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "hmm_policy(label=explore)",
 		Metadata: &router.RoutingMetadata{
@@ -144,7 +145,7 @@ func TestBuildObservationContext_SuppressesDebugRefWithoutDebugMode(t *testing.T
 // request's active strategy and RouteID stays empty when metadata carries no sidecar strategy.
 func TestBuildObservationContext_DefaultsStrategyToActive(t *testing.T) {
 	served := router.Decision{
-		Provider: "anthropic",
+		Provider: providers.ProviderAiand,
 		Model:    "moonshotai/kimi-k3",
 		Reason:   "cluster:v-test",
 		Metadata: &router.RoutingMetadata{
@@ -163,10 +164,10 @@ func TestBuildObservationContext_DefaultsStrategyToActive(t *testing.T) {
 // fresh.Metadata on a sticky HMM turn so telemetry joins to the same id policyOutcomeRoute reports.
 func TestBuildObservationContext_StickyHMMRouteIDFromFresh(t *testing.T) {
 	// Served pin — no metadata, the sticky shape.
-	served := router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "pin"}
+	served := router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "pin"}
 	// Fresh HMM re-score this turn carries the correlation id.
 	fresh := router.Decision{
-		Provider: "anthropic",
+		Provider: providers.ProviderAiand,
 		Model:    "deepseek-ai/deepseek-v4-flash",
 		Reason:   "hmm_policy(label=explore)",
 		Metadata: &router.RoutingMetadata{
@@ -185,7 +186,7 @@ func TestBuildObservationContext_StickyHMMRouteIDFromFresh(t *testing.T) {
 // TestBuildObservationContext_HardPinLeavesStrategyNull verifies that turns bypassing routing
 // (no served metadata and no fresh re-score) leave strategy NULL, not the session's active strategy.
 func TestBuildObservationContext_HardPinLeavesStrategyNull(t *testing.T) {
-	served := router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "user_forced"}
+	served := router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "user_forced"}
 
 	// Request opted into HMM, but this turn was hard-pinned and never scored.
 	ctx := router.WithStrategy(context.Background(), router.StrategyHMM)

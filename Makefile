@@ -9,7 +9,7 @@
 #   Targets that touch the database read DATABASE_URL from .env.development
 #   (and .env.local if present).
 #   Host / Build.io parity: point DATABASE_URL at Supabase session pooler
-#   (:5432), set PUBSUB_DISABLED=true, then `make setup` / `make dev`.
+#   (:5432), then `make setup` / `make dev`.
 #   Do not run `make db` or `make full-setup` on that path — see
 #   docs/HOST_WSL_SUPABASE.md.
 #   Local disposable Postgres: `make db` (Compose on 5433) or any other
@@ -52,7 +52,7 @@ test-install: ## Run offline installer regression tests
 
 smoke: ## Pre-merge smoke suite (compose+MITM in CI; use smoke-host for local Supabase)
 	./scripts/smoke/run.sh
-smoke-host: ## Smoke against host make setup/dev + Supabase (no compose, no pubsub-emulator)
+smoke-host: ## Smoke against host make setup/dev + Supabase (no compose)
 	SMOKE_HOST=1 ./scripts/smoke/run.sh
 
 initdb: ## Create the database and router schema (idempotent)

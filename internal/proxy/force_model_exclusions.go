@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"workweave/router/internal/router/catalog"
 )
@@ -43,35 +42,7 @@ func (s *Service) forcedModelBinding(ctx context.Context, model, provider string
 	if _, drop := s.excludedModelsForRequest(ctx)[model]; drop {
 		return "", fmt.Sprintf("%s is excluded on this installation", model)
 	}
-	excluded := s.policyExcludedProviders(ctx)
-	if len(excluded) == 0 {
-		return provider, ""
-	}
-	bindings := s.servableBindings(model, provider)
-	permitted := make([]string, 0, len(bindings))
-	for _, b := range bindings {
-		if _, drop := excluded[b]; !drop {
-			permitted = append(permitted, b)
-		}
-	}
-	switch {
-	case len(permitted) == 0 && len(bindings) == 1:
-		return "", fmt.Sprintf(
-			"%s is only served by %s, which is excluded on this installation",
-			model, bindings[0],
-		)
-	case len(permitted) == 0:
-		return "", fmt.Sprintf(
-			"every provider serving %s (%s) is excluded on this installation",
-			model, strings.Join(bindings, ", "),
-		)
-	}
-	for _, b := range permitted {
-		if b == provider {
-			return provider, ""
-		}
-	}
-	return permitted[0], ""
+	return provider, ""
 }
 
 // servableBindings returns the catalog bindings for model that hold a

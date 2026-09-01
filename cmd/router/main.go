@@ -294,19 +294,20 @@ func main() {
 		logger.Info("Hard-pin resolver not wired: ROUTER_HARD_PIN_MODEL operator override is set and absolute by design", "model", hardPinModel)
 	}
 
-	// ROUTER_SUBAGENT_PROVIDER + ROUTER_SUBAGENT_MODEL pin SubAgentDispatch
-	// turns to a distinct provider/model; both must be set together.
-	subAgentProvider := config.GetOr("ROUTER_SUBAGENT_PROVIDER", "")
+	// ROUTER_SUBAGENT_MODEL pins SubAgentDispatch turns to a distinct model;
+	// its provider is the model's catalog binding (aiand).
 	subAgentModel := config.GetOr("ROUTER_SUBAGENT_MODEL", "")
-	switch {
-	case subAgentModel != "" && subAgentProvider == "":
-		logger.Warn("ROUTER_SUBAGENT_MODEL set without ROUTER_SUBAGENT_PROVIDER; ignoring sub-agent override")
-		subAgentModel = ""
-	case subAgentProvider != "" && subAgentModel == "":
-		logger.Warn("ROUTER_SUBAGENT_PROVIDER set without ROUTER_SUBAGENT_MODEL; ignoring sub-agent override")
-		subAgentProvider = ""
-	case subAgentModel != "":
-		logger.Info("Sub-agent routing override enabled", "provider", subAgentProvider, "model", subAgentModel)
+	subAgentProvider := ""
+	if subAgentModel != "" {
+		if m, ok := catalog.ByID(subAgentModel); ok && len(m.Providers) > 0 {
+			subAgentProvider = m.Providers[0].Provider
+		}
+		if subAgentProvider == "" {
+			logger.Warn("ROUTER_SUBAGENT_MODEL has no catalog binding; ignoring sub-agent override", "model", subAgentModel)
+			subAgentModel = ""
+		} else {
+			logger.Info("Sub-agent routing override enabled", "provider", subAgentProvider, "model", subAgentModel)
+		}
 	}
 
 	// Default-eligible set: env-keyed providers only. BYOK/client credentials
@@ -395,7 +396,7 @@ func main() {
 	policyDeadlineFallback := config.GetOr("ROUTER_POLICY_DEADLINE_FALLBACK", "false") == "true"
 	// policyDeadlineDefaultModel is the tier-3 static fallback on a deadline miss with no pin; empty = fail-closed.
 	policyDeadlineDefaultModel := config.GetOr("ROUTER_POLICY_DEADLINE_DEFAULT_MODEL", "")
-	handoverProviderName := config.GetOr("ROUTER_HANDOVER_PROVIDER", providers.ProviderAiand)
+	handoverProviderName := providers.ProviderAiand
 	handoverModel := config.GetOr("ROUTER_HANDOVER_MODEL", "deepseek-ai/deepseek-v4-flash")
 	handoverTimeout := parseEnvDurationMs("ROUTER_HANDOVER_TIMEOUT_MS", proxy.DefaultHandoverTimeout)
 	// Kept as the interface type: a typed-nil *ProviderSummarizer would defeat
@@ -787,20 +788,6 @@ func main() {
 		}
 		proxySvc = proxySvc.WithExcludedModelsOverride(cleaned)
 		logger.Info("Model exclusion override active", "excluded_models", cleaned)
-	}
-
-	// ROUTER_EXCLUDED_PROVIDERS pins a deployment-wide provider exclusion
-	// list, overriding per-installation DB state. Empty / unset → DB takes over.
-	if excludedRaw := strings.TrimSpace(config.GetOr("ROUTER_EXCLUDED_PROVIDERS", "")); excludedRaw != "" {
-		parts := strings.Split(excludedRaw, ",")
-		cleaned := make([]string, 0, len(parts))
-		for _, p := range parts {
-			if trimmed := strings.TrimSpace(p); trimmed != "" {
-				cleaned = append(cleaned, trimmed)
-			}
-		}
-		proxySvc = proxySvc.WithExcludedProvidersOverride(cleaned)
-		logger.Info("Provider exclusion override active", "excluded_providers", cleaned)
 	}
 
 	// No-op when WV_APM_OTLP_ENDPOINT is unset. Flushed explicitly in the
@@ -1402,8 +1389,10 @@ func resolveDefaultBaselineModel() string {
 // model in the default bundle, else (defaultHardPinProvider, defaultHardPinModel).
 func resolveHardPinModel(available map[string]struct{}, logger *slog.Logger) (provider, model string) {
 	if m := config.GetOr("ROUTER_HARD_PIN_MODEL", ""); m != "" {
-		p := config.GetOr("ROUTER_HARD_PIN_PROVIDER", defaultHardPinProvider)
-		return p, m
+		if mm, ok := catalog.ByID(m); ok && len(mm.Providers) > 0 {
+			return mm.Providers[0].Provider, m
+		}
+		return defaultHardPinProvider, m
 	}
 
 	reqVersion := config.GetOr("ROUTER_CLUSTER_VERSION", cluster.LatestVersion)

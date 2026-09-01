@@ -95,7 +95,7 @@ For iterating on router code with `CompileDaemon`.
 
 ```bash
 # .env.local: Supabase session pooler DATABASE_URL (:5432), AIAND_API_KEY,
-# PUBSUB_DISABLED=true, ONNX paths. Skip make db and make full-setup.
+# ONNX paths. Skip make db and make full-setup.
 make setup                             # migrate + seed an rk_ key against Supabase
 make dev                               # hot reload on the host
 ```
@@ -206,7 +206,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 feat(proxy): add session pinning for multi-turn coherence
 fix(auth): clear API key cache on installation deletion
 refactor(translate): extract OpenAI envelope builder
-docs: clarify ROUTER_ADMIN_PASSWORD requirement
+docs: clarify EXTERNAL_KEY_ENCRYPTION_KEY requirement
 ```
 
 Common types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`.

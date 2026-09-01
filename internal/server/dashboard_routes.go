@@ -106,15 +106,13 @@ func dashboardRoutes(s Services) []dashboardRoute {
 		{method: "GET", path: "/content-capture", section: sectionMgmt, handler: admin.GetContentCaptureHandler(s.Auth, s.Proxy)},
 		{method: "PUT", path: "/content-capture", section: sectionMgmt, handler: admin.UpdateContentCaptureHandler(s.Auth, s.Proxy)},
 
-		// Excluded/allowed models + providers. The 6 rows need a non-nil
-		// DeployedModels (the handlers use it, or its 3-arg form); they mount
-		// only when one is wired. The override/routable source is *proxy.Service.
+		// Excluded/allowed models. The rows need a non-nil DeployedModels
+		// (the handlers use it, or its 3-arg form); they mount only when one
+		// is wired. The override/routable source is *proxy.Service.
 		{method: "GET", path: "/excluded-models", section: sectionMgmt, needs: needsDeployedModels, handler: admin.GetExcludedModelsHandler(s.Auth, s.DeployedModels, s.Proxy)},
 		{method: "PUT", path: "/excluded-models", section: sectionMgmt, needs: needsDeployedModels, handler: admin.UpdateExcludedModelsHandler(s.Auth, s.DeployedModels, s.Proxy)},
 		{method: "GET", path: "/allowed-models", section: sectionMgmt, needs: needsDeployedModels, handler: admin.GetAllowedModelsHandler(s.Auth, s.DeployedModels)},
 		{method: "PUT", path: "/allowed-models", section: sectionMgmt, needs: needsDeployedModels, handler: admin.UpdateAllowedModelsHandler(s.Auth, s.DeployedModels, s.Proxy)},
-		{method: "GET", path: "/excluded-providers", section: sectionMgmt, needs: needsDeployedModels, handler: admin.GetExcludedProvidersHandler(s.Auth, s.DeployedModels, s.Proxy)},
-		{method: "PUT", path: "/excluded-providers", section: sectionMgmt, needs: needsDeployedModels, handler: admin.UpdateExcludedProvidersHandler(s.Auth, s.DeployedModels, s.Proxy)},
 
 		// Playground preview — returns a decision payload with requested/actual cost + id.
 		// cache_savings_usd is 0 for non-cached decisions. Mounts in both admin modes.

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-
+	"workweave/router/internal/flags"
 	"workweave/router/internal/providers"
 	"workweave/router/internal/providers/openaicompat"
 	"workweave/router/internal/proxy"
@@ -36,6 +36,9 @@ func attrInt(sp *tracev1.Span, key string) (int64, bool) {
 // TestUpstreamSpan_FirstOutputMs_ExceedsTTFTOnReasoningStall verifies that
 // a role-only keepalive does not satisfy first_output_ms.
 func TestUpstreamSpan_FirstOutputMs_ExceedsTTFTOnReasoningStall(t *testing.T) {
+	// Broad promotion would move this tool-less turn onto /v1/responses,
+	// whose translator counts progress differently; pin chat/completions so
+	// the role-only keepalive + stall behavior stays exercisable.
 	const preOutputStall = 120 * time.Millisecond
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -60,17 +63,20 @@ func TestUpstreamSpan_FirstOutputMs_ExceedsTTFTOnReasoningStall(t *testing.T) {
 	emitter := newTestEmitter(t, collector.srv.URL)
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek-ai/deepseek-v4-pro"}},
-		map[string]providers.Client{"fireworks": openaicompat.NewClient("test-fw-key", upstream.URL)},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-pro"}},
+		map[string]providers.Client{providers.ProviderAiand: openaicompat.NewClient("test-fw-key", upstream.URL)},
 		emitter, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{"fireworks": {}})
+	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAiand: {}})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 	// Middleware installs Timing on the request context in prod; without it
 	// there are no latency attributes at all.
-	ctx, _ := timing.WithTiming(context.Background())
+	flagCtx := flags.WithOverrides(context.Background(), flags.Overrides{
+		Bools: map[flags.Key]bool{flags.KeyOpenAIResponsesBroad: false},
+	})
+	ctx, _ := timing.WithTiming(flagCtx)
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec, req.WithContext(ctx)))
 	require.NoError(t, emitter.Shutdown(context.Background()))
 

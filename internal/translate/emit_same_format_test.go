@@ -239,7 +239,7 @@ func TestOpenAISameFormat_ReasoningEffortDeletedForGPT5OnChatCompletions(t *test
 		Capabilities:   router.Lookup("gpt-5.6-luna"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
-	assert.NotContains(t, out, "reasoning_effort")
+	assert.Equal(t, "none", out["reasoning_effort"], "gpt-5.6 tool turns must opt out of reasoning explicitly on chat/completions")
 	assert.Contains(t, out, "tools")
 }
 

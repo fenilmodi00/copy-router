@@ -6,13 +6,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"workweave/router/internal/providers"
 	"workweave/router/internal/router"
 	"workweave/router/internal/router/planner"
 	"workweave/router/internal/translate"
 )
 
 func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
-	decision := router.Decision{Model: "deepseek-ai/deepseek-v4-pro", Provider: "openrouter"}
+	decision := router.Decision{Model: "deepseek-ai/deepseek-v4-pro", Provider: providers.ProviderAiand}
 
 	cases := []struct {
 		name           string
@@ -81,7 +82,7 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 			// "force-model applied" ack while another model served the turn.
 			name: "dropped forced pin: surfaced even when the model didn't change",
 			res: turnLoopResult{
-				Decision:            router.Decision{Model: "gpt-5.5", Provider: "openai"},
+				Decision:            router.Decision{Model: "gpt-5.5", Provider: providers.ProviderAiand},
 				PriorServedModel:    "gpt-5.5",
 				ForcedPinDropped:    true,
 				ForcedPinDropReason: "provider_not_enabled",
@@ -100,7 +101,7 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 		{
 			name: "dropped forced pin: suppressed in suggestion mode",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "gpt-5.5", Provider: "openai"},
+				Decision:         router.Decision{Model: "gpt-5.5", Provider: providers.ProviderAiand},
 				SuggestionMode:   true,
 				ForcedPinDropped: true,
 				ForcedPinModel:   "claude-opus-5",
@@ -176,7 +177,7 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 		{
 			name: "tool-result but model switched: marker shown despite sticky hit",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "deepseek-ai/deepseek-v4-flash", Provider: "anthropic"},
+				Decision:         router.Decision{Model: "deepseek-ai/deepseek-v4-flash", Provider: providers.ProviderAiand},
 				StickyHit:        true,
 				PriorServedModel: "deepseek-ai/deepseek-v4-pro",
 			},
@@ -190,7 +191,7 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 		{
 			name: "recovery code with model switch: marker shown without reason",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "deepseek-ai/deepseek-v4-flash", Provider: "anthropic"},
+				Decision:         router.Decision{Model: "deepseek-ai/deepseek-v4-flash", Provider: providers.ProviderAiand},
 				StickyHit:        true,
 				PriorServedModel: "deepseek-ai/deepseek-v4-pro",
 				PlannerDecision:  planner.Decision{Reason: "pin_model_missing"},
@@ -207,7 +208,7 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 		{
 			name: "user-forced model: distinct marker, not best-pick",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "openai/gpt-oss-120b", Provider: "openai", Reason: translate.ReasonUserForceModel},
+				Decision:         router.Decision{Model: "openai/gpt-oss-120b", Provider: providers.ProviderAiand, Reason: translate.ReasonUserForceModel},
 				StickyHit:        true,
 				PriorServedModel: "deepseek-ai/deepseek-v4-flash",
 			},
@@ -222,7 +223,7 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 		{
 			name: "loop escalation: distinct marker, not best-pick",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "moonshotai/kimi-k3", Provider: "anthropic", Reason: translate.ReasonLoopEscalation},
+				Decision:         router.Decision{Model: "moonshotai/kimi-k3", Provider: providers.ProviderAiand, Reason: translate.ReasonLoopEscalation},
 				StickyHit:        true,
 				PriorServedModel: "deepseek-ai/deepseek-v4-flash",
 			},
@@ -242,7 +243,7 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 			// "force-model applied" acknowledgment when the directive was issued.
 			name: "user-forced same model on a sticky follow-up: marker suppressed",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "openai/gpt-oss-120b", Provider: "openai", Reason: translate.ReasonUserForceModel},
+				Decision:         router.Decision{Model: "openai/gpt-oss-120b", Provider: providers.ProviderAiand, Reason: translate.ReasonUserForceModel},
 				StickyHit:        true,
 				PriorServedModel: "openai/gpt-oss-120b", // pin already serving the forced model
 			},
@@ -251,7 +252,7 @@ func TestRoutingMarkerFor_PlannerPaths(t *testing.T) {
 		{
 			name: "loop-escalated same model on a sticky follow-up: marker suppressed",
 			res: turnLoopResult{
-				Decision:         router.Decision{Model: "moonshotai/kimi-k3", Provider: "anthropic", Reason: translate.ReasonLoopEscalation},
+				Decision:         router.Decision{Model: "moonshotai/kimi-k3", Provider: providers.ProviderAiand, Reason: translate.ReasonLoopEscalation},
 				StickyHit:        true,
 				PriorServedModel: "moonshotai/kimi-k3", // pin already serving the escalated model
 			},
@@ -285,7 +286,7 @@ func TestRoutingMarkerFor_EmptyDecisionEmitsNothing(t *testing.T) {
 
 func TestRoutingMarkerFor_SuggestionModeSuppressed(t *testing.T) {
 	res := turnLoopResult{
-		Decision:       router.Decision{Model: "openai/gpt-oss-120b", Provider: "openai"},
+		Decision:       router.Decision{Model: "openai/gpt-oss-120b", Provider: providers.ProviderAiand},
 		SuggestionMode: true,
 		PlannerDecision: planner.Decision{
 			Reason: planner.ReasonSameModel,
@@ -297,7 +298,7 @@ func TestRoutingMarkerFor_SuggestionModeSuppressed(t *testing.T) {
 
 func TestRoutingMarkerFor_DropsProviderEvenWhenSet(t *testing.T) {
 	got := routingMarkerFor(turnLoopResult{
-		Decision: router.Decision{Model: "deepseek-ai/deepseek-v4-flash", Provider: "anthropic"},
+		Decision: router.Decision{Model: "deepseek-ai/deepseek-v4-flash", Provider: providers.ProviderAiand},
 		PlannerDecision: planner.Decision{
 			Reason: planner.ReasonNoPin,
 		},
@@ -312,7 +313,7 @@ func TestRoutingMarkerFor_UsesSidecarDisplayMarker(t *testing.T) {
 	got := routingMarkerFor(turnLoopResult{
 		Decision: router.Decision{
 			Model:    "moonshotai/kimi-k2.7-code",
-			Provider: "openrouter",
+			Provider: providers.ProviderAiand,
 			Metadata: &router.RoutingMetadata{
 				DisplayMarker: "✦ **Weave Router** → Delegating work with moonshotai/kimi-k2.7-code\n↳ label: delegated_work",
 			},

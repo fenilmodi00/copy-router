@@ -25,9 +25,6 @@ type Installation struct {
 	// routing is confined to these models minus ExcludedModels.
 	// Empty = no restriction; fail-closed when no eligible overlap remains.
 	AllowedModels []string
-	// ExcludedProviders is the per-installation provider exclusion list.
-	// Empty means no exclusion.
-	ExcludedProviders []string
 	// PreferredModels is the per-installation model priority ranking, in
 	// descending preference (index 0 = first preference). The scorer lifts each
 	// preferred model's score by a small, rank-decaying additive bonus so a
@@ -41,25 +38,6 @@ type Installation struct {
 	// remainder. nil means no preference -- the scorer keeps its tuned
 	// per-cluster defaults.
 	RoutingQualityWeight *float64
-	// UsageBypassEnabled toggles the per-installation subscription usage-bypass
-	// gate. When true, requests presenting a subscription credential whose
-	// observed rate-limit utilization is below UsageBypassThreshold pass
-	// straight through to the requested model (no routing, no billing debit).
-	// Defaults false -- strict opt-in.
-	UsageBypassEnabled bool
-	// UsageBypassThreshold is the [0, 1] utilization at/above which the bypass
-	// gate disengages and normal routing takes over. nil means "use the
-	// deployment default" so the toggle can be on before a value is chosen.
-	UsageBypassThreshold *float64
-	// SubscriptionRoutingDisabled turns off subscription-AWARE ROUTING for this
-	// installation. When true, the scorer's subscription subsidy bonus is
-	// suppressed, so routing decides purely on quality/cost/speed merits and
-	// non-Claude models compete fairly instead of always losing to the
-	// subsidized Claude family. It removes only the routing BIAS: a turn that
-	// still routes to Claude on its own merits is dispatched on the caller's
-	// subscription token exactly as before, so the prepaid billing path is
-	// unchanged. Defaults false -- preserves today's behavior.
-	SubscriptionRoutingDisabled bool
 	// RoutingStrategy is the canonical strategy selected for this installation.
 	// Existing installations default to the cluster scorer until allowlisted.
 	RoutingStrategy router.Strategy
@@ -75,9 +53,6 @@ type Installation struct {
 	PolicyRoutingIntent string
 	// AITrainingAllowed is the fail-closed privacy snapshot used by online learning.
 	AITrainingAllowed bool
-	// ByokEnabled opts a managed-mode installation into BYOK; managed deploys
-	// are off by default (they bill via prepaid credits). Self-hosted ignores it.
-	ByokEnabled bool
 	// ContentCaptureMode caps content capture for this installation
 	// ("off"|"hashed"|"full"); nil means no override; can only tighten
 	// WV_CAPTURE_CONTENT.
@@ -114,21 +89,10 @@ type InstallationRepository interface {
 	// UpdateAllowedModels replaces the positive model allowlist.
 	// Empty (or nil) means no restriction — NOT "no models routable".
 	UpdateAllowedModels(ctx context.Context, externalID, id string, models []string) error
-	// UpdateExcludedProviders replaces the per-installation provider
-	// exclusion list. An empty (or nil) slice clears the list.
-	UpdateExcludedProviders(ctx context.Context, externalID, id string, providerNames []string) error
 	// UpdateRoutingPreference sets the routing quality weight (a normalized
 	// fraction in [0, 1]). Passing nil clears the preference so the scorer
 	// reverts to its tuned per-cluster defaults.
 	UpdateRoutingPreference(ctx context.Context, externalID, id string, qualityWeight *float64) error
-	// UpdateUsageBypass sets the subscription usage-bypass gate. enabled toggles
-	// the gate; threshold is the [0, 1] utilization at/above which it disengages
-	// (nil = use the deployment default).
-	UpdateUsageBypass(ctx context.Context, externalID, id string, enabled bool, threshold *float64) error
-	// UpdateSubscriptionRoutingDisabled toggles subscription-aware routing for
-	// the installation. When true, the scorer's subscription subsidy bonus is
-	// suppressed so routing decides on merits.
-	UpdateSubscriptionRoutingDisabled(ctx context.Context, externalID, id string, disabled bool) error
 	// UpdateContentCaptureMode sets the per-installation capture ceiling; nil
 	// clears the override.
 	UpdateContentCaptureMode(ctx context.Context, externalID, id string, mode *string) error

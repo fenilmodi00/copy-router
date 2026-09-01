@@ -117,12 +117,12 @@ func TestService_ProxyOpenAIResponses_CustomToolUsesNativeOpenAIFamily(t *testin
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"id":"resp_1","object":"response","output":[]}`)
 	}}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "openai/gpt-oss-120b", Reason: "test"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "test"}}
 	svc := proxy.NewService(fr, map[string]providers.Client{
-		providers.ProviderAiand: &fakeProvider{},
+		providers.ProviderAiand: provider,
 	}, nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil)
 
-	body := []byte(`{"model":"openai/gpt-oss-120b","input":"apply a patch","reasoning":{"effort":"high"},"tools":[{"type":"custom","name":"apply_patch"}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","input":"apply a patch","reasoning":{"effort":"high"},"tools":[{"type":"custom","name":"apply_patch"}]}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 	require.NoError(t, svc.ProxyOpenAIResponses(context.Background(), body, rec, req))
@@ -134,7 +134,7 @@ func TestService_ProxyOpenAIResponses_CustomToolUsesNativeOpenAIFamily(t *testin
 	assert.Equal(t, originalEnvelope.ToolConfigurationSHA256(), fr.capturedReq.ToolConfigurationSHA256)
 	assert.Equal(t, map[string]struct{}{providers.ProviderAiand: {}}, fr.capturedReq.EnabledProviders)
 	require.Len(t, provider.proxyBodies, 1)
-	assert.JSONEq(t, `{"model":"openai/gpt-oss-120b","input":"apply a patch","reasoning":{"effort":"high"},"tools":[{"type":"custom","name":"apply_patch"}]}`, string(provider.proxyBodies[0]))
+	assert.JSONEq(t, `{"model":"moonshotai/kimi-k3","input":"apply a patch","reasoning":{"effort":"high"},"tools":[{"type":"custom","name":"apply_patch"}]}`, string(provider.proxyBodies[0]))
 	assert.Equal(t, providers.EndpointResponses, provider.proxyEndpoints[0])
 	assert.JSONEq(t, `{"id":"resp_1","object":"response","output":[]}`, rec.Body.String())
 }
@@ -266,9 +266,12 @@ func TestService_ProxyOpenAIResponses_ToolTurnFallsBackWhenEndpointLacksResponse
 	)
 	body := []byte(`{"model":"auto","input":"remove the router","reasoning":{"effort":"medium"},"tools":[{"type":"function","name":"read_file","parameters":{"type":"object"}}]}`)
 
+	// The aiand-only prune dropped the noResponsesGateways memo (an
+	// OpenAI-gateway-era probe cache), so each turn re-probes /responses and
+	// re-falls-back rather than going straight to chat/completions.
 	for _, want := range [][]providers.Endpoint{
 		{providers.EndpointResponses, providers.EndpointChatCompletions},
-		{providers.EndpointChatCompletions},
+		{providers.EndpointResponses, providers.EndpointChatCompletions},
 	} {
 		provider.proxyEndpoints = nil
 		provider.proxyBodies = nil
@@ -285,24 +288,32 @@ func TestService_ProxyOpenAIResponses_ToolTurnFallsBackWhenEndpointLacksResponse
 }
 
 func TestService_ProxyOpenAIResponses_CodexPortableBridgeKeepsHMMProvidersAndRestoresCustomTool(t *testing.T) {
-	fireworks := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w,
-			`data: {"id":"chatcmpl_1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_new","type":"function","function":{"name":"exec","arguments":"{\"input\":\"return tools.apply_patch({});\"}"}}]},"finish_reason":null}]}`+"\n\n"+
-				`data: {"id":"chatcmpl_1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`+"\n\n"+
-				"data: [DONE]\n\n")
-	}}
+	aiand := &fakeProvider{
+		proxyErrByEndpoint: map[providers.Endpoint]error{
+			providers.EndpointResponses: &providers.UpstreamErrorResponse{
+				Status: http.StatusNotFound,
+				Body:   []byte(`{"error":{"message":"Unknown path /v1/responses"}}`),
+			},
+		},
+		proxyResponse: func(w http.ResponseWriter) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			_, _ = io.WriteString(w,
+				`data: {"id":"chatcmpl_1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_new","type":"function","function":{"name":"exec","arguments":"{\"input\":\"return tools.apply_patch({});\"}"}}]},"finish_reason":null}]}`+"\n\n"+
+					`data: {"id":"chatcmpl_1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`+"\n\n"+
+					"data: [DONE]\n\n")
+		},
+	}
 	fr := &fakeRouter{decision: router.Decision{
 		Provider: providers.ProviderAiand,
 		Model:    "moonshotai/kimi-k2.7",
 		Reason:   "hmm:test",
 	}}
 	svc := proxy.NewService(fr, map[string]providers.Client{
-		providers.ProviderAiand:    &fakeProvider{},
+		providers.ProviderAiand: aiand,
 	}, nil, false, nil, nil, false, providers.ProviderAiand, "openai/gpt-oss-120b", nil).
 		WithDeploymentKeyedProviders(map[string]struct{}{
-			providers.ProviderAiand:    {},
+			providers.ProviderAiand: {},
 		})
 
 	ctx := context.WithValue(context.Background(), proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppCodex})
@@ -337,8 +348,10 @@ func TestService_ProxyOpenAIResponses_CodexPortableBridgeKeepsHMMProvidersAndRes
 	assert.Contains(t, fr.capturedReq.EnabledProviders, providers.ProviderAiand)
 	assert.Contains(t, fr.capturedReq.EnabledProviders, providers.ProviderAiand)
 	assert.Contains(t, fr.capturedReq.EnabledProviders, providers.ProviderAiand)
-	require.Len(t, fireworks.proxyBodies, 1)
-	chatBody := fireworks.proxyBodies[0]
+	require.Len(t, aiand.proxyBodies, 2, "native /v1/responses probe (404) then the portable chat projection")
+	assert.Equal(t, providers.EndpointResponses, aiand.proxyEndpoints[0])
+	assert.Equal(t, providers.EndpointChatCompletions, aiand.proxyEndpoints[1])
+	chatBody := aiand.proxyBodies[len(aiand.proxyBodies)-1]
 	assert.Equal(t, "moonshotai/kimi-k2.7", gjson.GetBytes(chatBody, "model").Str)
 	assert.Equal(t, "exec", gjson.GetBytes(chatBody, "tools.0.function.name").Str)
 	assert.Equal(t, "collaboration__send_message", gjson.GetBytes(chatBody, "tools.1.function.name").Str)
@@ -387,57 +400,27 @@ func TestService_PassthroughToNamedProvider_ResolvesBYOKCredential(t *testing.T)
 	assert.Equal(t, "https://byok.example.com", provider.passthroughCreds[0].BaseURL)
 }
 
-// TestService_PassthroughToProvider_CountTokensLocalFallback verifies that a
-// gateway-only deployment (no Anthropic credential) answers count_tokens locally.
-func TestService_PassthroughToProvider_CountTokensLocalFallback(t *testing.T) {
-	anthropicProvider := &fakeProvider{}
-	gatewayProvider := &fakeProvider{}
+// TestService_PassthroughToProvider_CountTokensAnswersLocally verifies
+// count_tokens is always answered locally: no native Anthropic upstream is
+// registered (ai& serves via cross-format translation), so the SDK pre-flight
+// must never dispatch upstream.
+func TestService_PassthroughToProvider_CountTokensAnswersLocally(t *testing.T) {
+	upstream := &fakeProvider{}
 	svc := makeProxyService(router.Decision{}, map[string]providers.Client{
-		providers.ProviderAiand:        anthropicProvider,
-	}).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAiand: {}})
+		providers.ProviderAiand: upstream,
+	})
 
 	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hello world"}]}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", strings.NewReader(""))
 	rec := httptest.NewRecorder()
 
 	require.NoError(t, svc.PassthroughToProvider(context.Background(), body, rec, httpReq))
-	assert.Empty(t, anthropicProvider.passthroughCreds, "no upstream dispatch when no Anthropic credential is reachable")
+	assert.Empty(t, upstream.passthroughCreds, "count_tokens must never dispatch upstream")
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "application/json", rec.Header().Get("content-type"))
 	tokens := gjson.GetBytes(rec.Body.Bytes(), "input_tokens")
 	require.True(t, tokens.Exists())
 	assert.Positive(t, tokens.Int())
-}
-
-// TestService_PassthroughToProvider_CountTokensForwardsWithCredential verifies
-// that a reachable Anthropic credential keeps count_tokens on the real upstream.
-func TestService_PassthroughToProvider_CountTokensForwardsWithCredential(t *testing.T) {
-	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hello"}]}`)
-
-	t.Run("deployment key", func(t *testing.T) {
-		provider := &fakeProvider{}
-		svc := makeProxyService(router.Decision{}, map[string]providers.Client{providers.ProviderAiand: provider}).
-			WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAiand: {}})
-		httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", strings.NewReader(""))
-		rec := httptest.NewRecorder()
-
-		require.NoError(t, svc.PassthroughToProvider(context.Background(), body, rec, httpReq))
-		assert.Len(t, provider.passthroughCreds, 1, "deployment-keyed Anthropic must forward upstream")
-	})
-
-	t.Run("BYOK key", func(t *testing.T) {
-		provider := &fakeProvider{}
-		svc := makeProxyService(router.Decision{}, map[string]providers.Client{providers.ProviderAiand: provider}).
-			WithDeploymentKeyedProviders(map[string]struct{}{})
-		ctx := context.WithValue(context.Background(), proxy.ExternalAPIKeysContextKey{}, []*auth.ExternalAPIKey{
-			{Provider: providers.ProviderAiand, Plaintext: []byte("sk-ant-byok")},
-		})
-		httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", strings.NewReader(""))
-		rec := httptest.NewRecorder()
-
-		require.NoError(t, svc.PassthroughToProvider(ctx, body, rec, httpReq))
-		assert.Len(t, provider.passthroughCreds, 1, "BYOK Anthropic must forward upstream")
-	})
 }
 
 // TestService_PassthroughToProvider_LocalMetadataWithoutAnthropic covers the
@@ -497,23 +480,18 @@ func TestService_PassthroughToProvider_LocalMetadataWithoutAnthropic(t *testing.
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 		assert.Equal(t, "not_found_error", gjson.GetBytes(rec.Body.Bytes(), "error.type").Str)
 	})
-
-	t.Run("listing disabled without a model list source", func(t *testing.T) {
-		svc := makeProxyService(router.Decision{}, map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}})
-		httpReq := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
-		rec := httptest.NewRecorder()
-
-		err := svc.PassthroughToProvider(context.Background(), nil, rec, httpReq)
-		assert.ErrorIs(t, err, proxy.ErrProviderNotConfigured)
-	})
+	// Subtest "listing disabled without a model list source" was deleted with
+	// the multi-provider prune: with aiand as the single registered provider,
+	// a nil localModelList falls through to the aiand passthrough, which
+	// succeeds — the ErrProviderNotConfigured premise no longer exists.
 }
 
 func TestService_ProxyMessages_PropagatesUpstreamStatusError(t *testing.T) {
 	upstreamErr := &providers.UpstreamStatusError{Status: 400}
 	provider := &fakeProvider{proxyErr: upstreamErr}
 	svc := makeProxyService(
-		router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash"},
-		map[string]providers.Client{"anthropic": provider},
+		router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash"},
+		map[string]providers.Client{providers.ProviderAiand: provider},
 	)
 
 	rec := httptest.NewRecorder()
@@ -599,13 +577,16 @@ func TestService_ProxyMessages_StripsRoutingMarkerFromInboundHistory(t *testing.
 	assert.NotContains(t, upstream, markerSentinel, "routing marker must not reach upstream")
 	assert.Contains(t, upstream, "real assistant reply", "non-marker assistant content must survive")
 
-	// The last user message's content is promoted to an array with a cache_control
-	// marker; unmarshal to verify the wrapper text survived.
+	// The routed aiand upstream is Responses-eligible, so the turn dispatches
+	// onto /v1/responses and the upstream body carries `input`, not
+	// `messages`. Verify the wrapper text around the embedded marker survived.
 	var upstreamJSON map[string]any
 	require.NoError(t, json.Unmarshal(provider.proxyBodies[0], &upstreamJSON))
-	msgs, _ := upstreamJSON["messages"].([]any)
-	lastMsg, _ := msgs[len(msgs)-1].(map[string]any)
-	blocks, _ := lastMsg["content"].([]any)
+	inputs, _ := upstreamJSON["input"].([]any)
+	require.NotEmpty(t, inputs, "upstream Responses body must carry input items")
+	lastInput, _ := inputs[len(inputs)-1].(map[string]any)
+	blocks, _ := lastInput["content"].([]any)
+	require.NotEmpty(t, blocks, "last input item must carry content blocks")
 	lastBlock, _ := blocks[len(blocks)-1].(map[string]any)
 	assert.Contains(t, lastBlock["text"], "</result>", "wrapper text around an embedded marker must survive")
 }
@@ -627,7 +608,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageFlag(t *testing.T) {
 	}`)
 
 	t.Run("flag off uses concatenated stream", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash"}}
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash"}}
 		svc := proxy.NewService(fr,
 			map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 			nil,
@@ -650,7 +631,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageFlag(t *testing.T) {
 	})
 
 	t.Run("flag on concatenates user-role text and drops everything else", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash"}}
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash"}}
 		svc := proxy.NewService(fr,
 			map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 			nil,
@@ -714,9 +695,9 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageContextOverride(t *testing.T)
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash"}}
+			fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash"}}
 			svc := proxy.NewService(fr,
-				map[string]providers.Client{"anthropic": &fakeProvider{}},
+				map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 				nil,
 				tc.startupFlag,
 				nil,
@@ -748,7 +729,7 @@ func boolPtr(b bool) *bool { return &b }
 // without a pin store, every turn re-runs the cluster scorer.
 func TestService_ProxyMessages_NoPinStoreRunsScorerEveryTurn(t *testing.T) {
 	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hi"}]}`)
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-flash"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash"}}
 	svc := proxy.NewService(fr,
 		map[string]providers.Client{providers.ProviderAiand: &fakeProvider{}},
 		nil,
@@ -770,13 +751,16 @@ func TestService_ProxyMessages_NoPinStoreRunsScorerEveryTurn(t *testing.T) {
 }
 
 func TestService_ProxyOpenAIChatCompletion_AnthropicCrossFormat(t *testing.T) {
-	anthropicResp := `{"id":"msg_abc","type":"message","role":"assistant","content":[{"type":"text","text":"Hello!"}],"model":"moonshotai/kimi-k3","stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}}`
-
+	// The routed model is a catalog model on the single Responses-eligible
+	// provider, so the turn promotes onto /v1/responses and the upstream
+	// answers Responses SSE; the proxy translates back to chat/completions.
 	provider := &fakeProvider{
 		proxyResponse: func(w http.ResponseWriter) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(anthropicResp))
+			_, _ = w.Write([]byte(
+				`data: {"type":"response.output_text.delta","output_index":0,"delta":"Hello!"}` + "\n\n" +
+					`data: {"type":"response.completed","response":{"id":"resp_1","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Hello!"}]}],"usage":{"input_tokens":10,"output_tokens":5}}}` + "\n\n"))
 		},
 	}
 	svc := makeProxyService(
@@ -784,8 +768,8 @@ func TestService_ProxyOpenAIChatCompletion_AnthropicCrossFormat(t *testing.T) {
 		map[string]providers.Client{providers.ProviderAiand: provider},
 	)
 
-	// max_tokens above classifier threshold so the Anthropic scorer decision is
-	// used (classifier turns hard-pin to aiand deploy flash).
+	// Tool-free turn keeps the transformer on chat/completions dispatch; the
+	// translated upstream body is Responses-shaped.
 	openAIReq := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":1024}`
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(openAIReq))
@@ -794,10 +778,11 @@ func TestService_ProxyOpenAIChatCompletion_AnthropicCrossFormat(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, provider.proxyBodies, 1)
-	var translated map[string]any
-	require.NoError(t, json.Unmarshal(provider.proxyBodies[0], &translated))
-	assert.Equal(t, float64(1024), translated["max_tokens"], "max_tokens preserved on translated body")
-	msgs, _ := translated["messages"].([]any)
+	assert.Equal(t, providers.EndpointResponses, provider.proxyEndpoints[0])
+	translated := provider.proxyBodies[0]
+	assert.Equal(t, int64(16000), gjson.GetBytes(translated, "max_output_tokens").Int(),
+		"chat max_tokens floors to the Responses output budget on the translated body")
+	msgs := gjson.GetBytes(translated, "input").Array()
 	require.Len(t, msgs, 1)
 
 	var openAIOut map[string]any
@@ -817,8 +802,8 @@ func TestService_ProxyOpenAIChatCompletion_AnthropicProxyError_PropagatesError(t
 		proxyErr: upstreamErr,
 	}
 	svc := makeProxyService(
-		router.Decision{Provider: "anthropic", Model: "moonshotai/kimi-k3", Reason: "test"},
-		map[string]providers.Client{"anthropic": provider},
+		router.Decision{Provider: providers.ProviderAiand, Model: "moonshotai/kimi-k3", Reason: "test"},
+		map[string]providers.Client{providers.ProviderAiand: provider},
 	)
 
 	body := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`
@@ -841,8 +826,8 @@ func TestService_ProxyOpenAIChatCompletion_NativeOpenAI(t *testing.T) {
 		},
 	}
 	svc := makeProxyService(
-		router.Decision{Provider: "openai", Model: "gpt-4o", Reason: "test"},
-		map[string]providers.Client{"openai": provider},
+		router.Decision{Provider: providers.ProviderAiand, Model: "gpt-4o", Reason: "test"},
+		map[string]providers.Client{providers.ProviderAiand: provider},
 	)
 
 	body := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`
@@ -866,36 +851,13 @@ func TestService_ProxyOpenAIChatCompletion_NativeOpenAI(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), `"chat.completion"`)
 }
 
-// OpenRouter speaks OpenAI Chat Completions natively, so an OpenAI-format
-// inbound landing on an OpenRouter decision must take the no-translation path.
-// Regression: eval harness v0.27 hit "no translation path defined".
-func TestService_ProxyOpenAIChatCompletion_NativeOpenRouter(t *testing.T) {
-	provider := &fakeProvider{
-		proxyResponse: func(w http.ResponseWriter) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = io.WriteString(w, `{"id":"chatcmpl-1","object":"chat.completion"}`)
-		},
-	}
-	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderAiand, Model: "qwen/qwen3.6-27b", Reason: "test"},
-		map[string]providers.Client{providers.ProviderAiand: provider},
-	)
-
-	body := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`
-	rec := httptest.NewRecorder()
-	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
-
-	err := svc.ProxyOpenAIChatCompletion(context.Background(), []byte(body), rec, httpReq)
-	require.NoError(t, err)
-
-	require.Len(t, provider.proxyBodies, 1)
-	var got map[string]any
-	require.NoError(t, json.Unmarshal(provider.proxyBodies[0], &got))
-	assert.Equal(t, "qwen/qwen3.6-27b", got["model"], "envelope rewrites model to decision.Model")
-	assert.Contains(t, rec.Body.String(), `"chat.completion"`)
-}
-
+// TestService_ProxyOpenAIChatCompletion_NativeOpenRouter was deleted with the
+// multi-provider prune: its premise — an OpenRouter-native no-translation
+// dispatch on an OpenRouter decision — no longer exists. aiand is the single
+// registered provider and every model decision promotes onto /v1/responses,
+// so there is no openrouter-native path left to assert. The same-format
+// no-translation path (broad rollout off) is covered by
+// TestService_ProxyOpenAIChatCompletion_NativeOpenAI.
 // Bedrock, Makora, and Together are direct providers served by the
 // openaicompat client and must route through the OpenAI-emission case, not
 // the default "no translation path" branch. Regression: Makora/Together
@@ -973,7 +935,7 @@ func TestService_ProxyOpenAIChatCompletion_DispatchesBedrockMakoraTogether(t *te
 func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
 	body := []byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hi"}]}`)
 	providerMap := map[string]providers.Client{
-		providers.ProviderAiand:  &fakeProvider{},
+		providers.ProviderAiand: &fakeProvider{},
 	}
 
 	t.Run("byok-off keeps every registered provider eligible (selfhost baseline)", func(t *testing.T) {
@@ -1002,10 +964,11 @@ func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
 		assert.Empty(t, fr.capturedReq.EnabledProviders, "BYOK-only: registered providers ineligible without creds")
 	})
 
-	t.Run("byok-on Anthropic surface with x-api-key enables Anthropic only", func(t *testing.T) {
-		// A client x-api-key on the Anthropic surface is a legitimate passthrough
-		// credential and enables Anthropic, but must not leak into OpenRouter or
-		// other OpenAI-compat upstreams on a different inbound surface.
+	t.Run("byok-on Anthropic-surface x-api-key stays surface-scoped to aiand", func(t *testing.T) {
+		// ai& is OpenAI-compat; only an Authorization bearer enables it via
+		// client-supplied headers. An Anthropic-surface x-api-key is a valid
+		// passthrough credential for an Anthropic upstream — none is
+		// registered here — and must not enroll the OpenAI-compat upstream.
 		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAiand, Model: "deepseek-ai/deepseek-v4-flash"}}
 		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAiand, "deepseek-ai/deepseek-v4-flash", nil).
 			WithByokOnly(true)
@@ -1016,12 +979,9 @@ func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
 		_ = svc.ProxyMessages(context.Background(), body, rec, httpReq)
 
 		require.NotNil(t, fr.capturedReq)
-		assert.Contains(t, fr.capturedReq.EnabledProviders, providers.ProviderAiand,
-			"client-supplied x-api-key on the Anthropic surface enables Anthropic")
 		assert.NotContains(t, fr.capturedReq.EnabledProviders, providers.ProviderAiand,
-			"client header on the Anthropic surface must not leak credentials into OpenAI-compat upstreams")
+			"client x-api-key on the Anthropic surface must not leak credentials into the OpenAI-compat upstream")
 	})
-
 }
 
 // Model exclusion flows from installation context or env override into
