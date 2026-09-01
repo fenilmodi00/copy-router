@@ -163,17 +163,24 @@ shape (caught by the nightly `Refresh cassettes` workflow). See
 
 ## Database changes
 
-`db/init/00-create-schema.sql` is the canonical schema. Don't write raw SQL
-outside `db/queries/` and don't call `pgx.Pool` from anywhere outside
-`internal/postgres/`.
+Hybrid model: `db/init/00-create-schema.sql` is the canonical fresh-install
+schema; `db/migrations/` holds incremental golang-migrate pairs after the
+`0001_init` baseline. Don't write raw SQL outside `db/queries/` and don't
+call `pgx.Pool` from anywhere outside `internal/postgres/`.
 
-Schema changes are edits to the canonical schema file plus regenerated SQLC:
+Schema changes edit the canonical file **and** add a migration:
 
 ```bash
 $EDITOR db/init/00-create-schema.sql
+make migrate-create NAME=add-foo   # requires golang-migrate
+$EDITOR db/migrations/NNNN_add-foo.{up,down}.sql
 $EDITOR db/queries/<table>.sql
 make generate     # regenerate SQLC after schema/query changes
 ```
+
+Fresh install: `make initdb` (or compose first boot). Incremental on an
+already-initialized DB: stamp `force 1` once, then `make migrate-up`. See
+[db/CLAUDE.md](db/CLAUDE.md).
 
 Rules:
 

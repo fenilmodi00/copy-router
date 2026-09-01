@@ -40,6 +40,11 @@ services:
       # schema (all router.* tables, indexes, and constraints). The DDL is
       # router-schema-qualified, so it lands correctly regardless of the
       # entrypoint's default search_path.
+      #
+      # No migrate sidecar: first boot is the dump, not 0001_init (which
+      # would fail on already-created tables). Incremental migrations after
+      # baseline are host-side: stamp version 1, then `make migrate-up`.
+      # Supabase / WSL uses the same host path — see db/CLAUDE.md.
       - ./db/init:/docker-entrypoint-initdb.d:ro
 
   server:

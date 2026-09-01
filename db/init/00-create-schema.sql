@@ -1,17 +1,15 @@
 -- Canonical router schema: the single source of truth for a FRESH install.
 -- Folded mechanically from the retired migration chain (0001..0069 + dated
 -- migrations through 20260902000000) by applying every step in order on an
--- empty database and dumping the terminal state. The product ships fresh:
--- there is no upgrade path and no historical data to preserve.
+-- empty database and dumping the terminal state.
 --
 -- Loaded three ways:
 --   * docker-compose: mounted at /docker-entrypoint-initdb.d (first boot)
---   * `make initdb` / cmd/initdb: applied to an existing Postgres
+--   * `make initdb` / cmd/initdb: applied when the router schema is empty
 --   * sqlc: parsed as the schema source for type inference (db/sqlc.yml)
 --
--- Schema changes now happen by EDITING this file (it is the deployed state,
--- not a migration target). Keep queries/ in sync and regenerate with
--- `make generate`.
+-- Incremental changes after baseline live in db/migrations/ (0002+). Keep
+-- this file and the migration pair in sync — see db/CLAUDE.md.
 
 CREATE SCHEMA IF NOT EXISTS router;
 

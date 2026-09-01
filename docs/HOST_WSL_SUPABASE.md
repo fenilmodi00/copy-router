@@ -85,6 +85,11 @@ make seed
 Otherwise ask a role that owns schema `router` to run `make initdb`, then
 `make seed` on the host.
 
+Incremental schema changes after that baseline are host-side
+`make migrate-up` (golang-migrate; no compose sidecar). After a canonical
+`initdb`/first boot, stamp version 1 once so `0001_init` is not re-applied
+— see [db/CLAUDE.md](../db/CLAUDE.md).
+
 Check:
 
 ```bash

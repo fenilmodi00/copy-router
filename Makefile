@@ -1,6 +1,7 @@
 # Prerequisites:
 #   - Go 1.25+
 #   - sqlc (go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0)
+#   - golang-migrate (brew install golang-migrate) for migrate-* targets
 #   - CompileDaemon for `make dev` (go install github.com/githubnemo/CompileDaemon@latest)
 #   - bun for `make frontend-dev` (https://bun.sh)
 #
@@ -14,7 +15,7 @@
 #   Local disposable Postgres: `make db` (Compose on 5433) or any other
 #   Postgres URL you already have running.
 
-.PHONY: generate generate-statusline build test test-verbose test-statusline test-install smoke smoke-host initdb seed setup full-setup db dev frontend-dev check fmt vet precommit install-hooks help install-cc uninstall-cc up up-hmm down down-hmm logs
+.PHONY: generate generate-statusline build test test-verbose test-statusline test-install smoke smoke-host initdb migrate-up migrate-down migrate-create seed setup full-setup db dev frontend-dev check fmt vet precommit install-hooks help install-cc uninstall-cc up up-hmm down down-hmm logs
 
 # Load DATABASE_URL from .env files (matches docker-compose defaults).
 -include .env.development
@@ -54,14 +55,32 @@ smoke: ## Pre-merge smoke suite (compose+MITM in CI; use smoke-host for local Su
 smoke-host: ## Smoke against host make setup/dev + Supabase (no compose)
 	SMOKE_HOST=1 ./scripts/smoke/run.sh
 
-initdb: ## Create the database and router schema (idempotent)
+initdb: ## Create the database and apply canonical schema if empty (fresh install)
 	@go run ./cmd/initdb
+
+# Incremental golang-migrate. DATABASE_URL must already include a query
+# string (e.g. ?sslmode=disable) so search_path can be appended with &.
+# Fresh install uses initdb/compose (canonical dump), not this target.
+# After initdb/compose, stamp version 1 before the first incremental up:
+#   migrate -path db/migrations -database "$(DATABASE_URL)&search_path=router" force 1
+migrate-up: ## Apply pending migrations (empty DB: 0001_init; else 0002+)
+	migrate -path db/migrations \
+		-database "$(DATABASE_URL)&search_path=router" up
+
+migrate-down: ## Roll back the last migration
+	migrate -path db/migrations \
+		-database "$(DATABASE_URL)&search_path=router" down 1
+
+migrate-create: ## Create a new migration (usage: make migrate-create NAME=add-foo)
+	@if [ -z "$(NAME)" ]; then echo "Usage: make migrate-create NAME=add-foo"; exit 1; fi
+	migrate create -ext sql -dir db/migrations -seq -digits 4 $(NAME)
 
 seed: ## Create a local dev installation + API key and print usage instructions
 	go run ./cmd/seed
 
-# initdb applies the canonical schema (db/init/00-create-schema.sql); there is
-# no separate migration step anymore.
+# initdb = fresh install (canonical schema). migrate-up = incremental after
+# the 0001_init baseline. setup stays on initdb; do not chain migrate-up
+# (0001 would collide with tables initdb already created).
 setup: initdb seed ## Bootstrap (host DB): init DB + schema, seed an API key
 
 full-setup: generate-statusline ## Bootstrap router: docker compose + seed + interactively wire Claude Code

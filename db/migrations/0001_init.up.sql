@@ -1,3 +1,5 @@
+BEGIN;
+
 -- Canonical router schema: the single source of truth for a FRESH install.
 -- Folded mechanically from the retired migration chain (0001..0069 + dated
 -- migrations through 20260902000000) by applying every step in order on an
@@ -1749,3 +1751,5 @@ ALTER TABLE ONLY router.struggle_shadow_events
 --
 
 
+
+COMMIT;
