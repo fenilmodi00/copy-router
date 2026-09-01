@@ -388,7 +388,7 @@ were removed — `ROUTER_FEEDBACK_*` env vars are ignored.
 - [**Policy router harness**](docs/POLICY_ROUTER_HARNESS.md): contract and
   rollout checklist for adding an out-of-process policy model.
 - 🛠️ [**Contributing**](CONTRIBUTING.md): layering rules, hot-reload dev,
-  migrations, tests, the whole engineering loop.
+  schema changes, tests, the whole engineering loop.
 - 🏗️ [**Architecture**](AGENTS.md): package layout, import contracts,
   recipes for adding endpoints / models / strategies. Glossary: [CONTEXT.md](CONTEXT.md).
 

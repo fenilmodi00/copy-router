@@ -17,7 +17,7 @@ const (
 	ScopeAnalyticsRead APIKeyScope = "analytics_read"
 )
 
-// Normalized resolves the zero value to ScopeRouting (mirrors the migration backfill);
+// Normalized resolves the zero value to ScopeRouting;
 // an unrecognized non-empty value passes through and fails every scope check.
 func (s APIKeyScope) Normalized() APIKeyScope {
 	if s == "" {

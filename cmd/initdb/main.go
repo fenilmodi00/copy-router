@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"net/url"
 	"os"
@@ -14,6 +15,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 )
+
+// canonicalSchema is the single source of truth for the fresh-install
+// schema, embedded so the binary carries it (mirrors db/init/00-create-schema.sql).
+//
+//go:embed schema.sql
+var canonicalSchema string
 
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -68,8 +75,10 @@ func ensureDatabase(ctx context.Context, u *url.URL, dbName string) {
 	fmt.Printf("Created database %q\n", dbName)
 }
 
-// ensureSchema connects to the target database and creates the router schema
-// if it doesn't already exist.
+// ensureSchema connects to the target database, creates the router schema if
+// missing, and applies the canonical schema to a fresh (empty) one. An
+// already-populated schema is left untouched — the product ships fresh, so
+// there is no upgrade path by design.
 func ensureSchema(ctx context.Context, dsn string) {
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -77,10 +86,27 @@ func ensureSchema(ctx context.Context, dsn string) {
 	}
 	defer conn.Close(ctx)
 
-	if _, err := conn.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS router"); err != nil {
-		fatal("Cannot create router schema: %v", err)
+	var tables int
+	if err := conn.QueryRow(ctx,
+		"SELECT count(*) FROM pg_tables WHERE schemaname = 'router'").Scan(&tables); err != nil {
+		fatal("Cannot inspect router schema: %v", err)
 	}
-	fmt.Println("Schema 'router' ready")
+	if tables > 0 {
+		fmt.Printf("Schema 'router' ready (%d tables, already initialized)\n", tables)
+		return
+	}
+
+	// The canonical schema is router.*-qualified and creates the schema
+	// itself (IF NOT EXISTS), so it applies cleanly whether or not the
+	// schema exists yet.
+	if _, err := conn.Exec(ctx, canonicalSchema); err != nil {
+		fatal("Cannot apply canonical schema: %v", err)
+	}
+	if err := conn.QueryRow(ctx,
+		"SELECT count(*) FROM pg_tables WHERE schemaname = 'router'").Scan(&tables); err != nil {
+		fatal("Cannot inspect router schema: %v", err)
+	}
+	fmt.Printf("Schema 'router' ready (%d tables, initialized)\n", tables)
 }
 
 func fatal(format string, args ...any) {

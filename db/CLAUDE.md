@@ -2,18 +2,18 @@
 
 > **Mirror notice.** Verbatim sync with [AGENTS.md](AGENTS.md). **Update both together** — divergence = bug.
 
-Migrations + SQLC query sources. Read [root CLAUDE.md](../CLAUDE.md) first. Adapter that consumes these lives in [`../internal/postgres`](../internal/postgres) — see [its CLAUDE.md](../internal/postgres/CLAUDE.md).
+Canonical schema + SQLC query sources. Read [root CLAUDE.md](../CLAUDE.md) first. Adapter that consumes these lives in [`../internal/postgres`](../internal/postgres) — see [its CLAUDE.md](../internal/postgres/CLAUDE.md).
 
 ## Layout
 
-- `migrations/` — `NNNN_<name>.up.sql` + `.down.sql` pairs, sequential numbering.
+- `init/00-create-schema.sql` — **the canonical schema.** Schema changes are
+  edits to this file; `cmd/initdb` applies it to a fresh `router` schema.
 - `queries/<table>.sql` — SQLC query sources.
 
-## Migration conventions
+## Schema conventions
 
-- Always wrap migrations in `BEGIN; ... COMMIT;`.
-- Never create migration files manually — use `make migrate-create NAME=<name>`.
-- **Down migrations must be precise rollbacks.** No `IF EXISTS` guards. Don't separately drop indexes when dropping tables.
+- Schema changes are edits to `init/00-create-schema.sql` plus any matching
+  query changes, followed by `make generate` — never a separate migration.
 - `organization_id` + `created_by` are opaque external identifiers — **never add foreign keys to tables outside the router's own schema.** Such tables don't exist in this project.
 - Soft-delete via `deleted_at TIMESTAMP` on tables that need lifecycle. Hot-path queries filter `WHERE deleted_at IS NULL`.
 

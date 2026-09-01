@@ -11,7 +11,7 @@ import (
 
 // TestBoot asserts the stack is up and the public, unauthenticated endpoints
 // respond with well-formed payloads — a fast fail if the binary didn't boot
-// (bad assets dir, missing pubsub topic, migration failure, etc.).
+// (bad assets dir, bad config, schema failure, etc.).
 func TestBoot(t *testing.T) {
 	t.Run("health", func(t *testing.T) {
 		resp, err := http.Get(cfg.BaseURL + "/health")

@@ -16,12 +16,11 @@ Do **not** run:
 | `make full-setup` | Boots Compose, then seed, then Claude Code wiring. Wrong for Supabase host mode. |
 | `docker compose up` (Postgres) | Local DB is not part of this path. |
 
-Use `make setup` (migrate + seed) and `make dev` only.
+Use `make setup` (init DB + schema, seed) and `make dev` only.
 
 ## Prerequisites
 
 - Go 1.25+
-- [golang-migrate](https://github.com/golang-migrate/migrate) on `PATH`
 - [CompileDaemon](https://github.com/githubnemo/CompileDaemon) for `make dev`
 - Network reachability to Supabase session pooler host on **port 5432**
 - ONNX Runtime + `libtokenizers` on the host (see [ONNX on WSL](#onnx-on-wsl))
@@ -32,7 +31,7 @@ Use `make setup` (migrate + seed) and `make dev` only.
 2. Copy the URI. Port must be **5432**.
 3. Prefer `sslmode=require` in the query string.
 
-**Avoid** the **transaction** pooler on port **6543**. Migrate and the Go `pgx` pool use prepared statements; transaction pooler breaks that path unless you disable prepared statements (not supported here).
+**Avoid** the **transaction** pooler on port **6543**. The Go `pgx` pool uses prepared statements; transaction pooler breaks that path unless you disable prepared statements (not supported here).
 
 Put the URI in `.env.local` as `DATABASE_URL`. Do not commit `.env.local`.
 
@@ -67,20 +66,24 @@ Optional override only when you need a non-default aiand base:
 From the repo root, with `.env.local` loaded by the Makefile (`-include .env.local`):
 
 ```bash
-# Migrate + seed (prints an rk_ API key). Idempotent when schema is current.
+# Init DB + schema, then seed (prints an rk_ API key). Idempotent.
 make setup
 
 # Hot-reload server (needs ONNX env above).
 make dev
 ```
 
-When the remote project already has schema `router` but the DB role cannot `CREATE SCHEMA` or cannot write `router.schema_migrations` (common on a shared Supabase project already migrated by another role), `make setup` / `make migrate-up` may fail with `permission denied`. If migrations are already applied (no pending schema drift), run seed only:
+When the remote project already has schema `router` with tables owned by a
+different role (common on a shared Supabase project), `make setup` may fail
+with `permission denied`. If the schema there already matches the canonical
+schema, run seed only:
 
 ```bash
 make seed
 ```
 
-Otherwise ask a role that owns schema `router` to run migrate, then `make seed` on the host.
+Otherwise ask a role that owns schema `router` to run `make initdb`, then
+`make seed` on the host.
 
 Check:
 

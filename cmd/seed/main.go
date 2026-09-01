@@ -86,7 +86,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// One active key per installation (migration 0007). Soft-delete any
+	// One active key per installation. Soft-delete any
 	// existing key so re-running `make seed` rotates the local-dev token
 	// instead of erroring on the partial unique index.
 	if _, err := tx.Exec(ctx, `

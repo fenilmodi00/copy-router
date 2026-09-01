@@ -14,6 +14,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Init script runs once on first DB creation and applies the canonical
+      # schema (router.*-qualified DDL).
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U router -d router"]
@@ -29,22 +31,6 @@ services:
     restart: unless-stopped
 
 
-  # Migration runner - applies DB schema updates
-  migrate:
-    image: migrate/migrate:v4.17.1
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./db/migrations:/migrations
-    command:
-      - "-path=/migrations"
-      - "-database=postgres://router:${POSTGRES_PASSWORD:-router_production}@postgres:5432/router?sslmode=disable&search_path=router"
-      - "up"
-    restart: "no"
-    profiles:
-      - migrate
-
   # Router server - the main AI model router
   server:
     build:
@@ -56,8 +42,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     environment:
       # Server
       PORT: "8080"

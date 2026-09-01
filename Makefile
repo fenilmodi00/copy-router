@@ -1,7 +1,6 @@
 # Prerequisites:
 #   - Go 1.25+
 #   - sqlc (go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0)
-#   - golang-migrate (brew install golang-migrate)
 #   - CompileDaemon for `make dev` (go install github.com/githubnemo/CompileDaemon@latest)
 #   - bun for `make frontend-dev` (https://bun.sh)
 #
@@ -15,7 +14,7 @@
 #   Local disposable Postgres: `make db` (Compose on 5433) or any other
 #   Postgres URL you already have running.
 
-.PHONY: generate generate-statusline build test test-verbose test-statusline test-install smoke smoke-host initdb migrate-up migrate-down migrate-create seed setup full-setup db dev frontend-dev check fmt vet precommit install-hooks help install-cc uninstall-cc up up-hmm down down-hmm logs
+.PHONY: generate generate-statusline build test test-verbose test-statusline test-install smoke smoke-host initdb seed setup full-setup db dev frontend-dev check fmt vet precommit install-hooks help install-cc uninstall-cc up up-hmm down down-hmm logs
 
 # Load DATABASE_URL from .env files (matches docker-compose defaults).
 -include .env.development
@@ -58,22 +57,12 @@ smoke-host: ## Smoke against host make setup/dev + Supabase (no compose)
 initdb: ## Create the database and router schema (idempotent)
 	@go run ./cmd/initdb
 
-migrate-up: initdb ## Apply all pending migrations
-	migrate -path db/migrations \
-		-database "$(DATABASE_URL)&search_path=router" up
-
-migrate-down: ## Roll back the last migration
-	migrate -path db/migrations \
-		-database "$(DATABASE_URL)&search_path=router" down 1
-
-migrate-create: ## Create a new migration (usage: make migrate-create NAME=add-foo)
-	@if [ -z "$(NAME)" ]; then echo "Usage: make migrate-create NAME=add-foo"; exit 1; fi
-	migrate create -ext sql -dir db/migrations $(NAME)
-
 seed: ## Create a local dev installation + API key and print usage instructions
 	go run ./cmd/seed
 
-setup: migrate-up seed ## Bootstrap (host DB): init DB, run migrations, seed an API key
+# initdb applies the canonical schema (db/init/00-create-schema.sql); there is
+# no separate migration step anymore.
+setup: initdb seed ## Bootstrap (host DB): init DB + schema, seed an API key
 
 full-setup: generate-statusline ## Bootstrap router: docker compose + seed + interactively wire Claude Code
 	@if [ -n "$(KEY)" ] && [ -n "$(BASE_URL)" ]; then \
@@ -88,7 +77,7 @@ full-setup: generate-statusline ## Bootstrap router: docker compose + seed + int
 			echo "error: KEY and BASE_URL must both be provided together."; \
 			exit 1; \
 		fi; \
-		./install/spin "Building docker compose stack (postgres, migrate, server)" \
+		./install/spin "Building docker compose stack (postgres, server)" \
 			docker compose up --build -d || exit 1; \
 		./install/spin "Waiting for router /health" bash -c '\
 			for i in $$(seq 1 60); do \
