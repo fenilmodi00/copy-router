@@ -27,7 +27,7 @@ type Services struct {
 	ReadinessChecker admin.HealthChecker
 	HMMRosterSource  policy.RosterSource
 	Analytics        *analytics.Service
-	// AiandCatalogHandler, when non-nil, mounts GET /admin/v1/aiand/models.
+	// AiandCatalogHandler, when non-nil, mounts GET /v1/aiand/models.
 	// nil means no catalog route (self-hosted without AIAND_API_KEY).
 	// Self-serve always wires a handler that uses per-user BYOK keys.
 	AiandCatalogHandler gin.HandlerFunc
@@ -53,7 +53,7 @@ const (
 )
 
 // dashboardRoute is one row in the shared dashboard data-plane table. Paths
-// are relative to the /admin/v1 prefix; the mounter prefixes them.
+// are relative to the /v1 prefix; the mounter prefixes them.
 type dashboardRoute struct {
 	method  string
 	path    string
@@ -62,7 +62,7 @@ type dashboardRoute struct {
 	handler gin.HandlerFunc
 }
 
-// dashboardRoutes is the single source of truth for the /admin/v1/* data
+// dashboardRoutes is the single source of truth for the /v1/* dashboard data
 // plane in both selfhosted and selfserve. New dashboard endpoints are added as
 // a row here, not as a new route inside a mode block.
 func dashboardRoutes(s Services) []dashboardRoute {

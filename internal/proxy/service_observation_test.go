@@ -627,7 +627,7 @@ func TestProxyOpenAIChatCompletion_PlaygroundTelemetry(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	body := []byte(`{"model":"auto","messages":[{"role":"user","content":"hello"}],"stream":true}`)
-	httpReq := httptest.NewRequest(http.MethodPost, "/admin/v1/playground/chat", strings.NewReader(""))
+	httpReq := httptest.NewRequest(http.MethodPost, "/v1/playground/chat", strings.NewReader(""))
 	// This test pins telemetry, not endpoint choice; keep the turn on chat so
 	// the chat-shaped fake provider serves it under the broad Responses rule.
 	ctx = flags.WithOverrides(ctx, flags.Overrides{

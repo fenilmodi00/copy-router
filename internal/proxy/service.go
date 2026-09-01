@@ -340,7 +340,7 @@ const prevTurnMaxedOutThreshold = 8000
 type APIKeyIDContextKey struct{}
 
 // apiKeyIDFromContext returns the authenticated api_key_id, or "" when no key
-// is on context (selfhosted/admin paths).
+// is on context (dashboard/account-cookie paths).
 func apiKeyIDFromContext(ctx context.Context) string {
 	id, _ := ctx.Value(APIKeyIDContextKey{}).(string)
 	return id

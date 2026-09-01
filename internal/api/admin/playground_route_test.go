@@ -64,9 +64,9 @@ func playgroundRoutePOST(handler gin.HandlerFunc, body string, headers map[strin
 		})
 		c.Next()
 	})
-	engine.POST("/admin/v1/playground/route", handler)
+	engine.POST("/v1/playground/route", handler)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/playground/route", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/playground/route", strings.NewReader(body))
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -235,8 +235,8 @@ func playgroundChatPOSTWithInst(handler gin.HandlerFunc, body string, headers ma
 			c.Next()
 		})
 	}
-	engine.POST("/admin/v1/playground/chat", handler)
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/playground/chat", strings.NewReader(body))
+	engine.POST("/v1/playground/chat", handler)
+	req := httptest.NewRequest(http.MethodPost, "/v1/playground/chat", strings.NewReader(body))
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -266,9 +266,9 @@ func TestPlaygroundChat_BindsInstallationContext(t *testing.T) {
 		c.Set("router_installation", inst)
 		c.Next()
 	})
-	engine.POST("/admin/v1/playground/chat", admin.PlaygroundChatHandler(capture, authSvc))
+	engine.POST("/v1/playground/chat", admin.PlaygroundChatHandler(capture, authSvc))
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/playground/chat",
+	req := httptest.NewRequest(http.MethodPost, "/v1/playground/chat",
 		bytes.NewReader([]byte(`{"model":"auto","messages":[{"role":"user","content":"hi"}]}`)))
 	engine.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)

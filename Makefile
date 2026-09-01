@@ -130,7 +130,7 @@ db: ## Start the compose Postgres only (port 5433)
 
 # `make dev` runs both processes with hot-reload:
 #   - Go router via CompileDaemon on :8080
-#   - Next.js dashboard via `bun run dev` on :3000 (rewrites /admin → :8080)
+#   - Next.js dashboard via `bun run dev` on :3000 (rewrites /v1 and /account → :8080)
 #
 # `-tags ORT` is required for hugot v0.7+ to enable the ONNX Runtime
 # backend. Without it, cluster.NewEmbedder fails at boot and the
@@ -146,7 +146,7 @@ db: ## Start the compose Postgres only (port 5433)
 #
 # PORT is exported from .env.local for the Go router. Next.js also
 # reads PORT, so without an override it binds :8080 first, Go fails
-# with "address already in use", and /admin rewrites loop to Next
+# with "address already in use", and /v1 rewrites loop to Next
 # (ECONNRESET). Force the UI onto 3000 regardless of .env.local.
 dev: ## Run Go router (:8080) + Next.js UI (:3000) with hot-reload
 	@set -e; \

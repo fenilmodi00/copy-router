@@ -102,10 +102,10 @@ func apiKeysEngine(svc *auth.Service) *gin.Engine {
 	inject := func(c *gin.Context) {
 		c.Set("router_installation", &auth.Installation{ID: testInstallationID})
 	}
-	engine.GET("/admin/v1/keys", inject, admin.ListAPIKeysHandler(svc))
-	engine.POST("/admin/v1/keys", inject, admin.IssueAPIKeyHandler(svc))
-	engine.POST("/admin/v1/keys/:id/rotate", inject, admin.RotateAPIKeyHandler(svc))
-	engine.GET("/admin/v1/provider-keys", inject, admin.ListExternalKeysHandler(svc))
+	engine.GET("/v1/keys", inject, admin.ListAPIKeysHandler(svc))
+	engine.POST("/v1/keys", inject, admin.IssueAPIKeyHandler(svc))
+	engine.POST("/v1/keys/:id/rotate", inject, admin.RotateAPIKeyHandler(svc))
+	engine.GET("/v1/provider-keys", inject, admin.ListExternalKeysHandler(svc))
 	return engine
 }
 
@@ -123,7 +123,7 @@ func TestListAPIKeysHandler_ReturnsKeysForInstallation(t *testing.T) {
 	require.NoError(t, err)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/keys", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/keys", nil)
 	apiKeysEngine(svc).ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -141,7 +141,7 @@ func TestIssueAPIKeyHandler_ReturnsTokenMatchingFingerprint(t *testing.T) {
 	svc := newAuthServiceForKeyTests(repo, nil)
 
 	body, _ := json.Marshal(map[string]string{"name": "ci-key"})
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/keys", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	apiKeysEngine(svc).ServeHTTP(rec, req)
@@ -185,7 +185,7 @@ func TestIssueAPIKeyHandler_ScopeSelectsCredentialKind(t *testing.T) {
 			svc := newAuthServiceForKeyTests(&fakeAPIKeyRepository{}, nil)
 
 			body, _ := json.Marshal(map[string]string{"scope": tt.bodyScope})
-			req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/keys", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 			apiKeysEngine(svc).ServeHTTP(rec, req)
@@ -209,7 +209,7 @@ func TestIssueAPIKeyHandler_RejectsUnknownScope(t *testing.T) {
 	svc := newAuthServiceForKeyTests(&fakeAPIKeyRepository{}, nil)
 
 	body, _ := json.Marshal(map[string]string{"scope": "admin"})
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/keys", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	apiKeysEngine(svc).ServeHTTP(rec, req)
@@ -225,7 +225,7 @@ func TestRotateAPIKeyHandler_PreservesScope(t *testing.T) {
 	oldKey, _, err := svc.IssueScopedAPIKey(context.Background(), testInstallationID, auth.ScopeAnalyticsRead, nil, nil)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys/"+oldKey.ID+"/rotate", nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/keys/"+oldKey.ID+"/rotate", nil)
 	rec := httptest.NewRecorder()
 	apiKeysEngine(svc).ServeHTTP(rec, req)
 
@@ -247,7 +247,7 @@ func TestRotateAPIKeyHandler_SoftDeletesOldKeyAndIssuesNew(t *testing.T) {
 	oldKey, _, err := svc.IssueAPIKey(context.Background(), testInstallationID, nil, nil)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys/"+oldKey.ID+"/rotate", nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/keys/"+oldKey.ID+"/rotate", nil)
 	rec := httptest.NewRecorder()
 	apiKeysEngine(svc).ServeHTTP(rec, req)
 
@@ -272,7 +272,7 @@ func TestRotateAPIKeyHandler_ForeignKeyIDReturnsNotFound(t *testing.T) {
 	foreignKey, _, err := svc.IssueAPIKey(context.Background(), "other-inst", nil, nil)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/keys/"+foreignKey.ID+"/rotate", nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/keys/"+foreignKey.ID+"/rotate", nil)
 	rec := httptest.NewRecorder()
 	apiKeysEngine(svc).ServeHTTP(rec, req)
 
@@ -293,7 +293,7 @@ func TestListExternalKeysHandler_ReturnsProviderKeysForInstallation(t *testing.T
 	repo := &fakeExternalAPIKeyRepo{keys: []*auth.ExternalAPIKey{externalKey}}
 	svc := newAuthServiceForKeyTests(&fakeAPIKeyRepository{}, repo)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/provider-keys", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/provider-keys", nil)
 	rec := httptest.NewRecorder()
 	apiKeysEngine(svc).ServeHTTP(rec, req)
 
@@ -373,7 +373,7 @@ func upsertKeyEngine(svc *auth.Service) *gin.Engine {
 func upsertKeyEngineWithModels(svc *auth.Service, models admin.DeployedModelsSource) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.POST("/admin/v1/provider-keys", func(c *gin.Context) {
+	engine.POST("/v1/provider-keys", func(c *gin.Context) {
 		c.Set("router_installation", &auth.Installation{ID: "inst-1"})
 	}, admin.UpsertExternalKeyHandler(svc, models))
 	return engine
@@ -390,7 +390,7 @@ func postProviderKeyWithBaseURL(engine *gin.Engine, provider, baseURL string) *h
 }
 
 func postProviderKeyBody(engine *gin.Engine, body []byte) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPost, "/admin/v1/provider-keys", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/provider-keys", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -543,7 +543,7 @@ func TestUpsertExternalKeyHandler_RejectsReservedIdentityHeader(t *testing.T) {
 func aliasUpdateEngine(svc *auth.Service, models admin.DeployedModelsSource) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.PUT("/admin/v1/provider-keys/:id/model-aliases", func(c *gin.Context) {
+	engine.PUT("/v1/provider-keys/:id/model-aliases", func(c *gin.Context) {
 		c.Set("router_installation", &auth.Installation{ID: "inst-1"})
 	}, admin.UpdateExternalKeyAliasesHandler(svc, models))
 	return engine
@@ -551,7 +551,7 @@ func aliasUpdateEngine(svc *auth.Service, models admin.DeployedModelsSource) *gi
 
 func putModelAliases(engine *gin.Engine, id string, aliases map[string]string) *httptest.ResponseRecorder {
 	body, _ := json.Marshal(map[string]any{"model_aliases": aliases})
-	req := httptest.NewRequest(http.MethodPut, "/admin/v1/provider-keys/"+id+"/model-aliases", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/v1/provider-keys/"+id+"/model-aliases", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)

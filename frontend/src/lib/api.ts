@@ -35,7 +35,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // Absolute-path variant of request() — used for /account/v1/* which lives
-// outside the /admin/v1 BASE group. Shares the 401 bounce + error shape so
+// outside the /v1 BASE group. Shares the 401 bounce + error shape so
 // callers don't observe a difference in failure handling.
 async function requestRaw<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {

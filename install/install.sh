@@ -2059,12 +2059,12 @@ toggle_opencode() {
 # ---------- model selection ----------
 #
 # `models` reads and edits the installation's model/provider selection through
-# the router's /admin/v1 API — the same lists the router dashboard's settings
+# the router's /v1 API — the same lists the router dashboard's settings
 # page renders, backed by the same columns. Nothing local is written: the
 # endpoint and router key are read out of the install already on disk so a
 # self-hosted install talks to its own router with its own key.
 #
-# The Weave-hosted router runs in `managed` mode and mounts no /admin/v1 at
+# The Weave-hosted router runs in `managed` mode and mounts no /v1 at
 # all — there model selection belongs to the organization and is edited in the
 # Weave dashboard. That surfaces as a 404, which reads (for a list) as "fall
 # back to the public catalog and say where to edit" and (for an edit) as a
@@ -2132,7 +2132,7 @@ models_fail() {
       err "This router does not expose the model-selection API, so $what is not available here."
       printf "  %sWeave-hosted routers keep model selection with the organization — edit it at %s%s\n" \
         "$C_DIM" "$MODELS_DASHBOARD_URL" "$C_RESET" >&2
-      printf "  %sSelf-hosted? Update the router to a build that serves /admin/v1/models.%s\n" \
+      printf "  %sSelf-hosted? Update the router to a build that serves /v1/models.%s\n" \
         "$C_DIM" "$C_RESET" >&2
       ;;
     *)
@@ -2180,7 +2180,7 @@ models_render_providers() {
 # models_print_preferred appends the priority ranking when one is set. Absent
 # is the norm (the router picks per turn), so silence is the right output.
 models_print_preferred() {
-  models_api GET "/admin/v1/preferred-models" || return 0
+  models_api GET "/v1/preferred-models" || return 0
   local list
   list="$(printf '%s' "$models_http_body" | jq -r '(.preferred // []) | join(" > ")' 2>/dev/null || true)"
   [ -n "$list" ] || return 0
@@ -2225,7 +2225,7 @@ models_list_catalog() {
 }
 
 models_list() {
-  if ! models_api GET "/admin/v1/models"; then
+  if ! models_api GET "/v1/models"; then
     # Only a missing API is worth degrading for; anything else is a real error.
     [ "$models_http_status" = "404" ] || models_fail "listing models"
     models_list_catalog models
@@ -2242,7 +2242,7 @@ models_list() {
 }
 
 models_providers_list() {
-  if ! models_api GET "/admin/v1/providers"; then
+  if ! models_api GET "/v1/providers"; then
     # Same 404 degrade as models_list: a router with no model-selection API
     # still answers the unauthed catalog, and this is a read-only listing
     # command same as `models list` — no reason to hard-fail one and not
@@ -2265,8 +2265,8 @@ models_toggle() {
   local kind="$1" action="$2" ids="$3"
   local path body id label doing
   case "$kind" in
-    model)    path="/admin/v1/excluded-models"    ; label="model"    ;;
-    provider) path="/admin/v1/excluded-providers" ; label="provider" ;;
+    model)    path="/v1/excluded-models"    ; label="model"    ;;
+    provider) path="/v1/excluded-providers" ; label="provider" ;;
   esac
   # Enabling means dropping the id from the exclusion list, disabling means
   # adding it — the API's remove/add endpoints, inverted here so the CLI reads
@@ -2308,7 +2308,7 @@ models_prefer() {
   else
     body="$(printf '%s' "$ids" | jq -c -R -s '{preferred: (split("\n") | map(select(length > 0)))}')"
   fi
-  models_api PUT "/admin/v1/preferred-models" "$body" || models_fail "setting the preferred-model ranking"
+  models_api PUT "/v1/preferred-models" "$body" || models_fail "setting the preferred-model ranking"
   if [ "$models_json" = "true" ]; then
     printf '%s\n' "$models_http_body"
     return 0

@@ -63,14 +63,14 @@ func metricsProxySvc(telemetry proxy.TelemetryRepository) *proxy.Service {
 func metricsTimeseriesGET(handler gin.HandlerFunc) *httptest.ResponseRecorder {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.GET("/admin/v1/metrics/timeseries",
+	engine.GET("/v1/metrics/timeseries",
 		func(c *gin.Context) {
 			c.Set("router_installation", &auth.Installation{ID: "inst-1", Name: "test"})
 		},
 		handler,
 	)
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/v1/metrics/timeseries?granularity=hour", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/metrics/timeseries?granularity=hour", nil))
 	return rec
 }
 
@@ -104,14 +104,14 @@ func TestMetricsSummary_EmitsCacheInputSavingsUSD(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := admin.MetricsSummaryHandler(svc, &auth.Service{})
 	engine := gin.New()
-	engine.GET("/admin/v1/metrics/summary",
+	engine.GET("/v1/metrics/summary",
 		func(c *gin.Context) {
 			c.Set("router_installation", &auth.Installation{ID: "inst-1", Name: "test"})
 		},
 		handler,
 	)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/admin/v1/metrics/summary?from=2026-08-27T00:00:00Z&to=2026-08-28T00:00:00Z", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/metrics/summary?from=2026-08-27T00:00:00Z&to=2026-08-28T00:00:00Z", nil)
 	engine.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)

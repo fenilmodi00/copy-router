@@ -59,7 +59,7 @@ set, so all six existing enforcement sites honor it with no new filter loops.
 the allowlist instead of dumping the desugared exclusion list.
 
 **A wholly non-routable allowlist is rejected at the admin API.** Membership
-validation for `PUT /admin/v1/allowed-models` is catalog-wide on purpose —
+validation for `PUT /v1/allowed-models` is catalog-wide on purpose —
 force-model and hard-pin reach rows the router never scores — but the
 desugaring only excludes over `routableUniverse()`. A list naming *only*
 non-routable rows (an unbound provider, or a tierless passthrough-only row)

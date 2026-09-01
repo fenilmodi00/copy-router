@@ -5,8 +5,8 @@
 // Axes:
 //  1. Concurrency sweep — List-held-open barrier at N = 2, 3, 10, 25
 //  2. Mixed RotateAPIKey vs DeleteAPIKey on the same key
-//  3. HTTP-level POST /admin/v1/keys/:id/rotate via gin httptest + real
-//     WithAdminOnly cookie auth (not a live docker listener)
+//  3. HTTP-level POST /v1/keys/:id/rotate via gin httptest + real
+//     WithAccountCookie auth (not a live docker listener)
 //  4. Timing sensitivity — N=2, 20 runs each: post-List sleep sweep, then
 //     start-stagger sweep to find the largest stagger with ≥1/20 hit
 //
@@ -419,7 +419,7 @@ func checkHTTPRotateRace(ctx context.Context, pool *pgxpool.Pool) error {
 	fmt.Printf("http_status_counts=%v\n", statuses)
 	fmt.Printf("rotate_http_201=%d active_keys_with_race_name=%d\n", okCount.Load(), activeNamed)
 	if okCount.Load() > 1 && activeNamed > 1 {
-		fmt.Println("YES: race reproduces through gin WithAdminOnly + RotateAPIKeyHandler (httptest)")
+		fmt.Println("YES: race reproduces through gin WithAccountCookie + RotateAPIKeyHandler (httptest)")
 	} else {
 		fmt.Println("NO: HTTP path did not show multi-successor race")
 	}

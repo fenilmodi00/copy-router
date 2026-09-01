@@ -42,7 +42,7 @@ func aiandCatalogEngine(t *testing.T, upstream http.Handler) (*gin.Engine, *atom
 
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.GET("/admin/v1/aiand/models",
+	engine.GET("/v1/aiand/models",
 		func(c *gin.Context) {
 			c.Set("router_installation", &auth.Installation{ID: "inst-1", Name: "test"})
 		},
@@ -58,7 +58,7 @@ func aiandCatalogEngine(t *testing.T, upstream http.Handler) (*gin.Engine, *atom
 
 func aiandCatalogGET(engine *gin.Engine) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/v1/aiand/models", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/aiand/models", nil))
 	return rec
 }
 
@@ -164,7 +164,7 @@ func TestAiandCatalogHandler_UsesInstallationBYOKWithoutDeploymentKey(t *testing
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	inst := &auth.Installation{ID: "inst-user-1"}
-	engine.GET("/admin/v1/aiand/models",
+	engine.GET("/v1/aiand/models",
 		func(c *gin.Context) {
 			c.Set("router_installation", inst)
 			keys := []*auth.ExternalAPIKey{{
@@ -184,7 +184,7 @@ func TestAiandCatalogHandler_UsesInstallationBYOKWithoutDeploymentKey(t *testing
 func TestAiandCatalogHandler_NoCredentialIs401(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.GET("/admin/v1/aiand/models",
+	engine.GET("/v1/aiand/models",
 		admin.AiandCatalogHandler("", "https://example.invalid/v1", nil, time.Now),
 	)
 	rec := aiandCatalogGET(engine)

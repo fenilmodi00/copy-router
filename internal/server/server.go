@@ -43,7 +43,7 @@ const (
 )
 
 // Register wires routes onto the engine. In managed mode the dashboard +
-// /admin/v1/* routes are not registered at all.
+// dashboard /v1/* routes are not registered at all.
 //
 // DeployedModels may be nil in tests; required in selfhosted prod so the
 // dashboard can render the universe of routable models.
@@ -64,7 +64,7 @@ const (
 // nil leaves it unmounted (tests, deployments without telemetry storage).
 //
 // AiandCatalogHandler, when non-nil, mounts the live ai& model catalog
-// (GET /admin/v1/aiand/models) inside the dashboard metrics group. nil means
+// (GET /v1/aiand/models) inside the dashboard group. nil means
 // no catalog route (self-hosted without AIAND_API_KEY). Self-serve always
 // wires a handler that authenticates upstream with each user's BYOK key.
 func Register(engine *gin.Engine, s Services) {
