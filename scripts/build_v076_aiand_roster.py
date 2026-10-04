@@ -219,8 +219,8 @@ def main():
         yaml.safe_dump(meta, f, sort_keys=False, allow_unicode=True, width=100)
 
     # --- centroids: byte copy + hash verify
-    h = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()  # noqa: E731
-    assert h(SRC / "centroids.bin") == h(DST / "centroids.bin"), "centroids drift"
+    sha256_of = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()  # noqa: E731
+    assert sha256_of(SRC / "centroids.bin") == sha256_of(DST / "centroids.bin"), "centroids drift"
 
     dump("quality_means.json", qm)
     dump("model_axes.json", axes)
