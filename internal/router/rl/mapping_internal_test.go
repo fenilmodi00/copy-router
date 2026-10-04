@@ -40,6 +40,8 @@ var defaultRosterPrefixProviders = map[string]struct{}{
 	providers.ProviderTogether:   {},
 	// Muse Spark is not in the trained roster yet; bare ID is best-effort.
 	providers.ProviderMeta: {},
+	// AIand's catalog IDs are already slash-form; bare ID is correct.
+	providers.ProviderAIAND: {},
 	// Anthropic-spec surfaces serving non-Claude models (Wafer's Messages API)
 	// stay bare — the roster keys vendor-prefixed Anthropic slots by Claude ID.
 	providers.ProviderWaferAnthropic: {},
