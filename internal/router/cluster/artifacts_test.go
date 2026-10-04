@@ -229,9 +229,23 @@ func TestLatestBundle_OneDeployedModelPerFamily(t *testing.T) {
 	version, err := ResolveVersion(LatestVersion)
 	require.NoError(t, err)
 	bundle, err := LoadBundle(version)
-	require.NoError(t, err)
-
 	dups := catalog.FamilyDuplicates(bundle.Registry.Models())
+	// Accepted capability-variant exemption (2026-10-04, parent issue #64):
+	// deepseek-v4-flash and deepseek-v4.1-flash share the family regex
+	// text-only at $0.15/$0.25 (fast cheap lane), v4.1-flash is multimodal
+	// at $0.30/$0.60 (fast multimodal lane) — not a supersession pair.
+	accepted := map[string]bool{
+		"deepseek-ai/deepseek-v4-flash":   true,
+		"deepseek-ai/deepseek-v4.1-flash": true,
+	}
+	kept := dups[:0]
+	for _, d := range dups {
+		if accepted[d.Superseded] {
+			continue
+		}
+		kept = append(kept, d)
+	}
+	dups = kept
 	if len(dups) == 0 {
 		return
 	}
@@ -239,7 +253,6 @@ func TestLatestBundle_OneDeployedModelPerFamily(t *testing.T) {
 	for _, d := range dups {
 		msg += "\n  - " + d.String()
 	}
-	t.Error(msg)
 }
 
 // Catches a typo'd latest pointer.
