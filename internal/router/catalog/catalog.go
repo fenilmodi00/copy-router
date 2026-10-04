@@ -702,6 +702,9 @@ var Models = []Model{
 			Price: Pricing{InputUSDPer1M: 3.000, OutputUSDPer1M: 15.000, CacheReadMultiplier: 0.10}},
 		{Provider: providers.ProviderWaferAnthropic, UpstreamID: "Kimi-K3",
 			Price: Pricing{InputUSDPer1M: 3.000, OutputUSDPer1M: 15.000, CacheReadMultiplier: 0.10}},
+		// AIand serves the same model at its own (lower) output rate; appended
+		// so existing Fireworks/OpenRouter/Wafer preference is unchanged.
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 3.000, OutputUSDPer1M: 12.500, CacheReadMultiplier: 0.50 / 3.000}},
 	}},
 	// AA top-performer additions (2026-05-18): ranked by composite of quality
 	// (Intelligence Index v4.0), cost (blended 3:1), and effective time per
@@ -825,5 +828,48 @@ var Models = []Model{
 	{ID: "qwen/qwen3.8-max", Source: SourceOpenSource, Tier: TierHigh, ContextWindow: 131_072, Providers: []ProviderBinding{
 		{Provider: providers.ProviderFireworks, UpstreamID: "accounts/fireworks/models/qwen3p8-max",
 			Price: Pricing{InputUSDPer1M: 2.000, OutputUSDPer1M: 6.000, CacheReadMultiplier: 0.125}},
+	}},
+
+	// --- AIand (api.aiand.com) ---
+	//
+	// AIand serves this open-weights roster natively under slash-form IDs
+	// (empty UpstreamID, like OpenRouter). Rates/context/caps from the live
+	// GET /v1/models probe (2026-10-04). moonshotai/kimi-k3 already exists
+	// above; it carries an AIand binding there rather than a second row.
+	{ID: "deepseek-ai/deepseek-v4-flash", Source: SourceOpenSource, Tier: TierLow, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.250, CacheReadMultiplier: 0.08 / 0.150}},
+	}},
+	{ID: "deepseek-ai/deepseek-v4.1-flash", Source: SourceOpenSource, Tier: TierMid, ContextWindow: 1_048_576, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 0.300, OutputUSDPer1M: 0.600, CacheReadMultiplier: 0.02 / 0.300}},
+	}},
+	{ID: "deepseek-ai/deepseek-v4-pro", Source: SourceOpenSource, Tier: TierHigh, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 2.500, CacheReadMultiplier: 0.25}},
+	}},
+	{ID: "zai-org/glm-5.2", Source: SourceOpenSource, Tier: TierHigh, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 4.000, CacheReadMultiplier: 0.30}},
+	}},
+	{ID: "zai-org/glm-5.3", Source: SourceOpenSource, Tier: TierHigh, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 4.000, CacheReadMultiplier: 0.30}},
+	}},
+	{ID: "zai-org/glm-5.3-flash", Source: SourceOpenSource, Tier: TierLow, ContextWindow: 1_048_550, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.500, CacheReadMultiplier: 0.03 / 0.150}},
+	}},
+	{ID: "moonshotai/kimi-k2.7-code", Source: SourceOpenSource, Tier: TierMid, ContextWindow: 262_144, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 0.750, OutputUSDPer1M: 3.500, CacheReadMultiplier: 0.20 / 0.750}},
+	}},
+	{ID: "qwen/qwen3.6-27b", Source: SourceOpenSource, Tier: TierMid, ContextWindow: 262_144, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 0.320, OutputUSDPer1M: 3.200, CacheReadMultiplier: 0.20 / 0.320}},
+	}},
+	{ID: "qwen/qwen3.8-27b", Source: SourceOpenSource, Tier: TierMid, ContextWindow: 262_144, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 0.400, OutputUSDPer1M: 3.000, CacheReadMultiplier: 0.20 / 0.400}},
+	}},
+	{ID: "motif-technologies/motif-3", Source: SourceOpenSource, Tier: TierMid, ContextWindow: 262_144, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 0.500, OutputUSDPer1M: 2.000, CacheReadMultiplier: 0.20 / 0.500}},
+	}},
+	{ID: "google/gemma-4-31b-it", Source: SourceOpenSource, Tier: TierLow, ContextWindow: 262_144, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 0.200, OutputUSDPer1M: 0.500, CacheReadMultiplier: 0.25}},
+	}},
+	{ID: "openai/gpt-oss-120b", Source: SourceOpenSource, Tier: TierLow, ContextWindow: 131_072, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
+		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.600, CacheReadMultiplier: 0.08 / 0.150}},
 	}},
 }

@@ -42,6 +42,9 @@ const (
 	XAIBaseURL = "https://api.x.ai/v1"
 	// MetaBaseURL is Meta's Model API OpenAI-compatible Chat Completions surface.
 	MetaBaseURL = "https://api.meta.ai/v1"
+	// AIANDBaseURL is AIand's OpenAI-compatible Chat Completions surface, serving
+	// its open-weights catalog under slash-form model IDs.
+	AIANDBaseURL = "https://api.aiand.com/v1"
 	// WaferBaseURL is Wafer Serverless' OpenAI-compatible surface.
 	WaferBaseURL = "https://pass.wafer.ai/v1"
 )
