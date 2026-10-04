@@ -10,9 +10,7 @@ import (
 )
 
 // v076AIandModels are the 13 catalog IDs the v0.76 overlay adds under
-// provider "aiand" (scripts/build_v076_aiand_roster.py). String literals
-// rather than catalog/provider constants so this bundle-validity test boots
-// before Ticket A's AIand catalog rows and provider const land.
+// providers.ProviderAIAND (scripts/build_v076_aiand_roster.py).
 var v076AIandModels = []string{
 	"deepseek-ai/deepseek-v4-flash",
 	"deepseek-ai/deepseek-v4.1-flash",
@@ -54,7 +52,7 @@ func TestV076BundleLoads(t *testing.T) {
 	for _, p := range providers.AllProviders() {
 		all[p] = struct{}{}
 	}
-	all["aiand"] = struct{}{}
+	all[providers.ProviderAIAND] = struct{}{}
 	base, err := NewScorer(v075, DefaultConfig(), &fakeEmbedder{}, all)
 	require.NoError(t, err)
 	s, err := NewScorer(bundle, DefaultConfig(), &fakeEmbedder{}, all)
@@ -68,18 +66,16 @@ func TestV076BundleLoads(t *testing.T) {
 	}
 
 	// AIand-only deploy (only AIAND_API_KEY wired): the boot filter keeps
-	// AIand candidates and drops every other provider's model. kimi-k3 has
-	// a pre-existing catalog row (fireworks/openrouter) with no aiand
-	// binding yet, so 12 of 13 survive until Ticket A's catalog rows land.
-	aiand := map[string]struct{}{"aiand": {}}
+	// all 13 AIand candidates and drops every other provider's model —
+	// Ticket A's catalog rows bind every one of them to aiand.
+	aiand := map[string]struct{}{providers.ProviderAIAND: {}}
 	s2, err := NewScorer(bundle, DefaultConfig(), &fakeEmbedder{}, aiand)
 	require.NoError(t, err, "AIand-only deploy must boot v0.76")
-	require.NotEmpty(t, s2.models)
+	require.Len(t, s2.models, 13)
 	for _, c := range s2.candidates {
-		assert.Equal(t, "aiand", c.Provider, "boot filter must resolve every survivor to aiand")
+		assert.Equal(t, providers.ProviderAIAND, c.Provider, "boot filter must resolve every survivor to aiand")
 		assert.Contains(t, v076AIandModels, c.Model)
 	}
-	assert.GreaterOrEqual(t, len(s2.models), 12)
 	assert.NotContains(t, s2.models, "claude-haiku-4-5")
 
 	// Frozen geometry: centroids.bin byte-identical to the parent bundle.
