@@ -542,19 +542,18 @@ func TestResolveBinding_WaferTrailingBindings(t *testing.T) {
 	b, ok = ResolveBinding("z-ai/glm-5.2", map[string]struct{}{providers.ProviderWafer: {}, providers.ProviderWaferAnthropic: {}})
 	assert.False(t, ok)
 
-	// kimi-k3: Fireworks leads, OpenRouter second, Wafer last.
-	b, ok = ResolveBinding("moonshotai/kimi-k3", map[string]struct{}{providers.ProviderOpenRouter: {}, providers.ProviderWafer: {}})
+	// kimi-k3: AIand-only product binding (2026-10-04 roster decision);
+	// the Fireworks/OpenRouter/Wafer trailing bindings are gone.
+	b, ok = ResolveBinding("moonshotai/kimi-k3", map[string]struct{}{providers.ProviderAIAND: {}})
 	require.True(t, ok)
-	assert.Equal(t, providers.ProviderOpenRouter, b.Provider)
+	assert.Equal(t, providers.ProviderAIAND, b.Provider)
+	assert.Empty(t, b.UpstreamID)
+
+	b, ok = ResolveBinding("moonshotai/kimi-k3", map[string]struct{}{providers.ProviderOpenRouter: {}, providers.ProviderWafer: {}})
+	assert.False(t, ok, "kimi-k3 resolves only via AIand now")
 
 	b, ok = ResolveBinding("moonshotai/kimi-k3", map[string]struct{}{providers.ProviderWafer: {}})
-	require.True(t, ok)
-	assert.Equal(t, "Kimi-K3", b.UpstreamID)
-
-	b, ok = ResolveBinding("moonshotai/kimi-k3", map[string]struct{}{providers.ProviderWaferAnthropic: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderWaferAnthropic, b.Provider)
-	assert.Equal(t, "Kimi-K3", b.UpstreamID)
+	assert.False(t, ok)
 
 	// deepseek-v4-flash: Makora leads, OpenRouter second, Wafer's fast-tier
 	// binding last; wafer_anthropic trails it.
@@ -614,7 +613,8 @@ func TestWaferPricing(t *testing.T) {
 		cacheRead float64
 	}{
 		{"z-ai/glm-5.3-flash", 0.150, 0.500, 0.03 / 0.150},
-		{"moonshotai/kimi-k3", 3.000, 15.000, 0.10},
+		// moonshotai/kimi-k3 is AIand-only since the 2026-10-04 roster decision;
+		// its AIand rates are pinned separately in TestAIandPricing.
 		{"deepseek/deepseek-v4-flash", 0.280, 0.560, 0.07 / 0.280},
 	}
 	for _, tc := range cases {
@@ -626,6 +626,36 @@ func TestWaferPricing(t *testing.T) {
 				assert.InDelta(t, tc.outputUSD, p.OutputUSDPer1M, 1e-9)
 				assert.InDelta(t, tc.cacheRead, p.CacheReadMultiplier, 1e-9)
 			}
+		})
+	}
+}
+
+// TestAIandPricing pins the per-1M rates and cache multipliers of the
+// AIand-only roster (live-probed 2026-10-04), since billing debits flow
+// straight through these numbers.
+func TestAIandPricing(t *testing.T) {
+	cases := []struct {
+		model     string
+		inputUSD  float64
+		outputUSD float64
+		cacheRead float64
+	}{
+		{"deepseek-ai/deepseek-v4-flash", 0.150, 0.250, 0.08 / 0.150},
+		{"deepseek-ai/deepseek-v4.1-flash", 0.300, 0.600, 0.02 / 0.300},
+		{"deepseek-ai/deepseek-v4-pro", 1.000, 2.500, 0.25},
+		{"zai-org/glm-5.3", 1.000, 4.000, 0.30},
+		{"zai-org/glm-5.3-flash", 0.150, 0.500, 0.03 / 0.150},
+		{"qwen/qwen3.8-27b", 0.400, 3.000, 0.20 / 0.400},
+		{"moonshotai/kimi-k3", 3.000, 12.500, 0.50 / 3.000},
+		{"motif-technologies/motif-3", 0.500, 2.000, 0.20 / 0.500},
+	}
+	for _, tc := range cases {
+		t.Run(tc.model, func(t *testing.T) {
+			p, ok := PriceFor(providers.ProviderAIAND, tc.model)
+			require.True(t, ok)
+			assert.InDelta(t, tc.inputUSD, p.InputUSDPer1M, 1e-9)
+			assert.InDelta(t, tc.outputUSD, p.OutputUSDPer1M, 1e-9)
+			assert.InDelta(t, tc.cacheRead, p.CacheReadMultiplier, 1e-9)
 		})
 	}
 }
