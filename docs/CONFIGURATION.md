@@ -48,7 +48,7 @@ Claude Code keep using the user's logged-in plan.
 The router can serve as an AIand-only product: every automatic route lands
 on the curated 8-model AIand roster (glm-5.3, glm-5.3-flash, kimi-k3,
 deepseek-v4-pro, v4-flash, v4.1-flash, qwen3.8-27b, motif-3). Enforcement
-lives in the cluster bundle's model registry (`artifacts/v0.78`), not in
+lives in the cluster bundle's model registry (`artifacts/v0.79`), not in
 catalog or env: boot registers every provider regardless of which API keys
 are wired, so the 8-model registry is what bounds the candidate pool. A
 vendor BYOK header cannot widen it either — the registry gates the pool
