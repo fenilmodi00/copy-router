@@ -7,7 +7,7 @@ export interface ModelPricing {
 	cacheReadMultiplier: number;
 }
 
-export const PRICING_VERSION = "catalog-sha256:9784eadb00c29643";
+export const PRICING_VERSION = "catalog-sha256:cd6d01a59a052760";
 
 export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = Object.freeze({
 	"claude-fable-5": { inputUsdPerMillion: 10, outputUsdPerMillion: 50, cacheReadMultiplier: 0.1 },
@@ -25,6 +25,9 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = Object.free
 	"claude-sonnet-4-6": { inputUsdPerMillion: 3, outputUsdPerMillion: 15, cacheReadMultiplier: 0.1 },
 	"claude-sonnet-5": { inputUsdPerMillion: 3, outputUsdPerMillion: 15, cacheReadMultiplier: 0.1 },
 	"claude-sonnet-5-5": { inputUsdPerMillion: 2, outputUsdPerMillion: 10, cacheReadMultiplier: 0.1 },
+	"deepseek-ai/deepseek-v4-flash": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.25, cacheReadMultiplier: 0.5333333333333333 },
+	"deepseek-ai/deepseek-v4-pro": { inputUsdPerMillion: 1, outputUsdPerMillion: 2.5, cacheReadMultiplier: 0.25 },
+	"deepseek-ai/deepseek-v4.1-flash": { inputUsdPerMillion: 0.3, outputUsdPerMillion: 0.6, cacheReadMultiplier: 0.06666666666666667 },
 	"deepseek/deepseek-v4-flash": { inputUsdPerMillion: 0.14, outputUsdPerMillion: 0.28, cacheReadMultiplier: 0.1 },
 	"deepseek/deepseek-v4-pro": { inputUsdPerMillion: 1.74, outputUsdPerMillion: 3.48, cacheReadMultiplier: 0.0862 },
 	"deepseek/deepseek-v4-pro-0813": { inputUsdPerMillion: 1.74, outputUsdPerMillion: 3.48, cacheReadMultiplier: 0.0862 },
@@ -80,7 +83,8 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = Object.free
 	"moonshotai/kimi-k2.5": { inputUsdPerMillion: 0.6, outputUsdPerMillion: 3, cacheReadMultiplier: 0.5 },
 	"moonshotai/kimi-k2.6": { inputUsdPerMillion: 0.95, outputUsdPerMillion: 4, cacheReadMultiplier: 0.1684 },
 	"moonshotai/kimi-k2.7": { inputUsdPerMillion: 0.95, outputUsdPerMillion: 4, cacheReadMultiplier: 0.2 },
-	"moonshotai/kimi-k3": { inputUsdPerMillion: 3, outputUsdPerMillion: 15, cacheReadMultiplier: 0.1 },
+	"moonshotai/kimi-k3": { inputUsdPerMillion: 3, outputUsdPerMillion: 12.5, cacheReadMultiplier: 0.16666666666666666 },
+	"motif-technologies/motif-3": { inputUsdPerMillion: 0.5, outputUsdPerMillion: 2, cacheReadMultiplier: 0.4 },
 	"muse-spark-1.3": { inputUsdPerMillion: 1.25, outputUsdPerMillion: 4.25, cacheReadMultiplier: 0.12 },
 	"qwen/qwen3-235b-a22b-2507": { inputUsdPerMillion: 0.2266, outputUsdPerMillion: 0.9064, cacheReadMultiplier: 0.5 },
 	"qwen/qwen3-30b-a3b-instruct-2507": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6, cacheReadMultiplier: 0.1684 },
@@ -90,6 +94,7 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = Object.free
 	"qwen/qwen3.5-flash-02-23": { inputUsdPerMillion: 0.05, outputUsdPerMillion: 0.15, cacheReadMultiplier: 0.1 },
 	"qwen/qwen3.6-35b-a3b": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 1, cacheReadMultiplier: 0.1 },
 	"qwen/qwen3.7-plus": { inputUsdPerMillion: 0.4, outputUsdPerMillion: 1.6, cacheReadMultiplier: 0.2 },
+	"qwen/qwen3.8-27b": { inputUsdPerMillion: 0.4, outputUsdPerMillion: 3, cacheReadMultiplier: 0.5 },
 	"qwen/qwen3.8-max": { inputUsdPerMillion: 2, outputUsdPerMillion: 6, cacheReadMultiplier: 0.125 },
 	"xiaomi/mimo-v2.5-pro": { inputUsdPerMillion: 1, outputUsdPerMillion: 3, cacheReadMultiplier: 0.1 },
 	"xiaomi/mimo-v2.6-flash": { inputUsdPerMillion: 0.14, outputUsdPerMillion: 0.28, cacheReadMultiplier: 0.02 },
@@ -99,4 +104,6 @@ export const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = Object.free
 	"z-ai/glm-5.2": { inputUsdPerMillion: 1.4, outputUsdPerMillion: 4.4, cacheReadMultiplier: 0.18571428571428572 },
 	"z-ai/glm-5.3": { inputUsdPerMillion: 1.4, outputUsdPerMillion: 4.4, cacheReadMultiplier: 0.18571428571428572 },
 	"z-ai/glm-5.3-flash": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.5, cacheReadMultiplier: 0.2 },
+	"zai-org/glm-5.3": { inputUsdPerMillion: 1, outputUsdPerMillion: 4, cacheReadMultiplier: 0.3 },
+	"zai-org/glm-5.3-flash": { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.5, cacheReadMultiplier: 0.2 },
 });

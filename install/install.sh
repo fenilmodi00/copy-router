@@ -5658,6 +5658,9 @@ prices='{
     "claude-sonnet-4-6":                0.003,
     "claude-sonnet-5":                  0.003,
     "claude-sonnet-5-5":                0.002,
+    "deepseek-ai/deepseek-v4-flash":    0.00015,
+    "deepseek-ai/deepseek-v4-pro":      0.001,
+    "deepseek-ai/deepseek-v4.1-flash":  0.0003,
     "deepseek/deepseek-v4-flash":       0.00014,
     "deepseek/deepseek-v4-pro":         0.00174,
     "deepseek/deepseek-v4-pro-0813":    0.00174,
@@ -5714,6 +5717,7 @@ prices='{
     "moonshotai/kimi-k2.6":             0.00095,
     "moonshotai/kimi-k2.7":             0.00095,
     "moonshotai/kimi-k3":               0.003,
+    "motif-technologies/motif-3":       0.0005,
     "muse-spark-1.3":                   0.00125,
     "qwen/qwen3-235b-a22b-2507":        0.0002266,
     "qwen/qwen3-30b-a3b-instruct-2507": 0.00015,
@@ -5723,6 +5727,7 @@ prices='{
     "qwen/qwen3.5-flash-02-23":         0.00005,
     "qwen/qwen3.6-35b-a3b":             0.00015,
     "qwen/qwen3.7-plus":                0.0004,
+    "qwen/qwen3.8-27b":                 0.0004,
     "qwen/qwen3.8-max":                 0.002,
     "xiaomi/mimo-v2.5-pro":             0.001,
     "xiaomi/mimo-v2.6-flash":           0.00014,
@@ -5731,7 +5736,9 @@ prices='{
     "z-ai/glm-5.1":                     0.0014,
     "z-ai/glm-5.2":                     0.0014,
     "z-ai/glm-5.3":                     0.0014,
-    "z-ai/glm-5.3-flash":               0.00015
+    "z-ai/glm-5.3-flash":               0.00015,
+    "zai-org/glm-5.3":                  0.001,
+    "zai-org/glm-5.3-flash":            0.00015
   },
   "output": {
     "claude-fable-5":                   0.05,
@@ -5749,6 +5756,9 @@ prices='{
     "claude-sonnet-4-6":                0.015,
     "claude-sonnet-5":                  0.015,
     "claude-sonnet-5-5":                0.01,
+    "deepseek-ai/deepseek-v4-flash":    0.00025,
+    "deepseek-ai/deepseek-v4-pro":      0.0025,
+    "deepseek-ai/deepseek-v4.1-flash":  0.0006,
     "deepseek/deepseek-v4-flash":       0.00028,
     "deepseek/deepseek-v4-pro":         0.00348,
     "deepseek/deepseek-v4-pro-0813":    0.00348,
@@ -5804,7 +5814,8 @@ prices='{
     "moonshotai/kimi-k2.5":             0.003,
     "moonshotai/kimi-k2.6":             0.004,
     "moonshotai/kimi-k2.7":             0.004,
-    "moonshotai/kimi-k3":               0.015,
+    "moonshotai/kimi-k3":               0.0125,
+    "motif-technologies/motif-3":       0.002,
     "muse-spark-1.3":                   0.00425,
     "qwen/qwen3-235b-a22b-2507":        0.0009064,
     "qwen/qwen3-30b-a3b-instruct-2507": 0.0006,
@@ -5814,6 +5825,7 @@ prices='{
     "qwen/qwen3.5-flash-02-23":         0.00015,
     "qwen/qwen3.6-35b-a3b":             0.001,
     "qwen/qwen3.7-plus":                0.0016,
+    "qwen/qwen3.8-27b":                 0.003,
     "qwen/qwen3.8-max":                 0.006,
     "xiaomi/mimo-v2.5-pro":             0.003,
     "xiaomi/mimo-v2.6-flash":           0.00028,
@@ -5822,7 +5834,9 @@ prices='{
     "z-ai/glm-5.1":                     0.0044,
     "z-ai/glm-5.2":                     0.0044,
     "z-ai/glm-5.3":                     0.0044,
-    "z-ai/glm-5.3-flash":               0.0005
+    "z-ai/glm-5.3-flash":               0.0005,
+    "zai-org/glm-5.3":                  0.004,
+    "zai-org/glm-5.3-flash":            0.0005
   },
   "cache_read": {
     "claude-fable-5":                   0.1,
@@ -5840,6 +5854,9 @@ prices='{
     "claude-sonnet-4-6":                0.1,
     "claude-sonnet-5":                  0.1,
     "claude-sonnet-5-5":                0.1,
+    "deepseek-ai/deepseek-v4-flash":    0.5333333333333333,
+    "deepseek-ai/deepseek-v4-pro":      0.25,
+    "deepseek-ai/deepseek-v4.1-flash":  0.06666666666666667,
     "deepseek/deepseek-v4-flash":       0.1,
     "deepseek/deepseek-v4-pro":         0.0862,
     "deepseek/deepseek-v4-pro-0813":    0.0862,
@@ -5895,7 +5912,8 @@ prices='{
     "moonshotai/kimi-k2.5":             0.5,
     "moonshotai/kimi-k2.6":             0.1684,
     "moonshotai/kimi-k2.7":             0.2,
-    "moonshotai/kimi-k3":               0.1,
+    "moonshotai/kimi-k3":               0.16666666666666666,
+    "motif-technologies/motif-3":       0.4,
     "muse-spark-1.3":                   0.12,
     "qwen/qwen3-235b-a22b-2507":        0.5,
     "qwen/qwen3-30b-a3b-instruct-2507": 0.1684,
@@ -5905,6 +5923,7 @@ prices='{
     "qwen/qwen3.5-flash-02-23":         0.1,
     "qwen/qwen3.6-35b-a3b":             0.1,
     "qwen/qwen3.7-plus":                0.2,
+    "qwen/qwen3.8-27b":                 0.5,
     "qwen/qwen3.8-max":                 0.125,
     "xiaomi/mimo-v2.5-pro":             0.1,
     "xiaomi/mimo-v2.6-flash":           0.02,
@@ -5913,7 +5932,9 @@ prices='{
     "z-ai/glm-5.1":                     0.18571428571428572,
     "z-ai/glm-5.2":                     0.18571428571428572,
     "z-ai/glm-5.3":                     0.18571428571428572,
-    "z-ai/glm-5.3-flash":               0.2
+    "z-ai/glm-5.3-flash":               0.2,
+    "zai-org/glm-5.3":                  0.3,
+    "zai-org/glm-5.3-flash":            0.2
   }
 }'
 # END_GENERATED_PRICES

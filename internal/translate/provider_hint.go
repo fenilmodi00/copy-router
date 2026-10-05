@@ -58,12 +58,14 @@ func isGLM51(model string) bool {
 	return model == "z-ai/glm-5.1"
 }
 
-// isGLM53Flash reports whether the model id is z-ai/glm-5.3-flash. Like
-// GLM-5.1 it needs tool_stream=true opted in (docs.z.ai/guides/vlm/glm-5.3-flash).
-// Unlike GLM-5.1, thinking can't be disabled, so it's absent from
-// openRouterReasoningHint and gets no chat_template_kwargs handling.
+// isGLM53Flash reports whether the model id is GLM-5.3-Flash under either
+// known namespace: z-ai/ (OpenRouter and friends) or zai-org/ (AIand's
+// catalog form). Like GLM-5.1 it needs tool_stream=true opted in
+// (docs.z.ai/guides/vlm/glm-5.3-flash). Unlike GLM-5.1, thinking can't be
+// disabled, so it's absent from openRouterReasoningHint and gets no
+// chat_template_kwargs handling.
 func isGLM53Flash(model string) bool {
-	return model == "z-ai/glm-5.3-flash"
+	return model == "z-ai/glm-5.3-flash" || model == "zai-org/glm-5.3-flash"
 }
 
 // isQwen3Family reports whether the model id belongs to the qwen3.x family.

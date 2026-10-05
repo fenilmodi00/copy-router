@@ -41,6 +41,28 @@ Claude Code keep using the user's logged-in plan.
 | `MINIMAX_API_KEY`     | *(none)*                                                   | Enables the native MiniMax provider through its OpenAI-compatible API. |
 | `MINIMAX_REGION`      | `global`                                                   | Set to `cn` (or `china`) to use the mainland-China endpoint. |
 | `MINIMAX_BASE_URL`    | regional default                                           | Override the MiniMax endpoint; defaults to `https://api.minimax.io/v1` globally or `https://api.minimaxi.com/v1` for mainland China. |
+| `AIAND_API_KEY`       | *(none)*                                                   | Enables the AIand provider (api.aiand.com), serving its open-weights catalog through an OpenAI-compatible API. |
+| `AIAND_BASE_URL`      | `https://api.aiand.com/v1`                                 | Override for the AIand endpoint. |
+## AIand-only deployment
+
+The router can serve as an AIand-only product: every automatic route lands
+on the curated 8-model AIand roster (glm-5.3, glm-5.3-flash, kimi-k3,
+deepseek-v4-pro, v4-flash, v4.1-flash, qwen3.8-27b, motif-3). Enforcement
+lives in the cluster bundle's model registry (`artifacts/v0.79`), not in
+catalog or env: boot registers every provider regardless of which API keys
+are wired, so the 8-model registry is what bounds the candidate pool. A
+vendor BYOK header cannot widen it either — the registry gates the pool
+before provider eligibility is consulted.
+
+Recommended settings:
+
+| Variable | Value | Why |
+|---|---|---|
+| `AIAND_API_KEY` | your key | the only provider key needed |
+| `ROUTER_DEFAULT_BASELINE_MODEL` | `zai-org/glm-5.3` | savings math compares against the roster's frontier anchor instead of an Anthropic price the deploy cannot serve |
+| `ROUTER_HARD_PIN_MODEL` | `deepseek-ai/deepseek-v4-flash` | compaction/explore utility turns stay on AIand's fast lane instead of the default Anthropic fallback |
+| `ROUTER_EXCLUDED_PROVIDERS` | comma list of the 16 non-aiand providers | optional hard pin that also blocks per-request vendor BYOK widening |
+
 | `ROUTER_SUBSCRIPTION_POOLS_ENABLED` | `false`                                         | Enables encrypted server-side subscription enrollment and account-management endpoints. Set `false` as the emergency pool-disable switch. |
 | `WEAVE_CODEX_OAUTH_ISSUER` | `https://auth.openai.com` | Optional Codex OAuth issuer override for self-hosted testing. |
 | `WEAVE_ANTHROPIC_OAUTH_AUTHORIZE` | `https://claude.ai/oauth/authorize` | Optional Claude OAuth authorization endpoint override used by the enrollment CLI. |

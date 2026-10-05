@@ -403,6 +403,16 @@ func main() {
 	}
 
 	{
+		// AIand serves slash-form catalog IDs natively — plain NewClient, no model ID map.
+		aiandBaseURL := config.GetOr("AIAND_BASE_URL", openaiCompatProvider.AIANDBaseURL)
+		registerDeploymentKeyedProvider(providerMap, envKeyedProviders, logger,
+			providers.ProviderAIAND, "AIand", "AIAND_API_KEY", aiandBaseURL, byokOnly,
+			func(key, baseURL string) providers.Client {
+				return openaiCompatProvider.NewClient(key, baseURL, openaiCompatProvider.WithModelListHTTPClient(discoveryHTTPClient))
+			})
+	}
+
+	{
 		// Wafer-ZDR: required — Wafer rejects requests whose model doesn't
 		// support ZDR rather than serve them without retention.
 		waferBaseURL := config.GetOr("WAFER_BASE_URL", openaiCompatProvider.WaferBaseURL)

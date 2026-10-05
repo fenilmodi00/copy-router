@@ -66,6 +66,23 @@ func TestGLM53FlashFlags_ClientSetToolStreamPreserved(t *testing.T) {
 	assert.Equal(t, false, out["tool_stream"], "client-set tool_stream=false must be preserved")
 }
 
+func TestGLM53FlashFlags_AiandNamespace_ToolStreamSet(t *testing.T) {
+	// zai-org/glm-5.3-flash is the same weights on AIand's catalog form;
+	// the tool_stream directive must fire there too.
+	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
+	env, err := translate.ParseOpenAI(body)
+	require.NoError(t, err)
+	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
+		TargetModel:    "zai-org/glm-5.3-flash",
+		TargetProvider: providers.ProviderAIAND,
+		Capabilities:   router.Lookup("zai-org/glm-5.3-flash"),
+	})
+	require.NoError(t, err)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(prep.Body, &out))
+	assert.Equal(t, true, out["tool_stream"], "zai-org/glm-5.3-flash must receive tool_stream=true")
+}
+
 func TestGLM53FlashFlags_NotAppliedToOtherModels(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
 	env, err := translate.ParseOpenAI(body)

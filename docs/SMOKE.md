@@ -84,6 +84,7 @@ path-gated run — it replays what's already checked in. Keys are only needed to
 make smoke                                          # replay-only, no key needed
 ANTHROPIC_API_KEY=sk-ant-… SMOKE_PROXY_MODE=record make smoke   # refresh Anthropic cassettes
 ANTHROPIC_API_KEY=sk-ant-… OPENAI_API_KEY=sk-… SMOKE_PROXY_MODE=record make smoke   # refresh both providers' cassettes
+AIAND_API_KEY=… SMOKE_PROXY_MODE=record make smoke   # refresh AIand cassettes (auto-model turn)
 ```
 
 That runs `scripts/smoke/run.sh`, which:
@@ -100,7 +101,7 @@ That runs `scripts/smoke/run.sh`, which:
    route. A fixed-destination BusyBox TCP relay (from the existing Postgres image)
    joins a separate ingress network and publishes only a loopback port. It forwards
    only to `server:8080`; neither runtime service joins the ingress network.
-   Explicit recording supplies only exported Anthropic/OpenAI credentials and
+   Explicit recording supplies only exported Anthropic/OpenAI/AIand credentials and
    allows egress/cassette writes. Building images may download dependencies in
    either mode; zero provider calls is not zero build-network access.
    Direct execution uses the same child-environment safety rules as the agent
@@ -164,8 +165,9 @@ when Compose is installed, verify the actual merged config without a daemon.
 `replay-only` runs make zero upstream calls. `record`/`replay-or-record` pin
 most Anthropic scenarios to the cheapest model (`claude-haiku-4-5`); the
 mid-conversation tool-change scenario uses `claude-opus-5`, the minimum model
-that supports that beta. OpenAI scenarios use the cheapest reasoning tier
-(`gpt-5.4-nano`). All pins use `x-weave-force-model` and cap `max_tokens` — a
+(`gpt-5.4-nano`). The AIand scenario is an auto-model turn (no pin):
+the registry scorer's pick is served and recorded, so a refresh is one
+AIand call. All pins use `x-weave-force-model` and cap `max_tokens` — a
 full refresh is ~15 real calls across both providers, a few cents. Skip
 recording OpenAI by omitting
 `OPENAI_API_KEY`; `smoke/openai_test.go` skips itself
@@ -181,6 +183,7 @@ recording OpenAI by omitting
 | `smoke/streaming_test.go` | tool-use stream lifecycle: balanced `content_block_start/stop`, exactly one `message_stop`, `stop_reason` present |
 | `smoke/tool_delta_test.go` | non-system `tool_addition` and `tool_removal` blocks are normalized and accepted by Anthropic |
 | `smoke/openai_test.go` | OpenAI Responses-API translation path (gpt-5.x + tools): a genuinely typeless optional tool param round-trips without a 400; basic turn served correctly |
+| `smoke/aiand_test.go` | AIand-only deployment invariants: an auto-model request is served by a v0.78 registry model via the `aiand` decision provider, and a vendor BYOK key cannot widen the roster |
 
 ## Regression proof
 
@@ -213,7 +216,7 @@ old fixture mismatch, or build failure is not a successful fail-before proof.
 3. Keep it cheap: pin the cheap tier for whichever provider you're targeting,
    cap `max_tokens`, avoid multi-turn loops.
 4. Record the new cassette: `ANTHROPIC_API_KEY=… [OPENAI_API_KEY=…]
-   SMOKE_PROXY_MODE=record make smoke`, then review and commit the new
+   [AIAND_API_KEY=…] SMOKE_PROXY_MODE=record make smoke`, then review and commit the new
    file(s) under `smoke/mitmproxy/cassettes/`.
 
 ## Refreshing cassettes

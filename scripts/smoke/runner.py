@@ -114,6 +114,9 @@ class SmokeRun:
             self.record_credentials["SMOKE_RECORD_OPENAI_KEY"] = os.environ.get(
                 "OPENAI_API_KEY", ""
             )
+            self.record_credentials["SMOKE_RECORD_AIAND_KEY"] = os.environ.get(
+                "AIAND_API_KEY", ""
+            )
 
     def command(
         self,
@@ -252,6 +255,9 @@ class SmokeRun:
             ),
             "OPENAI_API_KEY": (
                 PLACEHOLDER_KEY if replay else "${SMOKE_RECORD_OPENAI_KEY:-}"
+            ),
+            "AIAND_API_KEY": (
+                PLACEHOLDER_KEY if replay else "${SMOKE_RECORD_AIAND_KEY:-}"
             ),
         }
         lines = ["services:"]
