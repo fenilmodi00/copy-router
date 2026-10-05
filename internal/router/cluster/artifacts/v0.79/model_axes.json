@@ -138,7 +138,7 @@
       "output_per_1k_usd": 0.004,
       "tps": 71.4,
       "ttft_s": 2.84,
-      "verbosity_tokens": 562.5680555555556
+      "verbosity_tokens": 668.2699055330635
     },
     "zai-org/glm-5.3-flash": {
       "input_per_1k_usd": 0.00015,
@@ -194,7 +194,7 @@
       "output_per_1k_usd": 0.003,
       "tps": 45.8,
       "ttft_s": 3.79,
-      "verbosity_tokens": 448.9970631424376
+      "verbosity_tokens": 723.9972413793104
     },
     "motif-technologies/motif-3": {
       "input_per_1k_usd": 0.0005,
