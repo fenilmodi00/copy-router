@@ -106,12 +106,16 @@ def embed(texts: list[str]) -> np.ndarray:
 
 
 def load_centroids() -> np.ndarray:
+    # CRT1 (artifacts.go): magic[4] "CRT1", version u32, k u32, dim u32,
+    # then k*dim little-endian float32 — data starts at offset 16.
     raw = (SRC / "centroids.bin").read_bytes()
     assert raw[:4] == b"CRT1", "bad centroids magic"
-    k = int.from_bytes(raw[5:9], "little")
-    dim = int.from_bytes(raw[9:13], "little")
+    version = int.from_bytes(raw[4:8], "little")
+    assert version == 1, f"unsupported centroids version {version}"
+    k = int.from_bytes(raw[8:12], "little")
+    dim = int.from_bytes(raw[12:16], "little")
     assert k == K and dim == 768, f"unexpected geometry k={k} dim={dim}"
-    arr = np.frombuffer(raw[13:13 + k * dim * 4], dtype="<f4").reshape(k, dim).copy()
+    arr = np.frombuffer(raw[16:16 + k * dim * 4], dtype="<f4").reshape(k, dim).copy()
     arr /= np.clip(np.linalg.norm(arr, axis=1, keepdims=True), EPS, None)
     return arr
 
@@ -173,22 +177,27 @@ def main():
     # --- 3. per-prompt z-score across model columns, then shrunk cluster means
     # z per prompt over the models present; prompts with <2 models or no
     # variance contribute 0 for all.
+    # Score rows can be None (truncated/failed generations are skipped by
+    # the evaluator); treat None as absent so the prompt's z-score uses only
+    # models with real scores, and drop prompts with fewer than 2 scored
+    # models (no discriminative signal).
     z_scores: dict[str, dict[str, float]] = {}
     for p, models_scores in by_prompt.items():
-        ms = [m for m in MODELS if m in models_scores]
+        scored = {m: v for m, v in models_scores.items() if v is not None}
+        ms = [m for m in MODELS if m in scored]
         if len(ms) < 2:
-            z_scores[p] = {m: 0.0 for m in MODELS}
-            continue
-        vals = np.array([models_scores[m] for m in ms], dtype=np.float64)
+            continue  # no signal: exclude the prompt entirely
+        vals = np.array([scored[m] for m in ms], dtype=np.float64)
         std = vals.std()
         if std < EPS:
-            z_scores[p] = {m: 0.0 for m in MODELS}
-            continue
+            continue  # all models agree: no signal
         z = (vals - vals.mean()) / std
-        z_scores[p] = {m: (float(z[i]) if m in models_scores else 0.0) for i, m in enumerate(ms)}
+        z_scores[p] = {m: (float(z[i]) if m in scored else 0.0) for i, m in enumerate(ms)}
+    prompts = [p for p in prompts if p in z_scores]
+    print(f"z-scored prompts: {len(prompts)} of {len(by_prompt)}")
 
     # per-model global mean (over all prompts), then per-cluster shrunk mean
-    global_mean = {m: float(np.mean([z_scores[p][m] for p in prompts])) for m in MODELS}
+    global_mean = {m: float(np.mean([z_scores[p].get(m, 0.0) for p in prompts])) for m in MODELS}
     cluster_cells = {k: {} for k in range(K)}
     for k in range(K):
         ps = [p for p in prompts if assign[p] == k]
@@ -196,7 +205,7 @@ def main():
             if not ps:
                 cluster_cells[k][m] = 0.0
                 continue
-            mean = float(np.mean([z_scores[p][m] for p in ps]))
+            mean = float(np.mean([z_scores[p].get(m, 0.0) for p in ps]))
             cluster_cells[k][m] = (len(ps) * mean + SHRINKAGE_K0 * global_mean[m]) / (len(ps) + SHRINKAGE_K0)
 
     # --- 4. load v0.78 bundle, swap AIand cells, regenerate
