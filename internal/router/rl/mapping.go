@@ -30,16 +30,10 @@ func rosterIDFor(m catalog.Model) string {
 		return m.ID
 	}
 	switch m.PrimaryProvider() {
-	case providers.ProviderAnthropic, providers.ProviderAnthropicGateway:
-		// A gateway serves the Claude family unchanged, so a gateway-primary
-		// binding maps onto the same roster slug as the direct Anthropic one.
+	case providers.ProviderAnthropic:
 		return "anthropic/" + m.ID
 	case providers.ProviderOpenAI:
 		return "openai/" + m.ID
-	case providers.ProviderGoogle:
-		return "google/" + m.ID
-	case providers.ProviderXAI:
-		return "x-ai/" + m.ID
 	}
 	return m.ID
 }

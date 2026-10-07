@@ -18,7 +18,7 @@ func TestDeployedModelsForRosterIDs_MapsRosterSlugsToCatalogEntries(t *testing.T
 		"openai/gpt-5.6-sol-pro",
 		"openai/gpt-5.6-luna-pro",
 		"anthropic/claude-opus-4.8",
-		"deepseek/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-flash",
 		"x-ai/grok-4.6",
 		"x-ai/grok-4.7",
 	})
@@ -32,14 +32,15 @@ func TestDeployedModelsForRosterIDs_MapsRosterSlugsToCatalogEntries(t *testing.T
 	assert.Equal(t, providers.ProviderOpenAI, byModel["gpt-5.6-sol-pro"])
 	assert.Equal(t, providers.ProviderOpenAI, byModel["gpt-5.6-luna-pro"])
 	assert.Equal(t, providers.ProviderAnthropic, byModel["claude-opus-4-8"])
-	// Bare first-party xAI IDs map through an explicit roster alias; the
-	// provider is the native xAI binding.
-	assert.Equal(t, providers.ProviderXAI, byModel["grok-4.6"])
-	assert.Equal(t, providers.ProviderXAI, byModel["grok-4.7"])
+	// Bare first-party xAI IDs map through an explicit roster alias, so they
+	// stay roster-addressable; the catalog row itself has no provider binding
+	// after the AIand-only cut, so the deployed entry carries an empty provider.
+	assert.Empty(t, byModel["grok-4.6"])
+	assert.Empty(t, byModel["grok-4.7"])
 	// OSS slugs already carry their provider prefix, so the roster_id equals
 	// the catalog ID; provider is whatever the catalog lists first.
-	require.Contains(t, byModel, "deepseek/deepseek-v4-flash")
-	assert.NotEmpty(t, byModel["deepseek/deepseek-v4-flash"])
+	require.Contains(t, byModel, "deepseek-ai/deepseek-v4-flash")
+	assert.Equal(t, providers.ProviderAIAND, byModel["deepseek-ai/deepseek-v4-flash"])
 }
 
 func TestDeployedModelsForRosterIDs_PreservesOrderAndDropsUnknown(t *testing.T) {

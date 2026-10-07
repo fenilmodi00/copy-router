@@ -222,7 +222,10 @@ func sourceNativeConstraint(req router.TranslationRequirements, code string) (tr
 		}
 		return constraint, true
 	case router.WireFormatGemini:
-		return translationConstraint{Code: code, TargetFamily: providers.FamilyGemini, ExactProviders: singletonProviderSet(providers.ProviderGoogle)}, true
+		// No provider speaks FamilyGemini in the AIand-only build; the family
+		// constraint (rather than a pinned provider) still keeps a Gemini-format
+		// source from being offered a foreign-family target.
+		return translationConstraint{Code: code, TargetFamily: providers.FamilyGemini}, true
 	default:
 		return translationConstraint{}, false
 	}

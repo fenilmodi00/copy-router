@@ -530,22 +530,22 @@ func TestProxyMessages_BaselineOverloadExhaustionDoesNotDisableAnthropic(t *test
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:      providers.ProviderFireworks,
+		Provider:      providers.ProviderOpenAI,
 		Model:         "deepseek/deepseek-v4-pro",
 		Reason:        "fresh",
 		PinnedUntil:   time.Now().Add(30 * time.Minute),
 		FirstPinnedAt: time.Now().Add(-5 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderFireworks, Model: "deepseek/deepseek-v4-pro", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "deepseek/deepseek-v4-pro", Reason: "fresh"}}
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderFireworks: openaicompat.NewClient("test-fw-key", ossUpstream.URL),
+			providers.ProviderOpenAI:    openaicompat.NewClient("test-fw-key", ossUpstream.URL),
 			providers.ProviderAnthropic: anthropic.NewClient("test-key", anthropicUpstream.URL),
 		},
 		nil, false, nil, store, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
-		providers.ProviderFireworks: {},
+		providers.ProviderOpenAI:    {},
 		providers.ProviderAnthropic: {},
 	}).WithPlannerEnabled(false).
 		WithRetrySleep(noRetrySleep)
@@ -591,38 +591,37 @@ func TestProxyMessages_ResponsesFailureBeforeOutputFallsBackToBaseline(t *testin
 	}))
 	defer openAIUpstream.Close()
 
+	// The AIand baseline is OpenAI-compatible: it answers with a
+	// chat-completions stream, which the proxy translates back for the client.
 	baseline := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_baseline\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-opus-4-8\"}}\n\n")
-		_, _ = io.WriteString(w, "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n")
-		_, _ = io.WriteString(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"recovered\"}}\n\n")
-		_, _ = io.WriteString(w, "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n")
-		_, _ = io.WriteString(w, "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n\n")
-		_, _ = io.WriteString(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+		_, _ = io.WriteString(w, `data: {"id":"chatcmpl_baseline","object":"chat.completion.chunk","created":1,"model":"zai-org/glm-5.3","choices":[{"index":0,"delta":{"role":"assistant","content":"recovered"},"finish_reason":null}]}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"id":"chatcmpl_baseline","object":"chat.completion.chunk","created":1,"model":"zai-org/glm-5.3","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1}}`+"\n\n")
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
 	}}
 
 	svc := proxy.NewService(
 		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.5", Reason: "test"}},
 		map[string]providers.Client{
-			providers.ProviderOpenAI:    openai.NewClient("test-key", openAIUpstream.URL),
-			providers.ProviderAnthropic: baseline,
+			providers.ProviderOpenAI: openai.NewClient("test-key", openAIUpstream.URL),
+			providers.ProviderAIAND:  baseline,
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
-		providers.ProviderOpenAI:    {},
-		providers.ProviderAnthropic: {},
+		providers.ProviderOpenAI: {},
+		providers.ProviderAIAND:  {},
 	}).WithRetrySleep(noRetrySleep)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"claude-opus-4-8","stream":true,"tools":[{"name":"Read","input_schema":{"type":"object","properties":{"file_path":{"type":"string"}},"required":["file_path"]}}],"messages":[{"role":"user","content":"inspect this"}]}`)
+	body := []byte(`{"model":"zai-org/glm-5.3","stream":true,"tools":[{"name":"Read","input_schema":{"type":"object","properties":{"file_path":{"type":"string"}},"required":["file_path"]}}],"messages":[{"role":"user","content":"inspect this"}]}`)
 
 	require.NoError(t, svc.ProxyMessages(context.Background(), body, rec, req))
 	mu.Lock()
 	assert.GreaterOrEqual(t, openAICalls, 1)
 	mu.Unlock()
-	require.Len(t, baseline.proxyBodies, 1, "pre-output Responses failure must retry on the requested Anthropic model")
+	require.Len(t, baseline.proxyBodies, 1, "pre-output Responses failure must retry on the requested AIand model")
 	assert.Contains(t, rec.Body.String(), "recovered")
 	assert.Contains(t, rec.Body.String(), "event: message_stop")
 	assert.NotContains(t, rec.Body.String(), "event: error")
@@ -630,7 +629,7 @@ func TestProxyMessages_ResponsesFailureBeforeOutputFallsBackToBaseline(t *testin
 
 // A routed model with a larger window than the requested baseline can carry a
 // prompt the baseline cannot; a pre-commit exhaustion on the routed model must
-// not rescue onto a baseline that Anthropic would 400 as "prompt is too long".
+// not rescue onto a baseline AIand would 400 as "prompt is too long".
 func TestProxyMessages_BaselineFailoverSkipsBaselineOverContextWindow(t *testing.T) {
 	openAIUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -643,18 +642,18 @@ func TestProxyMessages_BaselineFailoverSkipsBaselineOverContextWindow(t *testing
 	svc := proxy.NewService(
 		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.5", Reason: "test"}},
 		map[string]providers.Client{
-			providers.ProviderOpenAI:    openai.NewClient("test-key", openAIUpstream.URL),
-			providers.ProviderAnthropic: baseline,
+			providers.ProviderOpenAI: openai.NewClient("test-key", openAIUpstream.URL),
+			providers.ProviderAIAND:  baseline,
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
-		providers.ProviderOpenAI:    {},
-		providers.ProviderAnthropic: {},
+		providers.ProviderOpenAI: {},
+		providers.ProviderAIAND:  {},
 	}).WithRetrySleep(noRetrySleep)
 
-	// ~230K estimated tokens: fits gpt-5.5 (1.05M) but not claude-haiku-4-5 (200K).
-	filler := strings.Repeat("tool output line ", 230_000*4/len("tool output line "))
-	body := []byte(`{"model":"claude-haiku-4-5","stream":true,"messages":[{"role":"user","content":"` + filler + `"}]}`)
+	// ~300K estimated tokens: fits gpt-5.5 (1.05M) but not qwen3.8-27b (262K).
+	filler := strings.Repeat("tool output line ", 300_000*4/len("tool output line "))
+	body := []byte(`{"model":"qwen/qwen3.8-27b","stream":true,"messages":[{"role":"user","content":"` + filler + `"}]}`)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
@@ -687,88 +686,7 @@ func (c *sequencedClient) Passthrough(_ context.Context, _ providers.PreparedReq
 	return nil
 }
 
-// TestProxyMessages_GeminiValidated400RetriesWithAuto reproduces Jerry's
-// "Request contains an invalid argument" session: a tools-with-no-forced-choice
-// Gemini 3.x turn goes out under functionCallingConfig.mode=VALIDATED, Gemini
-// can't compile a tool schema into its decode grammar and 400s the whole
-// request pre-commit, and the router rescues it by re-emitting the SAME tools
-// under mode=AUTO. Asserts both attempts fire, the second carries AUTO, and the
-// client sees a clean Anthropic stream rather than the upstream 400.
-func TestProxyMessages_GeminiValidated400RetriesWithAuto(t *testing.T) {
-	geminiSSE := `data: {"candidates":[{"content":{"parts":[{"text":"I am an AI assistant."}],"role":"model"},"index":0}]}` + "\n\n" +
-		`data: {"candidates":[{"content":{"parts":[]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":4,"totalTokenCount":9}}` + "\n\n"
-
-	client := &sequencedClient{
-		responses: []func(w http.ResponseWriter) error{
-			// Call 1: VALIDATED-mode INVALID_ARGUMENT, pre-commit (no write).
-			func(http.ResponseWriter) error {
-				return &providers.UpstreamStatusError{Status: http.StatusBadRequest}
-			},
-			// Call 2: AUTO mode compiles fine and streams a valid response.
-			func(w http.ResponseWriter) error {
-				w.WriteHeader(http.StatusOK)
-				_, _ = io.WriteString(w, geminiSSE)
-				return nil
-			},
-		},
-	}
-
-	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderGoogle, Model: "gemini-3.1-pro-preview"}},
-		map[string]providers.Client{providers.ProviderGoogle: client},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderGoogle: {}})
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"gemini-3.1-pro-preview","stream":true,` +
-		`"tools":[{"name":"Read","input_schema":{"type":"object","properties":{"file_path":{"type":"string"}},"required":["file_path"]}}],` +
-		`"messages":[{"role":"user","content":"who are you"}]}`)
-
-	err := svc.ProxyMessages(context.Background(), body, rec, req)
-	require.NoError(t, err, "the AUTO-mode retry must rescue a VALIDATED-mode 400")
-
-	require.Len(t, client.bodies, 2, "first VALIDATED attempt 400s, second AUTO attempt runs")
-	assert.Contains(t, string(client.bodies[0]), `"mode":"VALIDATED"`, "first attempt requested VALIDATED decoding")
-	assert.Contains(t, string(client.bodies[1]), `"mode":"AUTO"`, "the retry downgraded the tool mode to AUTO")
-	assert.NotContains(t, string(client.bodies[1]), `"mode":"VALIDATED"`)
-
-	respBody := rec.Body.String()
-	assert.Contains(t, respBody, "event: message_start", "client sees the rescued Anthropic stream")
-	assert.Contains(t, respBody, "event: message_stop")
-}
-
-// TestProxyMessages_GeminiNon400NotRetried guards the gate: a non-400 Gemini
-// error (e.g. 503) must NOT trigger the AUTO downgrade — that path is reserved
-// for VALIDATED-mode schema-grammar rejections, and re-emitting would waste an
-// upstream call.
-func TestProxyMessages_GeminiNon400NotRetried(t *testing.T) {
-	client := &sequencedClient{
-		responses: []func(w http.ResponseWriter) error{
-			func(http.ResponseWriter) error {
-				return &providers.UpstreamStatusError{Status: http.StatusServiceUnavailable}
-			},
-		},
-	}
-
-	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderGoogle, Model: "gemini-3.1-pro-preview"}},
-		map[string]providers.Client{providers.ProviderGoogle: client},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderGoogle: {}})
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"gemini-3.1-pro-preview","stream":true,` +
-		`"tools":[{"name":"Read","input_schema":{"type":"object","properties":{"file_path":{"type":"string"}},"required":["file_path"]}}],` +
-		`"messages":[{"role":"user","content":"who are you"}]}`)
-
-	_ = svc.ProxyMessages(context.Background(), body, rec, req)
-
-	assert.Len(t, client.bodies, 1, "a 503 is not a VALIDATED-schema 400 — no AUTO retry")
-}
-
-// TestProxyMessages_OutputConfigFormat400RetriesWithoutIt reproduces a gateway
+// TestProxyMessages_OutputConfigFormat400RetriesWithoutIt reproduces an upstream
 // 400 on output_config.format (Cortex documents the knob, so it goes out as
 // written; only a rejection licenses one re-emit without it).
 func TestProxyMessages_OutputConfigFormat400RetriesWithoutIt(t *testing.T) {
@@ -794,10 +712,10 @@ func TestProxyMessages_OutputConfigFormat400RetriesWithoutIt(t *testing.T) {
 	}
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropicGateway, Model: "claude-sonnet-5"}},
-		map[string]providers.Client{providers.ProviderAnthropicGateway: client},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-5"}},
+		map[string]providers.Client{providers.ProviderAnthropic: client},
 		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropicGateway: {}})
+	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
@@ -829,10 +747,10 @@ func TestProxyMessages_UnrelatedAnthropic400NotRetried(t *testing.T) {
 	}
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropicGateway, Model: "claude-sonnet-5"}},
-		map[string]providers.Client{providers.ProviderAnthropicGateway: client},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-5"}},
+		map[string]providers.Client{providers.ProviderAnthropic: client},
 		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropicGateway: {}})
+	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))

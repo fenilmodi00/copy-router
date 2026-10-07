@@ -18,7 +18,6 @@ import (
 	"weave-os/router/internal/proxy"
 	"weave-os/router/internal/router"
 	"weave-os/router/internal/router/cluster"
-	"weave-os/router/internal/router/policy"
 	"weave-os/router/internal/router/sessionpin"
 	"weave-os/router/internal/translate"
 
@@ -26,6 +25,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// titleGenBody is Claude Code's sidebar-title call: no tools, title
+// json_schema output config.
+const titleGenBody = `{"model":"claude-haiku-4-5","max_tokens":32,"messages":[{"role":"user","content":"hello"}],` +
+	`"output_config":{"format":{"type":"json_schema","schema":{"properties":{"title":{"type":"string"}}}}}}`
 
 type fakePinStore struct {
 	mu                     sync.Mutex
@@ -562,21 +566,21 @@ func TestService_HardPin_Compaction_ByokOnly_UsesRequestResolver(t *testing.T) {
 		if _, ok := req.EnabledProviders[providers.ProviderAnthropic]; ok {
 			return providers.ProviderAnthropic, "claude-haiku-anthropic-byok", true
 		}
-		if _, ok := req.EnabledProviders[providers.ProviderOpenRouter]; ok {
-			return providers.ProviderOpenRouter, "deepseek/cheap", true
+		if _, ok := req.EnabledProviders[providers.ProviderOpenAI]; ok {
+			return providers.ProviderOpenAI, "gpt-5.6-sol", true
 		}
 		return "", "", false
 	}
 
 	providerMap := map[string]providers.Client{
-		providers.ProviderAnthropic:  &fakeProvider{},
-		providers.ProviderOpenRouter: &fakeProvider{},
+		providers.ProviderAnthropic: &fakeProvider{},
+		providers.ProviderOpenAI:    &fakeProvider{},
 	}
-	// Boot-time hard-pin points at OpenRouter; resolver must override to
+	// Boot-time hard-pin points at OpenAI; resolver must override to
 	// Anthropic since the installation only BYOKs Anthropic.
 	svc := proxy.NewService(
 		fr, providerMap, nil, false, nil, store, false,
-		providers.ProviderOpenRouter, "deepseek/cheap",
+		providers.ProviderOpenAI, "gpt-5.6-sol",
 		nil,
 	).WithByokOnly(true).WithHardPinResolver(resolver)
 
@@ -606,7 +610,7 @@ func TestService_HardPin_Compaction_ByokOnly_NoEligibleProviderErrors(t *testing
 	providerMap := map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}}
 	svc := proxy.NewService(
 		fr, providerMap, nil, false, nil, store, false,
-		providers.ProviderOpenRouter, "deepseek/cheap",
+		providers.ProviderOpenAI, "gpt-5.6-sol",
 		nil,
 	).WithByokOnly(true).WithHardPinResolver(resolver)
 
@@ -673,20 +677,20 @@ func TestService_Classifier_IgnoresExistingSessionPin(t *testing.T) {
 }
 
 // Regression guard: excluded_models must be honored on the hard-pin tier too.
-// Prod symptom: an excluded gemini model still got all utility traffic
-// because the hard-pin path never consulted req.ExcludedModels.
+// Prod symptom: an excluded model still got all utility traffic because the
+// hard-pin path never consulted req.ExcludedModels.
 func TestService_HardPin_TitleGen_AppliesExcludedModels(t *testing.T) {
 	store := newFakePinStore()
 	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "claude-opus-4-7", Reason: "cluster"}}
 
-	const excludedModel = "gemini-3.1-flash-lite-preview"
+	const excludedModel = "zai-org/glm-5.3"
 	const allowedFallback = "claude-haiku-4-5"
 
 	// Mimics cluster.FastestModelInSet: fastest candidate is excluded, so
 	// resolver must fall through to the next allowed candidate.
 	resolver := func(req proxy.HardPinRequest) (string, string, bool) {
 		if _, denied := req.ExcludedModels[excludedModel]; !denied {
-			return providers.ProviderGoogle, excludedModel, true
+			return providers.ProviderAIAND, excludedModel, true
 		}
 		return providers.ProviderAnthropic, allowedFallback, true
 	}
@@ -699,11 +703,11 @@ func TestService_HardPin_TitleGen_AppliesExcludedModels(t *testing.T) {
 	}
 	providerMap := map[string]providers.Client{
 		providers.ProviderAnthropic: &fakeProvider{proxyResponse: okResp},
-		providers.ProviderGoogle:    &fakeProvider{proxyResponse: okResp},
+		providers.ProviderAIAND:     &fakeProvider{proxyResponse: okResp},
 	}
 	svc := proxy.NewService(
 		fr, providerMap, nil, false, nil, store, false,
-		providers.ProviderGoogle, excludedModel, // boot-time pin is the excluded model
+		providers.ProviderAIAND, excludedModel, // boot-time pin is the excluded model
 		nil,
 	).WithHardPinResolver(resolver)
 
@@ -853,10 +857,10 @@ func TestService_HardPin_ExploreFallsThroughWhenFlagOff(t *testing.T) {
 func TestService_HardPin_SubAgentOverrideRoutesIndependentlyOfHardPin(t *testing.T) {
 	store := newFakePinStore()
 	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "claude-opus-4-7", Reason: "cluster"}}
-	// OpenRouter speaks the OpenAI-compat wire format, so the fake response
+	// AIand speaks the OpenAI-compat wire format, so the fake response
 	// must be a valid chat-completion body for the cross-format translation
 	// back to the Anthropic-shaped client response to succeed.
-	openRouterResp := func(w http.ResponseWriter) {
+	aiandResp := func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
@@ -864,8 +868,8 @@ func TestService_HardPin_SubAgentOverrideRoutesIndependentlyOfHardPin(t *testing
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderAnthropic:  &fakeProvider{},
-			providers.ProviderOpenRouter: &fakeProvider{proxyResponse: openRouterResp},
+			providers.ProviderAnthropic: &fakeProvider{},
+			providers.ProviderAIAND:     &fakeProvider{proxyResponse: aiandResp},
 		},
 		nil,
 		false,
@@ -875,7 +879,7 @@ func TestService_HardPin_SubAgentOverrideRoutesIndependentlyOfHardPin(t *testing
 		providers.ProviderAnthropic,
 		"claude-haiku-4-5",
 		nil,
-	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder")
+	).WithSubAgentOverride(providers.ProviderAIAND, "local/qwen3-coder")
 
 	ctx := authedCtx(uuid.New().String())
 	rec := httptest.NewRecorder()
@@ -884,7 +888,7 @@ func TestService_HardPin_SubAgentOverrideRoutesIndependentlyOfHardPin(t *testing
 
 	assert.Equal(t, 0, fr.routeCalls, "sub-agent override must bypass the cluster scorer")
 	assert.Equal(t, "local/qwen3-coder", rec.Header().Get(proxy.HeaderRouterModel))
-	assert.Equal(t, providers.ProviderOpenRouter, rec.Header().Get(proxy.HeaderRouterProvider))
+	assert.Equal(t, providers.ProviderAIAND, rec.Header().Get(proxy.HeaderRouterProvider))
 	assert.NotEqual(t, "claude-haiku-4-5", rec.Header().Get(proxy.HeaderRouterModel),
 		"must not fall back to the shared hardPinProvider/hardPinModel pair")
 }
@@ -897,8 +901,8 @@ func TestService_HardPin_SubAgentOverrideLeavesMainLoopUnaffected(t *testing.T) 
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderAnthropic:  &fakeProvider{},
-			providers.ProviderOpenRouter: &fakeProvider{},
+			providers.ProviderAnthropic: &fakeProvider{},
+			providers.ProviderAIAND:     &fakeProvider{},
 		},
 		nil,
 		false,
@@ -908,7 +912,7 @@ func TestService_HardPin_SubAgentOverrideLeavesMainLoopUnaffected(t *testing.T) 
 		providers.ProviderAnthropic,
 		"claude-haiku-4-5",
 		nil,
-	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder")
+	).WithSubAgentOverride(providers.ProviderAIAND, "local/qwen3-coder")
 
 	ctx := authedCtx(uuid.New().String())
 	rec := httptest.NewRecorder()
@@ -986,7 +990,7 @@ func TestService_HardPin_SubAgentOverrideAppliesUnderHMMStrategy(t *testing.T) {
 		Reason:   "hmm_policy:classifier_select(label=medium)",
 		Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMM)},
 	}}
-	openRouterResp := func(w http.ResponseWriter) {
+	aiandResp := func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
@@ -994,8 +998,8 @@ func TestService_HardPin_SubAgentOverrideAppliesUnderHMMStrategy(t *testing.T) {
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
-			providers.ProviderAnthropic:  &fakeProvider{},
-			providers.ProviderOpenRouter: &fakeProvider{proxyResponse: openRouterResp},
+			providers.ProviderAnthropic: &fakeProvider{},
+			providers.ProviderAIAND:     &fakeProvider{proxyResponse: aiandResp},
 		},
 		nil,
 		false,
@@ -1005,7 +1009,7 @@ func TestService_HardPin_SubAgentOverrideAppliesUnderHMMStrategy(t *testing.T) {
 		providers.ProviderAnthropic,
 		"claude-haiku-4-5",
 		nil,
-	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder").WithHMMRouter(fr)
+	).WithSubAgentOverride(providers.ProviderAIAND, "local/qwen3-coder").WithHMMRouter(fr)
 
 	ctx := router.WithStrategy(authedCtx(uuid.New().String()), router.StrategyHMM)
 	rec := httptest.NewRecorder()
@@ -1014,7 +1018,7 @@ func TestService_HardPin_SubAgentOverrideAppliesUnderHMMStrategy(t *testing.T) {
 
 	assert.Equal(t, 0, fr.routeCalls, "sub-agent override must bypass the HMM classifier")
 	assert.Equal(t, "local/qwen3-coder", rec.Header().Get(proxy.HeaderRouterModel))
-	assert.Equal(t, providers.ProviderOpenRouter, rec.Header().Get(proxy.HeaderRouterProvider))
+	assert.Equal(t, providers.ProviderAIAND, rec.Header().Get(proxy.HeaderRouterProvider))
 }
 
 // Without a hard pin or override, an HMM sub-agent turn is classified like any
@@ -1057,7 +1061,7 @@ func TestService_HardPin_SubAgentOverrideIneligibleProviderErrors(t *testing.T) 
 	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "claude-opus-4-7", Reason: "cluster"}}
 	svc := proxy.NewService(
 		fr,
-		// Only Anthropic registered — the override names OpenRouter, which
+		// Only Anthropic registered — the override names AIand, which
 		// EnabledProviders (derived from registered providers) won't contain.
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil,
@@ -1068,7 +1072,7 @@ func TestService_HardPin_SubAgentOverrideIneligibleProviderErrors(t *testing.T) 
 		providers.ProviderAnthropic,
 		"claude-haiku-4-5",
 		nil,
-	).WithSubAgentOverride(providers.ProviderOpenRouter, "local/qwen3-coder")
+	).WithSubAgentOverride(providers.ProviderAIAND, "local/qwen3-coder")
 
 	ctx := authedCtx(uuid.New().String())
 	rec := httptest.NewRecorder()
@@ -1732,90 +1736,6 @@ func TestService_ForceModelHeader_UnknownModelRejected(t *testing.T) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	assert.Empty(t, store.upserts, "a refused force must not write any pin")
-}
-
-// Prod 2026-08-26: a gateway-only installation 503'd on utility turns —
-// the hard-pin tier never forwarded the key's gateway aliases.
-func TestService_HardPin_TitleGen_GatewayExclusive_ResolvesAlias(t *testing.T) {
-	const aliasedModel = "claude-haiku-4-5"
-	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "claude-opus-4-7", Reason: "cluster"}}
-
-	var seen proxy.HardPinRequest
-	resolver := func(req proxy.HardPinRequest) (string, string, bool) {
-		seen = req
-		for model, provs := range req.CustomBindings {
-			for _, provider := range provs {
-				if _, isGateway := req.GatewayProviders[provider]; isGateway {
-					return provider, model, true
-				}
-			}
-		}
-		return "", "", false
-	}
-
-	providerMap := map[string]providers.Client{
-		providers.ProviderOpenAIGateway: &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = io.WriteString(w, `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn"}`)
-		}},
-	}
-	svc := proxy.NewService(
-		fr, providerMap, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5",
-		nil,
-	).WithByokOnly(true).WithHardPinResolver(resolver)
-
-	ctx := authedCtxWithGatewayKey(uuid.New().String(), aliasedModel)
-	rec := httptest.NewRecorder()
-	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	require.NoError(t, svc.ProxyMessages(ctx, []byte(titleGenBody), rec, httpReq))
-
-	assert.Equal(t, []string{providers.ProviderOpenAIGateway}, seen.CustomBindings[aliasedModel],
-		"hard-pin resolver must receive the key's configuration-declared bindings")
-	assert.Contains(t, seen.GatewayProviders, providers.ProviderOpenAIGateway)
-	assert.Equal(t, aliasedModel, rec.Header().Get(proxy.HeaderRouterModel))
-}
-
-// A gateway key that aliases nothing is a configuration problem the customer
-// can fix, so it must report that rather than "router unavailable".
-func TestService_HardPin_TitleGen_GatewayExclusive_NoAliasReportsConfigError(t *testing.T) {
-	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "claude-opus-4-7", Reason: "cluster"}}
-
-	resolver := func(proxy.HardPinRequest) (string, string, bool) { return "", "", false }
-
-	providerMap := map[string]providers.Client{providers.ProviderOpenAIGateway: &fakeProvider{}}
-	svc := proxy.NewService(
-		fr, providerMap, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5",
-		nil,
-	).WithByokOnly(true).WithHardPinResolver(resolver)
-
-	ctx := authedCtxWithGatewayKey(uuid.New().String(), "")
-	rec := httptest.NewRecorder()
-	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	err := svc.ProxyMessages(ctx, []byte(titleGenBody), rec, httpReq)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, policy.ErrGatewayServesNoDeployedModel,
-		"gateway-exclusive hard-pin must name the alias list, not report the router unavailable")
-	assert.NotErrorIs(t, err, cluster.ErrClusterUnavailable)
-}
-
-// authedCtxWithGatewayKey attaches an openai_gateway BYOK key, optionally
-// aliasing one catalog model onto it.
-func authedCtxWithGatewayKey(installationID, aliasedModel string) context.Context {
-	key := &auth.ExternalAPIKey{
-		InstallationID: installationID,
-		Provider:       providers.ProviderOpenAIGateway,
-		Plaintext:      []byte("gw-token"),
-		BaseURL:        "https://gateway.example.com/v1",
-	}
-	if aliasedModel != "" {
-		key.ModelAliases = map[string]string{aliasedModel: aliasedModel}
-	}
-	return context.WithValue(authedCtx(installationID), proxy.ExternalAPIKeysContextKey{}, []*auth.ExternalAPIKey{key})
 }
 
 // A /force-model pin that names an unavailable provider was silently dropped:

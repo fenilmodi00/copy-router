@@ -642,11 +642,8 @@ func TestUseOpenAIResponsesAPI(t *testing.T) {
 		"with the rollout off, the reasoning tool turn chat/completions rejects is still promoted")
 	assert.False(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderOpenAI, caps, false, false, false)),
 		"with the rollout off, a toolless turn keeps the chat projection")
-	assert.False(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderFireworks, caps, true, false, true)))
-	assert.True(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderOpenAIGateway, caps, true, false, true)),
-		"BYOK gateways reject tools alongside an effort on chat/completions too")
-	assert.False(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderOpenAIGateway, caps, false, false, true)),
-		"gateways stay narrow even under the broad rollout: most mount no Responses surface")
+	assert.False(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderAIAND, caps, true, false, true)),
+		"AIand is not a direct-OpenAI target; it stays on chat/completions")
 }
 
 // An Anthropic image block must survive the Responses emit as a typed

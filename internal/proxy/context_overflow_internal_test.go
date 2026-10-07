@@ -124,29 +124,31 @@ func TestShouldEnableExtendedContext(t *testing.T) {
 	assert.True(t, shouldEnableExtendedContext(180_000, 8_000), "near-200K request opts into 1M")
 }
 
-// TestExcludeContextOverflowModels_UsesRoutableBinding verifies the first
-// available catalog binding supplies the context window.
+// TestExcludeContextOverflowModels_UsesRoutableBinding verifies the context
+// pre-filter measures the request against the model's served window: 546K plus
+// the 64K reserve stays under the model's 1M catalog window for every
+// enabled-provider set, so the model is never excluded.
 func TestExcludeContextOverflowModels_UsesRoutableBinding(t *testing.T) {
 	available := map[string]struct{}{
 		"deepseek/deepseek-v4-pro-0813": {},
 	}
 	enabledBoth := map[string]struct{}{
-		providers.ProviderTogether:  {},
-		providers.ProviderFireworks: {},
+		providers.ProviderAIAND:  {},
+		providers.ProviderOpenAI: {},
 	}
-	enabledFireworksOnly := map[string]struct{}{
-		providers.ProviderFireworks: {},
+	enabledAIANDOnly := map[string]struct{}{
+		providers.ProviderAIAND: {},
 	}
 
-	// 546016 + 64K reserve is below Fireworks' 1M served window, so the
-	// provider's old Together 512K limit must not exclude the model.
+	// 546016 + 64K reserve is below the model's 1M served window, so the
+	// enabled-provider set must not exclude the model.
 	outBoth, overflowedBoth := excludeContextOverflowModels(546_016, 0, 64_000, enabledBoth, nil, available)
 	assert.NotContains(t, overflowedBoth, "deepseek/deepseek-v4-pro-0813")
 	assert.NotContains(t, outBoth, "deepseek/deepseek-v4-pro-0813")
 
-	_, overflowedFireworks := excludeContextOverflowModels(546_016, 0, 64_000, enabledFireworksOnly, nil, available)
-	assert.NotContains(t, overflowedFireworks, "deepseek/deepseek-v4-pro-0813",
-		"Fireworks serves the 1M window")
+	_, overflowedAIAND := excludeContextOverflowModels(546_016, 0, 64_000, enabledAIANDOnly, nil, available)
+	assert.NotContains(t, overflowedAIAND, "deepseek/deepseek-v4-pro-0813",
+		"the catalog model-level window is 1M")
 
 	// nil enabledProviders retains legacy model-level behavior.
 	_, overflowedNil := excludeContextOverflowModels(546_016, 0, 64_000, nil, nil, available)

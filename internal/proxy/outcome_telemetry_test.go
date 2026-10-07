@@ -11,27 +11,10 @@ import (
 	"weave-os/router/internal/providers"
 	"weave-os/router/internal/proxy"
 	"weave-os/router/internal/proxy/usage"
-	"weave-os/router/internal/router"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestGeminiTelemetryRecordsSuccessfulOutcomeCoverage(t *testing.T) {
-	telem := newCaptureTelemetry()
-	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderGoogle, Model: "gemini-2.5-pro"}},
-		map[string]providers.Client{providers.ProviderGoogle: &fakeProvider{}},
-		nil, false, nil, nil, false, providers.ProviderGoogle, "gemini-2.5-flash", telem,
-	)
-	req := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-1.5-pro:generateContent", nil)
-	require.NoError(t, svc.ProxyGeminiGenerateContent(authedCtx("55555555-5555-5555-5555-555555555555"), []byte(geminiInjectedBody), httptest.NewRecorder(), req))
-	row := telem.firstRow(t)
-	require.NotNil(t, row.UserPrompt, "successful requests must be represented in the outcome denominator")
-	assert.True(t, *row.UserPrompt)
-	assert.Empty(t, row.ErrorClass)
-	assert.Nil(t, row.LatestToolCallCounts, "Gemini does not expose the Anthropic tool-error contract")
-}
 
 func TestBypassTelemetryRecordsOutcomeAndIncomingTools(t *testing.T) {
 	for _, rejected := range []bool{false, true} {

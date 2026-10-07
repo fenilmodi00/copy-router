@@ -1494,7 +1494,7 @@ func TestCrossFormat_AnthropicToOpenAI_StripsUnsupportedToolSchemaPattern(t *tes
 
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "moonshotai/kimi-k2.7",
-		TargetProvider: "fireworks",
+		TargetProvider: "aiand",
 	})
 	require.NoError(t, err)
 

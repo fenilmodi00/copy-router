@@ -15,26 +15,26 @@ import (
 func TestResolveCompactionModelFailsClosed(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		t.Setenv("ROUTER_COMPACTION_MODEL", "")
-		model, err := resolveCompactionModel(providers.ProviderAnthropic)
+		model, err := resolveCompactionModel(providers.ProviderAIAND)
 		require.NoError(t, err)
 		assert.Equal(t, policy.PrecompactionDefaultModel, model)
 	})
 
-	t.Run("valid Anthropic binding", func(t *testing.T) {
-		t.Setenv("ROUTER_COMPACTION_MODEL", "claude-fable-5")
-		model, err := resolveCompactionModel(providers.ProviderAnthropic)
+	t.Run("valid AIand binding", func(t *testing.T) {
+		t.Setenv("ROUTER_COMPACTION_MODEL", "zai-org/glm-5.3")
+		model, err := resolveCompactionModel(providers.ProviderAIAND)
 		require.NoError(t, err)
-		assert.Equal(t, "claude-fable-5", model)
+		assert.Equal(t, "zai-org/glm-5.3", model)
 	})
 
 	t.Run("invalid binding", func(t *testing.T) {
-		t.Setenv("ROUTER_COMPACTION_MODEL", "gpt-5.5")
-		_, err := resolveCompactionModel(providers.ProviderAnthropic)
-		assert.ErrorContains(t, err, "has no anthropic catalog binding")
+		t.Setenv("ROUTER_COMPACTION_MODEL", "claude-fable-5")
+		_, err := resolveCompactionModel(providers.ProviderAIAND)
+		assert.ErrorContains(t, err, "has no aiand catalog binding")
 	})
 
 	t.Run("binding on the configured summarizer provider", func(t *testing.T) {
-		t.Setenv("ROUTER_COMPACTION_MODEL", "claude-fable-5")
+		t.Setenv("ROUTER_COMPACTION_MODEL", "zai-org/glm-5.3")
 		_, err := resolveCompactionModel(providers.ProviderOpenAI)
 		assert.ErrorContains(t, err, "has no openai catalog binding")
 	})
@@ -49,11 +49,11 @@ func TestResolveHardPinModelRejectsProviderWithoutModel(t *testing.T) {
 }
 
 func TestResolveHardPinModelUsesDefaultProviderForExplicitModel(t *testing.T) {
-	t.Setenv("ROUTER_HARD_PIN_MODEL", "claude-haiku-4-5")
+	t.Setenv("ROUTER_HARD_PIN_MODEL", "zai-org/glm-5.3-flash")
 	t.Setenv("ROUTER_HARD_PIN_PROVIDER", "")
 
 	provider, model, err := resolveHardPinModel(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	require.NoError(t, err)
-	assert.Equal(t, providers.ProviderAnthropic, provider)
-	assert.Equal(t, "claude-haiku-4-5", model)
+	assert.Equal(t, providers.ProviderAIAND, provider)
+	assert.Equal(t, "zai-org/glm-5.3-flash", model)
 }

@@ -129,20 +129,14 @@ func (e *RequestEnvelope) PrepareOpenAI(in http.Header, opts EmitOptions) (provi
 // applySessionAffinity attaches an upstream-specific prompt-cache routing hint
 // from opts.SessionAffinity. Serverless upstreams fan a session across
 // replicas and hold prefix KV-cache per replica; without a stickiness hint a
-// turn can land on a cold replica and pay a full prefill (the
-// deepseek-v4-pro/Fireworks incident: 60k-token turn, zero cache read, 26s
-// TTFT). Each upstream takes a different knob: OpenAI-compat serverless
-// (Fireworks/Makora/Together/…) gets x-session-affinity (the
-// default for any OpenAI-compat target, so new upstreams need no edit here),
-// OpenRouter gets x-session-id, OpenAI and customer openai_gateway endpoints
-// get the prompt_cache_key body field (a spec Chat Completions field, so a
-// gateway that forwards the body forwards the hint — no unknown-header risk),
-// xAI Chat Completions gets x-grok-conv-id — including grok served through an
-// openai_gateway, since xAI only honors prompt_cache_key on the Responses API
-// and keys Chat Completions cache routing on the header alone. Bedrock's explicit cachePoint
-// caching is centrally routed, so it gets nothing.
+// turn can land on a cold replica and pay a full prefill (prod saw 60k-token
+// turns with zero cache read and 26s TTFT before this). Each upstream takes a
+// different knob: direct OpenAI gets the prompt_cache_key body field (a spec
+// Chat Completions field, so nothing rejects it as an unknown key); every
+// other OpenAI-compat upstream — AIand included — gets x-session-affinity,
+// the default, so new upstreams need no edit here.
 //
-// The header-based hints are gated on a real session key — collapsing keyless
+// The header hint is gated on a real session key — collapsing keyless
 // requests onto one synthetic bucket would herd unrelated conversations onto
 // a single replica. OpenAI's prompt_cache_key is a soft hint rather than a
 // hard pin, so it's always set on OpenAI-format cross-format routes: a
@@ -151,17 +145,7 @@ func (e *RequestEnvelope) PrepareOpenAI(in http.Header, opts EmitOptions) (provi
 // leaving prefix-less requests unhinted. Without this, an Anthropic→OpenAI
 // route re-bills the full prefix every turn (NULL cache_read in prod).
 func applySessionAffinity(body []byte, headers http.Header, opts EmitOptions) ([]byte, error) {
-	switch opts.TargetProvider {
-	case providers.ProviderOpenRouter:
-		if opts.SessionAffinity != "" {
-			headers.Set("x-session-id", opts.SessionAffinity)
-		}
-		return body, nil
-	case providers.ProviderOpenAI, providers.ProviderOpenAIGateway:
-		if opts.TargetProvider == providers.ProviderOpenAIGateway &&
-			strings.HasPrefix(opts.TargetModel, "grok") && opts.SessionAffinity != "" {
-			headers.Set("x-grok-conv-id", opts.SessionAffinity)
-		}
+	if opts.TargetProvider == providers.ProviderOpenAI {
 		if opts.StripPromptCacheKey {
 			// The endpoint rejects the field as unknown; a caller-supplied key
 			// would 400 identically, so it is dropped too.
@@ -190,19 +174,9 @@ func applySessionAffinity(body []byte, headers http.Header, opts EmitOptions) ([
 			return nil, fmt.Errorf("set prompt_cache_key: %w", err)
 		}
 		return out, nil
-	case providers.ProviderBedrock:
-		// Explicit cachePoint caching, centrally routed — no replica roulette.
-		return body, nil
-	case providers.ProviderXAI:
-		// Chat Completions affinity header; Responses API uses prompt_cache_key
-		// (we stay on chat/completions for CapReasoning×xAI in Stage A).
-		if opts.SessionAffinity != "" {
-			headers.Set("x-grok-conv-id", opts.SessionAffinity)
-		}
-		return body, nil
 	}
-	// Other OpenAI-compat serverless upstreams get x-session-affinity, gated
-	// on a real session key (see doc comment above).
+	// Other OpenAI-compat serverless upstreams (AIand) get x-session-affinity,
+	// gated on a real session key (see doc comment above).
 	if providers.IsOpenAICompat(opts.TargetProvider) && opts.SessionAffinity != "" {
 		headers.Set("x-session-affinity", opts.SessionAffinity)
 	}
@@ -252,34 +226,6 @@ func (e *RequestEnvelope) buildOpenAIFromOpenAI(opts EmitOptions) ([]byte, error
 			return nil, fmt.Errorf("set reasoning_effort: %w", err)
 		}
 	}
-	if targetIsOpenRouter(opts) {
-		if hint := openRouterProviderHint(opts.TargetModel); hint != nil {
-			body, err = sjson.SetBytes(body, "provider", hint)
-			if err != nil {
-				return nil, fmt.Errorf("set openrouter provider hint: %w", err)
-			}
-		}
-		if reasoning := openRouterReasoningHint(opts.TargetModel); reasoning != nil {
-			body, err = sjson.SetBytes(body, "reasoning", reasoning)
-			if err != nil {
-				return nil, fmt.Errorf("set openrouter reasoning hint: %w", err)
-			}
-		}
-		if reminder := openRouterSystemReminder(opts.TargetModel); reminder != "" && hasNonEmptyTools(body) {
-			body, err = applySystemReminderToBody(body, reminder)
-			if err != nil {
-				return nil, fmt.Errorf("set system reminder: %w", err)
-			}
-		}
-		if openRouterForcesToolTemperatureZero(opts.TargetModel) &&
-			hasNonEmptyTools(body) &&
-			!gjson.GetBytes(body, "temperature").Exists() {
-			body, err = sjson.SetBytes(body, "temperature", 0)
-			if err != nil {
-				return nil, fmt.Errorf("set tool temperature override: %w", err)
-			}
-		}
-	}
 	body, err = applyQwen3SamplersIfNeeded(body, opts)
 	if err != nil {
 		return nil, err
@@ -293,17 +239,6 @@ func (e *RequestEnvelope) buildOpenAIFromOpenAI(opts EmitOptions) ([]byte, error
 		return nil, err
 	}
 	return body, nil
-}
-
-// targetIsOpenRouter reports whether the emit target is OpenRouter — direct
-// upstreams (Fireworks/Bedrock/Makora/Together) reject OpenRouter-only fields like
-// `provider`/`reasoning`. Empty TargetProvider falls back to the model-slug
-// match for callers not yet plumbed through (the handover summarizer).
-func targetIsOpenRouter(opts EmitOptions) bool {
-	if opts.TargetProvider != "" {
-		return opts.TargetProvider == providers.ProviderOpenRouter
-	}
-	return true
 }
 
 func (e *RequestEnvelope) buildOpenAIFromAnthropic(opts EmitOptions) ([]byte, providers.RequestMutationStats, error) {
@@ -329,7 +264,7 @@ func (e *RequestEnvelope) buildOpenAIFromAnthropic(opts EmitOptions) ([]byte, pr
 	}
 
 	// System + Messages
-	writeOpenAISystemAndMessagesFromAnthropic(jw, body, opts)
+	writeOpenAISystemAndMessagesFromAnthropic(jw, body)
 
 	// Stop sequences — reasoning OpenAI models (gpt-5.x) reject `stop` on
 	// /v1/chat/completions ("Unsupported parameter: 'stop' is not supported").
@@ -347,24 +282,14 @@ func (e *RequestEnvelope) buildOpenAIFromAnthropic(opts EmitOptions) ([]byte, pr
 	writeOpenAIParallelToolCallsFromAnthropic(jw, body)
 
 	// Temperature, top_p
-	clientSetTemp := false
 	sampleOK := samplersAccepted(opts)
 	if r := gjson.GetBytes(body, "temperature"); r.Exists() && sampleOK {
 		jw.Key("temperature")
 		jw.Raw(r.Raw)
-		clientSetTemp = true
 	}
 	if r := gjson.GetBytes(body, "top_p"); r.Exists() && sampleOK {
 		jw.Key("top_p")
 		jw.Raw(r.Raw)
-	}
-
-	// Tool temperature override for OpenRouter
-	if !clientSetTemp && targetIsOpenRouter(opts) && openRouterForcesToolTemperatureZero(opts.TargetModel) {
-		if hasNonEmptyTools(body) {
-			jw.Key("temperature")
-			jw.Int(0)
-		}
 	}
 
 	// Max tokens
@@ -383,22 +308,6 @@ func (e *RequestEnvelope) buildOpenAIFromAnthropic(opts EmitOptions) ([]byte, pr
 		jw.Key("include_usage")
 		jw.Bool(true)
 		jw.EndObj()
-	}
-
-	// OpenRouter hints
-	if targetIsOpenRouter(opts) {
-		if hint := openRouterProviderHint(opts.TargetModel); hint != nil {
-			if hintBytes, err := json.Marshal(hint); err == nil {
-				jw.Key("provider")
-				jw.RawBytes(hintBytes)
-			}
-		}
-		if reasoning := openRouterReasoningHint(opts.TargetModel); reasoning != nil {
-			if reasoningBytes, err := json.Marshal(reasoning); err == nil {
-				jw.Key("reasoning")
-				jw.RawBytes(reasoningBytes)
-			}
-		}
 	}
 
 	jw.EndObj()
@@ -423,8 +332,7 @@ func (e *RequestEnvelope) buildOpenAIFromAnthropic(opts EmitOptions) ([]byte, pr
 //     loop (docs/investigations/2026-05-26-glm5-empty-tool-loop.md).
 //   - chat_template_kwargs.enable_thinking=false — disables the vLLM chat
 //     template's default-on thinking mode (Fireworks/Together) so reasoning
-//     doesn't leak into the response stream. Skipped for OpenRouter, which
-//     disables thinking via its own reasoning={enabled:false} hint instead.
+//     doesn't leak into the response stream.
 func applyGLM51FlagsIfNeeded(body []byte, opts EmitOptions) ([]byte, error) {
 	if !isGLM51(opts.TargetModel) {
 		return body, nil
@@ -436,7 +344,7 @@ func applyGLM51FlagsIfNeeded(body []byte, opts EmitOptions) ([]byte, error) {
 		}
 		body = out
 	}
-	if !targetIsOpenRouter(opts) && !gjson.GetBytes(body, "chat_template_kwargs.enable_thinking").Exists() {
+	if !gjson.GetBytes(body, "chat_template_kwargs.enable_thinking").Exists() {
 		out, err := sjson.SetBytes(body, "chat_template_kwargs.enable_thinking", false)
 		if err != nil {
 			return nil, fmt.Errorf("set glm-5.1 chat_template_kwargs.enable_thinking: %w", err)
@@ -466,12 +374,7 @@ func applyGLM53FlashFlagsIfNeeded(body []byte, opts EmitOptions) ([]byte, error)
 // applyQwen3SamplersIfNeeded layers the Qwen3 model-card sampling defaults
 // onto the body for qwen3-family models, unless the client already set them.
 // The recommendation is model-keyed, not provider-keyed, so it's applied
-// across all OpenAI-compat providers — except repetition_penalty, which
-// Fireworks' serving stack 400s on ("repetition_penalty can't be combined
-// with frequency_penalty or presence_penalty") when presence_penalty is also
-// set; presence_penalty is the one that actually suppresses the tool-call
-// loop (see qwen3PresencePenalty doc), so it wins and repetition_penalty is
-// dropped there instead of the other way around.
+// across all OpenAI-compat providers.
 func applyQwen3SamplersIfNeeded(body []byte, opts EmitOptions) ([]byte, error) {
 	if !isQwen3Family(opts.TargetModel) {
 		return body, nil
@@ -484,9 +387,7 @@ func applyQwen3SamplersIfNeeded(body []byte, opts EmitOptions) ([]byte, error) {
 		{"temperature", qwen3Temperature},
 		{"top_p", qwen3TopP},
 		{"presence_penalty", qwen3PresencePenalty},
-	}
-	if opts.TargetProvider != providers.ProviderFireworks {
-		defaults = append(defaults, sampler{"repetition_penalty", qwen3RepetitionPenalty})
+		{"repetition_penalty", qwen3RepetitionPenalty},
 	}
 	for _, s := range defaults {
 		if gjson.GetBytes(body, s.key).Exists() {
@@ -503,17 +404,8 @@ func applyQwen3SamplersIfNeeded(body []byte, opts EmitOptions) ([]byte, error) {
 
 // writeOpenAISystemAndMessagesFromAnthropic emits the "messages" key into jw by
 // converting the Anthropic system field and messages array to OpenAI format.
-func writeOpenAISystemAndMessagesFromAnthropic(jw *jsonWriter, body []byte, opts EmitOptions) {
+func writeOpenAISystemAndMessagesFromAnthropic(jw *jsonWriter, body []byte) {
 	systemText := flattenAnthropicSystemGJSON(gjson.GetBytes(body, "system"))
-	if targetIsOpenRouter(opts) && hasNonEmptyTools(body) {
-		if reminder := openRouterSystemReminder(opts.TargetModel); reminder != "" {
-			if systemText == "" {
-				systemText = reminder
-			} else {
-				systemText = systemText + "\n\n" + reminder
-			}
-		}
-	}
 
 	jw.Key("messages")
 	jw.Arr()

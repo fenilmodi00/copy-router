@@ -10,28 +10,41 @@ import (
 	"weave-os/router/internal/router/policy"
 )
 
-func TestEscalationJudgePolicyOnlyResolvesFireworks(t *testing.T) {
-	resolver := newPlanResolver(t, modelSet(policy.EscalationJudgeModel), providerSet(providers.ProviderMakora, providers.ProviderFireworks))
-	plan, err := resolver.Resolve(policy.ResolutionRequest{Purpose: policy.PurposeEscalationJudge})
+func TestEscalationJudgePolicyOnlyResolvesAIAND(t *testing.T) {
+	// The judge slug is served on AIand through an installation-declared
+	// binding; the fixed policy must resolve it there and nowhere else.
+	bindings := map[string][]string{policy.EscalationJudgeModel: {providers.ProviderAIAND}}
+	resolver := newPlanResolver(t, modelSet(policy.EscalationJudgeModel), providerSet(providers.ProviderOpenAI, providers.ProviderAIAND))
+	plan, err := resolver.Resolve(policy.ResolutionRequest{
+		Purpose:       policy.PurposeEscalationJudge,
+		RouterRequest: router.Request{CustomBindings: bindings},
+	})
 	require.NoError(t, err)
-	assert.Equal(t, providers.ProviderFireworks, plan.SelectedTarget().Provider)
-	assert.Equal(t, "accounts/fireworks/models/glm-5p3-flash", plan.SelectedTarget().UpstreamID)
+	assert.Equal(t, providers.ProviderAIAND, plan.SelectedTarget().Provider)
+	assert.Equal(t, policy.EscalationJudgeModel, plan.SelectedTarget().UpstreamID)
 	assert.Empty(t, plan.AlternativeTargets())
 	assert.Equal(t, 1, plan.Budget().MaxAttempts)
 	assert.EqualValues(t, 20_000, plan.Budget().TimeoutMillis)
-	resolver = newPlanResolver(t, modelSet(policy.EscalationJudgeModel), providerSet(providers.ProviderMakora))
-	_, err = resolver.Resolve(policy.ResolutionRequest{Purpose: policy.PurposeEscalationJudge, RouterRequest: router.Request{EnabledProviders: providerSet(providers.ProviderMakora)}})
+	resolver = newPlanResolver(t, modelSet(policy.EscalationJudgeModel), providerSet(providers.ProviderOpenAI))
+	_, err = resolver.Resolve(policy.ResolutionRequest{Purpose: policy.PurposeEscalationJudge, RouterRequest: router.Request{EnabledProviders: providerSet(providers.ProviderOpenAI)}})
 	require.Error(t, err)
 }
 
 func TestEscalationJudgeDeploymentIsOptional(t *testing.T) {
-	config := policy.DeploymentPolicyConfig{AvailableProviders: providerSet(providers.ProviderAnthropic), TargetOverrides: []policy.PurposeTargetOverride{}}
+	// The judge target is optional: a deployment that serves every required
+	// utility hard pin but cannot serve the judge still validates until the
+	// purpose is enabled, and enabling it needs the reviewed slug's AIand row.
+	config := policy.DeploymentPolicyConfig{AvailableProviders: providerSet(providers.ProviderOpenAI, providers.ProviderAIAND), TargetOverrides: []policy.PurposeTargetOverride{}}
 	for _, purpose := range []policy.Purpose{policy.PurposeTitleGeneration, policy.PurposeClassifier, policy.PurposeProbe, policy.PurposeSubAgentDispatch, policy.PurposeClientCompaction} {
-		config.TargetOverrides = append(config.TargetOverrides, policy.PurposeTargetOverride{Purpose: purpose, Target: policy.TargetOverride{Source: policy.OverrideSourceDeployment, CatalogID: policy.UtilityHardPinDefaultModel, Provider: providers.ProviderAnthropic}})
+		config.TargetOverrides = append(config.TargetOverrides, policy.PurposeTargetOverride{Purpose: purpose, Target: policy.TargetOverride{Source: policy.OverrideSourceDeployment, CatalogID: "gpt-5.6-luna", Provider: providers.ProviderOpenAI}})
 	}
 	require.NoError(t, policy.DefaultRegistry().ValidateDeployment(config))
+	// The judge policy owns its target; deployment overrides are rejected.
 	config.EnabledOptionalPurposes = map[policy.Purpose]bool{policy.PurposeEscalationJudge: true}
-	require.Error(t, policy.DefaultRegistry().ValidateDeployment(config))
-	config.AvailableProviders[providers.ProviderFireworks] = struct{}{}
+	config.TargetOverrides = append(config.TargetOverrides, policy.PurposeTargetOverride{Purpose: policy.PurposeEscalationJudge, Target: policy.TargetOverride{Source: policy.OverrideSourceDeployment, CatalogID: "zai-org/glm-5.3", Provider: providers.ProviderAIAND}})
+	require.ErrorContains(t, policy.DefaultRegistry().ValidateDeployment(config), "override is not allowed")
+	// Without an override, the AIand-capable deployment resolves the judge's
+	// reviewed slug through its roster binding.
+	config.TargetOverrides = config.TargetOverrides[:len(config.TargetOverrides)-1]
 	require.NoError(t, policy.DefaultRegistry().ValidateDeployment(config))
 }

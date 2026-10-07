@@ -15,52 +15,36 @@ import (
 type sessionAffinityMechanism int
 
 const (
-	mechanismGenericHeader sessionAffinityMechanism = iota // x-session-affinity
-	mechanismSessionIDHeader
-	mechanismPromptCacheKeyBody
-	mechanismGrokConvIDHeader // x-grok-conv-id
-	mechanismNone
+	mechanismGenericHeader     sessionAffinityMechanism = iota // x-session-affinity
+	mechanismPromptCacheKeyBody                                // prompt_cache_key body field
 )
 
 // expectedSessionAffinityMechanism pins the affinity mechanism for every
-// OpenAI-compat provider applySessionAffinity currently knows about (finding
-// [113]: provider dispatch drift guard). This map is deliberately explicit
-// (not derived from providers.ProviderFamilies) so that adding a new
-// Provider* constant that's OpenAI-compat family forces a decision here
-// instead of silently inheriting whatever the switch's default happens to
-// do. If this test fails after adding a provider, either add an explicit
-// mechanism here (if the provider needs bespoke affinity handling, per
-// internal/providers/CLAUDE.md's onboarding recipe) or add it to
-// defaultMechanismProviders below to affirm the generic header is correct.
+// OpenAI-compat provider applySessionAffinity handles bespoke (finding [113]:
+// provider dispatch drift guard). This map is deliberately explicit (not
+// derived from providers.ProviderFamilies) so that adding a new Provider*
+// constant that's OpenAI-compat family forces a decision here instead of
+// silently inheriting whatever the default happens to do. If this test fails
+// after adding a provider, either add an explicit mechanism here (if the
+// provider needs bespoke affinity handling, per internal/providers/CLAUDE.md's
+// onboarding recipe) or add it to defaultMechanismProviders below to affirm
+// the generic header is correct.
 var expectedSessionAffinityMechanism = map[string]sessionAffinityMechanism{
-	providers.ProviderOpenRouter: mechanismSessionIDHeader,
-	providers.ProviderOpenAI:     mechanismPromptCacheKeyBody,
-	providers.ProviderXAI:        mechanismGrokConvIDHeader,
-	providers.ProviderBedrock:    mechanismNone,
-	// A customer endpoint may reject unknown headers, so the hint rides the spec
-	// prompt_cache_key body field — a gateway that forwards the body forwards the hint.
-	providers.ProviderOpenAIGateway: mechanismPromptCacheKeyBody,
+	providers.ProviderOpenAI: mechanismPromptCacheKeyBody,
 }
 
 // defaultMechanismProviders are OpenAI-compat providers intentionally left
 // off expectedSessionAffinityMechanism because the generic
 // x-session-affinity header default is correct for them.
 var defaultMechanismProviders = map[string]struct{}{
-	providers.ProviderFireworks: {},
-	providers.ProviderDeepInfra: {},
-	providers.ProviderMakora:    {},
-	providers.ProviderMiniMax:   {},
-	providers.ProviderTogether:  {},
-	providers.ProviderMeta:      {},
-	providers.ProviderAIAND:     {},
-	providers.ProviderWafer:     {},
+	providers.ProviderAIAND: {},
 }
 
 // TestSessionAffinityCoversEveryOpenAICompatProvider guards against a new
 // OpenAI-compat provider (or a re-family'd existing one) going unreviewed by
-// applySessionAffinity's per-provider switch in emit_openai.go. Every
-// provider in providers.AllProviders() that speaks the OpenAI-compat family
-// must be accounted for in exactly one of expectedSessionAffinityMechanism or
+// applySessionAffinity in emit_openai.go. Every provider in
+// providers.AllProviders() that speaks the OpenAI-compat family must be
+// accounted for in exactly one of expectedSessionAffinityMechanism or
 // defaultMechanismProviders.
 func TestSessionAffinityCoversEveryOpenAICompatProvider(t *testing.T) {
 	for _, p := range providers.AllProviders() {
@@ -110,36 +94,15 @@ func TestSessionAffinityMechanismMatchesActualBehavior(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			gotSessionID := out.Headers.Get("x-session-id")
 			gotGenericHeader := out.Headers.Get("x-session-affinity")
-			gotGrokConvID := out.Headers.Get("x-grok-conv-id")
 			_, gotBody := promptCacheKey(t, out.Body)
 
 			switch mechanism {
-			case mechanismSessionIDHeader:
-				assert.Equal(t, affinityKey, gotSessionID)
-				assert.Empty(t, gotGenericHeader)
-				assert.Empty(t, gotGrokConvID)
-				assert.False(t, gotBody)
 			case mechanismPromptCacheKeyBody:
-				assert.Empty(t, gotSessionID)
 				assert.Empty(t, gotGenericHeader)
-				assert.Empty(t, gotGrokConvID)
 				assert.True(t, gotBody)
-			case mechanismGrokConvIDHeader:
-				assert.Empty(t, gotSessionID)
-				assert.Empty(t, gotGenericHeader)
-				assert.Equal(t, affinityKey, gotGrokConvID)
-				assert.False(t, gotBody)
-			case mechanismNone:
-				assert.Empty(t, gotSessionID)
-				assert.Empty(t, gotGenericHeader)
-				assert.Empty(t, gotGrokConvID)
-				assert.False(t, gotBody)
 			case mechanismGenericHeader:
-				assert.Empty(t, gotSessionID)
 				assert.Equal(t, affinityKey, gotGenericHeader)
-				assert.Empty(t, gotGrokConvID)
 				assert.False(t, gotBody)
 			}
 		})

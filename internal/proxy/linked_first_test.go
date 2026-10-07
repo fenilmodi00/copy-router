@@ -87,13 +87,13 @@ func TestSubscriptionOnly_OpenAI_SpentCodexPlan_DepletedStillRefuses402(t *testi
 // organization credits instead of the credits-exhausted 402 a depleted turn
 // gets (compare TestSubscriptionOnly_OpenAI_PaidRoute_Refuses402).
 func TestLinkedFirst_OpenAI_PaidRoute_ContinuesOnCredits(t *testing.T) {
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenRouter, Model: "deepseek/deepseek-chat", Reason: "test"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: "deepseek/deepseek-chat", Reason: "test"}}
 	p := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"id":"x","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`)
 	}}
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderOpenRouter: p}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAIAND: p}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
 
 	body := `{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"Refactor the auth middleware and add tests."}],"max_tokens":4096,"tools":[{"type":"function","function":{"name":"edit_file","parameters":{"type":"object"}}}]}`
 	rec, req := codexSubRequest(t, body)

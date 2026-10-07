@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"weave-os/router/internal/observability"
 	"weave-os/router/internal/providers"
@@ -14,12 +13,13 @@ import (
 )
 
 // serveNativeWebSearch answers a native web-search turn when no enabled
-// provider can execute it, by running the search on the tenant's own gateway
-// and synthesizing the server_tool_use / web_search_tool_result blocks.
-// Cortex inference rejects web_search_20250305; agent:run on the same host
-// accepts it. Returns true if served; falls through when no executor, a
-// capable provider is in the pool, the turn is not a search sub-turn, or
-// the search fails.
+// provider can execute it, by running the search on an executor backend and
+// synthesizing the server_tool_use / web_search_tool_result blocks. Returns
+// true if served; falls through when no executor is wired, a capable
+// provider is in the pool, the turn is not a search sub-turn, or the search
+// fails. The Cortex Agents gateway executor was cut in the AIand-only split,
+// so no deployment wires an executor today; the detectors stay for when one
+// returns.
 func (s *Service) serveNativeWebSearch(
 	ctx context.Context,
 	body []byte,
@@ -38,41 +38,17 @@ func (s *Service) serveNativeWebSearch(
 		return false
 	}
 	log := observability.FromContext(ctx)
-	query, isSearchTurn := websearch.DetectSearchTurn(body)
-	if !isSearchTurn {
+	if _, isSearchTurn := websearch.DetectSearchTurn(body); !isSearchTurn {
 		log.Info("Native web-search tool on a provider that cannot serve it; turn left on normal routing",
 			"tool_type", tool.Type)
 		return false
 	}
 
-	credCtx := resolveAndInjectCredentials(ctx, providers.ProviderAnthropicGateway, model, headers)
-	if CredentialsFromContext(credCtx) == nil {
-		log.Info("Native web-search executor skipped: no gateway credential for this request")
-		return false
-	}
-
-	start := time.Now()
-	result, err := s.webSearch.Search(credCtx, query)
-	if err != nil {
-		log.Warn("Native web-search execution failed; falling back to normal routing",
-			"err", err, "latency_ms", time.Since(start).Milliseconds())
-		return false
-	}
-
-	msg := websearch.SynthesizeMessage(
-		"msg_router_websearch_"+fmt.Sprintf("%x", time.Now().UnixNano()),
-		model, tool.Name, query, result, inputTokens,
-	)
-	if err := writeWebSearchMessage(w, msg, stream); err != nil {
-		log.Warn("Failed writing synthesized web-search response", "err", err)
-		return true
-	}
-	log.Info("Served native web-search turn on the tenant's own provider",
-		"tool_type", tool.Type,
-		"results", len(result.Results),
-		"latency_ms", time.Since(start).Milliseconds(),
-	)
-	return true
+	// The gateway executor that resolved credentials for the search call is
+	// gone with the AIand-only cut; without one there is no credentialed
+	// backend to run the query on, so the turn falls through to routing.
+	log.Info("Native web-search turn left on normal routing", "tool_type", tool.Type)
+	return false
 }
 
 // anyNativeServerToolProvider reports whether any enabled provider runs

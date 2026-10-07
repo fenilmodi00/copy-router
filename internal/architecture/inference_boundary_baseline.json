@@ -51,24 +51,12 @@
       "removal_phase": "8"
     },
     {
-      "id": "direct_provider_call|internal/proxy/gemini.go|Service.ProxyGeminiGenerateContent|weave-os/router/internal/providers.Proxy|1",
-      "kind": "direct_provider_call",
-      "file": "internal/proxy/gemini.go",
-      "line": 291,
-      "symbol": "Service.ProxyGeminiGenerateContent",
-      "detail": "weave-os/router/internal/providers.Proxy",
-      "owner": "@steventohme",
-      "rationale": "Existing Gemini public-surface dispatch remains in proxy until the executor compatibility boundary is proven.",
-      "operation_class": "main_inference",
-      "removal_phase": "8"
-    },
-    {
       "id": "feature_target_constant|internal/proxy/loop_detection.go|proxy.package|escalateModel|1",
       "kind": "feature_target_constant",
       "file": "internal/proxy/loop_detection.go",
       "line": 19,
       "symbol": "proxy.package",
-      "detail": "escalateModel=claude-opus-5",
+      "detail": "escalateModel=zai-org/glm-5.3",
       "owner": "@steventohme",
       "rationale": "Existing loop-rescue target remains feature-owned until public-surface fallback becomes a typed policy transition.",
       "operation_class": "main_inference",

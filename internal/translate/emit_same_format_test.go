@@ -238,39 +238,12 @@ func TestOpenAISameFormat_ReasoningEffortDeletedForGPT5OnChatCompletions(t *test
 	}`)
 	opts := translate.EmitOptions{
 		TargetModel:    "gpt-5.6-luna",
-		TargetProvider: providers.ProviderOpenAIGateway,
+		TargetProvider: providers.ProviderOpenAI,
 		Capabilities:   router.Lookup("gpt-5.6-luna"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
 	assert.NotContains(t, out, "reasoning_effort")
 	assert.Contains(t, out, "tools")
-}
-
-// Cortex rejects reasoning_effort alongside tools for every model it serves,
-// not just gpt-5.x, and a gateway has no Responses surface to move it to.
-func TestOpenAISameFormat_ReasoningEffortDeletedForGatewayToolsOnAnyModel(t *testing.T) {
-	body := []byte(`{
-		"model":"grok-4.6",
-		"messages":[{"role":"user","content":"hi"}],
-		"reasoning_effort":"medium",
-		"tools":[{"type":"function","function":{"name":"read_file","parameters":{"type":"object"}}}]
-	}`)
-	opts := translate.EmitOptions{
-		TargetModel:    "grok-4.6",
-		TargetProvider: providers.ProviderOpenAIGateway,
-		Capabilities:   router.Lookup("grok-4.6"),
-	}
-	out := parseAndEmit(t, body, "openai", opts)
-	assert.NotContains(t, out, "reasoning_effort")
-	assert.Contains(t, out, "tools")
-
-	toolless := []byte(`{
-		"model":"grok-4.6",
-		"messages":[{"role":"user","content":"hi"}],
-		"reasoning_effort":"medium"
-	}`)
-	assert.Equal(t, "medium", parseAndEmit(t, toolless, "openai", opts)["reasoning_effort"],
-		"a toolless gateway turn keeps the caller's effort")
 }
 
 // Direct OpenAI applies its own effort on gpt-5.6 tool turns even when the
@@ -1402,7 +1375,7 @@ func TestAnthropicSameFormat_OutputConfigFormatStrippedOnRequest(t *testing.T) {
 		`"output_config":{"format":{"type":"json_schema","schema":{"type":"object","properties":{"title":{"type":"string"}}}}}}`)
 	out := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
 		TargetModel:             "claude-sonnet-5",
-		TargetProvider:          providers.ProviderAnthropicGateway,
+		TargetProvider:          providers.ProviderAnthropic,
 		Capabilities:            router.Lookup("claude-sonnet-5"),
 		StripOutputConfigFormat: true,
 	})
@@ -1415,7 +1388,7 @@ func TestAnthropicSameFormat_OutputConfigEffortSurvivesFormatStrip(t *testing.T)
 		`"thinking":{"type":"adaptive"},"output_config":{"effort":"high","format":{"type":"json_schema"}}}`)
 	out := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
 		TargetModel:             "claude-sonnet-5",
-		TargetProvider:          providers.ProviderAnthropicGateway,
+		TargetProvider:          providers.ProviderAnthropic,
 		Capabilities:            router.Lookup("claude-sonnet-5"),
 		StripOutputConfigFormat: true,
 	})
@@ -1425,23 +1398,19 @@ func TestAnthropicSameFormat_OutputConfigEffortSurvivesFormatStrip(t *testing.T)
 	assert.NotContains(t, outputConfig, "format")
 }
 
-// Gateways serve structured output (Cortex documents it), so the first attempt
-// carries the knob to a gateway exactly as it does to first-party Anthropic.
+// The first attempt always carries output_config.format; it is only dropped on
+// the retry path that asked for it (StripOutputConfigFormat).
 func TestAnthropicSameFormat_OutputConfigFormatKeptByDefault(t *testing.T) {
 	body := []byte(`{"model":"claude-sonnet-5","messages":[{"role":"user","content":"hi"}],"max_tokens":1024,` +
 		`"output_config":{"format":{"type":"json_schema"}}}`)
-	for _, provider := range []string{providers.ProviderAnthropic, providers.ProviderAnthropicGateway} {
-		t.Run(provider, func(t *testing.T) {
-			out := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
-				TargetModel:    "claude-sonnet-5",
-				TargetProvider: provider,
-				Capabilities:   router.Lookup("claude-sonnet-5"),
-			})
-			outputConfig, _ := out["output_config"].(map[string]any)
-			require.NotNil(t, outputConfig)
-			assert.Contains(t, outputConfig, "format")
-		})
-	}
+	out := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
+		TargetModel:    "claude-sonnet-5",
+		TargetProvider: providers.ProviderAnthropic,
+		Capabilities:   router.Lookup("claude-sonnet-5"),
+	})
+	outputConfig, _ := out["output_config"].(map[string]any)
+	require.NotNil(t, outputConfig)
+	assert.Contains(t, outputConfig, "format")
 }
 
 // openAIReasoningSignature builds the cross-format envelope that
@@ -1569,7 +1538,7 @@ func TestOpenAIToAnthropic_ForcedToolChoiceDowngradedForAutoOnlyModel(t *testing
 
 func TestOpenAIEmit_FillsMissingFunctionToolParameters(t *testing.T) {
 	empty := map[string]any{"type": "object", "properties": map[string]any{}}
-	opts := translate.EmitOptions{TargetModel: "grok-4.6", TargetProvider: providers.ProviderXAI, Capabilities: router.Lookup("grok-4.6")}
+	opts := translate.EmitOptions{TargetModel: "zai-org/glm-5.3", TargetProvider: providers.ProviderAIAND, Capabilities: router.Lookup("zai-org/glm-5.3")}
 
 	nested := []byte(`{"model":"grok-4.6","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"function","function":{"name":"read_file","parameters":{"type":"object"}}},{"type":"function","function":{"name":"noop"}},{"type":"function","function":{"name":"ping","parameters":null}}]}`)
 	out := parseAndEmit(t, nested, "openai", opts)
@@ -1601,12 +1570,12 @@ func TestAnthropicToOpenAI_FillsMissingInputSchemaAsParameters(t *testing.T) {
 	body := []byte(`{"model":"claude-opus-4-6","max_tokens":1024,"messages":[{"role":"user","content":"hi"}],"tools":[{"name":"Read","input_schema":{"type":"object"}},{"name":"Ping","description":"no args"}]}`)
 	env, err := translate.ParseAnthropic(body)
 	require.NoError(t, err)
-	p, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{TargetModel: "grok-4.6", TargetProvider: providers.ProviderXAI, Capabilities: router.Lookup("grok-4.6")})
+	p, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{TargetModel: "zai-org/glm-5.3", TargetProvider: providers.ProviderAIAND, Capabilities: router.Lookup("zai-org/glm-5.3")})
 	require.NoError(t, err)
 	tools := gjson.GetBytes(p.Body, "tools")
 	require.Equal(t, int64(2), tools.Get("#").Int())
 	assert.Equal(t, "object", tools.Get("0.function.parameters.type").String())
-	assert.True(t, tools.Get("1.function.parameters").Exists(), "xAI serde-requires parameters")
+	assert.True(t, tools.Get("1.function.parameters").Exists(), "the emitting upstream serde-requires parameters")
 	assert.Equal(t, "object", tools.Get("1.function.parameters.type").String())
 	assert.JSONEq(t, `{"type":"object","properties":{}}`, tools.Get("1.function.parameters").Raw)
 

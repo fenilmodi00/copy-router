@@ -17,38 +17,16 @@ import (
 // dispatch drift guard) instead of silently falling through to the bare
 // model-ID default.
 var expectedRosterPrefix = map[string]string{
-	providers.ProviderAnthropic:        "anthropic/",
-	providers.ProviderOpenAI:           "openai/",
-	providers.ProviderGoogle:           "google/",
-	providers.ProviderXAI:              "x-ai/",
-	providers.ProviderAnthropicGateway: "anthropic/",
+	providers.ProviderAnthropic: "anthropic/",
+	providers.ProviderOpenAI:    "openai/",
 }
 
 // defaultRosterPrefixProviders are providers intentionally left off
 // expectedRosterPrefix because rosterIDFor's bare-model-ID fallback (no
-// prefix) is correct for them — either the model ID is already slash-form
-// (OpenAI-compat upstreams dispatched via catalog models with slash IDs),
-// like wafer_anthropic's sibling wafer, or the RL policy roster doesn't need
-// to distinguish them.
+// prefix) is correct for them.
 var defaultRosterPrefixProviders = map[string]struct{}{
-	providers.ProviderOpenRouter: {},
-	providers.ProviderFireworks:  {},
-	providers.ProviderDeepInfra:  {},
-	providers.ProviderBedrock:    {},
-	providers.ProviderMakora:     {},
-	providers.ProviderMiniMax:    {},
-	providers.ProviderTogether:   {},
-	// Muse Spark is not in the trained roster yet; bare ID is best-effort.
-	providers.ProviderMeta: {},
 	// AIand's catalog IDs are already slash-form; bare ID is correct.
 	providers.ProviderAIAND: {},
-	// Anthropic-spec surfaces serving non-Claude models (Wafer's Messages API)
-	// stay bare — the roster keys vendor-prefixed Anthropic slots by Claude ID.
-	providers.ProviderWaferAnthropic: {},
-	providers.ProviderWafer:          {},
-	// An OpenAI-spec gateway serves several vendors' models, so no single
-	// vendor prefix is right; the bare ID lets the sidecar match what it can.
-	providers.ProviderOpenAIGateway: {},
 }
 
 // TestRosterIDForCoversEveryProvider guards against a new Provider* constant

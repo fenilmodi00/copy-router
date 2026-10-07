@@ -16,8 +16,8 @@ import (
 // Qwen3 sampling defaults: the router layers the Qwen3 model-card recommended
 // sampling parameters onto outbound bodies when the target is a qwen3 model
 // and the client did not set the corresponding field. Applies across all
-// OpenAI-compat backends (OpenRouter, Bedrock, DeepInfra, Fireworks) because
-// the recommendation is model-keyed, not provider-keyed.
+// OpenAI-compat backends because the recommendation is model-keyed, not
+// provider-keyed.
 
 const qwen3PresencePenaltyExpected = 1.5
 const qwen3TemperatureExpected = 0.7
@@ -39,9 +39,9 @@ func TestQwen3Samplers_OpenAISameFormat_InjectedForQwen3(t *testing.T) {
 	env, err := translate.ParseOpenAI(body)
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
-		TargetModel:    "qwen/qwen3.6-35b-a3b",
-		TargetProvider: providers.ProviderOpenRouter,
-		Capabilities:   router.Lookup("qwen/qwen3.6-35b-a3b"),
+		TargetModel:    "qwen/qwen3.8-27b",
+		TargetProvider: providers.ProviderAIAND,
+		Capabilities:   router.Lookup("qwen/qwen3.8-27b"),
 	})
 	require.NoError(t, err)
 	assertQwen3Defaults(t, prep.Body)
@@ -56,59 +56,12 @@ func TestQwen3Samplers_AnthropicCrossFormat_InjectedForQwen3(t *testing.T) {
 	env, err := translate.ParseAnthropic(body)
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
-		TargetModel:    "qwen/qwen3.6-35b-a3b",
-		TargetProvider: providers.ProviderOpenRouter,
-		Capabilities:   router.Lookup("qwen/qwen3.6-35b-a3b"),
+		TargetModel:    "qwen/qwen3.8-27b",
+		TargetProvider: providers.ProviderAIAND,
+		Capabilities:   router.Lookup("qwen/qwen3.8-27b"),
 	})
 	require.NoError(t, err)
 	assertQwen3Defaults(t, prep.Body)
-}
-
-func TestQwen3Samplers_AppliedOnBedrockTarget(t *testing.T) {
-	// Production bedrock-mantle traffic was previously skipping the qwen3
-	// sampler block because the targetIsOpenRouter gate excluded it. With
-	// the model-keyed application, samplers now reach Bedrock too.
-	body := []byte(`{
-		"model": "claude-opus-4-7",
-		"max_tokens": 256,
-		"messages": [{"role":"user","content":"hi"}]
-	}`)
-	env, err := translate.ParseAnthropic(body)
-	require.NoError(t, err)
-	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
-		TargetModel:    "qwen/qwen3-235b-a22b-2507",
-		TargetProvider: providers.ProviderBedrock,
-		Capabilities:   router.Lookup("qwen/qwen3-235b-a22b-2507"),
-	})
-	require.NoError(t, err)
-	assertQwen3Defaults(t, prep.Body)
-}
-
-func TestQwen3Samplers_RepetitionPenaltySkippedOnFireworks(t *testing.T) {
-	// Fireworks 400s ("repetition_penalty can't be combined with
-	// frequency_penalty or presence_penalty") when both are set on qwen3.8-max.
-	// presence_penalty is the one that suppresses the tool-call loop, so it's
-	// the one kept; repetition_penalty is dropped for this provider only.
-	body := []byte(`{
-		"model": "claude-opus-4-7",
-		"max_tokens": 256,
-		"messages": [{"role":"user","content":"hi"}]
-	}`)
-	env, err := translate.ParseAnthropic(body)
-	require.NoError(t, err)
-	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
-		TargetModel:    "qwen/qwen3.8-max",
-		TargetProvider: providers.ProviderFireworks,
-		Capabilities:   router.Lookup("qwen/qwen3.8-max"),
-	})
-	require.NoError(t, err)
-	var out map[string]any
-	require.NoError(t, json.Unmarshal(prep.Body, &out))
-	assert.Equal(t, qwen3TemperatureExpected, out["temperature"])
-	assert.Equal(t, qwen3TopPExpected, out["top_p"])
-	assert.Equal(t, qwen3PresencePenaltyExpected, out["presence_penalty"])
-	_, hasRepetitionPenalty := out["repetition_penalty"]
-	assert.False(t, hasRepetitionPenalty, "fireworks must not receive repetition_penalty alongside presence_penalty")
 }
 
 func TestQwen3Samplers_NotInjectedForNonQwen(t *testing.T) {
@@ -116,9 +69,9 @@ func TestQwen3Samplers_NotInjectedForNonQwen(t *testing.T) {
 	env, err := translate.ParseOpenAI(body)
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
-		TargetModel:    "deepseek/deepseek-v4-pro",
-		TargetProvider: providers.ProviderOpenRouter,
-		Capabilities:   router.Lookup("deepseek/deepseek-v4-pro"),
+		TargetModel:    "deepseek-ai/deepseek-v4-pro",
+		TargetProvider: providers.ProviderAIAND,
+		Capabilities:   router.Lookup("deepseek-ai/deepseek-v4-pro"),
 	})
 	require.NoError(t, err)
 	var out map[string]any
@@ -141,9 +94,9 @@ func TestQwen3Samplers_DoNotOverrideClientValues(t *testing.T) {
 	env, err := translate.ParseOpenAI(body)
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
-		TargetModel:    "qwen/qwen3.6-35b-a3b",
-		TargetProvider: providers.ProviderOpenRouter,
-		Capabilities:   router.Lookup("qwen/qwen3.6-35b-a3b"),
+		TargetModel:    "qwen/qwen3.8-27b",
+		TargetProvider: providers.ProviderAIAND,
+		Capabilities:   router.Lookup("qwen/qwen3.8-27b"),
 	})
 	require.NoError(t, err)
 	var out map[string]any
@@ -166,9 +119,9 @@ func TestQwen3Samplers_PartialClientOverridesFillRest(t *testing.T) {
 	env, err := translate.ParseAnthropic(body)
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
-		TargetModel:    "qwen/qwen3.6-35b-a3b",
-		TargetProvider: providers.ProviderOpenRouter,
-		Capabilities:   router.Lookup("qwen/qwen3.6-35b-a3b"),
+		TargetModel:    "qwen/qwen3.8-27b",
+		TargetProvider: providers.ProviderAIAND,
+		Capabilities:   router.Lookup("qwen/qwen3.8-27b"),
 	})
 	require.NoError(t, err)
 	var out map[string]any

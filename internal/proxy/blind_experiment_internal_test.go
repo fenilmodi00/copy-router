@@ -117,22 +117,22 @@ func TestCallerModelPassthroughUsesGatewayAlias(t *testing.T) {
 		router.Request{
 			RequestedModel: "gpt-5.4",
 			EnabledProviders: map[string]struct{}{
-				providers.ProviderOpenAIGateway:    {},
-				providers.ProviderAnthropicGateway: {},
+				providers.ProviderAIAND:  {},
+				providers.ProviderOpenAI: {},
 			},
 			GatewayProviders: map[string]struct{}{
-				providers.ProviderAnthropicGateway: {},
+				providers.ProviderAIAND: {},
 			},
 			CustomBindings: map[string][]string{
-				"gpt-5.4": {providers.ProviderAnthropicGateway},
+				"gpt-5.4": {providers.ProviderAIAND},
 			},
 		},
 	)
 
 	require.NoError(t, err)
 	assert.True(t, passthrough)
-	assert.Equal(t, providers.ProviderAnthropicGateway, decision.Provider,
-		"gateway-exclusive passthrough must use the held key's alias instead of the catalog gateway binding")
+	assert.Equal(t, providers.ProviderAIAND, decision.Provider,
+		"gateway-exclusive passthrough must use the held key's alias instead of the catalog binding")
 	assert.Equal(t, "gpt-5.4", decision.Model)
 	assert.Equal(t, blindExperimentPublicDecisionReason, decision.Reason)
 }

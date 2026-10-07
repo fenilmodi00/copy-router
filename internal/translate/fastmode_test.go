@@ -36,10 +36,10 @@ func TestFastMode_AnthropicOffLeavesRequestUntouched(t *testing.T) {
 	assert.NotContains(t, prep.Headers.Get("anthropic-beta"), "fast-mode")
 }
 
-func TestFastMode_AnthropicGatewayNeverGetsSpeed(t *testing.T) {
+func TestFastMode_NonAnthropicProviderNeverGetsSpeed(t *testing.T) {
 	prep := prepareWithFallback(t, http.Header{}, fastModeAnthropicBody, translate.EmitOptions{
 		TargetModel:    "claude-opus-5",
-		TargetProvider: providers.ProviderAnthropicGateway,
+		TargetProvider: providers.ProviderAIAND,
 		FastMode:       true,
 	})
 
@@ -92,14 +92,12 @@ func TestFastMode_OpenAIOffLeavesServiceTierUnset(t *testing.T) {
 	assert.False(t, gjson.GetBytes(responses, "service_tier").Exists())
 }
 
-func TestFastMode_OpenAICompatGatewaysNeverGetServiceTier(t *testing.T) {
-	for _, provider := range []string{providers.ProviderOpenAIGateway, providers.ProviderOpenRouter, providers.ProviderFireworks} {
-		chat, responses := prepareOpenAIFast(t, translate.EmitOptions{
-			TargetModel:    "gpt-5.6-luna",
-			TargetProvider: provider,
-			FastMode:       true,
-		})
-		assert.False(t, gjson.GetBytes(chat, "service_tier").Exists(), provider)
-		assert.False(t, gjson.GetBytes(responses, "service_tier").Exists(), provider)
-	}
+func TestFastMode_AIANDNeverGetsServiceTier(t *testing.T) {
+	chat, responses := prepareOpenAIFast(t, translate.EmitOptions{
+		TargetModel:    "gpt-5.6-luna",
+		TargetProvider: providers.ProviderAIAND,
+		FastMode:       true,
+	})
+	assert.False(t, gjson.GetBytes(chat, "service_tier").Exists())
+	assert.False(t, gjson.GetBytes(responses, "service_tier").Exists())
 }

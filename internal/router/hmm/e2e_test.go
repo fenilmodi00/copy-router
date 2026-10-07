@@ -32,10 +32,10 @@ func TestHTTPRouterEndToEndWithSidecar(t *testing.T) {
 		case "/route":
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&gotRoute))
 			require.NotEmpty(t, gotRoute.RouteID)
-			require.Contains(t, gotRoute.CandidateModels, "moonshotai/kimi-k2.7-code")
-			require.Equal(t, "fireworks", gotRoute.CandidateProviders["moonshotai/kimi-k2.7-code"])
+			require.Contains(t, gotRoute.CandidateModels, "anthropic/claude-sonnet-4.6")
+			require.Equal(t, "anthropic", gotRoute.CandidateProviders["anthropic/claude-sonnet-4.6"])
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"route_id": gotRoute.RouteID, "model": "moonshotai/kimi-k2.7-code", "score": 0.72,
+				"route_id": gotRoute.RouteID, "model": "anthropic/claude-sonnet-4.6", "score": 0.72,
 				"score_kind": "policy_confidence", "reason": "policy delegated_work", "policy_group": "delegated",
 				"policy_label": "delegated_work", "propensity": 0.5, "display_marker": "Weave Router: delegated_work",
 			})
@@ -50,7 +50,7 @@ func TestHTTPRouterEndToEndWithSidecar(t *testing.T) {
 
 	r := New(
 		policyclient.New(server.URL, server.Client(), 0),
-		map[string]struct{}{providers.ProviderFireworks: {}},
+		map[string]struct{}{providers.ProviderAnthropic: {}},
 	)
 	decision, err := r.Route(context.Background(), router.Request{
 		PromptText:           "please inspect the router source",
@@ -62,8 +62,8 @@ func TestHTTPRouterEndToEndWithSidecar(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, decision.Metadata)
-	assert.Equal(t, "moonshotai/kimi-k2.7", decision.Model)
-	assert.Equal(t, providers.ProviderFireworks, decision.Provider)
+	assert.Equal(t, "claude-sonnet-4-6", decision.Model)
+	assert.Equal(t, providers.ProviderAnthropic, decision.Provider)
 	assert.Equal(t, "hmm", decision.Metadata.Strategy)
 	assert.Equal(t, float32(0.5), decision.Metadata.Propensity)
 	assert.Contains(t, decision.Metadata.DisplayMarker, "delegated_work")
@@ -80,5 +80,5 @@ func TestHTTPRouterEndToEndWithSidecar(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, decision.Metadata.RouteID, gotOutcome["route_id"])
-	assert.Equal(t, "moonshotai/kimi-k2.7", gotOutcome["served_model"])
+	assert.Equal(t, "claude-sonnet-4-6", gotOutcome["served_model"])
 }

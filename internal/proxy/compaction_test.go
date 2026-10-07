@@ -24,14 +24,17 @@ func TestPrecompactionPolicyReviewsEveryCascadeCandidate(t *testing.T) {
 	require.True(t, ok)
 	assert.Contains(t, spec.FixedCatalogModels, policy.PrecompactionDefaultModel)
 	assert.Contains(t, spec.FixedCatalogModels, policy.PrecompactionLargeWindowModel)
-	for _, m := range catalog.Models {
-		anthropic := false
-		for _, b := range m.Providers {
-			anthropic = anthropic || b.Provider == providers.ProviderAnthropic
+	// Every reviewed summarizer must be servable on the AIand-only roster at a
+	// non-low tier: a warm session pin resolves onto one of these.
+	for _, m := range spec.FixedCatalogModels {
+		model, known := catalog.ByID(m)
+		require.True(t, known, "summarizer %s must be a catalog model", m)
+		assert.NotEqual(t, catalog.TierLow, model.Tier, "summarizer %s must not be low-tier", m)
+		aiand := false
+		for _, b := range model.Providers {
+			aiand = aiand || b.Provider == providers.ProviderAIAND
 		}
-		if anthropic && m.Tier != catalog.TierLow {
-			assert.Contains(t, spec.FixedCatalogModels, m.ID, "warm-pin candidate %s must be a reviewed summarizer", m.ID)
-		}
+		assert.True(t, aiand, "summarizer %s must carry an AIand binding", m)
 	}
 }
 
@@ -42,14 +45,14 @@ func TestCompactionHardPin(t *testing.T) {
 
 	p, m, source, ok := s.compactionHardPin(ctx, key, "", router.Request{})
 	require.True(t, ok)
-	assert.Equal(t, providers.ProviderAnthropic, p)
-	assert.Equal(t, policy.PrecompactionDefaultModel, m, "no pin → Sonnet-class default")
+	assert.Equal(t, providers.ProviderAIAND, p)
+	assert.Equal(t, policy.PrecompactionDefaultModel, m, "no pin → the deployment's mid/high-tier summarizer")
 	assert.Equal(t, policy.OverrideSourceDeployment, source, "the deployment's compaction model fixed the turn")
 
 	_, _, _, ok = s.compactionHardPin(ctx, key, "", router.Request{EnabledProviders: map[string]struct{}{providers.ProviderOpenAI: {}}})
-	assert.False(t, ok, "Anthropic disabled for the tenant → fall back to generic hard-pin")
+	assert.False(t, ok, "AIand disabled for the tenant → fall back to generic hard-pin")
 
-	_, _, _, ok = s.compactionHardPin(ctx, key, "", router.Request{GatewayProviders: map[string]struct{}{providers.ProviderOpenRouter: {}}})
+	_, _, _, ok = s.compactionHardPin(ctx, key, "", router.Request{GatewayProviders: map[string]struct{}{providers.ProviderAIAND: {}}})
 	assert.False(t, ok, "gateway-exclusive tenant → fall back to generic hard-pin")
 
 	_, _, _, ok = s.compactionHardPin(ctx, key, "", router.Request{ExcludedModels: map[string]struct{}{policy.PrecompactionDefaultModel: {}}})
@@ -76,7 +79,7 @@ func TestCompactionHardPin_CodexKeepsNonAnthropicSessionModel(t *testing.T) {
 	var key [sessionpin.SessionKeyLen]byte
 	ctx := context.Background()
 	live := time.Now().Add(time.Hour)
-	openAIProviders := map[string]providers.Client{providers.ProviderOpenAI: nil, providers.ProviderAnthropic: nil}
+	openAIProviders := map[string]providers.Client{providers.ProviderOpenAI: nil, providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil}
 	codex := func(req router.Request) router.Request {
 		req.ClientApp = ClientAppCodex
 		return req
@@ -96,10 +99,10 @@ func TestCompactionHardPin_CodexKeepsNonAnthropicSessionModel(t *testing.T) {
 	assert.Equal(t, policy.OverrideSourceSession, source, "the session's own model fixed the turn")
 
 	// Claude Code's compaction turn is Anthropic-format: the same history keeps
-	// the Sonnet-class summarizer.
+	// the deployment's AIand summarizer.
 	p, m, source, ok = s.compactionHardPin(ctx, key, sessionpin.DefaultRole, router.Request{ClientApp: ClientAppClaudeCode})
 	require.True(t, ok)
-	assert.Equal(t, providers.ProviderAnthropic, p)
+	assert.Equal(t, providers.ProviderAIAND, p)
 	assert.Equal(t, policy.PrecompactionDefaultModel, m)
 	assert.Equal(t, policy.OverrideSourceDeployment, source)
 
@@ -120,14 +123,14 @@ func TestCompactionHardPin_CodexKeepsNonAnthropicSessionModel(t *testing.T) {
 	s = &Service{compactionHardPinEnabled: true, pinStore: expired, clients: dispatch.NewClients(openAIProviders)}
 	p, m, _, ok = s.compactionHardPin(ctx, key, sessionpin.DefaultRole, codex(router.Request{}))
 	require.True(t, ok)
-	assert.Equal(t, providers.ProviderAnthropic, p)
+	assert.Equal(t, providers.ProviderAIAND, p)
 	assert.Equal(t, policy.PrecompactionDefaultModel, m)
 
 	// A tenant that turned OpenAI off cannot keep the thread there.
 	s = &Service{compactionHardPinEnabled: true, pinStore: switched, clients: dispatch.NewClients(openAIProviders)}
-	_, m, _, ok = s.compactionHardPin(ctx, key, sessionpin.DefaultRole, codex(router.Request{EnabledProviders: map[string]struct{}{providers.ProviderAnthropic: {}}}))
+	_, m, _, ok = s.compactionHardPin(ctx, key, sessionpin.DefaultRole, codex(router.Request{EnabledProviders: map[string]struct{}{providers.ProviderAIAND: {}}}))
 	require.True(t, ok)
-	assert.Equal(t, policy.PrecompactionDefaultModel, m, "served vendor disabled → Sonnet-class default")
+	assert.Equal(t, policy.PrecompactionDefaultModel, m, "served vendor disabled → the AIand summarizer")
 
 	// Org exclusions and the deployment-wide automatic disable still apply.
 	solFamily := map[string]struct{}{"gpt-5.6-sol": {}, "gpt-6-sol": {}, "gpt-6.1-sol": {}}
@@ -148,15 +151,17 @@ func TestCompactionHardPin_CodexKeepsNonAnthropicSessionModel(t *testing.T) {
 	assert.Equal(t, providers.ProviderOpenAI, p)
 	assert.Equal(t, "gpt-5.5-mini", m)
 
-	// An Anthropic-served Codex session keeps its own model, as before.
-	anthropicServed := &rolePinStore{byRole: map[string]sessionpin.Pin{
-		sessionpin.DefaultRole: {Provider: providers.ProviderAnthropic, Model: "claude-opus-4-8", LastServedModel: "claude-opus-4-8", LastTurnEndedAt: time.Now(), PinnedUntil: live},
+	// An AIand-served Codex session keeps its own model: the summarizer lane is
+	// the same vendor that ran the thread.
+	aiandServed := &rolePinStore{byRole: map[string]sessionpin.Pin{
+		sessionpin.DefaultRole: {Provider: providers.ProviderAIAND, Model: "zai-org/glm-5.3", LastServedModel: "zai-org/glm-5.3", LastTurnEndedAt: time.Now(), PinnedUntil: live},
 	}}
-	s = &Service{compactionHardPinEnabled: true, pinStore: anthropicServed, clients: dispatch.NewClients(openAIProviders)}
-	p, m, _, ok = s.compactionHardPin(ctx, key, sessionpin.DefaultRole, codex(router.Request{}))
+	s = &Service{compactionHardPinEnabled: true, pinStore: aiandServed, clients: dispatch.NewClients(openAIProviders)}
+	p, m, source, ok = s.compactionHardPin(ctx, key, sessionpin.DefaultRole, codex(router.Request{}))
 	require.True(t, ok)
-	assert.Equal(t, providers.ProviderAnthropic, p)
-	assert.Equal(t, "claude-opus-5-5", m)
+	assert.Equal(t, providers.ProviderAIAND, p)
+	assert.Equal(t, "zai-org/glm-5.3", m)
+	assert.Equal(t, policy.OverrideSourceSession, source, "the session's own model fixed the turn")
 }
 
 func TestCompactionHardPin_CodexEffortQualifiedSessionModel(t *testing.T) {
@@ -182,16 +187,16 @@ func TestCompactionHardPin_CodexEffortQualifiedSessionModel(t *testing.T) {
 }
 
 func TestCompactionHardPin_FamilyUpgradeHonorsRestrictions(t *testing.T) {
-	const olderModel = "z-ai/glm-5.2"
-	const newerModel = "z-ai/glm-5.3"
+	const olderModel = "gpt-6-sol"
+	const newerModel = "gpt-6.1-sol"
 	ctx := context.Background()
 	store := &rolePinStore{byRole: map[string]sessionpin.Pin{
 		hmmHistoryRole(sessionpin.DefaultRole): {
-			Provider: providers.ProviderFireworks, LastServedModel: olderModel,
+			Provider: providers.ProviderOpenAI, LastServedModel: olderModel,
 			LastTurnEndedAt: time.Now(), PinnedUntil: time.Now().Add(time.Hour),
 		},
 	}}
-	s := &Service{pinStore: store, clients: dispatch.NewClients(map[string]providers.Client{providers.ProviderFireworks: nil})}
+	s := &Service{pinStore: store, clients: dispatch.NewClients(map[string]providers.Client{providers.ProviderOpenAI: nil})}
 	for _, test := range []struct {
 		name string
 		req  router.Request
@@ -200,7 +205,7 @@ func TestCompactionHardPin_FamilyUpgradeHonorsRestrictions(t *testing.T) {
 		{"upgrade", router.Request{}, newerModel},
 		{"org exclusion", router.Request{ExcludedModels: map[string]struct{}{newerModel: {}}}, olderModel},
 		{"automatic exclusion", router.Request{AutomaticExcludedModels: map[string]struct{}{newerModel: {}}}, olderModel},
-		{"provider disabled", router.Request{EnabledProviders: map[string]struct{}{providers.ProviderOpenAI: {}}}, ""},
+		{"provider disabled", router.Request{EnabledProviders: map[string]struct{}{providers.ProviderAIAND: {}}}, ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, model, ok := s.compactionSessionModel(ctx, [sessionpin.SessionKeyLen]byte{}, sessionpin.DefaultRole, test.req)

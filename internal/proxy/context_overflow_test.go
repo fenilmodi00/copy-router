@@ -238,9 +238,6 @@ func TestHMMTotalOverflowReachesUpstreamOnEveryIngress(t *testing.T) {
 		{"responses", providers.ProviderAnthropic, "/v1/responses",
 			`{"model":"claude-opus-4-8","input":"` + prompt + `"}`,
 			"claude-opus-4-8", []string{"claude-opus-4-8", "claude-haiku-4-5"}, (*proxy.Service).ProxyOpenAIResponses},
-		{"gemini", providers.ProviderGoogle, "/v1beta/models/gemini-2.5-pro:generateContent",
-			`{"contents":[{"role":"user","parts":[{"text":"` + prompt + `"}]}]}`,
-			"gemini-2.5-pro", []string{"gemini-2.5-pro"}, (*proxy.Service).ProxyGeminiGenerateContent},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			upstream := overflowingProvider(`{"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long: 1100000 tokens > 1000000 maximum"}}`)

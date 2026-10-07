@@ -145,12 +145,12 @@ func TestApplyPinEvidence_UsesAvailablePriorTurnData(t *testing.T) {
 
 	withHistory := turnLoopResult{}
 	applyPinEvidence(&withHistory, sessionpin.Pin{
-		Provider:        providers.ProviderFireworks,
-		Model:           "accounts/fireworks/models/qwen3-235b-a22b",
+		Provider:        providers.ProviderAIAND,
+		Model:           "deepseek-ai/deepseek-v4.1-flash",
 		PolicyGroup:     "high",
 		LastTurnEndedAt: time.Now().Add(-time.Second),
 	})
-	assert.Equal(t, providers.ProviderFireworks, withHistory.PinProvider)
+	assert.Equal(t, providers.ProviderAIAND, withHistory.PinProvider)
 	assert.Equal(t, "high", withHistory.PinPolicyGroup)
 	require.NotNil(t, withHistory.PriorTurnGapMS)
 	assert.Greater(t, *withHistory.PriorTurnGapMS, int64(0))
@@ -447,10 +447,10 @@ func TestRecordHMMTurnHistory_ZeroUsageRefreshesTTLButSkipsUsageWriteback(t *tes
 func TestRecordHMMTurnHistory_ZeroUsagePreservesPriorProvider(t *testing.T) {
 	store := newStubPinStore()
 	store.getFound = true
-	store.getPin = sessionpin.Pin{Provider: providers.ProviderMakora}
+	store.getPin = sessionpin.Pin{Provider: providers.ProviderAIAND}
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderMakora: nil, providers.ProviderOpenAI: nil},
+		map[string]providers.Client{providers.ProviderAIAND: nil, providers.ProviderOpenAI: nil},
 		nil,
 		false,
 		nil,
@@ -482,14 +482,14 @@ func TestRecordHMMTurnHistory_ZeroUsagePreservesPriorProvider(t *testing.T) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	require.Len(t, store.upserts, 1)
-	assert.Equal(t, providers.ProviderMakora, store.upserts[0].Provider,
+	assert.Equal(t, providers.ProviderAIAND, store.upserts[0].Provider,
 		"a failed turn must not replace the provider paired with the last successful HMM model")
 }
 
 func TestNormalizeHMMStayPin_RepairsMismatchedProvider(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderMakora: nil, providers.ProviderOpenAI: nil},
+		map[string]providers.Client{providers.ProviderAIAND: nil, providers.ProviderOpenAI: nil},
 		nil,
 		false,
 		nil,
@@ -500,22 +500,22 @@ func TestNormalizeHMMStayPin_RepairsMismatchedProvider(t *testing.T) {
 	)
 	pin := sessionpin.Pin{
 		Provider:        providers.ProviderOpenAI,
-		LastServedModel: "deepseek/deepseek-v4.1-flash",
+		LastServedModel: "deepseek-ai/deepseek-v4.1-flash",
 		LastTurnEndedAt: time.Now(),
 		PinnedUntil:     time.Now().Add(time.Hour),
 	}
 
 	normalized, ok := svc.normalizeHMMStayPin(router.Request{}, pin)
 	require.True(t, ok)
-	assert.Equal(t, "deepseek/deepseek-v4.1-flash", normalized.Model)
-	assert.Equal(t, providers.ProviderMakora, normalized.Provider,
+	assert.Equal(t, "deepseek-ai/deepseek-v4.1-flash", normalized.Model)
+	assert.Equal(t, providers.ProviderAIAND, normalized.Provider,
 		"a sticky HMM pin must resolve the provider from its retained model")
 }
 
 func TestNormalizeHMMStayPin_ReResolvesDisabledProvider(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderMakora: nil, providers.ProviderOpenAI: nil},
+		map[string]providers.Client{providers.ProviderAIAND: nil, providers.ProviderOpenAI: nil},
 		nil,
 		false,
 		nil,
@@ -526,16 +526,16 @@ func TestNormalizeHMMStayPin_ReResolvesDisabledProvider(t *testing.T) {
 	)
 	pin := sessionpin.Pin{
 		Provider:        providers.ProviderOpenAI,
-		LastServedModel: "deepseek/deepseek-v4.1-flash",
+		LastServedModel: "deepseek-ai/deepseek-v4.1-flash",
 		LastTurnEndedAt: time.Now(),
 		PinnedUntil:     time.Now().Add(time.Hour),
 	}
 
 	normalized, ok := svc.normalizeHMMStayPin(router.Request{
-		EnabledProviders: map[string]struct{}{providers.ProviderMakora: {}},
+		EnabledProviders: map[string]struct{}{providers.ProviderAIAND: {}},
 	}, pin)
 	require.True(t, ok)
-	assert.Equal(t, providers.ProviderMakora, normalized.Provider,
+	assert.Equal(t, providers.ProviderAIAND, normalized.Provider,
 		"a sticky HMM pin must re-resolve a disabled provider for its retained model")
 }
 
@@ -594,7 +594,7 @@ func TestRecordTurnUsage_HMMEVStayWritesHistoryOnly(t *testing.T) {
 			Reason:   hmmHistoryReason,
 		},
 		Fresh: router.Decision{
-			Provider: providers.ProviderMakora,
+			Provider: providers.ProviderAIAND,
 			Model:    "deepseek/deepseek-v4.1-flash",
 			Reason:   "hmm_policy(classifier 'fast')",
 			Metadata: &router.RoutingMetadata{
@@ -638,7 +638,7 @@ func TestStickyStateRole_DefaultsToActivePinRole(t *testing.T) {
 func TestHMMCostGate_StaysOnWarmCacheWhenCheaperFreshDoesNotClearEV(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -653,7 +653,7 @@ func TestHMMCostGate_StaysOnWarmCacheWhenCheaperFreshDoesNotClearEV(t *testing.T
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
 	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
+		Provider: providers.ProviderAIAND,
 		Model:    "deepseek/deepseek-v4.1-flash",
 		Reason:   "hmm_policy(classifier 'fast')",
 		Metadata: &router.RoutingMetadata{
@@ -683,7 +683,7 @@ func TestHMMCostGate_StaysOnWarmCacheWhenCheaperFreshDoesNotClearEV(t *testing.T
 func TestHMMCostGate_SwitchesCheaperFreshWhenEVPositive(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -698,7 +698,7 @@ func TestHMMCostGate_SwitchesCheaperFreshWhenEVPositive(t *testing.T) {
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
 	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
+		Provider: providers.ProviderAIAND,
 		Model:    "deepseek/deepseek-v4.1-flash",
 		Reason:   "hmm_policy(classifier 'fast')",
 		Metadata: &router.RoutingMetadata{
@@ -727,7 +727,7 @@ func TestHMMCostGate_SwitchesCheaperFreshWhenEVPositive(t *testing.T) {
 func TestHMMCostGate_SameTierPinSuppressesLateralSwitchWhenEnabled(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderOpenAI: nil, providers.ProviderOpenRouter: nil},
+		map[string]providers.Client{providers.ProviderOpenAI: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -742,7 +742,7 @@ func TestHMMCostGate_SameTierPinSuppressesLateralSwitchWhenEnabled(t *testing.T)
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
 	fresh := router.Decision{
-		Provider: providers.ProviderOpenRouter,
+		Provider: providers.ProviderAIAND,
 		Model:    "deepseek/deepseek-v4.1-flash",
 		Reason:   "hmm_policy(classifier 'fast')",
 		Metadata: &router.RoutingMetadata{
@@ -791,7 +791,7 @@ func TestHMMCostGate_SameTierPinSuppressesLateralSwitchWhenEnabled(t *testing.T)
 func TestHMMCostGate_SameTierPinDoesNotBlockCrossTierSwitch(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -806,7 +806,7 @@ func TestHMMCostGate_SameTierPinDoesNotBlockCrossTierSwitch(t *testing.T) {
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
 	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
+		Provider: providers.ProviderAIAND,
 		Model:    "deepseek/deepseek-v4.1-flash",
 		Reason:   "hmm_policy(classifier 'fast')",
 		Metadata: &router.RoutingMetadata{
@@ -836,7 +836,7 @@ func TestHMMCostGate_SameTierPinDoesNotBlockCrossTierSwitch(t *testing.T) {
 func TestHMMCostGate_SameTierPinDoesNotBlockConfidentUpgrade(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderFireworks: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -846,7 +846,7 @@ func TestHMMCostGate_SameTierPinDoesNotBlockConfidentUpgrade(t *testing.T) {
 		nil,
 	).WithHMMSameTierPin(true)
 	history := sessionpin.Pin{
-		Provider:        providers.ProviderFireworks,
+		Provider:        providers.ProviderAIAND,
 		LastServedModel: "moonshotai/kimi-k2.7",
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
@@ -881,7 +881,7 @@ func TestHMMCostGate_SameTierPinDoesNotBlockConfidentUpgrade(t *testing.T) {
 func TestHMMCostGate_SameTierPinIgnoresUnknownTierModels(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -896,7 +896,7 @@ func TestHMMCostGate_SameTierPinIgnoresUnknownTierModels(t *testing.T) {
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
 	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
+		Provider: providers.ProviderAIAND,
 		Model:    "deepseek/deepseek-v4.1-flash",
 		Reason:   "hmm_policy(classifier 'fast')",
 		Metadata: &router.RoutingMetadata{
@@ -926,7 +926,7 @@ func TestHMMCostGate_SameTierPinIgnoresUnknownTierModels(t *testing.T) {
 func TestHMMCostGate_PhaseChangeFollowsFreshDecision(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -944,7 +944,7 @@ func TestHMMCostGate_PhaseChangeFollowsFreshDecision(t *testing.T) {
 		PinnedUntil:     time.Now().Add(time.Hour),
 	}
 	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
+		Provider: providers.ProviderAIAND,
 		Model:    "deepseek/deepseek-v4.1-flash",
 		Reason:   "hmm_policy(classifier 'balanced')",
 		Metadata: &router.RoutingMetadata{
@@ -973,7 +973,7 @@ func TestHMMCostGate_PhaseChangeFollowsFreshDecision(t *testing.T) {
 func TestHMMCostGate_HistoryPhaseChangeFollowsFreshDecision(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -990,7 +990,7 @@ func TestHMMCostGate_HistoryPhaseChangeFollowsFreshDecision(t *testing.T) {
 		PinnedUntil:     time.Now().Add(time.Hour),
 	}
 	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
+		Provider: providers.ProviderAIAND,
 		Model:    "deepseek/deepseek-v4.1-flash",
 		Reason:   "hmm_policy(classifier 'balanced')",
 		Metadata: &router.RoutingMetadata{
@@ -1019,7 +1019,7 @@ func TestHMMCostGate_HistoryPhaseChangeFollowsFreshDecision(t *testing.T) {
 func TestHMMCostGate_ExpensiveUpgradeRequiresHighConfidence(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderFireworks: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -1029,7 +1029,7 @@ func TestHMMCostGate_ExpensiveUpgradeRequiresHighConfidence(t *testing.T) {
 		nil,
 	)
 	history := sessionpin.Pin{
-		Provider:        providers.ProviderFireworks,
+		Provider:        providers.ProviderAIAND,
 		LastServedModel: "moonshotai/kimi-k2.7",
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
@@ -1079,7 +1079,7 @@ func TestHMMCostGate_ExpensiveUpgradeRequiresHighConfidence(t *testing.T) {
 func TestHMMCostGate_LowConfidenceUpgradeKeepsIndependentPlannerSwitch(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderFireworks: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -1094,7 +1094,7 @@ func TestHMMCostGate_LowConfidenceUpgradeKeepsIndependentPlannerSwitch(t *testin
 		ColdPinFollowFresh:     true,
 	})
 	history := sessionpin.Pin{
-		Provider:        providers.ProviderFireworks,
+		Provider:        providers.ProviderAIAND,
 		LastServedModel: "moonshotai/kimi-k2.7",
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}
@@ -1128,7 +1128,7 @@ func TestHMMCostGate_LowConfidenceUpgradeKeepsIndependentPlannerSwitch(t *testin
 func TestHMMCostGate_IgnoresExpiredActivePin(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -1145,7 +1145,7 @@ func TestHMMCostGate_IgnoresExpiredActivePin(t *testing.T) {
 		PinnedUntil:     time.Now().Add(-time.Minute),
 	}
 	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
+		Provider: providers.ProviderAIAND,
 		Model:    "deepseek/deepseek-v4.1-flash",
 		Reason:   "hmm_policy(classifier 'fast')",
 		Metadata: &router.RoutingMetadata{
@@ -1174,7 +1174,7 @@ func TestHMMCostGate_IgnoresExpiredActivePin(t *testing.T) {
 func TestHMMCostGate_IgnoresNonHMMActivePin(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -1194,7 +1194,7 @@ func TestHMMCostGate_IgnoresNonHMMActivePin(t *testing.T) {
 		PinnedUntil:     time.Now().Add(time.Hour),
 	}
 	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
+		Provider: providers.ProviderAIAND,
 		Model:    "deepseek/deepseek-v4.1-flash",
 		Reason:   "hmm_policy(classifier 'fast')",
 		Metadata: &router.RoutingMetadata{
@@ -1223,7 +1223,7 @@ func TestHMMCostGate_IgnoresNonHMMActivePin(t *testing.T) {
 func TestHMMCostGate_HonorsHMMReasonedActivePin(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -1243,7 +1243,7 @@ func TestHMMCostGate_HonorsHMMReasonedActivePin(t *testing.T) {
 		PinnedUntil:     time.Now().Add(time.Hour),
 	}
 	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
+		Provider: providers.ProviderAIAND,
 		Model:    "deepseek/deepseek-v4.1-flash",
 		Reason:   "hmm_policy(classifier 'fast')",
 		Metadata: &router.RoutingMetadata{
@@ -1273,7 +1273,7 @@ func TestHMMCostGate_IgnoresMaxedHistory(t *testing.T) {
 	endedAt := time.Now().Add(-30 * time.Second)
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderMakora: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -1291,7 +1291,7 @@ func TestHMMCostGate_IgnoresMaxedHistory(t *testing.T) {
 		PinnedUntil:       time.Now().Add(time.Hour),
 	}
 	fresh := router.Decision{
-		Provider: providers.ProviderMakora,
+		Provider: providers.ProviderAIAND,
 		Model:    "deepseek/deepseek-v4.1-flash",
 		Reason:   "hmm_policy(classifier 'fast')",
 		Metadata: &router.RoutingMetadata{
@@ -1558,7 +1558,7 @@ func TestService_WithHMMUpgradeConfidenceThreshold(t *testing.T) {
 func TestHMMCostGate_UpgradeThresholdConfigurable(t *testing.T) {
 	svc := NewService(
 		nil,
-		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderFireworks: nil},
+		map[string]providers.Client{providers.ProviderAnthropic: nil, providers.ProviderAIAND: nil},
 		nil,
 		false,
 		nil,
@@ -1570,7 +1570,7 @@ func TestHMMCostGate_UpgradeThresholdConfigurable(t *testing.T) {
 	svc.WithHMMUpgradeConfidenceThreshold(0.20)
 
 	history := sessionpin.Pin{
-		Provider:        providers.ProviderFireworks,
+		Provider:        providers.ProviderAIAND,
 		LastServedModel: "moonshotai/kimi-k2.7",
 		LastTurnEndedAt: time.Now().Add(-30 * time.Second),
 	}

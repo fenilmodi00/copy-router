@@ -191,12 +191,15 @@ func TestSidecarRouterOnboardsFutureStrategyWithoutProxyChanges(t *testing.T) {
 
 func TestSidecarRouterDispatchesSidecarSelectedArm(t *testing.T) {
 	resolver := policy.NewArmResolver(
-		set("minimax/minimax-m2.7"),
-		set(providers.ProviderTogether, providers.ProviderFireworks),
+		set("claude-opus-4-8"),
+		set(providers.ProviderAnthropic, providers.ProviderAIAND),
 		func(model catalog.Model) string { return model.ID },
 		policy.ManagedProviderPolicy(),
 	)
-	resolved := resolver.Resolve(router.Request{})
+	request := router.Request{CustomBindings: map[string][]string{
+		"claude-opus-4-8": {providers.ProviderAIAND},
+	}}
+	resolved := resolver.Resolve(request)
 	require.Len(t, resolved.Candidates, 2)
 	selected := resolved.Candidates[1]
 	decider := &recordingPolicy{result: policy.Result{
@@ -212,7 +215,7 @@ func TestSidecarRouterDispatchesSidecarSelectedArm(t *testing.T) {
 		Strategy: router.Strategy("future-policy"),
 	}, decider, resolver)
 
-	decision, err := adapter.Route(context.Background(), router.Request{})
+	decision, err := adapter.Route(context.Background(), request)
 
 	require.NoError(t, err)
 	assert.Equal(t, selected.CatalogID, decision.Model)
@@ -304,12 +307,15 @@ func TestSidecarRouterPreviewReturnsAllEligibleArmsWithoutLifecycleCallbacks(t *
 
 func TestSidecarRouterPreviewUsesArmSchemaAndIDs(t *testing.T) {
 	resolver := policy.NewArmResolver(
-		set("minimax/minimax-m2.7"),
-		set(providers.ProviderTogether, providers.ProviderFireworks),
+		set("claude-opus-4-8"),
+		set(providers.ProviderAnthropic, providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
-	resolved := resolver.Resolve(router.Request{})
+	request := router.Request{CustomBindings: map[string][]string{
+		"claude-opus-4-8": {providers.ProviderAIAND},
+	}}
+	resolved := resolver.Resolve(request)
 	require.Len(t, resolved.Candidates, 2)
 	selectedArmID := resolved.Candidates[0].ArmID
 	decider := &recordingPolicy{preview: policy.PreviewResult{
@@ -334,7 +340,7 @@ func TestSidecarRouterPreviewUsesArmSchemaAndIDs(t *testing.T) {
 		Strategy: router.Strategy("temporal-q"),
 	}, decider, resolver).WithCapabilities(policy.Capabilities{SupportsPreview: true})
 
-	result, err := adapter.PreviewRoute(context.Background(), router.Request{})
+	result, err := adapter.PreviewRoute(context.Background(), request)
 
 	require.NoError(t, err)
 	assert.Equal(t, policy.SchemaVersionV2, decider.previewQuery.SchemaVersion)

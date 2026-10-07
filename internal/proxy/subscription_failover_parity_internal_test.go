@@ -223,7 +223,7 @@ func TestSubscriptionFailoverParity_Eligibility(t *testing.T) {
 			})
 
 			t.Run("another provider's key is not a fallback", func(t *testing.T) {
-				other := providers.ProviderOpenRouter
+				other := providers.ProviderAIAND
 				svc := &Service{deploymentKeyedProviders: map[string]struct{}{other: {}}}
 				assert.False(t, in.fallbackAvailable(svc, in.subCtx()),
 					"the fallback probe is provider-scoped; a key for another provider cannot serve this turn")

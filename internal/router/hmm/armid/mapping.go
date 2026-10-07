@@ -44,8 +44,6 @@ func ForModel(m catalog.Model) string {
 		return "anthropic/" + m.ID
 	case providers.ProviderOpenAI:
 		return "openai/" + m.ID
-	case providers.ProviderGoogle:
-		return "google/" + m.ID
 	}
 	return ""
 }

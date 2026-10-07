@@ -15,8 +15,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// escalateModel is the strong model a looping cheap/mid session is rescued onto.
-const escalateModel = "claude-opus-5"
+// escalateModel is the strong model a looping cheap/mid session is rescued
+// onto: the roster's frontier anchor on AIand.
+const escalateModel = "zai-org/glm-5.3"
 
 // LoopEscalationStore persists cyclic-loop detections (one row per
 // session+role); CountLoopEscalationEvents enforces the once-per-session budget.
@@ -247,8 +248,8 @@ func (s *Service) handleLoopEscalation(
 	// budget, so recording before the pin lands would permanently block retry
 	// on a failed rescue. On upsert failure, return without a row so the loop re-detects next turn.
 	if willEscalate {
-		// Pin opus for the rest of the session (immutable sticky via
-		// ReasonLoopEscalation).
+		// Pin the frontier anchor for the rest of the session (immutable
+		// sticky via ReasonLoopEscalation).
 		if s.pinStore == nil || installationID == uuid.Nil {
 			return
 		}
@@ -260,7 +261,7 @@ func (s *Service) handleLoopEscalation(
 			SessionKey:      sessionKey,
 			Role:            role,
 			InstallationID:  installationID,
-			Provider:        providers.ProviderAnthropic,
+			Provider:        providers.ProviderAIAND,
 			Model:           escalateModel,
 			Reason:          translate.ReasonLoopEscalation,
 			Strategy:        router.StrategyFromContext(ctx),
@@ -276,7 +277,7 @@ func (s *Service) handleLoopEscalation(
 		}
 	}
 
-	// Durable row for fire-rate/opus-share metrics and the training corpus.
+	// Durable row for fire-rate/escalation-share metrics and the training corpus.
 	// context.Background(): request ctx may be canceled; losing the row would
 	// skew the corpus and break the once-per-session budget (pin check still dedupes re-fires meanwhile).
 	if s.loopEscalationStore != nil && installationID != uuid.Nil {

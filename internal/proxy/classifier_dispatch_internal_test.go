@@ -66,12 +66,6 @@ func TestClassifierDispatchAcrossProtocols(t *testing.T) {
 			`{"type":"function_call","call_id":"c1","name":"test","arguments":"{}"},{"type":"function_call_output","call_id":"c1","status":"failed","output":"failed"}`,
 			`{"role":"user","content":"third"}`,
 			(*Service).ProxyOpenAIResponses},
-		{"gemini", providers.ProviderGoogle, "gemini-2.5-pro", "/v1beta/models/gemini-2.5-pro:generateContent",
-			`{"model":"gemini-2.5-pro","contents":[{"role":"user","parts":[{"text":"first"}]}]}`,
-			`{"model":"gemini-2.5-pro","contents":[{"role":"user","parts":[{"text":"first"}]},{"role":"model","parts":[{"text":""},{"text":"answer"}]},{"role":"user","parts":[{"text":"next"}]}]}`,
-			`{"role":"model","parts":[{"functionCall":{"id":"c1","name":"test","args":{}}}]},{"role":"user","parts":[{"functionResponse":{"id":"c1","name":"test","response":{"error":"failed"}}}]}`,
-			`{"role":"user","parts":[{"text":"third"}]}`,
-			(*Service).ProxyGeminiGenerateContent},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var inputs []router.AtomicClassificationRequest

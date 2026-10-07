@@ -25,12 +25,16 @@ func TestValidateRosterIDs_AmbiguousMappingReported(t *testing.T) {
 	assert.Equal(t, "acme/model-a", diags[0].RosterID)
 }
 
-func TestValidateRosterIDs_OpenRouterOnlyBindingReported(t *testing.T) {
+func TestValidateRosterIDs_DeniedBindingReported(t *testing.T) {
+	// ManagedProviderPolicy denies nothing after the AIand-only cut, so the
+	// fixture supplies an explicit denial: a roster arm whose only binding is
+	// policy-denied must be reported as undispatchable.
 	models := []catalog.Model{
-		{ID: "acme/model-b", Providers: []catalog.ProviderBinding{{Provider: providers.ProviderOpenRouter}}},
+		{ID: "acme/model-b", Providers: []catalog.ProviderBinding{{Provider: providers.ProviderOpenAI}}},
 	}
+	denyOpenAI := policy.ProviderPolicy{Denied: map[string]struct{}{providers.ProviderOpenAI: {}}}
 
-	diags := validateRosterIDs([]string{"acme/model-b"}, models, policy.ManagedProviderPolicy())
+	diags := validateRosterIDs([]string{"acme/model-b"}, models, denyOpenAI)
 
 	require.Len(t, diags, 1)
 	assert.Equal(t, policy.ExclusionProviderPolicy, diags[0].Reason)

@@ -19,8 +19,8 @@ import (
 )
 
 // DispatchErrorKind identifies which sentinel a dispatch error (from
-// ProxyMessages, ProxyOpenAIChatCompletion, ProxyOpenAIResponses, or
-// ProxyGeminiGenerateContent) matched, so a format-specific handler can pick
+// ProxyMessages, ProxyOpenAIChatCompletion, or ProxyOpenAIResponses) matched,
+// so a format-specific handler can pick
 // its own error-envelope "type"/"status" string without re-deriving the
 // classification itself.
 type DispatchErrorKind int
@@ -73,8 +73,8 @@ const (
 // DispatchErrorClass is the format-agnostic classification of a dispatch
 // error: the HTTP status to return, the client-facing message, whether to
 // set Retry-After, and how (if at all) the handler should log it. Format
-// packages own only the envelope shape (writeAnthropicError/writeOpenAIError/
-// writeGeminiError) and any per-Kind "type" string their wire format needs.
+// packages own only the envelope shape (writeAnthropicError/writeOpenAIError)
+// and any per-Kind "type" string their wire format needs.
 type DispatchErrorClass struct {
 	Kind       DispatchErrorKind
 	Status     int
@@ -88,15 +88,14 @@ type DispatchErrorClass struct {
 }
 
 // ClassifyDispatchError maps the sentinel errors shared by every dispatch
-// entry point (ProxyMessages, ProxyOpenAIChatCompletion, ProxyOpenAIResponses,
-// ProxyGeminiGenerateContent) to a DispatchErrorClass. The second return value
-// is false when err doesn't match any known sentinel, meaning the caller
-// should fall back to its own generic upstream-failure response.
+// entry point (ProxyMessages, ProxyOpenAIChatCompletion, ProxyOpenAIResponses)
+// to a DispatchErrorClass. The second return value is false when err doesn't
+// match any known sentinel, meaning the caller should fall back to its own
+// generic upstream-failure response.
 //
 // Callers must check c.Writer.Written() (mid-stream failure) before calling
-// this — that's HTTP-plumbing, not classification — and must handle
-// format-specific sentinels (e.g. proxy.ErrGeminiCrossFormatUnsupported)
-// themselves before falling through here.
+// this — that's HTTP-plumbing, not classification — and must handle any
+// format-specific sentinels themselves before falling through here.
 func ClassifyDispatchError(err error) (DispatchErrorClass, bool) {
 	var statusErr *providers.UpstreamStatusError
 	var bufferedErr *providers.UpstreamErrorResponse

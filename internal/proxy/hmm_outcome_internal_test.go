@@ -39,7 +39,7 @@ func TestReportPolicyOutcome_UsesFreshMetadataForStickyServedDecision(t *testing
 		StickyHit: true,
 		Fresh: router.Decision{
 			Model:    "moonshotai/kimi-k2.7",
-			Provider: providers.ProviderFireworks,
+			Provider: providers.ProviderAIAND,
 			Metadata: &router.RoutingMetadata{
 				RouteID:          "route-fresh",
 				Strategy:         string(router.StrategyHMM),
@@ -74,13 +74,13 @@ func TestReportPolicyOutcome_UsesFreshMetadataForStickyServedDecision(t *testing
 	case payload := <-reporter.ch:
 		require.Equal(t, "route-fresh", payload["route_id"])
 		assert.Equal(t, "moonshotai/kimi-k2.7", payload["selected_model"])
-		assert.Equal(t, providers.ProviderFireworks, payload["selected_provider"])
+		assert.Equal(t, providers.ProviderAIAND, payload["selected_provider"])
 		assert.Equal(t, "claude-haiku-4-5", payload["served_model"])
 		assert.Equal(t, providers.ProviderAnthropic, payload["served_provider"])
 		assert.Equal(t, false, payload["selected_served_model_match"])
 		assert.NotContains(t, payload, "training_exclusion_reason")
 		assert.Equal(t, "moonshotai/kimi-k2.7", payload["decision_model"])
-		assert.Equal(t, providers.ProviderFireworks, payload["decision_provider"])
+		assert.Equal(t, providers.ProviderAIAND, payload["decision_provider"])
 		assert.Equal(t, "medium|mid", payload["policy_route_key"])
 		assert.Equal(t, "hmm-prod", payload["policy_artifact_id"])
 		assert.Equal(t, "org-1", payload["organization_id"])
@@ -107,7 +107,7 @@ func TestReportPolicyOutcome_OmitsResponseBodyWhenTrainingIsNotAllowed(t *testin
 		Metadata: &router.RoutingMetadata{RouteID: "route-1", Strategy: string(router.StrategyHMM)},
 	}}
 
-	s.reportPolicyOutcome(context.Background(), routeRes, routeRes.Fresh, effortResolution{}, providers.ProviderFireworks, false, 1, 1, 1, 0, 0, 1, 1, nil, &policyOutcomeResponse{Body: []byte("private response")})
+	s.reportPolicyOutcome(context.Background(), routeRes, routeRes.Fresh, effortResolution{}, providers.ProviderAIAND, false, 1, 1, 1, 0, 0, 1, 1, nil, &policyOutcomeResponse{Body: []byte("private response")})
 
 	select {
 	case payload := <-reporter.ch:

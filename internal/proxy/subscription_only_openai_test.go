@@ -72,12 +72,12 @@ func TestSubscriptionOnly_OpenAI_ServesOnCodexSub(t *testing.T) {
 // the bug the Codex path previously had, where such a turn debited past the
 // floor with no bound.
 func TestSubscriptionOnly_OpenAI_PaidRoute_Refuses402(t *testing.T) {
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenRouter, Model: "deepseek/deepseek-chat", Reason: "test"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: "deepseek/deepseek-chat", Reason: "test"}}
 	p := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"id":"x","object":"chat.completion"}`)
 	}}
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderOpenRouter: p}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAIAND: p}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
 
 	// MainLoop-shaped (tools + large max_tokens) so the turn isn't classified as
 	// a hard-pinned classifier turn; that would bypass the scorer and defeat the

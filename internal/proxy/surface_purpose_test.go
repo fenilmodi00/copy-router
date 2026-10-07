@@ -73,15 +73,6 @@ func TestPublicSurfaces_DispatchThroughResolvedPlan(t *testing.T) {
 					httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader("")))
 			},
 		},
-		"gemini generate content": {
-			provider: providers.ProviderGoogle, model: "gemini-2.5-pro",
-			purpose: inference.PurposeGeminiGenerateContent, policyID: "main-gemini-generate-content",
-			upstream: jsonUpstream(`{"candidates":[{"content":{"role":"model","parts":[{"text":"hi"}]}}]}`),
-			run: func(svc *proxy.Service, w http.ResponseWriter) error {
-				return svc.ProxyGeminiGenerateContent(authedCtx("00000000-0000-0000-0000-000000000001"), []byte(geminiInjectedBody), w,
-					httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-1.5-pro:generateContent", strings.NewReader("")))
-			},
-		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

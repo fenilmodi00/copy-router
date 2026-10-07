@@ -65,7 +65,7 @@ func TestMaxRouteRefusesAClosedSourceDecision(t *testing.T) {
 }
 
 func TestMaxRouteRefusesAnUnknownSourceDecision(t *testing.T) {
-	unknownRouter := &registryRouter{decision: router.Decision{Model: "muse-spark-1.3", Provider: providers.ProviderMeta}}
+	unknownRouter := &registryRouter{decision: router.Decision{Model: "muse-spark-1.3", Provider: providers.ProviderAIAND}}
 	svc := &Service{router: unknownRouter}
 
 	_, err := svc.Route(maxScopedContext(), router.Request{})
@@ -74,8 +74,8 @@ func TestMaxRouteRefusesAnUnknownSourceDecision(t *testing.T) {
 }
 
 func TestMaxRouteServesOpenSourceDecision(t *testing.T) {
-	openRouter := &registryRouter{decision: router.Decision{Model: "deepseek/deepseek-v4-pro", Provider: providers.ProviderFireworks}}
-	svc := &Service{router: openRouter}
+	ossRouter := &registryRouter{decision: router.Decision{Model: "deepseek/deepseek-v4-pro", Provider: providers.ProviderAIAND}}
+	svc := &Service{router: ossRouter}
 
 	decision, err := svc.Route(maxScopedContext(), router.Request{})
 
@@ -129,16 +129,16 @@ func TestDispatchRefusesAnIneligibleDecisionTheTurnLoopMinted(t *testing.T) {
 }
 
 func TestDispatchServesAnEligibleDecision(t *testing.T) {
-	fireworks := &fakeClient{name: providers.ProviderFireworks, outcomes: []fakeOutcome{{writeBytes: []byte("served")}}}
-	svc := newServiceWithProviders(t, map[string]providers.Client{providers.ProviderFireworks: fireworks})
+	aiand := &fakeClient{name: providers.ProviderAIAND, outcomes: []fakeOutcome{{writeBytes: []byte("served")}}}
+	svc := newServiceWithProviders(t, map[string]providers.Client{providers.ProviderAIAND: aiand})
 
 	rec := httptest.NewRecorder()
-	in := plannedInputs(rec, newPreludeBuffer(rec), []catalog.ProviderBinding{{Provider: providers.ProviderFireworks}}, nil)
+	in := plannedInputs(rec, newPreludeBuffer(rec), []catalog.ProviderBinding{{Provider: providers.ProviderAIAND}}, nil)
 
 	_, err := svc.dispatchWithFallback(maxScopedContext(), in)
 
 	require.NoError(t, err)
-	assert.Equal(t, 1, fireworks.calls)
+	assert.Equal(t, 1, aiand.calls)
 }
 
 // The subscription pass-through lane serves the requested model verbatim

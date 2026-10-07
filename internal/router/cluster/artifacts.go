@@ -222,20 +222,6 @@ func ListVersions() ([]string, error) {
 		if !e.IsDir() {
 			continue
 		}
-		if e.Name() == "legacy" {
-			// Traverse the legacy subfolder
-			legacyEntries, err := fs.ReadDir(embeddedArtifacts, "artifacts/legacy")
-			if err != nil {
-				return nil, fmt.Errorf("artifacts: read legacy root: %w", err)
-			}
-			for _, le := range legacyEntries {
-				if !le.IsDir() {
-					continue
-				}
-				versions = append(versions, le.Name())
-			}
-			continue
-		}
 		versions = append(versions, e.Name())
 	}
 	if len(versions) == 0 {
@@ -246,11 +232,7 @@ func ListVersions() ([]string, error) {
 }
 
 func bundleDirForVersion(version string) string {
-	p := path.Join("artifacts", version)
-	if _, err := fs.Stat(embeddedArtifacts, p); err == nil {
-		return p
-	}
-	return path.Join("artifacts", "legacy", version)
+	return path.Join("artifacts", version)
 }
 
 // ResolveVersion turns a user-supplied version string into a concrete

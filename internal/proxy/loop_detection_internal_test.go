@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"weave-os/router/internal/providers"
 	"weave-os/router/internal/router/sessionpin"
 	"weave-os/router/internal/translate"
 
@@ -183,8 +184,9 @@ func TestHandleLoopEscalation_RecordsEventAndPins(t *testing.T) {
 	assert.Equal(t, "Read", ev.LoopTool)
 	assert.Equal(t, int32(12), ev.RepeatCount)
 
-	require.Len(t, pins.upserts, 1, "escalation must write the opus pin")
+	require.Len(t, pins.upserts, 1, "escalation must write the frontier-anchor pin")
 	assert.Equal(t, escalateModel, pins.upserts[0].Model)
+	assert.Equal(t, providers.ProviderAIAND, pins.upserts[0].Provider, "the escalation target is served on AIand")
 	assert.Equal(t, translate.ReasonLoopEscalation, pins.upserts[0].Reason)
 }
 

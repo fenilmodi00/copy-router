@@ -12,7 +12,6 @@ const (
 	PurposeAnthropicMessages         Purpose = "anthropic_messages"
 	PurposeOpenAIChatCompletions     Purpose = "openai_chat_completions"
 	PurposeOpenAIResponses           Purpose = "openai_responses"
-	PurposeGeminiGenerateContent     Purpose = "gemini_generate_content"
 	PurposeEscalationJudge           Purpose = "escalation_judge"
 	PurposeHandoverSummary           Purpose = "handover_summary"
 	PurposePrecompactionSummary      Purpose = "precompaction_summary"

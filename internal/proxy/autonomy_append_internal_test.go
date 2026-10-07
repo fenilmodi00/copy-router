@@ -100,11 +100,10 @@ func TestAutonomySystemAppendApplies_IdempotentAndSkipsSearchSubTurn(t *testing.
 	})
 }
 
-func TestAutonomyAppendFired_NotRecordedForGeminiServedAttempt(t *testing.T) {
+func TestAutonomyAppendFired_TracksAppendOption(t *testing.T) {
 	on := translate.EmitOptions{AppendAutonomySystem: true}
 	assert.True(t, autonomyAppendFired(on, providers.ProviderAnthropic))
 	assert.True(t, autonomyAppendFired(on, providers.ProviderOpenAI))
-	assert.True(t, autonomyAppendFired(on, providers.ProviderOpenRouter))
-	assert.False(t, autonomyAppendFired(on, providers.ProviderGoogle), "PrepareGemini drops the append, telemetry must agree")
+	assert.True(t, autonomyAppendFired(on, providers.ProviderAIAND))
 	assert.False(t, autonomyAppendFired(translate.EmitOptions{}, providers.ProviderAnthropic))
 }

@@ -12,7 +12,7 @@ import (
 	"weave-os/router/internal/router/sessionpin"
 )
 
-// compactionModelOrDefault returns the configured Sonnet-class model for
+// compactionModelOrDefault returns the configured summarizer model for
 // Claude Code's own compaction turn.
 func (s *Service) compactionModelOrDefault() string {
 	if s.compactionModel != "" {
@@ -21,10 +21,10 @@ func (s *Service) compactionModelOrDefault() string {
 	return policy.PrecompactionDefaultModel
 }
 
-// anthropicSummarizerEligible reports whether model is a reviewed member of
-// the precompaction-summary policy: an Anthropic-served, non-low-tier catalog
-// model Claude Code's own compaction turn may be pinned to.
-func anthropicSummarizerEligible(model string) bool {
+// summarizerEligible reports whether model is a reviewed member of the
+// precompaction-summary policy: an AIand-served, non-low-tier catalog model
+// Claude Code's own compaction turn may be pinned to.
+func summarizerEligible(model string) bool {
 	spec, ok := policy.DefaultRegistry().Spec(policy.PurposePrecompactionSummary)
 	if !ok || !slices.Contains(spec.FixedCatalogModels, model) {
 		return false
@@ -34,7 +34,7 @@ func anthropicSummarizerEligible(model string) bool {
 		return false
 	}
 	for _, b := range m.Providers {
-		if b.Provider == providers.ProviderAnthropic {
+		if b.Provider == providers.ProviderAIAND {
 			return true
 		}
 	}
@@ -42,7 +42,7 @@ func anthropicSummarizerEligible(model string) bool {
 }
 
 // compactionPreferredSummarizer returns the session's active pinned model
-// when it is served by Anthropic directly — the same model that has been
+// when it is served by AIand directly — the same model that has been
 // running the conversation, so its prompt cache is warm for the summary call.
 // Empty when there is no pin store, no active pin, or the pin is elsewhere.
 func (s *Service) compactionPreferredSummarizer(ctx context.Context, sessionKey [sessionpin.SessionKeyLen]byte, role string) string {
@@ -50,23 +50,23 @@ func (s *Service) compactionPreferredSummarizer(ctx context.Context, sessionKey 
 		return ""
 	}
 	pin, active := s.loadPin(ctx, sessionKey, role)
-	if !active || pin.Provider != providers.ProviderAnthropic {
+	if !active || pin.Provider != providers.ProviderAIAND {
 		return ""
 	}
 	return pin.Model
 }
 
 // compactionHardPin picks the model for a harness's own compaction turn: the
-// model that ran the conversation when it is Sonnet-class or better (prompt
-// cache warm — what Claude Code and Codex do against their vendor directly),
-// else the configured compaction model on Anthropic. A Codex thread arrives
-// in Responses format, so when a non-Anthropic model has been serving it the
-// turn stays there rather than being summarized cross-format by Sonnet — the
-// summary replaces the thread's history for every turn that follows. source
-// records whether the session's own model or the deployment's configured one
-// won, so the plan is authorized under the matching override. ok=false when
-// nothing is eligible for this request, so the caller falls back to the
-// generic hard-pin tier.
+// model that ran the conversation when it is mid-tier or better (prompt cache
+// warm — what Claude Code and Codex do against their vendor directly), else
+// the configured compaction model on AIand. A Codex thread arrives in
+// Responses format, so when a non-AIand model has been serving it the turn
+// stays there rather than being summarized cross-format by the AIand
+// summarizer — the summary replaces the thread's history for every turn that
+// follows. source records whether the session's own model or the deployment's
+// configured one won, so the plan is authorized under the matching override.
+// ok=false when nothing is eligible for this request, so the caller falls back
+// to the generic hard-pin tier.
 func (s *Service) compactionHardPin(ctx context.Context, sessionKey [sessionpin.SessionKeyLen]byte, role string, req router.Request) (provider, model string, source policy.OverrideSource, ok bool) {
 	// Gateway-exclusive tenants drop vendor bindings; leave them to the resolver.
 	if len(req.GatewayProviders) > 0 {
@@ -78,12 +78,12 @@ func (s *Service) compactionHardPin(ctx context.Context, sessionKey [sessionpin.
 		}
 	}
 	if req.EnabledProviders != nil {
-		if _, enabled := req.EnabledProviders[providers.ProviderAnthropic]; !enabled {
+		if _, enabled := req.EnabledProviders[providers.ProviderAIAND]; !enabled {
 			return "", "", "", false
 		}
 	}
 	eligible := func(m string) bool {
-		if !anthropicSummarizerEligible(m) {
+		if !summarizerEligible(m) {
 			return false
 		}
 		if s.availableModels != nil {
@@ -98,17 +98,18 @@ func (s *Service) compactionHardPin(ctx context.Context, sessionKey [sessionpin.
 	}
 	preferred := s.compactionPreferredSummarizer(ctx, sessionKey, role)
 	if latest := catalog.LatestInFamily(preferred, eligible); latest != "" {
-		return providers.ProviderAnthropic, latest, policy.OverrideSourceSession, true
+		return providers.ProviderAIAND, latest, policy.OverrideSourceSession, true
 	}
 	if m := catalog.LatestInFamily(s.compactionModelOrDefault(), eligible); m != "" {
-		return providers.ProviderAnthropic, m, policy.OverrideSourceDeployment, true
+		return providers.ProviderAIAND, m, policy.OverrideSourceDeployment, true
 	}
 	return "", "", "", false
 }
 
 // compactionSessionModel upgrades the last served non-Anthropic session
 // family to its newest eligible catalog version. The active thread pin and
-// HMM history compete by completion time; Anthropic uses its separate path.
+// HMM history compete by completion time; the AIand summarizer lane owns the
+// models it prefers.
 func (s *Service) compactionSessionModel(ctx context.Context, sessionKey [sessionpin.SessionKeyLen]byte, role string, req router.Request) (provider, model string, ok bool) {
 	if s.pinStore == nil {
 		return "", "", false

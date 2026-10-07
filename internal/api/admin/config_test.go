@@ -22,8 +22,8 @@ import (
 // provider whose env var is actually set, regardless of when the provider
 // was added to internal/providers.
 func TestConfigHandler_EnvProviderKeys_IncludesEveryDeployedProvider(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderMakora), "dummy-key")
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderBedrock), "dummy-key")
+	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropic), "dummy-key")
+	t.Setenv(providers.APIKeyEnvVar(providers.ProviderOpenAI), "dummy-key")
 
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -41,6 +41,6 @@ func TestConfigHandler_EnvProviderKeys_IncludesEveryDeployedProvider(t *testing.
 		EnvProviderKeys []string `json:"env_provider_keys"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	require.Contains(t, body.EnvProviderKeys, providers.ProviderMakora)
-	require.Contains(t, body.EnvProviderKeys, providers.ProviderBedrock)
+	require.Contains(t, body.EnvProviderKeys, providers.ProviderAnthropic)
+	require.Contains(t, body.EnvProviderKeys, providers.ProviderOpenAI)
 }

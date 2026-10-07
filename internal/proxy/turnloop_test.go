@@ -972,7 +972,7 @@ func TestTurnLoop_MaxedOutPinExcludedFromCandidates(t *testing.T) {
 	store := newFakePinStore()
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
-		Provider:          providers.ProviderOpenRouter,
+		Provider:          providers.ProviderAIAND,
 		Model:             "moonshotai/kimi-k2.6",
 		Reason:            "cluster:v0.52",
 		PinnedUntil:       time.Now().Add(time.Hour),

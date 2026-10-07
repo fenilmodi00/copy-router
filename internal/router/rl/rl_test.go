@@ -46,21 +46,18 @@ func enabled(names ...string) map[string]struct{} {
 var allProviders = enabled(
 	providers.ProviderAnthropic,
 	providers.ProviderOpenAI,
-	providers.ProviderGoogle,
-	providers.ProviderMakora,
-	providers.ProviderFireworks,
-	providers.ProviderBedrock,
+	providers.ProviderAIAND,
 )
 
 func TestRouteMapsRosterChoiceBackToCatalogModel(t *testing.T) {
 	// The policy picks by OpenRouter-style roster ID; the router must dispatch
 	// the corresponding catalog model via its own provider.
 	dec := &fakeDecider{result: rl.Result{Model: "anthropic/claude-opus-4-8", Score: 1.5, ScoreLabel: "DPO score", StateLabel: "implementing"}}
-	r := rl.New(dec, deployed("claude-opus-4-8", "deepseek/deepseek-v4.1-flash"), allProviders)
+	r := rl.New(dec, deployed("claude-opus-4-8", "deepseek-ai/deepseek-v4.1-flash"), allProviders)
 
 	decision, err := r.Route(context.Background(), router.Request{
 		PromptText:       "refactor the auth module",
-		EnabledProviders: enabled(providers.ProviderAnthropic, providers.ProviderMakora),
+		EnabledProviders: enabled(providers.ProviderAnthropic, providers.ProviderAIAND),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "claude-opus-4-8", decision.Model)
@@ -68,19 +65,19 @@ func TestRouteMapsRosterChoiceBackToCatalogModel(t *testing.T) {
 	assert.Contains(t, decision.Reason, "DPO score")
 	assert.Contains(t, decision.Reason, "implementing")
 
-	// The deepseek slash-form id passes through unchanged; the dotted/dashed
-	// first-party slug is what the policy was offered for opus.
+	// The AIand-served deepseek slash-form id passes through unchanged; the
+	// dotted/dashed first-party slug is what the policy was offered for opus.
 	rosterIDs := make(map[string]string, len(dec.got.Candidates))
 	for _, c := range dec.got.Candidates {
 		rosterIDs[c.RosterID] = c.Provider
 	}
 	assert.Equal(t, providers.ProviderAnthropic, rosterIDs["anthropic/claude-opus-4-8"])
-	assert.Equal(t, providers.ProviderMakora, rosterIDs["deepseek/deepseek-v4.1-flash"])
+	assert.Equal(t, providers.ProviderAIAND, rosterIDs["deepseek-ai/deepseek-v4.1-flash"])
 }
 
 func TestRouteOmitsModelsWithNoEnabledProvider(t *testing.T) {
 	dec := &fakeDecider{result: rl.Result{Model: "anthropic/claude-opus-4-8"}}
-	r := rl.New(dec, deployed("claude-opus-4-8", "deepseek/deepseek-v4.1-flash"), allProviders)
+	r := rl.New(dec, deployed("claude-opus-4-8", "deepseek-ai/deepseek-v4.1-flash"), allProviders)
 
 	_, err := r.Route(context.Background(), router.Request{
 		PromptText:       "hi",
@@ -88,18 +85,18 @@ func TestRouteOmitsModelsWithNoEnabledProvider(t *testing.T) {
 	})
 	require.NoError(t, err)
 	for _, c := range dec.got.Candidates {
-		assert.NotEqual(t, "deepseek/deepseek-v4.1-flash", c.RosterID,
-			"makora not enabled, so the deepseek model must not be offered")
+		assert.NotEqual(t, "deepseek-ai/deepseek-v4.1-flash", c.RosterID,
+			"aiand not enabled, so the deepseek model must not be offered")
 	}
 }
 
 func TestRouteExcludesRequestedExclusions(t *testing.T) {
-	dec := &fakeDecider{result: rl.Result{Model: "deepseek/deepseek-v4.1-flash"}}
-	r := rl.New(dec, deployed("claude-opus-4-8", "deepseek/deepseek-v4.1-flash"), allProviders)
+	dec := &fakeDecider{result: rl.Result{Model: "deepseek-ai/deepseek-v4.1-flash"}}
+	r := rl.New(dec, deployed("claude-opus-4-8", "deepseek-ai/deepseek-v4.1-flash"), allProviders)
 
 	_, err := r.Route(context.Background(), router.Request{
 		PromptText:       "hi",
-		EnabledProviders: enabled(providers.ProviderAnthropic, providers.ProviderMakora),
+		EnabledProviders: enabled(providers.ProviderAnthropic, providers.ProviderAIAND),
 		ExcludedModels:   map[string]struct{}{"claude-opus-4-8": {}},
 	})
 	require.NoError(t, err)
@@ -137,7 +134,7 @@ func TestRouteNilEnabledProvidersIsUnrestricted(t *testing.T) {
 	// policy must still be offered the deployed models via their primary
 	// provider, not an empty set.
 	dec := &fakeDecider{result: rl.Result{Model: "anthropic/claude-opus-4-8"}}
-	r := rl.New(dec, deployed("claude-opus-4-8", "deepseek/deepseek-v4.1-flash"), allProviders)
+	r := rl.New(dec, deployed("claude-opus-4-8", "deepseek-ai/deepseek-v4.1-flash"), allProviders)
 
 	decision, err := r.Route(context.Background(), router.Request{
 		PromptText:       "hi",
@@ -170,10 +167,10 @@ func TestRouteToolTurnDropsToolUseLowFromCandidatesAndIndex(t *testing.T) {
 }
 
 func TestRouteImageTurnDropsImageUnsupported(t *testing.T) {
-	// Qwen Coder Next is text-only; Opus is vision-capable.
+	// motif-3 is text-only; Opus is vision-capable.
 	// An image turn must drop the text-only model when a capable one survives.
 	dec := &fakeDecider{result: rl.Result{Model: "anthropic/claude-opus-4-8"}}
-	r := rl.New(dec, deployed("claude-opus-4-8", "qwen/qwen3-coder-next"), allProviders)
+	r := rl.New(dec, deployed("claude-opus-4-8", "motif-technologies/motif-3"), allProviders)
 
 	_, err := r.Route(context.Background(), router.Request{
 		PromptText:       "what is in this image",
@@ -182,7 +179,7 @@ func TestRouteImageTurnDropsImageUnsupported(t *testing.T) {
 	})
 	require.NoError(t, err)
 	for _, c := range dec.got.Candidates {
-		assert.NotEqual(t, "qwen/qwen3-coder-next", c.RosterID,
+		assert.NotEqual(t, "motif-technologies/motif-3", c.RosterID,
 			"image-unsupported model must not be offered on an image turn")
 	}
 }

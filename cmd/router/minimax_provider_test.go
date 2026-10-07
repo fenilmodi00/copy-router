@@ -8,9 +8,9 @@ import (
 	"weave-os/router/internal/providers"
 )
 
-func TestUpstreamIDsForProvider_MiniMax(t *testing.T) {
-	ids := upstreamIDsForProvider(providers.ProviderMiniMax)
+func TestUpstreamIDsForProvider_OpenAI(t *testing.T) {
+	ids := upstreamIDsForProvider(providers.ProviderOpenAI)
 
-	assert.Equal(t, "MiniMax-M3", ids["minimax/minimax-m3"])
-	assert.Equal(t, "MiniMax-M2.7", ids["minimax/minimax-m2.7"])
+	assert.Equal(t, "gpt-5.6-luna", ids["gpt-5.6-luna-pro"])
+	assert.Equal(t, "gpt-5.6-sol", ids["gpt-5.6-sol-pro"])
 }

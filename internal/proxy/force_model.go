@@ -232,6 +232,9 @@ func resolveForceModelWithEffort(model string) (canonicalID, provider string, kn
 	if requiredProvider != "" {
 		return unknownID, requiredProvider, false, effort
 	}
+	// Unknown names keep the claude-/gpt- prefix hints (BYOK passthrough still
+	// serves those families); everything else falls through to the AIand
+	// roster — the only auto-served catalog on this deployment.
 	switch {
 	case strings.HasPrefix(model, "claude-"):
 		return model, providers.ProviderAnthropic, false, effort
@@ -239,12 +242,8 @@ func resolveForceModelWithEffort(model string) (canonicalID, provider string, kn
 		model == "o1", model == "o3", model == "o1-pro", model == "o3-pro",
 		strings.HasPrefix(model, "o1-"), strings.HasPrefix(model, "o3-"), strings.HasPrefix(model, "o4-"):
 		return model, providers.ProviderOpenAI, false, effort
-	case strings.HasPrefix(model, "gemini-"):
-		return model, providers.ProviderGoogle, false, effort
-	case strings.Contains(model, "/"):
-		return model, providers.ProviderOpenRouter, false, effort
 	default:
-		return model, providers.ProviderAnthropic, false, effort
+		return model, providers.ProviderAIAND, false, effort
 	}
 }
 

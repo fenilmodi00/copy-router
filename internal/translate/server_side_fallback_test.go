@@ -46,11 +46,12 @@ func TestServerSideFallback_DisabledLeavesRequestUntouched(t *testing.T) {
 	assert.NotContains(t, prep.Headers.Get("anthropic-beta"), "server-side-fallback")
 }
 
-// The beta is a first-party Anthropic field; a gateway rejects the unknown key.
+// The beta is a first-party Anthropic field; a non-Anthropic target rejects the
+// unknown key.
 func TestServerSideFallback_SkippedForNonFirstPartyTarget(t *testing.T) {
 	prep := prepareWithFallback(t, http.Header{}, serverSideFallbackBody, translate.EmitOptions{
 		TargetModel:              "claude-opus-5",
-		TargetProvider:           providers.ProviderAnthropicGateway,
+		TargetProvider:           providers.ProviderAIAND,
 		EnableServerSideFallback: true,
 	})
 

@@ -17,8 +17,8 @@ func TestCacheTTLFor(t *testing.T) {
 		"anthropic should report the 1h extended-cache window")
 
 	// The OSS/compat providers cache best-effort on a minutes-scale window.
-	assert.Equal(t, 5*time.Minute, providers.CacheTTLFor(providers.ProviderFireworks),
-		"fireworks should report the short best-effort window")
+	assert.Equal(t, 5*time.Minute, providers.CacheTTLFor(providers.ProviderAIAND),
+		"aiand should report the short best-effort window")
 
 	// Unknown providers fall back to the conservative default.
 	assert.Equal(t, providers.DefaultCacheTTL, providers.CacheTTLFor("nonexistent-provider"),

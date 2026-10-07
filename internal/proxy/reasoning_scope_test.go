@@ -125,10 +125,10 @@ func TestReasoningReplayScope_NormalizesEndpoint(t *testing.T) {
 // key, which no request-scoped value describes — two deployments of the same
 // provider and model must still not share a scope.
 func TestReasoningReplayScope_DeploymentKeyedTurnsAreDistinct(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderOpenRouter, Model: "grok-4.6"}
+	decision := router.Decision{Provider: providers.ProviderAIAND, Model: "grok-4.6"}
 	scopeFor := func(apiKey, baseURL string) string {
 		svc := reasoningScopeService(t, map[string]providers.Client{
-			providers.ProviderOpenRouter: openaicompat.NewClient(apiKey, baseURL),
+			providers.ProviderAIAND: openaicompat.NewClient(apiKey, baseURL),
 		})
 		return svc.reasoningReplayScope(requestcontext.WithCredentials(context.Background(), nil), decision)
 	}

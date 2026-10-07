@@ -145,7 +145,7 @@ func TestRunTurnLoop_ForcedModelContextOverflow_StaysInTier(t *testing.T) {
 		"claude-haiku-4-5": {},
 	}}
 	store := &forcedPinStore{pin: sessionpin.Pin{
-		Provider:    providers.ProviderFireworks,
+		Provider:    providers.ProviderAIAND,
 		Model:       forced,
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(time.Hour),

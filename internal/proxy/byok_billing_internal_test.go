@@ -38,7 +38,7 @@ func TestByokServedForProvider(t *testing.T) {
 		"a usable BYOK key for the summarizer's provider means the customer paid that upstream")
 	assert.False(t, byokServedForProvider(ctx, providers.ProviderOpenAI),
 		"an empty-plaintext BYOK row must not flip the turn to fee billing")
-	assert.False(t, byokServedForProvider(ctx, providers.ProviderGoogle),
+	assert.False(t, byokServedForProvider(ctx, providers.ProviderAIAND),
 		"a provider with no BYOK row bills full cost")
 	assert.False(t, byokServedForProvider(ctx, ""),
 		"an unreported summarizer provider must not be guessed as BYOK")

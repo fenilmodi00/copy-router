@@ -26,23 +26,9 @@ func TestCatalog_EveryModelHasAtLeastOneBinding(t *testing.T) {
 
 func TestCatalog_BindingsReferenceCanonicalProviders(t *testing.T) {
 	known := map[string]struct{}{
-		providers.ProviderAnthropic:        {},
-		providers.ProviderOpenAI:           {},
-		providers.ProviderGoogle:           {},
-		providers.ProviderOpenRouter:       {},
-		providers.ProviderFireworks:        {},
-		providers.ProviderDeepInfra:        {},
-		providers.ProviderBedrock:          {},
-		providers.ProviderMakora:           {},
-		providers.ProviderMiniMax:          {},
-		providers.ProviderTogether:         {},
-		providers.ProviderXAI:              {},
-		providers.ProviderMeta:             {},
-		providers.ProviderAIAND:            {},
-		providers.ProviderWafer:            {},
-		providers.ProviderWaferAnthropic:   {},
-		providers.ProviderAnthropicGateway: {},
-		providers.ProviderOpenAIGateway:    {},
+		providers.ProviderAnthropic: {},
+		providers.ProviderOpenAI:    {},
+		providers.ProviderAIAND:     {},
 	}
 	for _, m := range Models {
 		for i, b := range m.Providers {
@@ -168,39 +154,8 @@ func TestResolveBinding_PicksFirstAvailable(t *testing.T) {
 func TestTierFor_KnownAndUnknown(t *testing.T) {
 	assert.Equal(t, TierHigh, TierFor("claude-opus-4-7"))
 	assert.Equal(t, TierLow, TierFor("claude-haiku-4-5"))
-	assert.Equal(t, TierLow, TierFor("google/gemma-4-26b-a4b-it"))
+	assert.Equal(t, TierLow, TierFor("zai-org/glm-5.3-flash"))
 	assert.Equal(t, TierUnknown, TierFor("definitely-not-a-model"))
-}
-
-func TestResolveBinding_GemmaUsesNativeGoogleUpstreamID(t *testing.T) {
-	b, ok := ResolveBinding("google/gemma-4-26b-a4b-it", map[string]struct{}{providers.ProviderGoogle: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderGoogle, b.Provider)
-	assert.Equal(t, "gemma-4-26b-a4b-it", b.UpstreamID)
-}
-
-func TestResolveBinding_MiniMaxUsesNativeModelIDs(t *testing.T) {
-	cases := []struct {
-		model       string
-		upstreamID  string
-		inputPrice  float64
-		outputPrice float64
-	}{
-		{model: "minimax/minimax-m3", upstreamID: "MiniMax-M3", inputPrice: 0.300, outputPrice: 1.200},
-		{model: "minimax/minimax-m2.7", upstreamID: "MiniMax-M2.7", inputPrice: 0.300, outputPrice: 1.200},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.model, func(t *testing.T) {
-			binding, ok := ResolveBinding(tc.model, map[string]struct{}{providers.ProviderMiniMax: {}})
-			require.True(t, ok)
-			assert.Equal(t, providers.ProviderMiniMax, binding.Provider)
-			assert.Equal(t, tc.upstreamID, binding.UpstreamID)
-			assert.Equal(t, tc.inputPrice, binding.Price.InputUSDPer1M)
-			assert.Equal(t, tc.outputPrice, binding.Price.OutputUSDPer1M)
-			assert.Equal(t, 0.20, binding.Price.EffectiveCacheReadMultiplier())
-		})
-	}
 }
 
 func TestGPT56ProCatalogRowsAreDirectOpenAIRoutable(t *testing.T) {
@@ -265,29 +220,11 @@ func TestRoutingTargetSet_FiltersByTierAndRegisteredProviders(t *testing.T) {
 	assert.NotContains(t, targets, "gpt-4o", "untiered passthrough models must not become routing targets")
 }
 
-func TestRoutingTargetSet_AcceptsAnyRegisteredFallbackBinding(t *testing.T) {
-	targets := RoutingTargetSet(map[string]struct{}{providers.ProviderOpenRouter: {}})
+func TestRoutingTargetSet_AcceptsAnyRegisteredBinding(t *testing.T) {
+	targets := RoutingTargetSet(map[string]struct{}{providers.ProviderAIAND: {}})
 
-	assert.Contains(t, targets, "qwen/qwen3-coder-next", "a registered fallback binding makes the model dispatchable")
+	assert.Contains(t, targets, "zai-org/glm-5.3", "a registered binding makes the model dispatchable")
 	assert.NotContains(t, targets, "gpt-5.6-terra", "models with no registered binding stay unavailable")
-}
-
-func TestResolveBinding_UsesFireworksForTogetherDedicatedEndpointModels(t *testing.T) {
-	for _, id := range []string{
-		"deepseek/deepseek-v4-pro",
-		"deepseek/deepseek-v4-pro-0813",
-		"moonshotai/kimi-k2.7",
-		"z-ai/glm-5.1",
-	} {
-		t.Run(id, func(t *testing.T) {
-			_, ok := ResolveBinding(id, map[string]struct{}{providers.ProviderTogether: {}})
-			assert.False(t, ok, "model must not resolve through an unavailable binding")
-
-			binding, ok := ResolveBinding(id, map[string]struct{}{providers.ProviderFireworks: {}})
-			require.True(t, ok, "Fireworks remains a routable binding")
-			assert.Equal(t, providers.ProviderFireworks, binding.Provider)
-		})
-	}
 }
 
 func TestHMMRoutingTargetSetIncludesHMMOnlyTargets(t *testing.T) {
@@ -313,17 +250,9 @@ func TestAllowedAtOrBelow_FiltersOutUnknownTier(t *testing.T) {
 	assert.False(t, high)
 }
 
-func TestToolUseLowSet_IncludesQwen3_235BInstruct(t *testing.T) {
-	// Instruct-2507 emits narrative text instead of tool_use blocks (seen in prod
-	// 2026-05-23), so it's flagged ToolUseLow to exclude it from agentic argmax.
-	set := ToolUseLowSet()
-	_, found := set["qwen/qwen3-235b-a22b-2507"]
-	assert.True(t, found, "qwen/qwen3-235b-a22b-2507 must be marked ToolUseLow")
-}
-
 func TestToolUseLowSet_OmitsHealthyModels(t *testing.T) {
 	set := ToolUseLowSet()
-	for _, id := range []string{"claude-opus-4-7", "deepseek/deepseek-v4-pro", "moonshotai/kimi-k2.5"} {
+	for _, id := range []string{"claude-opus-4-7", "deepseek-ai/deepseek-v4-pro", "moonshotai/kimi-k3"} {
 		_, found := set[id]
 		assert.Falsef(t, found, "%s must NOT be in the ToolUseLow set", id)
 	}
@@ -336,33 +265,19 @@ func TestModel_ToolUseQualityDefaultsToUnknown(t *testing.T) {
 	assert.Equal(t, ToolUseUnknown, m.ToolUseQuality)
 }
 
-func TestAgenticLowSet_IncludesHarnessIncapableModels(t *testing.T) {
-	// These models emit valid tool calls but can't sustain an agentic harness
-	// loop, so they're dropped from has_tools turns (minimax-m3 grepping for a
-	// skill instead of running it is the canonical failure).
-	set := AgenticLowSet()
-	for _, id := range []string{
-		"minimax/minimax-m3",
-		"qwen/qwen3-next-80b-a3b-instruct",
-		"gemini-3.1-flash-lite-preview",
-		"deepseek/deepseek-v4-flash",
-	} {
-		_, found := set[id]
-		assert.Truef(t, found, "%s must be marked AgenticLow", id)
-	}
-}
-
 func TestAgenticLowSet_OmitsHarnessCapableModels(t *testing.T) {
 	// Demotion ladder (Opus -> Sonnet -> cheaper capable coders) plus haiku, a
 	// legitimate cheap tool model, must all stay eligible on has_tools turns.
+	// No surviving catalog row carries AgenticLow after the AIand-only cut, so
+	// this guards against a future flag leak onto a capable model.
 	set := AgenticLowSet()
 	for _, id := range []string{
 		"claude-opus-4-8",
 		"claude-sonnet-4-6",
-		"z-ai/glm-5.2",
-		"deepseek/deepseek-v4-pro",
-		"moonshotai/kimi-k2.6",
-		"qwen/qwen3-coder-next",
+		"zai-org/glm-5.3",
+		"deepseek-ai/deepseek-v4-pro",
+		"moonshotai/kimi-k3",
+		"qwen/qwen3.8-27b",
 		"claude-haiku-4-5",
 	} {
 		_, found := set[id]
@@ -378,27 +293,27 @@ func TestModel_AgenticUseDefaultsToUnknown(t *testing.T) {
 }
 
 func TestImageUnsupportedSet_IncludesTextOnlyModels(t *testing.T) {
-	// Text-only OSS models reject image parts with a 4xx (GLM-5.1 is the
+	// Text-only OSS models reject image parts with a 4xx (GLM-5.3 is the
 	// canonical case), so they must be flagged.
 	set := ImageUnsupportedSet()
-	for _, id := range []string{"z-ai/glm-5.1", "z-ai/glm-5", "z-ai/glm-5.3", "deepseek/deepseek-v4-pro", "moonshotai/kimi-k2.6", "qwen/qwen3-coder"} {
+	for _, id := range []string{"zai-org/glm-5.3", "deepseek-ai/deepseek-v4-pro", "deepseek-ai/deepseek-v4-flash", "motif-technologies/motif-3"} {
 		_, found := set[id]
 		assert.Truef(t, found, "%s must be flagged ImageInputUnsupported", id)
 	}
 }
 
 func TestImageUnsupportedSet_OmitsMultimodalModels(t *testing.T) {
-	// First-party models are all multimodal; mistral-small-2603 is a
-	// multimodal OSS row and is deliberately left unflagged too.
+	// First-party models are all multimodal; glm-5.3-flash and kimi-k3 are
+	// multimodal OSS rows and are deliberately left unflagged too.
 	set := ImageUnsupportedSet()
-	for _, id := range []string{"claude-opus-4-7", "gpt-5.5", "gemini-3.1-pro-preview", "mistralai/mistral-small-2603"} {
+	for _, id := range []string{"claude-opus-4-7", "gpt-5.5", "zai-org/glm-5.3-flash", "moonshotai/kimi-k3", "qwen/qwen3.8-27b"} {
 		_, found := set[id]
 		assert.Falsef(t, found, "%s must NOT be flagged ImageInputUnsupported", id)
 	}
 }
 
 func TestAcceptsImages(t *testing.T) {
-	assert.False(t, AcceptsImages("z-ai/glm-5.1"), "text-only model rejects images")
+	assert.False(t, AcceptsImages("zai-org/glm-5.3"), "text-only model rejects images")
 	assert.True(t, AcceptsImages("claude-opus-4-7"), "multimodal model accepts images")
 	// Unknown models default to image-capable so an unrecognized passthrough or
 	// force-model target is never wrongly evicted from an image-bearing turn.
@@ -435,22 +350,16 @@ func TestContextWindowFor_KnownModels(t *testing.T) {
 	assert.Equal(t, 1_050_000, ContextWindowFor("gpt-6-luna"))
 	// GPT-4.1 family has 1M context.
 	assert.Equal(t, 1_047_576, ContextWindowFor("gpt-4.1"))
-	// Gemini models have 1M context.
-	assert.Equal(t, 1_048_576, ContextWindowFor("gemini-3.5-flash"))
-	// DeepSeek V4 (Flash + Pro) serves the full 1,048,576-token window.
-	assert.Equal(t, 1_048_576, ContextWindowFor("deepseek/deepseek-v4-pro"))
-	assert.Equal(t, 1_048_576, ContextWindowFor("deepseek/deepseek-v4-flash"))
-	// Most OSS models serve a 256K window (Qwen3 / Kimi families).
-	assert.Equal(t, 262_144, ContextWindowFor("moonshotai/kimi-k2.5"))
-	// GLM-5 serves ~200K (max_position_embeddings 202752); GLM-5.2 confirmed at 1M.
-	assert.Equal(t, 202_752, ContextWindowFor("z-ai/glm-5"))
-	assert.Equal(t, 1_048_576, ContextWindowFor("z-ai/glm-5.2"))
-	// 1,310,720 is Cloudflare-only; Fireworks/Together serve 1,048,576.
-	assert.Equal(t, 1_048_576, ContextWindowFor("z-ai/glm-5.3"))
-	assert.Equal(t, 1_048_576, ContextWindowFor("z-ai/glm-5.3-flash"))
-	// Fireworks-only; served window is ~131K, not the 1M in model docs.
-	assert.Equal(t, 131_072, ContextWindowFor("qwen/qwen3.8-max"))
-	assert.Equal(t, 204_800, ContextWindowFor("minimax/minimax-m2.7"))
+	// AIand roster: DeepSeek V4 (Flash + Pro) serves the full 1,048,576-token window.
+	assert.Equal(t, 1_048_576, ContextWindowFor("deepseek-ai/deepseek-v4-pro"))
+	assert.Equal(t, 1_048_576, ContextWindowFor("deepseek-ai/deepseek-v4-flash"))
+	assert.Equal(t, 1_048_576, ContextWindowFor("moonshotai/kimi-k3"))
+	// 1,310,720 is Cloudflare-only; the AIand-served GLM-5.3 rows report 1,048,576.
+	assert.Equal(t, 1_048_576, ContextWindowFor("zai-org/glm-5.3"))
+	assert.Equal(t, 1_048_576, ContextWindowFor("zai-org/glm-5.3-flash"))
+	// Most remaining OSS roster rows serve a 256K window.
+	assert.Equal(t, 262_144, ContextWindowFor("qwen/qwen3.8-27b"))
+	assert.Equal(t, 262_144, ContextWindowFor("motif-technologies/motif-3"))
 	// Unknown model falls back to DefaultContextWindow.
 	assert.Equal(t, DefaultContextWindow, ContextWindowFor("not-a-real-model"))
 }
@@ -481,153 +390,19 @@ func TestValidateDeployed_FlagsMissingAndUntiered(t *testing.T) {
 	assert.Contains(t, err.Error(), "gpt-4o")
 }
 
-// TestResolveBinding_WaferTrailingBindings pin the trailing-binding order:
-// Wafer only resolves when the earlier providers are absent, so a deploy with
-// Makora/Together/Fireworks wired never displaces them onto Wafer.
-func TestResolveBinding_WaferTrailingBindings(t *testing.T) {
-	// glm-5.3-flash: DeepInfra leads; Makora, Together, and Wafer trail it,
-	// with Fireworks last.
-	b, ok := ResolveBinding("z-ai/glm-5.3-flash", map[string]struct{}{providers.ProviderDeepInfra: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderDeepInfra, b.Provider)
-	assert.Equal(t, "zai-org/GLM-5.3-Flash", b.UpstreamID)
-
-	b, ok = ResolveBinding("z-ai/glm-5.3-flash", map[string]struct{}{
-		providers.ProviderMakora: {}, providers.ProviderTogether: {}, providers.ProviderFireworks: {},
-	})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderMakora, b.Provider)
-	assert.Equal(t, "zai-org/GLM-5.3-Flash", b.UpstreamID)
-
-	b, ok = ResolveBinding("z-ai/glm-5.3-flash", map[string]struct{}{providers.ProviderFireworks: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderFireworks, b.Provider)
-	assert.Equal(t, "accounts/fireworks/models/glm-5p3-flash", b.UpstreamID)
-
-	b, ok = ResolveBinding("z-ai/glm-5.3-flash", map[string]struct{}{providers.ProviderWafer: {}, providers.ProviderFireworks: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderWafer, b.Provider)
-
-	b, ok = ResolveBinding("z-ai/glm-5.3-flash", map[string]struct{}{providers.ProviderTogether: {}, providers.ProviderWafer: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderTogether, b.Provider)
-	assert.Equal(t, "zai-org/GLM-5.3-Flash", b.UpstreamID)
-
-	b, ok = ResolveBinding("z-ai/glm-5.3-flash", map[string]struct{}{providers.ProviderWafer: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderWafer, b.Provider)
-	assert.Equal(t, "GLM-5.3-Flash", b.UpstreamID)
-
-	b, ok = ResolveBinding("z-ai/glm-5.3-flash", map[string]struct{}{providers.ProviderWaferAnthropic: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderWaferAnthropic, b.Provider)
-
-	// glm-5.3 (full) is Fireworks-only.
-	b, ok = ResolveBinding("z-ai/glm-5.3", map[string]struct{}{providers.ProviderFireworks: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderFireworks, b.Provider)
-	assert.Equal(t, "accounts/fireworks/models/glm-5p3", b.UpstreamID)
-
-	// glm-5.2: Together leads; Wafer is retired and no longer resolves.
-	b, ok = ResolveBinding("z-ai/glm-5.2", map[string]struct{}{providers.ProviderTogether: {}, providers.ProviderWafer: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderTogether, b.Provider)
-
-	b, ok = ResolveBinding("z-ai/glm-5.2", map[string]struct{}{providers.ProviderWafer: {}})
-	assert.False(t, ok)
-
-	b, ok = ResolveBinding("z-ai/glm-5.2", map[string]struct{}{providers.ProviderWaferAnthropic: {}})
-	assert.False(t, ok)
-
-	b, ok = ResolveBinding("z-ai/glm-5.2", map[string]struct{}{providers.ProviderWafer: {}, providers.ProviderWaferAnthropic: {}})
-	assert.False(t, ok)
-
-	// kimi-k3: AIand-only product binding (2026-10-04 roster decision);
-	// the Fireworks/OpenRouter/Wafer trailing bindings are gone.
-	b, ok = ResolveBinding("moonshotai/kimi-k3", map[string]struct{}{providers.ProviderAIAND: {}})
+// TestResolveBinding_KimiK3AIandOnly pins that kimi-k3 resolves only through
+// AIand (2026-10-04 roster decision); its AIand rates are pinned in
+// TestAIandPricing.
+func TestResolveBinding_KimiK3AIandOnly(t *testing.T) {
+	b, ok := ResolveBinding("moonshotai/kimi-k3", map[string]struct{}{providers.ProviderAIAND: {}})
 	require.True(t, ok)
 	assert.Equal(t, providers.ProviderAIAND, b.Provider)
 	assert.Empty(t, b.UpstreamID)
 
-	b, ok = ResolveBinding("moonshotai/kimi-k3", map[string]struct{}{providers.ProviderOpenRouter: {}, providers.ProviderWafer: {}})
-	assert.False(t, ok, "kimi-k3 resolves only via AIand now")
-
-	b, ok = ResolveBinding("moonshotai/kimi-k3", map[string]struct{}{providers.ProviderWafer: {}})
-	assert.False(t, ok)
-
-	// deepseek-v4-flash: Makora leads, OpenRouter second, Wafer's fast-tier
-	// binding last; wafer_anthropic trails it.
-	b, ok = ResolveBinding("deepseek/deepseek-v4-flash", map[string]struct{}{providers.ProviderOpenRouter: {}, providers.ProviderWafer: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderOpenRouter, b.Provider)
-
-	b, ok = ResolveBinding("deepseek/deepseek-v4-flash", map[string]struct{}{providers.ProviderWafer: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderWafer, b.Provider)
-	assert.Equal(t, "DeepSeek-V4-Flash-0731-Fast", b.UpstreamID)
-
-	b, ok = ResolveBinding("deepseek/deepseek-v4-flash", map[string]struct{}{providers.ProviderWaferAnthropic: {}})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderWaferAnthropic, b.Provider)
-	assert.Equal(t, "DeepSeek-V4-Flash-0731-Fast", b.UpstreamID)
-}
-
-func TestGLM53FlashProviderPricing(t *testing.T) {
-	for _, provider := range []string{providers.ProviderDeepInfra, providers.ProviderMakora, providers.ProviderFireworks} {
-		t.Run(provider, func(t *testing.T) {
-			p, ok := PriceFor(provider, "z-ai/glm-5.3-flash")
-			require.True(t, ok)
-			assert.InDelta(t, 0.150, p.InputUSDPer1M, 1e-9)
-			assert.InDelta(t, 0.500, p.OutputUSDPer1M, 1e-9)
-			assert.InDelta(t, 0.03/0.150, p.CacheReadMultiplier, 1e-9)
-		})
-	}
-}
-
-func TestMaxCandidateProviders(t *testing.T) {
-	for _, model := range []string{
-		"inclusionai/ling-3.0-flash",
-		"xiaomi/mimo-v2.6-flash",
-		"xiaomi/mimo-v2.6-pro",
-	} {
-		binding, ok := ResolveBinding(model, map[string]struct{}{providers.ProviderDeepInfra: {}})
-		require.True(t, ok, "DeepInfra should resolve %s", model)
-		assert.Equal(t, providers.ProviderDeepInfra, binding.Provider)
-	}
-
-	deepSeekBinding, ok := ResolveBinding("deepseek/deepseek-v4.1-flash", map[string]struct{}{
-		providers.ProviderDeepInfra: {}, providers.ProviderFireworks: {},
+	_, ok = ResolveBinding("moonshotai/kimi-k3", map[string]struct{}{
+		providers.ProviderAnthropic: {}, providers.ProviderOpenAI: {},
 	})
-	require.True(t, ok)
-	assert.Equal(t, providers.ProviderFireworks, deepSeekBinding.Provider,
-		"DeepSeek V4.1 Flash remains Fireworks-primary")
-}
-
-// TestWaferPricing pins the per-1M rates and cache multipliers as published on
-// wafer.ai, since billing debits flow straight through these numbers.
-func TestWaferPricing(t *testing.T) {
-	cases := []struct {
-		model     string
-		inputUSD  float64
-		outputUSD float64
-		cacheRead float64
-	}{
-		{"z-ai/glm-5.3-flash", 0.150, 0.500, 0.03 / 0.150},
-		// moonshotai/kimi-k3 is AIand-only since the 2026-10-04 roster decision;
-		// its AIand rates are pinned separately in TestAIandPricing.
-		{"deepseek/deepseek-v4-flash", 0.280, 0.560, 0.07 / 0.280},
-	}
-	for _, tc := range cases {
-		t.Run(tc.model, func(t *testing.T) {
-			for _, provider := range []string{providers.ProviderWafer, providers.ProviderWaferAnthropic} {
-				p, ok := PriceFor(provider, tc.model)
-				require.True(t, ok)
-				assert.InDelta(t, tc.inputUSD, p.InputUSDPer1M, 1e-9)
-				assert.InDelta(t, tc.outputUSD, p.OutputUSDPer1M, 1e-9)
-				assert.InDelta(t, tc.cacheRead, p.CacheReadMultiplier, 1e-9)
-			}
-		})
-	}
+	assert.False(t, ok)
 }
 
 // TestAIandPricing pins the per-1M rates and cache multipliers of the
@@ -656,24 +431,6 @@ func TestAIandPricing(t *testing.T) {
 			assert.InDelta(t, tc.inputUSD, p.InputUSDPer1M, 1e-9)
 			assert.InDelta(t, tc.outputUSD, p.OutputUSDPer1M, 1e-9)
 			assert.InDelta(t, tc.cacheRead, p.CacheReadMultiplier, 1e-9)
-		})
-	}
-}
-
-func TestAnthropicGatewayPricesCacheReadsLikeDirectAnthropic(t *testing.T) {
-	for _, model := range []string{"claude-opus-5", "claude-sonnet-5", "claude-opus-4-8"} {
-		t.Run(model, func(t *testing.T) {
-			gateway, ok := PriceFor(providers.ProviderAnthropicGateway, model)
-			require.True(t, ok)
-			direct, ok := PriceFor(providers.ProviderAnthropic, model)
-			require.True(t, ok)
-
-			assert.InDelta(t, 0.10, gateway.CacheReadMultiplier, 1e-9)
-			assert.InDelta(t,
-				EffectiveInputCost(0, 0, 1_000_000, direct, providers.ProviderAnthropic),
-				EffectiveInputCost(0, 0, 1_000_000, gateway, providers.ProviderAnthropicGateway),
-				1e-9,
-			)
 		})
 	}
 }

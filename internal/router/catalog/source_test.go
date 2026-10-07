@@ -30,7 +30,7 @@ func TestSourceFor(t *testing.T) {
 	require.True(t, known)
 	assert.Equal(t, SourceClosedSource, source)
 
-	source, known = SourceFor("z-ai/glm-5.3")
+	source, known = SourceFor("zai-org/glm-5.3")
 	require.True(t, known)
 	assert.Equal(t, SourceOpenSource, source)
 
@@ -43,10 +43,10 @@ func TestSourceFor(t *testing.T) {
 func TestPermittedByAndCheckEligibility(t *testing.T) {
 	max := eligibility.MaxOpenSourceOnly
 
-	assert.True(t, PermittedBy(max, "z-ai/glm-5.3"))
-	assert.NoError(t, CheckEligibility(max, "z-ai/glm-5.3"))
+	assert.True(t, PermittedBy(max, "zai-org/glm-5.3"))
+	assert.NoError(t, CheckEligibility(max, "zai-org/glm-5.3"))
 
-	for _, id := range []string{"claude-opus-4-7", "muse-spark-1.3", "not-in-the-catalog"} {
+	for _, id := range []string{"claude-opus-4-7", "gpt-5.5", "not-in-the-catalog"} {
 		assert.Falsef(t, PermittedBy(max, id), "%q should be ineligible for Max", id)
 		assert.ErrorIsf(t, CheckEligibility(max, id), eligibility.ErrModelIneligible, "%q should be refused", id)
 	}

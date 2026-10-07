@@ -12,20 +12,23 @@ import (
 	"weave-os/router/internal/router/policy"
 )
 
+// muse-spark-1.3 stays in the deployed set with no surviving provider binding:
+// the product boundary reads the catalog row's source class, ahead of provider
+// resolution.
 func maxResolver() *policy.Resolver {
 	return policy.NewResolver(
-		set("deepseek/deepseek-v4-pro", "claude-opus-4-8", "muse-spark-1.3"),
-		set(providers.ProviderFireworks, providers.ProviderAnthropic, providers.ProviderMeta),
+		set("deepseek-ai/deepseek-v4-pro", "claude-opus-4-8", "muse-spark-1.3"),
+		set(providers.ProviderAIAND, providers.ProviderAnthropic),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 }
 
-func TestResolverWithoutProductBoundaryKeepsEveryModel(t *testing.T) {
+func TestResolverWithoutProductBoundaryKeepsEveryBoundModel(t *testing.T) {
 	resolved := maxResolver().Resolve(router.Request{})
 
 	assert.ElementsMatch(t,
-		[]string{"deepseek/deepseek-v4-pro", "claude-opus-4-8", "muse-spark-1.3"},
+		[]string{"deepseek-ai/deepseek-v4-pro", "claude-opus-4-8"},
 		catalogIDs(resolved.Candidates),
 	)
 }
@@ -33,7 +36,7 @@ func TestResolverWithoutProductBoundaryKeepsEveryModel(t *testing.T) {
 func TestResolverDropsClosedAndUnknownSourceModelsUnderMax(t *testing.T) {
 	resolved := maxResolver().Resolve(router.Request{ProductEligibility: eligibility.MaxOpenSourceOnly})
 
-	require.Equal(t, []string{"deepseek/deepseek-v4-pro"}, catalogIDs(resolved.Candidates))
+	require.Equal(t, []string{"deepseek-ai/deepseek-v4-pro"}, catalogIDs(resolved.Candidates))
 	for _, id := range []string{"claude-opus-4-8", "muse-spark-1.3"} {
 		assert.Containsf(t, resolved.Diagnostics, policy.Diagnostic{
 			CatalogID: id,
@@ -70,7 +73,7 @@ func TestProductRefusalOutranksTheDesugaredExclusion(t *testing.T) {
 		ExcludedModels:     set("claude-opus-4-8", "muse-spark-1.3"),
 	})
 
-	require.Equal(t, []string{"deepseek/deepseek-v4-pro"}, catalogIDs(resolved.Candidates))
+	require.Equal(t, []string{"deepseek-ai/deepseek-v4-pro"}, catalogIDs(resolved.Candidates))
 	for _, id := range []string{"claude-opus-4-8", "muse-spark-1.3"} {
 		assert.Containsf(t, resolved.Diagnostics, policy.Diagnostic{
 			CatalogID: id,
@@ -83,12 +86,12 @@ func TestProductRefusalOutranksTheDesugaredExclusion(t *testing.T) {
 func TestEligibleModelStillReportsRequestedExclusion(t *testing.T) {
 	resolved := maxResolver().Resolve(router.Request{
 		ProductEligibility: eligibility.MaxOpenSourceOnly,
-		ExcludedModels:     set("deepseek/deepseek-v4-pro"),
+		ExcludedModels:     set("deepseek-ai/deepseek-v4-pro"),
 	})
 
 	assert.Empty(t, resolved.Candidates)
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: "deepseek/deepseek-v4-pro",
+		CatalogID: "deepseek-ai/deepseek-v4-pro",
 		Reason:    policy.ExclusionRequested,
 	})
 }

@@ -37,12 +37,11 @@ func TestEscalationCompletionRecordsPostRoutingPreparationFailure(t *testing.T) 
 		{"messages_missing_provider", `{"model":"claude-opus-4-8","max_tokens":4096,"tools":[{"name":"Read","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"inspect the repository"}]}`, (*Service).ProxyMessages, ErrProviderNotConfigured},
 		{"chat_missing_provider", `{"model":"gpt-5","messages":[{"role":"user","content":"inspect the repository"}],"tools":[{"type":"function","function":{"name":"Read","parameters":{"type":"object"}}}]}`, (*Service).ProxyOpenAIChatCompletion, ErrProviderNotConfigured},
 		{"responses_missing_provider", `{"model":"gpt-5","input":"inspect the repository","tools":[{"type":"function","name":"Read","parameters":{"type":"object"}}]}`, (*Service).ProxyOpenAIResponses, ErrProviderNotConfigured},
-		{"gemini_cross_format", `{"model":"gemini-3-pro-preview","contents":[{"role":"user","parts":[{"text":"inspect the repository"}]}],"tools":[{"functionDeclarations":[{"name":"Read","parameters":{"type":"object"}}]}]}`, (*Service).ProxyGeminiGenerateContent, ErrGeminiCrossFormatUnsupported},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := newEscalationTestStore()
 			observer := &escalationTestObserver{}
-			clients := map[string]providers.Client{providers.ProviderGoogle: &stripFailureProvider{}}
+			clients := map[string]providers.Client{providers.ProviderAIAND: &stripFailureProvider{}}
 			svc := newEscalationCompletionService(store, observer, clients)
 			err := tc.invoke(svc, escalationCompletionContext(), []byte(tc.body), httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/test", nil))
 			require.ErrorIs(t, err, tc.expectedError)

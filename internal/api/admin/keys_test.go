@@ -429,17 +429,17 @@ func TestUpsertExternalKeyHandler_AllowsProviderWithoutEnvKey(t *testing.T) {
 }
 
 func TestUpsertExternalKeyHandler_PersistsAndReturnsBaseURL(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropicGateway), "")
+	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAIAND), "")
 
 	repo := &fakeExternalAPIKeyRepo{}
 	rec := postProviderKeyWithBaseURL(
 		upsertKeyEngine(newUpsertKeyService(repo)),
-		providers.ProviderAnthropicGateway,
+		providers.ProviderAIAND,
 		"https://gateway.example.com/llm/",
 	)
 
 	require.Equal(t, http.StatusCreated, rec.Code)
-	require.NotNil(t, repo.createdBase, "base_url must reach the repository — dropping it is what made BYOK gateways unreachable")
+	require.NotNil(t, repo.createdBase, "base_url must reach the repository — dropping it would make a key pointed at a custom endpoint unreachable")
 	assert.Equal(t, "https://gateway.example.com/llm", *repo.createdBase,
 		"the trailing slash must be trimmed: providers append their own /v1/messages path")
 
@@ -449,34 +449,6 @@ func TestUpsertExternalKeyHandler_PersistsAndReturnsBaseURL(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, "https://gateway.example.com/llm", body.BaseURL,
 		"the response must echo the stored endpoint so the dashboard can show where the key points")
-}
-
-func TestUpsertExternalKeyHandler_RejectsGatewayKeyWithoutBaseURL(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropicGateway), "")
-
-	repo := &fakeExternalAPIKeyRepo{}
-	rec := postProviderKey(upsertKeyEngine(newUpsertKeyService(repo)), providers.ProviderAnthropicGateway)
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code,
-		"a gateway has no default endpoint, so a key without one could never be dispatched")
-	assert.Equal(t, 0, repo.created, "the undispatchable key must not be persisted")
-}
-
-func TestUpsertExternalKeyHandler_RejectsGatewayKeyWithSlashOnlyBaseURL(t *testing.T) {
-	t.Setenv(providers.APIKeyEnvVar(providers.ProviderAnthropicGateway), "")
-
-	repo := &fakeExternalAPIKeyRepo{}
-	rec := postProviderKeyWithBaseURL(
-		upsertKeyEngine(newUpsertKeyService(repo)),
-		providers.ProviderAnthropicGateway,
-		"///",
-	)
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code,
-		"a value that normalizes away to nothing leaves the same undispatchable key as omitting it")
-	assert.Equal(t, 0, repo.created)
-	assert.Equal(t, 0, repo.softDeletedByProvider,
-		"a rejected upsert must not take out the working key it would have replaced")
 }
 
 func TestUpsertExternalKeyHandler_RejectsRelativeBaseURL(t *testing.T) {
@@ -630,7 +602,7 @@ func putModelAliases(engine *gin.Engine, id string, aliases map[string]string) *
 
 func TestUpdateExternalKeyAliasesHandler_ReplacesAliasesWithoutTheSecret(t *testing.T) {
 	repo := &fakeExternalAPIKeyRepo{keys: []*auth.ExternalAPIKey{
-		{ID: "ext-1", InstallationID: "inst-1", Provider: providers.ProviderOpenAIGateway},
+		{ID: "ext-1", InstallationID: "inst-1", Provider: providers.ProviderAIAND},
 	}}
 	models := fakeDeployedModels{entries: []cluster.DeployedEntry{{Model: "gpt-5", Provider: providers.ProviderOpenAI}}}
 
@@ -648,7 +620,7 @@ func TestUpdateExternalKeyAliasesHandler_ReplacesAliasesWithoutTheSecret(t *test
 
 func TestUpdateExternalKeyAliasesHandler_RejectsUnknownCatalogModel(t *testing.T) {
 	repo := &fakeExternalAPIKeyRepo{keys: []*auth.ExternalAPIKey{
-		{ID: "ext-1", InstallationID: "inst-1", Provider: providers.ProviderOpenAIGateway},
+		{ID: "ext-1", InstallationID: "inst-1", Provider: providers.ProviderAIAND},
 	}}
 	models := fakeDeployedModels{entries: []cluster.DeployedEntry{{Model: "gpt-5", Provider: providers.ProviderOpenAI}}}
 
@@ -660,7 +632,7 @@ func TestUpdateExternalKeyAliasesHandler_RejectsUnknownCatalogModel(t *testing.T
 
 func TestUpdateExternalKeyAliasesHandler_ForeignKeyIsNotFound(t *testing.T) {
 	repo := &fakeExternalAPIKeyRepo{keys: []*auth.ExternalAPIKey{
-		{ID: "ext-1", InstallationID: "inst-2", Provider: providers.ProviderOpenAIGateway},
+		{ID: "ext-1", InstallationID: "inst-2", Provider: providers.ProviderAIAND},
 	}}
 	models := fakeDeployedModels{entries: []cluster.DeployedEntry{{Model: "gpt-5", Provider: providers.ProviderOpenAI}}}
 

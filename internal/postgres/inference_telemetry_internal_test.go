@@ -93,7 +93,7 @@ func TestInferenceSummaryProjectionPopulatesColumns(t *testing.T) {
 			RegistryRevision: "r1",
 			PolicyRevision:   "p2",
 		},
-		PlanTarget:        inference.Target{CatalogID: "glm-5.1", Provider: providers.ProviderFireworks},
+		PlanTarget:        inference.Target{CatalogID: "glm-5.1", Provider: providers.ProviderAIAND},
 		ServedTarget:      inference.Target{CatalogID: "claude-sonnet-4-6", Provider: providers.ProviderAnthropic},
 		FallbackReason:    "upstream_retryable",
 		AccountingOutcome: inference.AccountingOutcomeUsageUnknown,

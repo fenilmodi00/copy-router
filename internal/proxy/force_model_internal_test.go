@@ -30,24 +30,30 @@ func TestResolveForceModel(t *testing.T) {
 			wantKnown:    true,
 		},
 		{
-			name:         "catalog google",
+			// The Gemini catalog rows survive for historical traffic but carry
+			// no bindings, so a gemini-* pin has no servable catalog match and
+			// falls to the heuristic default arm.
+			name:         "gemini catalog row with no bindings falls to default",
 			input:        "gemini-3.1-flash-lite-preview",
 			wantID:       "gemini-3.1-flash-lite-preview",
-			wantProvider: providers.ProviderGoogle,
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
+		},
+		{
+			// The Bedrock-bound qwen rows went with the provider cut; this is
+			// an AIAND-served slash-form row, so the vendor-prefix path is
+			// still exercised.
+			name:         "catalog aiand — slash form",
+			input:        "qwen/qwen3.8-27b",
+			wantID:       "qwen/qwen3.8-27b",
+			wantProvider: providers.ProviderAIAND,
 			wantKnown:    true,
 		},
 		{
-			name:         "catalog bedrock — slash form",
-			input:        "qwen/qwen3-235b-a22b-2507",
-			wantID:       "qwen/qwen3-235b-a22b-2507",
-			wantProvider: providers.ProviderBedrock,
-			wantKnown:    true,
-		},
-		{
-			name:         "catalog bedrock — bare suffix match",
-			input:        "qwen3-235b-a22b-2507",
-			wantID:       "qwen/qwen3-235b-a22b-2507",
-			wantProvider: providers.ProviderBedrock,
+			name:         "catalog aiand — bare suffix match",
+			input:        "qwen3.8-27b",
+			wantID:       "qwen/qwen3.8-27b",
+			wantProvider: providers.ProviderAIAND,
 			wantKnown:    true,
 		},
 		{
@@ -131,43 +137,46 @@ func TestResolveForceModel(t *testing.T) {
 			name:         "alias mixed case and whitespace",
 			input:        "  Gemini  ",
 			wantID:       "gemini-3-pro-preview",
-			wantProvider: providers.ProviderGoogle,
-			wantKnown:    true,
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
 		},
+		// The qwen rows kept their IDs but lost their vendor bindings in the
+		// AIand-only cut, so every spelling below still canonicalizes while
+		// naming no servable catalog entry (known=false).
 		{
 			name:         "alias qwen",
 			input:        "qwen",
 			wantID:       "qwen/qwen3-coder",
-			wantProvider: providers.ProviderFireworks,
-			wantKnown:    true,
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
 		},
 		{
 			name:         "canonical qwen3.8-max with vendor prefix",
 			input:        "qwen/qwen3.8-max",
 			wantID:       "qwen/qwen3.8-max",
-			wantProvider: providers.ProviderFireworks,
-			wantKnown:    true,
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
 		},
 		{
 			name:         "dash spelling qwen/qwen-3.8-max",
 			input:        "qwen/qwen-3.8-max",
 			wantID:       "qwen/qwen3.8-max",
-			wantProvider: providers.ProviderFireworks,
-			wantKnown:    true,
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
 		},
 		{
 			name:         "dash spelling qwen-3.8-max",
 			input:        "qwen-3.8-max",
 			wantID:       "qwen/qwen3.8-max",
-			wantProvider: providers.ProviderFireworks,
-			wantKnown:    true,
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
 		},
 		{
 			name:         "dash spelling qwen-3.8",
 			input:        "qwen-3.8",
 			wantID:       "qwen/qwen3.8-max",
-			wantProvider: providers.ProviderFireworks,
-			wantKnown:    true,
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
 		},
 		{
 			name:         "gpt-6 alias resolves to Astra",
@@ -187,10 +196,10 @@ func TestResolveForceModel(t *testing.T) {
 			wantKnown:    false,
 		},
 		{
-			name:         "heuristic openrouter — unknown slash model",
+			name:         "heuristic aiand — unknown slash model",
 			input:        "mistral/mistral-small-2603",
 			wantID:       "mistral/mistral-small-2603",
-			wantProvider: providers.ProviderOpenRouter,
+			wantProvider: providers.ProviderAIAND,
 			wantKnown:    false,
 		},
 		{
@@ -201,10 +210,10 @@ func TestResolveForceModel(t *testing.T) {
 			wantKnown:    true,
 		},
 		{
-			name:         "heuristic anthropic — unknown bareword",
+			name:         "heuristic aiand — unknown bareword",
 			input:        "totally-not-a-model",
 			wantID:       "totally-not-a-model",
-			wantProvider: providers.ProviderAnthropic,
+			wantProvider: providers.ProviderAIAND,
 			wantKnown:    false,
 		},
 		// Truncated command (the bug this guard closes): "/force-model gpt-"
@@ -223,14 +232,14 @@ func TestResolveForceModel(t *testing.T) {
 			name:         "spaced model name is not known",
 			input:        "qwen 3.8",
 			wantID:       "qwen 3.8",
-			wantProvider: providers.ProviderAnthropic,
+			wantProvider: providers.ProviderAIAND,
 			wantKnown:    false,
 		},
 		{
 			name:         "spaced alias is not known",
 			input:        "qwen max",
 			wantID:       "qwen max",
-			wantProvider: providers.ProviderAnthropic,
+			wantProvider: providers.ProviderAIAND,
 			wantKnown:    false,
 		},
 		{
@@ -255,15 +264,15 @@ func TestResolveForceModel(t *testing.T) {
 			name:         "fragment of a bare name is not known",
 			input:        "mimo",
 			wantID:       "mimo",
-			wantProvider: providers.ProviderAnthropic,
+			wantProvider: providers.ProviderAIAND,
 			wantKnown:    false,
 		},
 		{
 			// The vendor prefix stays optional via an exact bare-name entry.
 			name:         "bare name of a slash-form model",
-			input:        "mimo-v2.5-pro",
-			wantID:       "xiaomi/mimo-v2.5-pro",
-			wantProvider: providers.ProviderOpenRouter,
+			input:        "deepseek-v4.1-flash",
+			wantID:       "deepseek-ai/deepseek-v4.1-flash",
+			wantProvider: providers.ProviderAIAND,
 			wantKnown:    true,
 		},
 	}
@@ -322,22 +331,24 @@ func TestBareCatalogNames_AliasesTakePrecedence(t *testing.T) {
 	}
 }
 
-// grok-4.5 is retired; family aliases (grok, xai) follow flagship 4.7, while own-name pins resolve exactly.
+// grok-4.5 is retired; family aliases (grok, xai) still follow flagship 4.7.
+// The grok rows lost their bindings in the AIand-only cut, so the alias
+// canonicalizes but names no servable model — the pin is rejected.
 func TestResolveForceModel_GrokFamilyAlias(t *testing.T) {
 	for _, input := range []string{"grok", "xai"} {
 		t.Run(input, func(t *testing.T) {
 			gotID, gotProvider, gotKnown := resolveForceModel(input)
 			assert.Equal(t, "grok-4.7", gotID, "canonical id")
-			assert.Equal(t, providers.ProviderXAI, gotProvider, "provider")
-			assert.True(t, gotKnown, "known")
+			assert.Equal(t, providers.ProviderAIAND, gotProvider, "provider")
+			assert.False(t, gotKnown, "known")
 		})
 	}
 }
 
 // An explicit :level suffix must survive resolution to its catalog model.
 func TestResolveForceModel_EffortSuffixPreserved(t *testing.T) {
-	gotID, _, gotKnown, gotEffort := resolveForceModelWithEffort("grok-4.6:high")
-	assert.Equal(t, "grok-4.6", gotID, "canonical id")
+	gotID, _, gotKnown, gotEffort := resolveForceModelWithEffort("claude-opus-4-7:high")
+	assert.Equal(t, "claude-opus-4-7", gotID, "canonical id")
 	assert.True(t, gotKnown, "known")
 	assert.Equal(t, "high", gotEffort, "effort")
 }

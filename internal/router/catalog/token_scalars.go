@@ -53,7 +53,7 @@ var routerTokenScalarTable = map[string]map[string]RouterTokenScalars{
 		"claude-sonnet-5":  {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 		"claude-opus-5":    {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 	},
-	"deepseek/deepseek-v4-flash": {
+	"deepseek-ai/deepseek-v4-flash": {
 		"gpt-5.6-luna":     {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 		"gpt-5.6-terra":    {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 		"gpt-5.6-sol":      {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
@@ -61,7 +61,7 @@ var routerTokenScalarTable = map[string]map[string]RouterTokenScalars{
 		"claude-sonnet-5":  {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 		"claude-opus-5":    {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 	},
-	"deepseek/deepseek-v4.1-flash": {
+	"deepseek-ai/deepseek-v4.1-flash": {
 		"gpt-5.6-luna":     {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 		"gpt-5.6-terra":    {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 		"gpt-5.6-sol":      {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
@@ -77,7 +77,7 @@ var routerTokenScalarTable = map[string]map[string]RouterTokenScalars{
 		"claude-sonnet-5":  {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 		"claude-opus-5":    {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 	},
-	"z-ai/glm-5.3-flash": {
+	"zai-org/glm-5.3-flash": {
 		"gpt-5.6-luna":     {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 		"gpt-5.6-terra":    {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 		"gpt-5.6-sol":      {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
@@ -101,23 +101,7 @@ var routerTokenScalarTable = map[string]map[string]RouterTokenScalars{
 		"claude-sonnet-5":  {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 		"claude-opus-5":    {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 	},
-	"grok-4.6": {
-		"gpt-5.6-luna":     {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
-		"gpt-5.6-terra":    {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
-		"gpt-5.6-sol":      {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
-		"claude-haiku-4-5": {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
-		"claude-sonnet-5":  {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
-		"claude-opus-5":    {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
-	},
-	"grok-4.7": {
-		"gpt-5.6-luna":     {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
-		"gpt-5.6-terra":    {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
-		"gpt-5.6-sol":      {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
-		"claude-haiku-4-5": {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
-		"claude-sonnet-5":  {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
-		"claude-opus-5":    {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
-	},
-	"z-ai/glm-5.3": {
+	"zai-org/glm-5.3": {
 		"gpt-5.6-luna":     {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 		"gpt-5.6-terra":    {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},
 		"gpt-5.6-sol":      {Input: 1, Output: 1, CacheWrite: 1, CacheRead: 1},

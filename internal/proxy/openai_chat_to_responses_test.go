@@ -324,17 +324,17 @@ func TestService_ProxyOpenAIChatCompletion_LogsToolCallIssues(t *testing.T) {
 	assert.Contains(t, logBuf.String(), "read_file")
 }
 
-// A gateway provider keeps its own narrow rule: a plain chat turn must not be
-// promoted onto a Responses surface most gateways don't mount.
-func TestService_ProxyOpenAIChatCompletion_GatewayKeepsChatCompletions(t *testing.T) {
+// A non-OpenAI provider keeps its own narrow rule: a plain chat turn must not
+// be promoted onto the Responses surface only direct OpenAI mounts.
+func TestService_ProxyOpenAIChatCompletion_NonOpenAIProviderKeepsChatCompletions(t *testing.T) {
 	provider := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
 	}}
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAIGateway, Model: "gpt-5.6-luna", Reason: "test"}},
-		map[string]providers.Client{providers.ProviderOpenAIGateway: provider},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: "gpt-5.6-luna", Reason: "test"}},
+		map[string]providers.Client{providers.ProviderAIAND: provider},
 		nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil,
 	)
 

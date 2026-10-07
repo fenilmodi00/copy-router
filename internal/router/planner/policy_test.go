@@ -86,34 +86,37 @@ func TestDecide_SubscriptionDiscountFlipsSwitch(t *testing.T) {
 func TestDecide_UsesNamedProviderBindings(t *testing.T) {
 	t.Parallel()
 
+	// Every catalog model carries a single provider binding after the
+	// AIand-only cut, so a named provider either matches that binding or falls
+	// back to the model's primary price (with PinPriceFallback set).
 	base := planner.Inputs{
 		Pin: sessionpin.Pin{
-			Provider:        providers.ProviderMakora,
-			Model:           "deepseek/deepseek-v4.1-flash",
+			Provider:        providers.ProviderAnthropic,
+			Model:           modelHaiku,
 			LastTurnEndedAt: time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC),
 		},
 		Fresh: router.Decision{
-			Provider: providers.ProviderOpenRouter,
-			Model:    "qwen/qwen3-coder-next",
+			Provider: providers.ProviderOpenAI,
+			Model:    "gpt-5.4-nano",
 		},
 		EstimatedInputTokens: 1_000_000,
 		AvailableModels: map[string]struct{}{
-			"deepseek/deepseek-v4.1-flash": {},
-			"qwen/qwen3-coder-next":        {},
+			modelHaiku:     {},
+			"gpt-5.4-nano": {},
 		},
 	}
 
-	makoraPin := planner.Decide(base, planner.EVConfig{ExpectedRemainingTurns: 3})
-	assert.InDelta(t, -0.087, makoraPin.ExpectedSavingsUSD, 1e-9)
-	assert.False(t, makoraPin.PinPriceFallback)
-	assert.False(t, makoraPin.FreshPriceFallback)
+	boundPin := planner.Decide(base, planner.EVConfig{ExpectedRemainingTurns: 3})
+	assert.InDelta(t, 0.24, boundPin.ExpectedSavingsUSD, 1e-9)
+	assert.False(t, boundPin.PinPriceFallback)
+	assert.False(t, boundPin.FreshPriceFallback)
 
-	openRouterPinInput := base
-	openRouterPinInput.Pin.Provider = providers.ProviderOpenRouter
-	openRouterPin := planner.Decide(openRouterPinInput, planner.EVConfig{ExpectedRemainingTurns: 3})
-	assert.InDelta(t, -0.075, openRouterPin.ExpectedSavingsUSD, 1e-9)
-	assert.NotEqual(t, makoraPin.ExpectedSavingsUSD, openRouterPin.ExpectedSavingsUSD,
-		"the pin's named provider must affect its cache economics")
+	fallbackPinInput := base
+	fallbackPinInput.Pin.Provider = providers.ProviderAIAND
+	fallbackPin := planner.Decide(fallbackPinInput, planner.EVConfig{ExpectedRemainingTurns: 3})
+	assert.True(t, fallbackPin.PinPriceFallback,
+		"a provider that does not bind the pin model falls back to its primary price")
+	assert.InDelta(t, boundPin.ExpectedSavingsUSD, fallbackPin.ExpectedSavingsUSD, 1e-9)
 }
 
 func TestDecide_PrimaryPriceFallbackIsExplicit(t *testing.T) {

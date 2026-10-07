@@ -4506,19 +4506,19 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		return attemptBuildErr
 	}
 
-	// In-turn baseline failover eligibility: when the router cost-routes to an
-	// OSS/Gemini model and every binding fails, fall back to the requested
-	// model on Anthropic instead of hard-failing. Eligible only when: not
+	// In-turn baseline failover eligibility: when the router cost-routes to a
+	// non-AIand model and every binding fails, fall back to the requested
+	// model on AIand instead of hard-failing. Eligible only when: not
 	// BYOK/inbound-credential bound (those resolve to a single provider),
-	// Anthropic isn't excluded for the installation (else failing over would
+	// AIand isn't excluded for the installation (else failing over would
 	// violate the exclusion contract), the routed model isn't already
-	// Anthropic, the baseline is a distinct known Anthropic catalog model, and
+	// AIand-served, the baseline is a distinct known AIand catalog model, and
 	// the prompt fits its context window (a larger-window routed model can
 	// carry a prompt the baseline would 400 as "prompt is too long").
 	// Computed pre-dispatch so the primary dispatch defers its exhaustion flush.
 	baselineModel := s.baselineFor(feats.Model)
 	baselineCatalog, baselineKnown := catalog.ByID(baselineModel)
-	_, anthropicExcluded := s.excludedProvidersForRequest(ctx)[providers.ProviderAnthropic]
+	_, baselineExcluded := s.excludedProvidersForRequest(ctx)[providers.ProviderAIAND]
 	baselineAllowed := modelPermittedByAllowlist(ctx, baselineModel) &&
 		modelInRequestSubset(ctx, baselineModel)
 	// baselineViable omits authoritative-per-turn: that contract governs which
@@ -4527,12 +4527,12 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		!routeRes.CallerModelPassthrough &&
 		decision.Reason != translate.ReasonUserForceModel &&
 		s.shouldFailover(ctx) &&
-		!anthropicExcluded &&
+		!baselineExcluded &&
 		baselineAllowed &&
-		decision.Provider != providers.ProviderAnthropic &&
+		decision.Provider != providers.ProviderAIAND &&
 		baselineModel != decision.Model &&
-		baselineKnown && baselineCatalog.PrimaryProvider() == providers.ProviderAnthropic &&
-		siblingFitsContext(baselineModel, providers.ProviderAnthropic, overflowEstimate, env.SignatureTokenSavings(), outputReserve)
+		baselineKnown && baselineCatalog.PrimaryProvider() == providers.ProviderAIAND &&
+		siblingFitsContext(baselineModel, providers.ProviderAIAND, overflowEstimate, env.SignatureTokenSavings(), outputReserve)
 	baselineEligible := !routeRes.AuthoritativePerTurn && baselineViable
 
 	// Subscription-credit failover eligibility. A Claude turn served on the
@@ -4549,7 +4549,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	// fallback claudeSubscriptionExhausted takes pre-emptively, just driven by
 	// the live error instead of a stale snapshot. Eligible only pre-commit, on
 	// a subscription-served Anthropic turn, with a fallback key available.
-	// Mutually exclusive with baselineEligible (non-Anthropic routed provider).
+	// Mutually exclusive with baselineEligible (non-AIand routed provider).
 	// Suppressed when credits are depleted: this retry serves on the Weave/BYOK
 	// key at full cost, which is exactly the paid spend that mode forbids — a
 	// subscription throttle there surfaces raw instead. A linked-first turn's
@@ -4649,8 +4649,8 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	}
 
 	// The routed model's bindings all failed with a fault another model could
-	// satisfy, pre-commit — re-dispatch the requested model on Anthropic.
-	// crossFormat/respSummary/reqStats reset to Anthropic-native values so
+	// satisfy, pre-commit — re-dispatch the requested model on AIand.
+	// crossFormat/respSummary/reqStats reset to the emitted format's values so
 	// telemetry reflects the binding that actually served.
 	baselineFailoverUsed := false
 	baselineAttempted := false
@@ -4678,17 +4678,19 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 			(baselineViable && (capabilityRejected || translate.IsIntrinsicallyIncompatible(proxyErr) || crossBindingRejected))) {
 		baselineDecision := decision
 		baselineDecision.Model = baselineModel
-		baselineDecision.Provider = providers.ProviderAnthropic
+		// The binding decides the wire format: the baseline family is AIand
+		// (OpenAI-compat) today, but the rescue emits for whatever serves it
+		// rather than assuming the native Anthropic shape.
+		baselineDecision.Provider = baselineCatalog.PrimaryProvider()
 		baselineOpts := opts
 		baselineOpts.TargetModel = baselineModel
-		baselineOpts.TargetProvider = providers.ProviderAnthropic
+		baselineOpts.TargetProvider = baselineDecision.Provider
 		baselineOpts.Capabilities = router.Lookup(baselineModel)
 		// Recompute against the model that actually serves, not the cost-routed
-		// OSS id — otherwise PrepareAnthropic may leave stale signed thinking
-		// blocks the baseline model rejects (400). Compare bare model IDs:
-		// baselineModel carries no effort, and any effort on the prior identity
-		// belonged to a different model, so the model comparison already
-		// subsumes it.
+		// OSS id — otherwise the emit may leave stale signed thinking blocks the
+		// baseline model rejects (400). Compare bare model IDs: baselineModel
+		// carries no effort, and any effort on the prior identity belonged to a
+		// different model, so the model comparison already subsumes it.
 		baselineOpts.ModelSwitched = baseModelOf(routeRes.PriorServedModel) != baselineModel ||
 			routeRes.SessionEverSwitched
 		// The arm's level named the failed model's menu; the baseline resolves
@@ -4696,37 +4698,26 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		baselineDecision.Effort = ""
 		baselineEffort := s.resolveEffort(ctx, baselineDecision, baselineOpts.Capabilities, routeRes.EscalateEffort)
 		baselineEffort.apply(&baselineOpts)
-		baselineCtx := ctx
-		baselineSubExhausted := s.claudeSubscriptionExhausted(ctx, r.Header)
-		if baselineSubExhausted {
-			baselineCtx = withSuppressedClaudeSubscription(baselineCtx)
-		}
-		baselineCtx = s.resolveCredentials(baselineCtx, providers.ProviderAnthropic, baselineModel, r.Header)
-		baselineOpts.FastMode = fastModeForAttempt(baselineCtx, baselineModel, providers.ProviderAnthropic)
-		baselinePrep, baselineEmitErr := env.PrepareAnthropic(r.Header, baselineOpts)
-		if baselineEmitErr != nil {
-			log.Error("Baseline failover: emit Anthropic body failed; surfacing original error", "err", baselineEmitErr, "baseline_model", baselineModel)
+		baselineCtx := s.resolveCredentials(ctx, baselineDecision.Provider, baselineModel, r.Header)
+		baselineMarker := suppressMarkerIfRequested(ctx, r.Header, modelSelectionMarkerForRequest(ctx, routeRes, baselineRoutingMarkerFor(routeRes, baselineModel), baselineModel, markerReasonBaseline))
+		baselineAttempt, baselineBuildErr := buildAttempt(baselineDecision, baselineOpts, baselineMarker)
+		if baselineBuildErr != nil {
+			log.Error("Baseline failover: building the rescue attempt failed; surfacing original error",
+				"err", baselineBuildErr,
+				"baseline_model", baselineModel,
+				"baseline_provider", baselineDecision.Provider)
 			if !siblingViable {
 				flushDeferredErr()
 			}
 		} else {
-			log.Warn("Baseline failover: retrying requested model on Anthropic",
+			log.Warn("Baseline failover: retrying the baseline model on its own provider",
 				"failed_model", decision.Model,
 				"failed_provider", primaryProvider,
 				"baseline_model", baselineModel,
+				"baseline_provider", baselineDecision.Provider,
 				"err", proxyErr)
-			if baselineSubExhausted {
-				ctx = withSuppressedClaudeSubscription(ctx)
-			}
 			effortServed = baselineEffort
 			baselineBindings := s.resolveBindingsForDispatch(baselineCtx, baselineDecision)
-			baselineMarker := suppressMarkerIfRequested(ctx, r.Header, modelSelectionMarkerForRequest(ctx, routeRes, baselineRoutingMarkerFor(routeRes, baselineModel), baselineModel, markerReasonBaseline))
-			baselineAttempt := anthropicTierAttemptFor(baselineOpts, baselinePrep, baselineMarker).attempt(recordFastServed)
-			fastServed = baselineOpts.FastMode
-			crossFormat = false
-			respSummary = translate.ResponseSummary{}
-			reqStats = providers.RequestMutationStats{}
-			logUpstreamBody(log, routeRes.SessionKey, baselineDecision, feats, baselinePrep.Body)
 			winnerIdx, proxyErr = s.dispatchWithFallback(baselineCtx, failoverInputs{
 				w:               contentSink,
 				buf:             preludeBuf,
@@ -4757,7 +4748,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	// model once on the Weave/BYOK key when a subscription-served Anthropic turn
 	// hit a transient fault (429/timeout), an OAuth rejection (401/403), or a
 	// model-access 404 (subscription token cannot use that Claude model),
-	// pre-commit. Skipped when baseline failover already ran (non-Anthropic).
+	// pre-commit. Skipped when baseline failover already ran (non-AIand routed).
 	subscriptionFailoverUsed := false
 	subscriptionRetryRan := false
 	if subscriptionRetryEligible && !baselineAttempted && proxyErr != nil &&
@@ -4921,9 +4912,9 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		finalProvider = bindings[winnerIdx].Provider
 	} else if baselineAttempted {
 		// Baseline ran but no binding served (winnerIdx == -1); the last
-		// attempt was Anthropic with the baseline model, so finalProvider must
-		// not revert to the OSS primary that never served it.
-		finalProvider = providers.ProviderAnthropic
+		// attempt was the baseline model on its own provider, so finalProvider
+		// must not revert to the routed primary that never served it.
+		finalProvider = decision.Provider
 	}
 	decision.Provider = finalProvider
 

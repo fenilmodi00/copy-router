@@ -22,7 +22,6 @@ const (
 	capAnthropicModel = "claude-sonnet-5"
 	capChatModel      = "deepseek/deepseek-v4-flash"
 	capResponsesModel = "gpt-5.6-luna"
-	capGeminiModel    = "gemini-3-flash-preview"
 )
 
 func TestProxyOutputLimitAcrossResponsePaths(t *testing.T) {
@@ -33,15 +32,12 @@ func TestProxyOutputLimitAcrossResponsePaths(t *testing.T) {
 		model    string
 	}{
 		{"messages", "anthropic", providers.ProviderAnthropic, capAnthropicModel},
-		{"messages", "chat", providers.ProviderOpenRouter, capChatModel},
+		{"messages", "chat", providers.ProviderAIAND, capChatModel},
 		{"messages", "responses", providers.ProviderOpenAI, capResponsesModel},
-		{"messages", "gemini", providers.ProviderGoogle, capGeminiModel},
 		{"chat", "anthropic", providers.ProviderAnthropic, capAnthropicModel},
-		{"chat", "chat", providers.ProviderOpenRouter, capChatModel},
+		{"chat", "chat", providers.ProviderAIAND, capChatModel},
 		{"chat", "responses", providers.ProviderOpenAI, capResponsesModel},
-		{"chat", "gemini", providers.ProviderGoogle, capGeminiModel},
 		{"responses", "responses", providers.ProviderOpenAI, capResponsesModel},
-		{"gemini", "gemini", providers.ProviderGoogle, capGeminiModel},
 	}
 	for _, path := range paths {
 		for _, stream := range []bool{false, true} {
@@ -74,13 +70,6 @@ func TestProxyOutputLimitAcrossResponsePaths(t *testing.T) {
 					case "responses":
 						body = []byte(fmt.Sprintf(`{"model":"auto","stream":%t,"input":"Inspect the repository files"}`, stream))
 						require.NoError(t, svc.ProxyOpenAIResponses(ctx, body, rec, httptest.NewRequest(http.MethodPost, "/v1/responses", nil)))
-					case "gemini":
-						body = []byte(`{"contents":[{"role":"user","parts":[{"text":"Inspect the repository files"}]}],"generationConfig":{"maxOutputTokens":64000}}`)
-						action := "generateContent"
-						if stream {
-							action = "streamGenerateContent"
-						}
-						require.NoError(t, svc.ProxyGeminiGenerateContent(ctx, body, rec, httptest.NewRequest(http.MethodPost, "/v1beta/models/"+path.model+":"+action, nil)))
 					}
 					assert.Equal(t, http.StatusOK, rec.Code)
 					assert.NotEmpty(t, rec.Body.String())
@@ -92,40 +81,6 @@ func TestProxyOutputLimitAcrossResponsePaths(t *testing.T) {
 				})
 			}
 		}
-	}
-}
-
-func TestProxyGeminiTelemetryClassifiesOutputCap(t *testing.T) {
-	for _, capped := range []bool{false, true} {
-		t.Run(fmt.Sprintf("capped=%t", capped), func(t *testing.T) {
-			response := capWireResponse("gemini", false, capped)
-			provider := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write([]byte(response))
-			}}
-			telem := newCaptureTelemetry()
-			svc := proxy.NewService(&fakeRouter{decision: router.Decision{Provider: providers.ProviderGoogle, Model: capGeminiModel, Reason: "fresh"}},
-				map[string]providers.Client{providers.ProviderGoogle: provider}, nil, false, nil, newFakePinStore(), false,
-				providers.ProviderGoogle, capGeminiModel, telem)
-			body := []byte(`{"contents":[{"role":"user","parts":[{"text":"Inspect the repository files"}]}],"generationConfig":{"maxOutputTokens":64000}}`)
-			require.NoError(t, svc.ProxyGeminiGenerateContent(authedCtx(uuid.NewString()), body, httptest.NewRecorder(),
-				httptest.NewRequest(http.MethodPost, "/v1beta/models/"+capGeminiModel+":generateContent", nil)))
-
-			select {
-			case <-telem.notify:
-			case <-time.After(2 * time.Second):
-				t.Fatal("gemini turn never persisted a telemetry row")
-			}
-			telem.mu.Lock()
-			defer telem.mu.Unlock()
-			require.NotEmpty(t, telem.rows)
-			want := proxy.TurnErrorClass("")
-			if capped {
-				want = proxy.TurnErrorMaxTokens
-			}
-			assert.Equal(t, want, telem.rows[len(telem.rows)-1].ErrorClass)
-		})
 	}
 }
 
@@ -154,16 +109,6 @@ func capWireResponse(wire string, stream, capped bool) string {
 		}
 		return "data: {\"id\":\"chat_1\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"answer\"},\"finish_reason\":null}]}\n\n" +
 			fmt.Sprintf("data: {\"id\":\"chat_1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":%q}],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":32000}}\n\ndata: [DONE]\n\n", reason)
-	case "gemini":
-		reason := "STOP"
-		if capped {
-			reason = "MAX_TOKENS"
-		}
-		body := fmt.Sprintf(`{"candidates":[{"content":{"role":"model","parts":[{"text":"answer"}]},"finishReason":%q}],"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":32000,"totalTokenCount":32100}}`, reason)
-		if stream {
-			return "data: " + body + "\n\n"
-		}
-		return body
 	case "responses":
 		status, details := "completed", "null"
 		if capped {

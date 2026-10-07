@@ -20,47 +20,36 @@ const (
 	inferencePolicyOwner           = "@steventohme"
 
 	// EscalationJudgeModel is the reviewed Switchyard judge target.
-	EscalationJudgeModel = "z-ai/glm-5.3-flash"
+	EscalationJudgeModel = "zai-org/glm-5.3-flash"
 
 	// HandoverSummaryDefaultModel is the reviewed default target of the
-	// handover-summary policy. Haiku-class: summarization is cheap.
-	HandoverSummaryDefaultModel = "claude-haiku-4-5"
-	// PrecompactionDefaultModel is the reviewed Sonnet-class summarizer the
-	// compaction cascade uses when the session has no warm Anthropic pin; the
-	// summary is the only record of the elided history, so it is worth a
-	// mid-tier model.
-	PrecompactionDefaultModel = "claude-sonnet-5-5"
-	// PrecompactionLargeWindowModel is the big-context Anthropic-family
-	// summarizer for histories too large for PrecompactionDefaultModel.
-	PrecompactionLargeWindowModel = "claude-opus-5"
+	// handover-summary policy. The roster's fast lane: summarization is cheap.
+	HandoverSummaryDefaultModel = "zai-org/glm-5.3-flash"
+	// PrecompactionDefaultModel is the reviewed summarizer the compaction
+	// cascade uses when the session has no warm roster pin; the summary is the
+	// only record of the elided history, so it stays on the roster's strong
+	// 1M-context lane.
+	PrecompactionDefaultModel = "deepseek-ai/deepseek-v4-pro"
+	// PrecompactionLargeWindowModel is the 1M-context AIand summarizer for
+	// histories too large for PrecompactionDefaultModel.
+	PrecompactionLargeWindowModel = "zai-org/glm-5.3"
 	// UtilityHardPinDefaultProvider and UtilityHardPinDefaultModel are the
 	// reviewed fallback target of the utility hard-pin policies (title-gen,
 	// classifier, probe, sub-agent dispatch, client compaction without a
 	// summary-grade session model) when the deployment names no override and
 	// the cluster bundle cannot supply its fastest available model.
-	UtilityHardPinDefaultProvider = providers.ProviderAnthropic
-	UtilityHardPinDefaultModel    = "claude-haiku-4-5"
+	UtilityHardPinDefaultProvider = providers.ProviderAIAND
+	UtilityHardPinDefaultModel    = "zai-org/glm-5.3-flash"
 )
 
 // compactionSummarizerModels is the reviewed set both compaction purposes may
-// summarize with, in default preference order. It includes every Anthropic
-// non-low catalog model so a session's warm pin can summarize its own history
-// and so ROUTER_COMPACTION_MODEL, which pins both purposes, validates once.
+// summarize with, in default preference order. It carries the roster's strong
+// lane so a warm pin on one of them can summarize its own history and so
+// ROUTER_COMPACTION_MODEL, which pins both purposes, validates once.
 var compactionSummarizerModels = []string{
 	PrecompactionDefaultModel,
 	PrecompactionLargeWindowModel,
-	"claude-sonnet-4-5",
-	"claude-sonnet-4-6",
-	"claude-sonnet-5",
-	"claude-opus-4-0",
-	"claude-opus-4-1",
-	"claude-opus-4-5",
-	"claude-opus-4-6",
-	"claude-opus-4-7",
-	"claude-opus-4-8",
-	"claude-opus-5-5",
-	"claude-fable-5",
-	"claude-fable-5-1",
+	"moonshotai/kimi-k3",
 }
 
 // FallbackSpec declares the only fallback family and fixed alternatives a policy permits.
@@ -528,12 +517,12 @@ func defaultPolicySpecs() []PolicySpec {
 		{
 			Purpose:            PurposeEscalationJudge,
 			Optional:           true,
-			FixedProvider:      providers.ProviderFireworks,
+			FixedProvider:      providers.ProviderAIAND,
 			DispatchClass:      DispatchClassAuxiliaryInference,
 			PolicyID:           "aux-escalation-judge",
 			PolicyRevision:     "2",
 			Owner:              inferencePolicyOwner,
-			Rationale:          "Judge a completed conversation prefix asynchronously with the pinned Switchyard rubric through Fireworks; failures leave serving unchanged and inference is funded by Weave.",
+			Rationale:          "Judge a completed conversation prefix asynchronously with the pinned Switchyard rubric through AIand; failures leave serving unchanged and inference is funded by Weave.",
 			SelectionStrategy:  SelectionStrategyFixedCatalog,
 			CandidateSource:    CandidateSourceFixedCatalog,
 			FixedCatalogModels: []string{EscalationJudgeModel},
@@ -546,7 +535,6 @@ func defaultPolicySpecs() []PolicySpec {
 		mainPolicy(PurposeAnthropicMessages, "main-anthropic-messages", "3", MigrationStatusExecutor, "Select an eligible catalog binding for Anthropic Messages while preserving request semantics and tenant boundaries."),
 		mainPolicy(PurposeOpenAIChatCompletions, "main-openai-chat-completions", "3", MigrationStatusExecutor, "Select an eligible catalog binding for OpenAI Chat Completions while preserving request semantics and tenant boundaries."),
 		mainPolicy(PurposeOpenAIResponses, "main-openai-responses", "3", MigrationStatusExecutor, "Select an eligible catalog binding and compatible endpoint for OpenAI Responses requests."),
-		mainPolicy(PurposeGeminiGenerateContent, "main-gemini-generate-content", "3", MigrationStatusExecutor, "Select an eligible catalog binding for Gemini Generate Content while preserving native URL and body semantics."),
 		{
 			Purpose:            PurposeHandoverSummary,
 			DispatchClass:      DispatchClassAuxiliaryInference,
@@ -569,7 +557,7 @@ func defaultPolicySpecs() []PolicySpec {
 			PolicyID:           "aux-precompaction-summary",
 			PolicyRevision:     "2",
 			Owner:              inferencePolicyOwner,
-			Rationale:          "Preserve elided task state with the context-window-aware summarizer cascade before local trim rescue: the session's warm Anthropic pin when it is a reviewed non-low model, else the deployment compaction model, else the large-window model.",
+			Rationale:          "Preserve elided task state with the context-window-aware summarizer cascade before local trim rescue: the session's warm pin when it is a reviewed summarizer-grade roster model, else the deployment compaction model, else the large-window model.",
 			SelectionStrategy:  SelectionStrategyFixedCatalog,
 			CandidateSource:    CandidateSourceFixedCatalog,
 			FixedCatalogModels: compactionSummarizerModels,

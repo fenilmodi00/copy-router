@@ -64,15 +64,6 @@ func abortMalformedPolicyPin(c *gin.Context, message string) {
 				"message": message,
 			},
 		})
-	case apiFormatGemini:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-			"error": gin.H{
-				"code":    http.StatusBadRequest,
-				"message": message,
-				"status":  "INVALID_ARGUMENT",
-				"details": []gin.H{{"reason": code}},
-			},
-		})
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{

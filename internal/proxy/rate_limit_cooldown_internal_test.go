@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"weave-os/router/internal/auth"
 	"weave-os/router/internal/dispatch"
 	"weave-os/router/internal/flags"
 	"weave-os/router/internal/providers"
@@ -214,12 +213,12 @@ func TestReadmittableCooldowns_DropsPermanentAndImageUnsafeArms(t *testing.T) {
 // and never the arm that just 429'd. A session-lifetime demotion stays out.
 // Exhaustion is recorded only when the walk actually dispatches one.
 func TestRescueDecisions_ExhaustedPoolReadmitsCoolingArms(t *testing.T) {
-	s := siblingService(providers.ProviderAnthropic, providers.ProviderFireworks)
+	s := siblingService(providers.ProviderAnthropic, providers.ProviderAIAND)
 	md := &router.RoutingMetadata{
 		CandidateModels: []string{"claude-opus-5", "claude-sonnet-5", "deepseek/deepseek-v4-pro", "claude-haiku-4-5"},
 		CandidateProviders: map[string]string{
 			"claude-sonnet-5":          providers.ProviderAnthropic,
-			"deepseek/deepseek-v4-pro": providers.ProviderFireworks,
+			"deepseek/deepseek-v4-pro": providers.ProviderAIAND,
 			"claude-haiku-4-5":         providers.ProviderAnthropic,
 		},
 	}
@@ -249,12 +248,12 @@ func TestRescueDecisions_ExhaustedPoolReadmitsCoolingArms(t *testing.T) {
 // only after they all failed, and dispatching the eligible one records no
 // exhaustion.
 func TestRescueDecisions_CoolingArmRanksBehindEligibleCandidates(t *testing.T) {
-	s := siblingService(providers.ProviderAnthropic, providers.ProviderFireworks)
+	s := siblingService(providers.ProviderAnthropic, providers.ProviderAIAND)
 	md := &router.RoutingMetadata{
 		CandidateModels: []string{"claude-opus-5", "deepseek/deepseek-v4-pro", "claude-sonnet-5"},
 		CandidateProviders: map[string]string{
 			"claude-sonnet-5":          providers.ProviderAnthropic,
-			"deepseek/deepseek-v4-pro": providers.ProviderFireworks,
+			"deepseek/deepseek-v4-pro": providers.ProviderAIAND,
 		},
 	}
 	ctx := context.Background()
@@ -393,26 +392,6 @@ func TestRescueDecisions_ReadmissionKeepsGlobalExclusionOnCoolingArm(t *testing.
 	got := s.siblingFailoverDecisions(ctx, overloadedDecision(md), 1_000, 0, 0)
 
 	assert.Equal(t, []string{"claude-haiku-4-5"}, siblingModels(got))
-}
-
-// The gateway BYOK walk readmits cooling arms the same way.
-func TestGatewayRescueDecisions_ExhaustedPoolReadmitsCoolingArms(t *testing.T) {
-	s := &Service{}
-	ctx := context.WithValue(context.Background(), ExternalAPIKeysContextKey{}, []*auth.ExternalAPIKey{
-		{Provider: providers.ProviderOpenAIGateway, Plaintext: []byte("pat"), ModelAliases: map[string]string{"grok-4.6": "grok-4.6"}},
-		{Provider: providers.ProviderAnthropicGateway, Plaintext: []byte("pat"), ModelAliases: map[string]string{"claude-opus-5": "claude-opus-5"}},
-	})
-	ctx = context.WithValue(ctx, SessionDemotedModelsContextKey{}, []string{"claude-opus-5"})
-	ctx = context.WithValue(ctx, SessionCooldownModelsContextKey{}, map[string]time.Time{"claude-opus-5": rateLimitTestNow.Add(time.Minute)})
-	failed := router.Decision{
-		Provider: providers.ProviderOpenAIGateway,
-		Model:    "grok-4.6",
-		Metadata: &router.RoutingMetadata{CandidateModels: []string{"grok-4.6", "claude-opus-5"}},
-	}
-
-	got := s.siblingFailoverDecisions(ctx, failed, 1_000, 0, 0)
-
-	assert.Equal(t, []string{"claude-opus-5"}, siblingModels(got))
 }
 
 // The turn's throttle policy is the dispatch default schedule with the

@@ -17,7 +17,7 @@ func compatibilityService(mode TranslationCompatibilityMode) *Service {
 		clients: dispatch.NewClients(map[string]providers.Client{
 			providers.ProviderAnthropic: nil,
 			providers.ProviderOpenAI:    nil,
-			providers.ProviderGoogle:    nil,
+			providers.ProviderAIAND:     nil,
 		}),
 		translationCompatibilityMode: mode,
 	}
@@ -48,7 +48,7 @@ func TestTranslationPlan_GeminiIngressNeverOffersForeignFamily(t *testing.T) {
 	plan := svc.planTranslation(router.Request{
 		EnabledProviders: map[string]struct{}{
 			providers.ProviderAnthropic: {},
-			providers.ProviderGoogle:    {},
+			providers.ProviderAIAND:     {},
 		},
 		TranslationRequirements: router.TranslationRequirements{
 			SourceFormat: router.WireFormatGemini,
@@ -56,8 +56,9 @@ func TestTranslationPlan_GeminiIngressNeverOffersForeignFamily(t *testing.T) {
 		},
 	})
 
-	assert.Equal(t, map[string]struct{}{providers.ProviderGoogle: {}}, plan.EnabledProviders)
+	assert.Empty(t, plan.EnabledProviders, "no surviving provider speaks the Gemini family")
 	requireExclusion(t, plan, "native_wire_family_required", providers.ProviderAnthropic, true)
+	requireExclusion(t, plan, "native_wire_family_required", providers.ProviderAIAND, true)
 }
 
 func TestTranslationPlan_ImageConstraintShadowsBeforeEnforcement(t *testing.T) {
@@ -96,8 +97,8 @@ func TestTranslationPlan_NativeResponsesRequireOpenAIResponsesAdapter(t *testing
 	svc := compatibilityService(TranslationCompatibilityShadow)
 	plan := svc.planTranslation(router.Request{
 		EnabledProviders: map[string]struct{}{
-			providers.ProviderOpenAI:     {},
-			providers.ProviderOpenRouter: {},
+			providers.ProviderOpenAI: {},
+			providers.ProviderAIAND:  {},
 		},
 		TranslationRequirements: router.TranslationRequirements{
 			SourceFormat: router.WireFormatOpenAI,
@@ -107,7 +108,7 @@ func TestTranslationPlan_NativeResponsesRequireOpenAIResponsesAdapter(t *testing
 	})
 
 	assert.Equal(t, map[string]struct{}{providers.ProviderOpenAI: {}}, plan.EnabledProviders)
-	requireExclusion(t, plan, "native_wire_family_required", providers.ProviderOpenRouter, true)
+	requireExclusion(t, plan, "native_wire_family_required", providers.ProviderAIAND, true)
 }
 
 func TestTranslationPlan_BroadSemanticRequirementOnlyFiltersInEnforce(t *testing.T) {

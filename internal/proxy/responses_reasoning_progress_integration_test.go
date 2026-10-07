@@ -36,15 +36,20 @@ func flushResponsesFrame(w http.ResponseWriter, frame string) bool {
 	return err == nil
 }
 
+// responsesToolTurnBody is a reasoning-capable tool turn, expressible on the
+// Responses API, used to drive the reasoning-progress assertions.
+const responsesToolTurnBody = `{"model":"gpt-5.4-mini","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"list files"}],` +
+	`"tools":[{"name":"read_file","input_schema":{"type":"object","properties":{"path":{"type":"string"}}}}]}`
+
 func TestResponsesReasoningProgress_LongReasoningCompletes(t *testing.T) {
 	for _, tc := range []struct {
-		name                      string
-		chat, gateway, throughput bool
+		name                     string
+		chat, compat, throughput bool
 	}{
 		{name: "direct to anthropic"},
 		{name: "direct to chat", chat: true},
-		{name: "gateway to anthropic", gateway: true},
-		{name: "gateway reasoning does not count as slow output", gateway: true, throughput: true},
+		{name: "openaicompat to anthropic", compat: true},
+		{name: "openaicompat reasoning does not count as slow output", compat: true, throughput: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			logBuf := captureCompletionLog(t)
@@ -96,8 +101,7 @@ func TestResponsesReasoningProgress_LongReasoningCompletes(t *testing.T) {
 
 			provider := providers.ProviderOpenAI
 			var client providers.Client = openai.NewClientWithStallTimeouts("test-key", upstream.URL, time.Second, 2*time.Second, 300*time.Millisecond)
-			if tc.gateway {
-				provider = providers.ProviderOpenAIGateway
+			if tc.compat {
 				client = openaicompat.NewClientWithStallTimeouts("test-key", upstream.URL+"/v1", 2*time.Second, 300*time.Millisecond)
 				if tc.throughput {
 					// If reasoning enters the throughput counter, two sparse
@@ -116,8 +120,8 @@ func TestResponsesReasoningProgress_LongReasoningCompletes(t *testing.T) {
 					req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatToolTurnBody))
 					finished <- svc.ProxyOpenAIChatCompletion(ctx, []byte(chatToolTurnBody), rec, req)
 				} else {
-					req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(gatewayToolTurn))
-					finished <- svc.ProxyMessages(ctx, []byte(gatewayToolTurn), rec, req)
+					req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(responsesToolTurnBody))
+					finished <- svc.ProxyMessages(ctx, []byte(responsesToolTurnBody), rec, req)
 				}
 			}()
 			defer func() { cancel(); <-joined }()
@@ -249,9 +253,9 @@ func TestResponsesReasoningProgress_StallAndCancellation(t *testing.T) {
 			client := openai.NewClientWithStallTimeouts("test-key", upstream.URL, time.Second, idle, stall)
 			svc := makeProxyService(router.Decision{Provider: providers.ProviderOpenAI, Model: reasoningProgressModel}, map[string]providers.Client{providers.ProviderOpenAI: client})
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(gatewayToolTurn))
+			req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(responsesToolTurnBody))
 			started := time.Now()
-			err := svc.ProxyMessages(ctx, []byte(gatewayToolTurn), rec, req)
+			err := svc.ProxyMessages(ctx, []byte(responsesToolTurnBody), rec, req)
 			elapsed := time.Since(started)
 			require.Error(t, err)
 			assert.Less(t, elapsed, 3*time.Second, "must terminate before the safety deadline")

@@ -135,26 +135,6 @@ func TestUsageExtractor_OpenAIResponsesNonStreaming(t *testing.T) {
 	assert.Equal(t, 9, out)
 }
 
-func TestUsageExtractor_GoogleStreaming(t *testing.T) {
-	rec := httptest.NewRecorder()
-	ext := otel.NewUsageExtractor(rec, "google")
-
-	events := []string{
-		"data: {\"id\":\"chatcmpl-g\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"delta\":{\"content\":\"Yo\"}}]}\n\n",
-		"data: {\"id\":\"chatcmpl-g\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"usage\":{\"prompt_tokens\":30,\"completion_tokens\":5}}\n\n",
-		"data: [DONE]\n\n",
-	}
-
-	for _, e := range events {
-		_, err := ext.Write([]byte(e))
-		require.NoError(t, err)
-	}
-
-	in, out := ext.Tokens()
-	assert.Equal(t, 30, in)
-	assert.Equal(t, 5, out)
-}
-
 func TestUsageExtractor_NoUsageReturnsZero(t *testing.T) {
 	rec := httptest.NewRecorder()
 	ext := otel.NewUsageExtractor(rec, "anthropic")
@@ -271,86 +251,11 @@ func TestUsageExtractor_OpenAICacheTokens_Streaming(t *testing.T) {
 	assert.Equal(t, 7, cacheRead)
 }
 
-func TestUsageExtractor_GoogleNativeCacheTokens_NonStreaming(t *testing.T) {
-	rec := httptest.NewRecorder()
-	ext := otel.NewUsageExtractor(rec, "google")
-
-	// Native Gemini :generateContent body — no "usage" field, only "usageMetadata"
-	// with cachedContentTokenCount. Without the native-shape branch the
-	// extractor returned all zeros and Gemini caching was invisible end-to-end.
-	body := `{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":1200,"candidatesTokenCount":4,"totalTokenCount":1204,"cachedContentTokenCount":1024}}`
-	_, err := ext.Write([]byte(body))
-	require.NoError(t, err)
-
-	in, out := ext.Tokens()
-	assert.Equal(t, 1200, in)
-	assert.Equal(t, 4, out)
-
-	cacheCreation, cacheRead := ext.CacheTokens()
-	assert.Equal(t, 0, cacheCreation)
-	assert.Equal(t, 1024, cacheRead)
-}
-
-func TestUsageExtractor_GoogleNativeThoughtsTokensCountAsOutput(t *testing.T) {
-	rec := httptest.NewRecorder()
-	ext := otel.NewUsageExtractor(rec, "google")
-
-	body := `{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":7,"thoughtsTokenCount":250,"totalTokenCount":357}}`
-	_, err := ext.Write([]byte(body))
-	require.NoError(t, err)
-
-	in, out := ext.Tokens()
-	assert.Equal(t, 100, in)
-	assert.Equal(t, 257, out, "thoughtsTokenCount is billed as output")
-}
-
-func TestUsageExtractor_AnthropicGatewayStreaming(t *testing.T) {
-	// Gateway providers use the native path (no translator RecordUsage call),
-	// so the extractor's sniffing is the only usage source.
-	rec := httptest.NewRecorder()
-	ext := otel.NewUsageExtractor(rec, "anthropic_gateway")
-
-	events := []string{
-		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-5\",\"usage\":{\"input_tokens\":100,\"output_tokens\":0,\"cache_read_input_tokens\":900}}}\n\n",
-		"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":25}}\n\n",
-	}
-	for _, e := range events {
-		_, err := ext.Write([]byte(e))
-		require.NoError(t, err)
-	}
-
-	in, out := ext.Tokens()
-	assert.Equal(t, 100, in)
-	assert.Equal(t, 25, out)
-
-	_, cacheRead := ext.CacheTokens()
-	assert.Equal(t, 900, cacheRead)
-}
-
-func TestUsageExtractor_OpenAIGatewayStreaming(t *testing.T) {
-	rec := httptest.NewRecorder()
-	ext := otel.NewUsageExtractor(rec, "openai_gateway")
-
-	events := []string{
-		"data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\n",
-		"data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"usage\":{\"prompt_tokens\":20,\"completion_tokens\":12}}\n\n",
-		"data: [DONE]\n\n",
-	}
-	for _, e := range events {
-		_, err := ext.Write([]byte(e))
-		require.NoError(t, err)
-	}
-
-	in, out := ext.Tokens()
-	assert.Equal(t, 20, in)
-	assert.Equal(t, 12, out)
-}
-
 func TestUsageExtractor_RecordedUsageSurvivesUsagelessChunk(t *testing.T) {
 	// Some OpenAI-compat upstreams keep emitting a null/empty usage object
 	// after the terminal chunk; that must not wipe the counts already seen.
 	rec := httptest.NewRecorder()
-	ext := otel.NewUsageExtractor(rec, "openai_gateway")
+	ext := otel.NewUsageExtractor(rec, providers.ProviderOpenAI)
 
 	events := []string{
 		"data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"usage\":{\"prompt_tokens\":20,\"completion_tokens\":12}}\n\n",
@@ -394,14 +299,6 @@ func TestUsageExtractor_AnthropicResponse(t *testing.T) {
 		{
 			name:              "streaming tool turn",
 			provider:          "anthropic",
-			writes:            anthropicToolTurn,
-			wantStopReason:    "tool_use",
-			wantToolUseBlocks: 2,
-			wantObserved:      true,
-		},
-		{
-			name:              "gateway family dispatch parses identically",
-			provider:          "anthropic_gateway",
 			writes:            anthropicToolTurn,
 			wantStopReason:    "tool_use",
 			wantToolUseBlocks: 2,
@@ -518,7 +415,7 @@ func TestUsageExtractor_OpenAIChatResponse(t *testing.T) {
 		},
 		{
 			name:             "openai-compat family dispatch parses identically",
-			provider:         "openrouter",
+			provider:         providers.ProviderAIAND,
 			writes:           chatToolTurn,
 			wantFinishReason: "tool_calls",
 			wantToolCalls:    2,
@@ -605,15 +502,10 @@ func TestUsageExtractor_OutputLimitEvidence(t *testing.T) {
 		{"anthropic long tool handoff", providers.ProviderAnthropic, "tool_use", 32000, false},
 		{"anthropic long answer", providers.ProviderAnthropic, "end_turn", 32000, false},
 		{"anthropic missing terminal", providers.ProviderAnthropic, "", 16000, false},
-		{"anthropic gateway cap", providers.ProviderAnthropicGateway, "max_tokens", 512, true},
 		{"chat cap", providers.ProviderOpenAI, "length", 8192, true},
 		{"chat long tool handoff", providers.ProviderOpenAI, "tool_calls", 32000, false},
 		{"chat long answer", providers.ProviderOpenAI, "stop", 32000, false},
 		{"chat missing terminal", providers.ProviderOpenAI, "", 16000, false},
-		{"openrouter cap", providers.ProviderOpenRouter, "length", 512, true},
-		{"gemini cap", providers.ProviderGoogle, "MAX_TOKENS", 512, true},
-		{"gemini long answer", providers.ProviderGoogle, "STOP", 32000, false},
-		{"gemini missing terminal", providers.ProviderGoogle, "", 16000, false},
 	}
 	for _, tc := range tests {
 		for _, stream := range []bool{false, true} {
@@ -825,7 +717,7 @@ func TestUsageExtractor_FragmentationMatchesSingleWrite(t *testing.T) {
 		},
 		{
 			name:     "openai chat stream capped at length",
-			provider: providers.ProviderOpenRouter,
+			provider: providers.ProviderOpenAI,
 			body:     strings.Replace(openAIChatToolStream, `"finish_reason":"tool_calls"`, `"finish_reason":"length"`, 1),
 			want: usageTotals{
 				signals: usageSignals{outputLimitReached: true, finishReason: "length", toolCalls: 2, chatObserved: true},
@@ -850,16 +742,6 @@ func TestUsageExtractor_FragmentationMatchesSingleWrite(t *testing.T) {
 				"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\n" +
 				"event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"usage\":{\"input_tokens\":120,\"output_tokens\":34,\"input_tokens_details\":{\"cached_tokens\":40}}}}\n\n",
 			want: usageTotals{input: 120, output: 34, cacheRead: 40},
-		},
-		{
-			name:     "gemini stream capped at MAX_TOKENS",
-			provider: providers.ProviderGoogle,
-			body: "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial\"}]}}]}\n\n" +
-				"data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\" answer\"}]},\"finishReason\":\"MAX_TOKENS\"}],\"usageMetadata\":{\"promptTokenCount\":1200,\"candidatesTokenCount\":4,\"thoughtsTokenCount\":6,\"cachedContentTokenCount\":1024}}\n\n",
-			want: usageTotals{
-				signals: usageSignals{outputLimitReached: true},
-				input:   1200, output: 10, cacheRead: 1024,
-			},
 		},
 	}
 	prefixSignals := func(t *testing.T, provider, prefix string) usageSignals {

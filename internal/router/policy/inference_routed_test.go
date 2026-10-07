@@ -22,11 +22,14 @@ func routedResolver(t *testing.T) *policy.PlanResolver {
 }
 
 func TestResolveRouted_AuthorizesBindingWalkInOrder(t *testing.T) {
-	const model = "deepseek/deepseek-v4-pro"
+	const model = "gpt-5.6-luna-pro"
 	entry, ok := catalog.ByID(model)
 	require.True(t, ok)
-	require.GreaterOrEqual(t, len(entry.Providers), 2)
-	primary, secondary := entry.Providers[0], entry.Providers[1]
+	require.NotEmpty(t, entry.Providers)
+	primary := entry.Providers[0]
+	// No surviving catalog row carries a second provider, so the failover
+	// binding is caller-declared and has no catalog index.
+	secondary := catalog.ProviderBinding{Provider: providers.ProviderAIAND}
 
 	plan, err := routedResolver(t).ResolveRouted(policy.RoutedResolutionRequest{
 		Purpose: policy.PurposeAnthropicMessages,
@@ -52,7 +55,7 @@ func TestResolveRouted_AuthorizesBindingWalkInOrder(t *testing.T) {
 	alternatives := plan.AlternativeBindings()
 	require.Len(t, alternatives, 1)
 	assert.Equal(t, secondary.Provider, alternatives[0].Provider)
-	assert.Equal(t, 1, alternatives[0].BindingIndex)
+	assert.Equal(t, -1, alternatives[0].BindingIndex, "a caller-declared failover has no catalog binding index")
 	assert.Equal(t, policy.SelectionStrategyRouter, plan.Provenance().SelectionStrategy)
 	assert.Equal(t, "arm-1:high", plan.Provenance().RosterID)
 	assert.Empty(t, plan.Provenance().OverrideSource)

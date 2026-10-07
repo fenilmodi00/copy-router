@@ -33,9 +33,9 @@ func fastModeCtx(models ...string) context.Context {
 func newFastModeService(decision router.Decision, upstream providers.Client) (*Service, *bypassCaptureTelemetry) {
 	telemetry := newBypassCaptureTelemetry()
 	svc := NewService(staticRouter{decision: decision}, map[string]providers.Client{
-		providers.ProviderAnthropic:  upstream,
-		providers.ProviderOpenAI:     upstream,
-		providers.ProviderOpenRouter: upstream,
+		providers.ProviderAnthropic: upstream,
+		providers.ProviderOpenAI:    upstream,
+		providers.ProviderAIAND:     upstream,
 	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", telemetry)
 	return svc, telemetry
 }
@@ -50,7 +50,7 @@ func TestFastModeForAttempt(t *testing.T) {
 		assert.True(t, fastModeForAttempt(fastModeCtx(fastLunaModel), fastLunaModel, providers.ProviderOpenAI))
 	})
 	t.Run("off when the serving binding has no fast tier", func(t *testing.T) {
-		assert.False(t, fastModeForAttempt(fastModeCtx(fastOpusModel), fastOpusModel, providers.ProviderOpenRouter))
+		assert.False(t, fastModeForAttempt(fastModeCtx(fastOpusModel), fastOpusModel, providers.ProviderAIAND))
 		assert.False(t, fastModeForAttempt(fastModeCtx("claude-sonnet-4-6"), "claude-sonnet-4-6", providers.ProviderAnthropic))
 	})
 	t.Run("off when the turn is served on a subscription", func(t *testing.T) {
@@ -77,11 +77,11 @@ func TestServedPricing(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, base, got)
 
-	gatewayBase, ok := catalog.PriceFor(providers.ProviderOpenRouter, "qwen/qwen3-235b-a22b-2507")
+	noFastBase, ok := catalog.PriceFor(providers.ProviderAIAND, "qwen/qwen3.8-27b")
 	require.True(t, ok)
-	got, ok = servedPricing(providers.ProviderOpenRouter, "qwen/qwen3-235b-a22b-2507", true)
+	got, ok = servedPricing(providers.ProviderAIAND, "qwen/qwen3.8-27b", true)
 	require.True(t, ok, "a binding without a fast tier must still price at its list rate")
-	assert.Equal(t, gatewayBase, got)
+	assert.Equal(t, noFastBase, got)
 }
 
 func TestProxyMessages_FastModeAnthropicDispatchesFastAndBillsFastRate(t *testing.T) {
@@ -255,8 +255,8 @@ func TestProxyOpenAIChatCompletion_FastModeSetsPriorityTier(t *testing.T) {
 }
 
 // A baseline/subscription failover builds one Anthropic body up front and then
-// walks the binding list; a hop from first-party Anthropic onto a gateway must
-// re-emit without the fast tier and report the attempt as not fast.
+// walks the binding list; a hop from first-party Anthropic onto a binding with
+// no fast tier must re-emit without the fast tier and report the attempt as not fast.
 func TestAnthropicTierAttempt_ReemitsWhenBindingLosesFastTier(t *testing.T) {
 	env, err := translate.ParseAnthropic([]byte(`{"model":"claude-opus-5","max_tokens":64,"messages":[{"role":"user","content":"hi"}]}`))
 	require.NoError(t, err)
@@ -295,16 +295,16 @@ func TestAnthropicTierAttempt_ReemitsWhenBindingLosesFastTier(t *testing.T) {
 	assert.Equal(t, "fast", gjson.GetBytes(upstream.capturedBody, "speed").Str)
 	assert.Empty(t, loggedBodies, "same tier reuses the prepared body")
 
-	require.NoError(t, attempt(ctx, router.Decision{Provider: providers.ProviderAnthropicGateway, Model: fastOpusModel}, upstream))
-	assert.False(t, gjson.GetBytes(upstream.capturedBody, "speed").Exists(), "gateway hop must not carry the fast-tier speed field")
+	require.NoError(t, attempt(ctx, router.Decision{Provider: providers.ProviderAIAND, Model: fastOpusModel}, upstream))
+	assert.False(t, gjson.GetBytes(upstream.capturedBody, "speed").Exists(), "a hop to a binding without a fast tier must not carry the fast-tier speed field")
 	assert.Len(t, loggedBodies, 1, "tier change re-emits the body once")
 
 	assert.Equal(t, []bool{true, false}, served)
 }
 
-func TestProxyMessages_FastModeGatewayNeverGetsFastFields(t *testing.T) {
+func TestProxyMessages_FastModeNoFastTierNeverGetsFastFields(t *testing.T) {
 	upstream := &bypassFakeProvider{respBody: `{"id":"chatcmpl_1","object":"chat.completion","model":"qwen/qwen3-235b-a22b-2507","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5}}`}
-	svc, _ := newFastModeService(router.Decision{Provider: providers.ProviderOpenRouter, Model: "qwen/qwen3-235b-a22b-2507"}, upstream)
+	svc, _ := newFastModeService(router.Decision{Provider: providers.ProviderAIAND, Model: "qwen/qwen3-235b-a22b-2507"}, upstream)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))

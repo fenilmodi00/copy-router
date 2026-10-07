@@ -61,7 +61,7 @@ func (e *RequestEnvelope) PrepareOpenAIResponses(in http.Header, opts EmitOption
 // so reasoning-tool turns promoted to /v1/responses stay pinned to a warm replica.
 func applyResponsesSessionAffinity(body []byte, opts EmitOptions) ([]byte, error) {
 	switch opts.TargetProvider {
-	case providers.ProviderOpenAI, providers.ProviderOpenAIGateway:
+	case providers.ProviderOpenAI:
 	default:
 		return body, nil
 	}
@@ -152,9 +152,8 @@ type ResponsesRoute struct {
 // UseOpenAIResponsesAPI reports whether a dispatch should use POST
 // /v1/responses instead of /v1/chat/completions. Direct OpenAI uses Responses
 // for every turn it can express (chat/completions 400s reasoning + tools from
-// gpt-5.4 on; only Responses carries encrypted reasoning across turns).
-// Gateways keep the narrow rule — reasoning tool turns only — because most
-// mount no Responses surface; one without it is downgraded by the caller.
+// gpt-5.4 on; only Responses carries encrypted reasoning across turns). Every
+// other provider stays on chat/completions.
 func UseOpenAIResponsesAPI(rt ResponsesRoute) bool {
 	narrow := rt.Capabilities.Supports(router.CapReasoning) && rt.HasTools
 	switch rt.Provider {
@@ -163,8 +162,6 @@ func UseOpenAIResponsesAPI(rt ResponsesRoute) bool {
 			return false
 		}
 		return rt.Broad || narrow
-	case providers.ProviderOpenAIGateway:
-		return narrow
 	default:
 		return false
 	}

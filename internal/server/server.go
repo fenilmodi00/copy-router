@@ -14,7 +14,6 @@ import (
 	anthropicapi "weave-os/router/internal/api/anthropic"
 	classifierapi "weave-os/router/internal/api/classifier"
 	feedbackapi "weave-os/router/internal/api/feedback"
-	geminiapi "weave-os/router/internal/api/gemini"
 	openaiapi "weave-os/router/internal/api/openai"
 	subscriptionsapi "weave-os/router/internal/api/subscriptions"
 	"weave-os/router/internal/auth"
@@ -385,8 +384,6 @@ func RegisterWithFeatures(engine *gin.Engine, authSvc *auth.Service, proxySvc *p
 	// translated internally to chat completions so the turn loop is reused.
 	chatCompletionWithoutPolicyPinGroup := engine.Group("", chatCompletionWithoutPolicyPin...)
 	chatCompletionWithoutPolicyPinGroup.POST("/v1/responses", openaiapi.ResponsesHandler(proxySvc, authSvc))
-	// Action suffix (:generateContent or :streamGenerateContent) lives inside modelAction because Gin treats `:` outside the leading position as a literal.
-	chatCompletionWithoutPolicyPinGroup.POST("/v1beta/models/:modelAction", geminiapi.GenerateContentHandler(proxySvc, authSvc))
 
 	// Passthrough endpoints cost no upstream tokens, so they stay open even
 	// with billing enabled — count_tokens is the SDK's pre-flight call before

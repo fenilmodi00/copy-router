@@ -310,8 +310,8 @@ func TestDispatchWithFallback_RetriesOnResponseHeaderTimeout(t *testing.T) {
 	}
 
 	s := newServiceWithProviders(t, map[string]providers.Client{
-		providers.ProviderMakora:     primary,
-		providers.ProviderOpenRouter: fallback,
+		providers.ProviderAIAND:  primary,
+		providers.ProviderOpenAI: fallback,
 	})
 
 	rec := httptest.NewRecorder()
@@ -324,8 +324,8 @@ func TestDispatchWithFallback_RetriesOnResponseHeaderTimeout(t *testing.T) {
 		initialDecision: router.Decision{Model: "deepseek/deepseek-v4-flash"},
 		purpose:         inference.PurposeAnthropicMessages,
 		bindings: []catalog.ProviderBinding{
-			{Provider: providers.ProviderMakora},
-			{Provider: providers.ProviderOpenRouter},
+			{Provider: providers.ProviderAIAND},
+			{Provider: providers.ProviderOpenAI},
 		},
 		attempt: func(ctx context.Context, d router.Decision, p providers.Client) error {
 			buf.Seal()
@@ -338,7 +338,7 @@ func TestDispatchWithFallback_RetriesOnResponseHeaderTimeout(t *testing.T) {
 	assert.Equal(t, 1, primary.calls)
 	assert.Equal(t, 1, fallback.calls)
 	assert.Equal(t, "rescued", rec.Body.String())
-	assert.Equal(t, providers.ProviderMakora, rec.Header().Get(HeaderRouterFallbackFrom))
+	assert.Equal(t, providers.ProviderAIAND, rec.Header().Get(HeaderRouterFallbackFrom))
 }
 
 // Covers the mid-stream stall watchdog (prod incident 2026-06-09: streams
@@ -355,8 +355,8 @@ func TestDispatchWithFallback_RetriesOnUpstreamIdleTimeout(t *testing.T) {
 	}
 
 	s := newServiceWithProviders(t, map[string]providers.Client{
-		providers.ProviderOpenAI:     primary,
-		providers.ProviderOpenRouter: fallback,
+		providers.ProviderOpenAI: primary,
+		providers.ProviderAIAND:  fallback,
 	})
 
 	rec := httptest.NewRecorder()
@@ -370,7 +370,7 @@ func TestDispatchWithFallback_RetriesOnUpstreamIdleTimeout(t *testing.T) {
 		purpose:         inference.PurposeAnthropicMessages,
 		bindings: []catalog.ProviderBinding{
 			{Provider: providers.ProviderOpenAI},
-			{Provider: providers.ProviderOpenRouter},
+			{Provider: providers.ProviderAIAND},
 		},
 		attempt: func(ctx context.Context, d router.Decision, p providers.Client) error {
 			buf.Seal()
@@ -902,7 +902,7 @@ func TestShouldFailover(t *testing.T) {
 		s := &Service{}
 		ctx := context.WithValue(context.Background(), ExternalAPIKeysContextKey{},
 			[]*auth.ExternalAPIKey{
-				{Provider: providers.ProviderMakora, Plaintext: []byte("mk-byok")},
+				{Provider: providers.ProviderAIAND, Plaintext: []byte("aiand-byok")},
 			})
 		assert.False(t, s.shouldFailover(ctx))
 	})

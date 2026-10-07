@@ -17,9 +17,9 @@ func TestLatestInFamily(t *testing.T) {
 		{"dated Anthropic alias", "claude-sonnet-4-5-20250929", []string{"claude-sonnet-4-6", "claude-sonnet-5"}, "claude-sonnet-5"},
 		{"dated OpenAI alias", "gpt-4.1-mini-2025-04-14", []string{"gpt-5.5-mini"}, "gpt-5.5-mini"},
 		{"dated alias cannot bypass eligibility", "claude-sonnet-4-5-20250929", []string{"claude-sonnet-4-5-20250929"}, ""},
-		{"Gemini versions", "gemini-3.5-flash", []string{"gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"}, "gemini-3.8-flash"},
-		{"GLM keeps variant", "z-ai/glm-5.1", []string{"z-ai/glm-5.2", "z-ai/glm-5.3", "z-ai/glm-5.3-flash"}, "z-ai/glm-5.3"},
-		{"Kimi major", "moonshotai/kimi-k2.5", []string{"moonshotai/kimi-k2.7", "moonshotai/kimi-k3"}, "moonshotai/kimi-k3"},
+		{"Opus versions", "claude-opus-4-6", []string{"claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5"}, "claude-opus-5"},
+		{"GLM keeps variant", "zai-org/glm-5.3", []string{"zai-org/glm-5.3", "zai-org/glm-5.3-flash"}, "zai-org/glm-5.3"},
+		{"DeepSeek minor", "deepseek-ai/deepseek-v4-flash", []string{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4.1-flash"}, "deepseek-ai/deepseek-v4.1-flash"},
 		{"OpenAI keeps size", "gpt-5.4-mini", []string{"gpt-5.5-mini", "gpt-5.6-luna", "gpt-6-astra"}, "gpt-5.5-mini"},
 		{"newest unavailable", "claude-sonnet-4-5", []string{"claude-sonnet-4-5", "claude-sonnet-4-6"}, "claude-sonnet-4-6"},
 		{"no downgrade", "claude-sonnet-5", []string{"claude-sonnet-4-6"}, ""},
@@ -115,8 +115,8 @@ func TestFamilyDuplicates(t *testing.T) {
 		"claude-sonnet-5",
 		"claude-opus-4-7",
 		"claude-opus-4-8",
-		"moonshotai/kimi-k2.6",
-		"moonshotai/kimi-k2.7",
+		"deepseek-ai/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4.1-flash",
 		"gpt-5.5",
 	}
 	dups := FamilyDuplicates(ids)
@@ -125,9 +125,9 @@ func TestFamilyDuplicates(t *testing.T) {
 		got[d.Superseded] = d.SupersededBy
 	}
 	want := map[string]string{
-		"claude-sonnet-4-6":    "claude-sonnet-5",
-		"claude-opus-4-7":      "claude-opus-4-8",
-		"moonshotai/kimi-k2.6": "moonshotai/kimi-k2.7",
+		"claude-sonnet-4-6":             "claude-sonnet-5",
+		"claude-opus-4-7":               "claude-opus-4-8",
+		"deepseek-ai/deepseek-v4-flash": "deepseek-ai/deepseek-v4.1-flash",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("FamilyDuplicates(%v) = %v, want %v", ids, dups, want)
@@ -146,8 +146,8 @@ func TestFamilyDuplicates(t *testing.T) {
 
 func TestFamilyDuplicates_NoFalsePositiveOnDistinctSizes(t *testing.T) {
 	ids := []string{
-		"deepseek/deepseek-v4-flash",
-		"deepseek/deepseek-v4-pro",
+		"deepseek-ai/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4-pro",
 		"gpt-5.5-mini",
 	}
 	if dups := FamilyDuplicates(ids); len(dups) != 0 {

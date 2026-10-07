@@ -44,21 +44,9 @@ func TestValidateDispatchableRejectsUnknown(t *testing.T) {
 // mis-assignment (e.g. flipping an OpenAI-compat provider to Anthropic) fails.
 func TestFamilyForKnownProviders(t *testing.T) {
 	cases := map[string]providers.TranslationFamily{
-		providers.ProviderAnthropic:      providers.FamilyAnthropic,
-		providers.ProviderOpenAI:         providers.FamilyOpenAICompat,
-		providers.ProviderGoogle:         providers.FamilyGemini,
-		providers.ProviderOpenRouter:     providers.FamilyOpenAICompat,
-		providers.ProviderFireworks:      providers.FamilyOpenAICompat,
-		providers.ProviderDeepInfra:      providers.FamilyOpenAICompat,
-		providers.ProviderBedrock:        providers.FamilyOpenAICompat,
-		providers.ProviderMakora:         providers.FamilyOpenAICompat,
-		providers.ProviderMiniMax:        providers.FamilyOpenAICompat,
-		providers.ProviderTogether:       providers.FamilyOpenAICompat,
-		providers.ProviderXAI:            providers.FamilyOpenAICompat,
-		providers.ProviderMeta:           providers.FamilyOpenAICompat,
-		providers.ProviderAIAND:          providers.FamilyOpenAICompat,
-		providers.ProviderWafer:          providers.FamilyOpenAICompat,
-		providers.ProviderWaferAnthropic: providers.FamilyAnthropic,
+		providers.ProviderAnthropic: providers.FamilyAnthropic,
+		providers.ProviderOpenAI:    providers.FamilyOpenAICompat,
+		providers.ProviderAIAND:     providers.FamilyOpenAICompat,
 	}
 	for p, want := range cases {
 		assert.Equalf(t, want, providers.FamilyFor(p), "family for %q", p)
@@ -68,9 +56,12 @@ func TestFamilyForKnownProviders(t *testing.T) {
 }
 
 // TestAllProvidersSorted asserts AllProviders returns a deterministic sorted
-// slice (relied on for stable dashboard display order).
+// slice (relied on for stable dashboard display order) and exactly the
+// AIand-only roster.
 func TestAllProvidersSorted(t *testing.T) {
 	all := providers.AllProviders()
+	assert.Equal(t, []string{providers.ProviderAIAND, providers.ProviderAnthropic, providers.ProviderOpenAI}, all,
+		"AIand-only build registers exactly aiand, anthropic, openai")
 	for i := 1; i < len(all); i++ {
 		assert.LessOrEqualf(t, all[i-1], all[i], "AllProviders not sorted at index %d", i)
 	}

@@ -496,8 +496,8 @@ func TestProxyMessages_BypassWeeklyLimit_FallsBackToRoutedDispatch(t *testing.T)
 		Primary: usage.Window{UsedPercent: 0.20, WindowMinutes: 300},
 	})
 	svc := proxy.NewService(fr, map[string]providers.Client{
-		providers.ProviderAnthropic:  wrappedP,
-		providers.ProviderOpenRouter: &fakeProvider{},
+		providers.ProviderAnthropic: wrappedP,
+		providers.ProviderAIAND:     &fakeProvider{},
 	}, nil, false, nil, nil, false, providers.ProviderAnthropic, bypassScorerPickMdl, nil).
 		WithSubscriptionAwareRouting(obs, 0.05, 2.0).
 		WithTranslationCompatibilityMode(proxy.TranslationCompatibilityEnforce)
@@ -643,12 +643,12 @@ func TestSubscriptionOnly_NonBypassServedOnSub_Serves(t *testing.T) {
 // must be refused with the credits-exhausted sentinel and never dispatched —
 // paid failover is disabled below the floor.
 func TestSubscriptionOnly_NonBypassPaidRoute_Refuses402(t *testing.T) {
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenRouter, Model: "deepseek/deepseek-chat", Reason: "cluster:v0.2"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: "deepseek/deepseek-chat", Reason: "cluster:v0.2"}}
 	p := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"id":"x","type":"message"}`))
 	}}
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderOpenRouter: p}, nil, false, nil, nil, false, providers.ProviderAnthropic, bypassScorerPickMdl, nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAIAND: p}, nil, false, nil, nil, false, providers.ProviderAnthropic, bypassScorerPickMdl, nil)
 
 	rec, req, body := bypassRequest(t)
 	// Sub present but the scorer routes to a paid provider it can't cover.

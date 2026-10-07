@@ -37,7 +37,7 @@ func TestRunTurnLoop_ForcedTextOnlyModel_DropsPinForImageTurn(t *testing.T) {
 		"claude-sonnet-4-6": {},
 	}}
 	store := &forcedPinStore{pin: sessionpin.Pin{
-		Provider:    providers.ProviderFireworks,
+		Provider:    providers.ProviderAIAND,
 		Model:       textOnlyForcedModel,
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(time.Hour),
@@ -78,7 +78,7 @@ func TestRunTurnLoop_ForcedTextOnlyModel_HonoredWithoutImages(t *testing.T) {
 		"claude-sonnet-4-6": {},
 	}}
 	store := &forcedPinStore{pin: sessionpin.Pin{
-		Provider:    providers.ProviderFireworks,
+		Provider:    providers.ProviderAIAND,
 		Model:       textOnlyForcedModel,
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(time.Hour),
@@ -107,7 +107,7 @@ func TestRunTurnLoop_ForcedTextOnlyModel_HonoredWithoutImages(t *testing.T) {
 // forcedPinEligible is the gate for the hard-pinned-turn fast path, which is a
 // separate branch from the one above and needs the same guard.
 func TestForcedPinEligible_RejectsTextOnlyModelOnImageTurn(t *testing.T) {
-	pin := sessionpin.Pin{Provider: providers.ProviderFireworks, Model: textOnlyForcedModel}
+	pin := sessionpin.Pin{Provider: providers.ProviderAIAND, Model: textOnlyForcedModel}
 
 	assert.False(t, forcedPinEligible(pin, router.Request{HasImages: true}),
 		"text-only forced pin must be ineligible for an image-bearing turn")

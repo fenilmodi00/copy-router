@@ -235,9 +235,9 @@ func TestProxyOpenAIResponses_RetriesTranslatedStreamingEmptyCompletion(t *testi
 	const servedModel = "grok-4.6"
 	client := &emptyThenOKChatCompletionsClient{}
 	svc := NewService(
-		staticRouter{decision: router.Decision{Provider: providers.ProviderXAI, Model: servedModel, Reason: "test"}},
-		map[string]providers.Client{providers.ProviderXAI: client},
-		nil, false, nil, nil, false, providers.ProviderXAI, servedModel, nil,
+		staticRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: servedModel, Reason: "test"}},
+		map[string]providers.Client{providers.ProviderAIAND: client},
+		nil, false, nil, nil, false, providers.ProviderAIAND, servedModel, nil,
 	)
 	svc.retrySleep = noopSleep
 	ctx := context.WithValue(context.Background(), ClientIdentityContextKey{}, ClientIdentity{ClientApp: ClientAppCodex})

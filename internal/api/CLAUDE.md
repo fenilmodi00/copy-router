@@ -9,7 +9,6 @@ Presentation layer. Handlers adapt HTTP ↔ Service. Read [root CLAUDE.md](../..
 - `admin/` — operational endpoints: `/health`, `/validate`, `/v1/client-events` (harness CLI off/on/uninstall report → log + `router.harness_lifecycle` span, nothing stored), `/admin/v1/*`, and `/v1/sessions/:session_id/cost` (authed by `middleware.WithReadKey`: an `rk_` or `ra_` key resolves its installation; per-installation `WithInstallationRateLimit`; no admission, billing or spend gates)
 - `anthropic/` — Anthropic Messages surface (`/v1/messages`, passthrough, `/v1/route`)
 - `openai/` — OpenAI Chat Completions (`/v1/chat/completions`)
-- `gemini/` — Gemini native (`/v1beta/models/:modelAction`)
 - `analytics/` — read-only routing-decision export (`/v1/analytics/routing-decisions`, `/models`, `/schema`). Authed by `ra_` analytics keys via `middleware.WithAnalyticsKey` **only** — no `WithAuth`, no balance check, no spend cap, since nothing here can route or spend.
 - `feedback/` — no-login feedback-link surface (`/f/<token>`, rating submit). The token itself (signed via [`internal/feedback`](../feedback)) is the sole credential, so this is the one subpackage that **deliberately carries no auth middleware** — do not add `WithAuth`/`WithAdminOnly` here; that would break the whole point of a shareable no-login link.
 

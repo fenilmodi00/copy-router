@@ -42,8 +42,6 @@ func TestFastPriceFor_BaseListPriceUnchanged(t *testing.T) {
 
 func TestFastPriceFor_NoFastTier(t *testing.T) {
 	cases := []struct{ name, provider, id string }{
-		{"gateway anthropic", providers.ProviderAnthropicGateway, "claude-opus-5"},
-		{"gateway openai", providers.ProviderOpenAIGateway, "gpt-5"},
 		{"pro has no priority tier", providers.ProviderOpenAI, "gpt-5.4-pro"},
 		{"opus 4.7 rejects speed", providers.ProviderAnthropic, "claude-opus-4-7"},
 		{"opus 4.6 ignores speed", providers.ProviderAnthropic, "claude-opus-4-6"},
@@ -63,7 +61,6 @@ func TestSupportsFastMode(t *testing.T) {
 	assert.True(t, SupportsFastMode("gpt-5.6-luna-pro"), "alias carries its own fast tier")
 	assert.True(t, SupportsFastMode("claude-opus-5"))
 	assert.False(t, SupportsFastMode("claude-sonnet-4-6"))
-	assert.False(t, SupportsFastMode("gemini-2.5-pro"))
 	assert.False(t, SupportsFastMode("unknown"))
 }
 

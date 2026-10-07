@@ -33,7 +33,8 @@ func TestDefaultInferenceRegistryCompactionPurposesShareSummarizers(t *testing.T
 	handover, found := registry.Spec(policy.PurposeCompactionHandoverSummary)
 	require.True(t, found)
 	assert.Equal(t, precompaction.FixedCatalogModels, handover.FixedCatalogModels)
-	assert.Contains(t, handover.FixedCatalogModels, "claude-sonnet-4-5")
+	assert.Contains(t, handover.FixedCatalogModels, policy.PrecompactionLargeWindowModel)
+	assert.Contains(t, handover.FixedCatalogModels, "moonshotai/kimi-k3")
 }
 
 func TestInferenceRegistryRejectsDuplicateAndMissingPurposes(t *testing.T) {
@@ -127,7 +128,7 @@ func TestInferenceRegistryRejectsInvalidFallbackAndOverridePrecedence(t *testing
 	fixedIndex := policyIndex(t, specs, policy.PurposeHandoverSummary)
 	specs[fixedIndex].Fallback = policy.FallbackSpec{
 		Kind:         policy.FallbackKindPlanAlternatives,
-		Alternatives: []string{"claude-haiku-4-5"},
+		Alternatives: []string{policy.HandoverSummaryDefaultModel},
 	}
 	_, err = policy.NewRegistry(specs)
 	require.Error(t, err)

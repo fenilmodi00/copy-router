@@ -19,7 +19,7 @@ func TestResolveDefaultBaselineModel(t *testing.T) {
 		}
 		os.Unsetenv("ROUTER_DEFAULT_BASELINE_MODEL")
 		t.Cleanup(require)
-		assert.Equal(t, "claude-sonnet-4-5", resolveDefaultBaselineModel())
+		assert.Equal(t, "zai-org/glm-5.3", resolveDefaultBaselineModel())
 	})
 
 	t.Run("explicit empty disables substitution", func(t *testing.T) {

@@ -8,10 +8,12 @@ import (
 
 func TestSupportsAnthropicServerTools(t *testing.T) {
 	cases := map[string]bool{
-		providers.ProviderAnthropic:        true,
-		providers.ProviderAnthropicGateway: false,
-		providers.ProviderOpenAI:           false,
-		providers.ProviderBedrock:          false,
+		providers.ProviderAnthropic: true,
+		providers.ProviderOpenAI:    false,
+		providers.ProviderAIAND:     false,
+		// A provider absent from ProviderFamilies (the cut gateway) gets no family,
+		// so it cannot be credited with native server-tool support.
+		"anthropic_gateway": false,
 	}
 	for provider, want := range cases {
 		if got := providers.SupportsAnthropicServerTools(provider); got != want {
@@ -20,11 +22,10 @@ func TestSupportsAnthropicServerTools(t *testing.T) {
 	}
 }
 
-func TestAnthropicGatewayShareFamilyButNotServerTools(t *testing.T) {
-	if providers.FamilyFor(providers.ProviderAnthropicGateway) != providers.FamilyFor(providers.ProviderAnthropic) {
-		t.Fatal("the gateway must stay Anthropic-family: it speaks the Messages wire format")
-	}
-	if providers.SupportsAnthropicServerTools(providers.ProviderAnthropicGateway) {
-		t.Fatal("wire-format compatibility must not imply server-tool support")
+func TestIsGatewayFalseForEveryKnownProvider(t *testing.T) {
+	for _, provider := range providers.AllProviders() {
+		if providers.IsGateway(provider) {
+			t.Errorf("IsGateway(%q) = true; the AIand-only build has no gateway surface", provider)
+		}
 	}
 }

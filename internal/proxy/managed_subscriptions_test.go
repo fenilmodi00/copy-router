@@ -399,7 +399,6 @@ func TestInferenceFailsClosedWhenSubscriptionEnrollmentIsUnknown(t *testing.T) {
 
 	require.ErrorIs(t, svc.ProxyMessages(ctx, body, httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/messages", nil)), ErrSubscriptionPoolUnavailable)
 	require.ErrorIs(t, svc.ProxyOpenAIChatCompletion(ctx, body, httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)), ErrSubscriptionPoolUnavailable)
-	require.ErrorIs(t, svc.ProxyGeminiGenerateContent(ctx, body, httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1beta/models/test:generateContent", nil)), ErrSubscriptionPoolUnavailable)
 }
 
 func TestDispatchWithFallbackRotatesManagedAccountBeforeCommit(t *testing.T) {

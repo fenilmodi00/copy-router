@@ -179,17 +179,17 @@ func TestResolveForceEffort(t *testing.T) {
 	}
 }
 
-// Claude Code ingress against an OpenAI-spec gateway: the turn carries tools,
-// so the forced effort must not ride along — Cortex 400s the pair.
-func TestForceReasoningEffort_GatewayToolTurnOmitsEffort(t *testing.T) {
+// Claude Code ingress against direct OpenAI: gpt-5.x rejects reasoning_effort
+// alongside tools on chat/completions, so the forced effort must not ride along.
+func TestForceReasoningEffort_DirectOpenAIToolTurn(t *testing.T) {
 	body := []byte(`{"model":"claude-opus-5","max_tokens":1024,"messages":[{"role":"user","content":"hi"}],` +
 		`"tools":[{"name":"read_file","input_schema":{"type":"object"}}]}`)
 	env, err := translate.ParseAnthropic(body)
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
-		TargetModel:          "grok-4.6",
-		TargetProvider:       providers.ProviderOpenAIGateway,
-		Capabilities:         router.Lookup("grok-4.6"),
+		TargetModel:          "gpt-5.5",
+		TargetProvider:       providers.ProviderOpenAI,
+		Capabilities:         router.Lookup("gpt-5.5"),
 		ForceReasoningEffort: "high",
 	})
 	require.NoError(t, err)

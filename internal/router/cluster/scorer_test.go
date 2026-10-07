@@ -121,9 +121,10 @@ func twoClusterArtifacts(t *testing.T) (centroidsBlob, rankingsBlob, registryBlo
 
 func allProviders() map[string]struct{} {
 	return map[string]struct{}{
-		"anthropic": {},
-		"openai":    {},
-		"google":    {},
+		"anthropic":             {},
+		"openai":                {},
+		"google":                {},
+		providers.ProviderAIAND: {},
 	}
 }
 
@@ -955,22 +956,22 @@ func TestScorer_EnabledProvidersGatesArgmax(t *testing.T) {
 	assert.Equal(t, "anthropic", got.Provider)
 }
 
-// gpt-5 also carries an openai_gateway catalog binding; gateway exclusivity
-// must route only the aliased model so an unaliased name never goes upstream.
+// An exclusive binding set must route only the aliased model, so the
+// unaliased gpt-5 never reaches an upstream it was not declared for.
 func TestScorer_GatewayExclusiveRoutesOnlyAliasedModel(t *testing.T) {
 	emb := &fakeEmbedder{vec: makeOpusVec()}
 	s := newTwoProviderScorer(t, emb)
 
 	got, err := s.Route(context.Background(), router.Request{
 		PromptText:       strings.Repeat("x", 100),
-		EnabledProviders: map[string]struct{}{providers.ProviderOpenAIGateway: {}},
-		GatewayProviders: map[string]struct{}{providers.ProviderOpenAIGateway: {}},
-		CustomBindings:   map[string][]string{"claude-opus-4-7": {providers.ProviderOpenAIGateway}},
+		EnabledProviders: map[string]struct{}{providers.ProviderAIAND: {}},
+		GatewayProviders: map[string]struct{}{providers.ProviderAIAND: {}},
+		CustomBindings:   map[string][]string{"claude-opus-4-7": {providers.ProviderAIAND}},
 	})
 	require.NoError(t, err)
 	// Ungated, gpt-5 wins cluster 0 and would ship an unaliased name upstream.
 	assert.Equal(t, "claude-opus-4-7", got.Model)
-	assert.Equal(t, providers.ProviderOpenAIGateway, got.Provider)
+	assert.Equal(t, providers.ProviderAIAND, got.Provider)
 }
 
 // A gateway key aliasing nothing is a customer configuration to fix, so the
@@ -981,8 +982,8 @@ func TestScorer_GatewayWithoutAliasesReturnsErrGatewayServesNoDeployedModel(t *t
 
 	_, err := s.Route(context.Background(), router.Request{
 		PromptText:       strings.Repeat("x", 100),
-		EnabledProviders: map[string]struct{}{providers.ProviderOpenAIGateway: {}},
-		GatewayProviders: map[string]struct{}{providers.ProviderOpenAIGateway: {}},
+		EnabledProviders: map[string]struct{}{providers.ProviderAIAND: {}},
+		GatewayProviders: map[string]struct{}{providers.ProviderAIAND: {}},
 	})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, policy.ErrGatewayServesNoDeployedModel))

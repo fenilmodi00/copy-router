@@ -47,10 +47,10 @@ func upstreamModelsService(providerMap map[string]providers.Client) *proxy.Servi
 
 func TestListUpstreamModels_PassesCredentialsToLister(t *testing.T) {
 	lister := &listerClient{models: []string{"cortex-a", "cortex-b"}}
-	svc := upstreamModelsService(map[string]providers.Client{providers.ProviderOpenAIGateway: lister})
+	svc := upstreamModelsService(map[string]providers.Client{providers.ProviderAIAND: lister})
 
 	creds := &proxy.Credentials{APIKey: []byte("byok"), BaseURL: "https://cortex.example/api/v2/cortex/v1"}
-	models, err := svc.ListUpstreamModels(context.Background(), providers.ProviderOpenAIGateway, creds)
+	models, err := svc.ListUpstreamModels(context.Background(), providers.ProviderAIAND, creds)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"cortex-a", "cortex-b"}, models)
 	require.NotNil(t, lister.seenCreds, "the BYOK credentials must reach the adapter via context")
@@ -58,15 +58,15 @@ func TestListUpstreamModels_PassesCredentialsToLister(t *testing.T) {
 }
 
 func TestListUpstreamModels_UnsupportedProvider(t *testing.T) {
-	svc := upstreamModelsService(map[string]providers.Client{providers.ProviderGoogle: nonListerClient{}})
+	svc := upstreamModelsService(map[string]providers.Client{providers.ProviderAIAND: nonListerClient{}})
 
-	_, err := svc.ListUpstreamModels(context.Background(), providers.ProviderGoogle, nil)
+	_, err := svc.ListUpstreamModels(context.Background(), providers.ProviderAIAND, nil)
 	assert.ErrorIs(t, err, proxy.ErrModelListingUnsupported)
 }
 
 func TestListUpstreamModels_UnknownProvider(t *testing.T) {
 	svc := upstreamModelsService(nil)
 
-	_, err := svc.ListUpstreamModels(context.Background(), providers.ProviderOpenAIGateway, nil)
+	_, err := svc.ListUpstreamModels(context.Background(), providers.ProviderAIAND, nil)
 	assert.ErrorIs(t, err, proxy.ErrProviderNotConfigured)
 }

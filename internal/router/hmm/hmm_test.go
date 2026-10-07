@@ -28,10 +28,10 @@ func (f *fakeDecider) Decide(_ context.Context, q Query) (Result, error) {
 func TestRouterMapsSidecarRosterModelBackToCatalogDecision(t *testing.T) {
 	decider := &fakeDecider{res: Result{
 		RouteID:              "route-1",
-		Model:                "moonshotai/kimi-k2.7-code",
-		Provider:             providers.ProviderFireworks,
+		Model:                "anthropic/claude-sonnet-4.6",
+		Provider:             providers.ProviderAnthropic,
 		Score:                0.8,
-		CandidateScores:      map[string]float32{"moonshotai/kimi-k2.7-code": 0.8},
+		CandidateScores:      map[string]float32{"anthropic/claude-sonnet-4.6": 0.8},
 		Reason:               "policy",
 		Propensity:           0.9,
 		DisplayMarker:        "display marker",
@@ -44,8 +44,8 @@ func TestRouterMapsSidecarRosterModelBackToCatalogDecision(t *testing.T) {
 		SchemaVersion:        "policy_router_v1",
 		DebugRef:             "debug-1",
 	}}
-	deployed := map[string]struct{}{"moonshotai/kimi-k2.7": {}}
-	available := map[string]struct{}{providers.ProviderFireworks: {}}
+	deployed := map[string]struct{}{"claude-sonnet-4-6": {}}
+	available := map[string]struct{}{providers.ProviderAnthropic: {}}
 	r := newWithRoutingTargets(router.StrategyHMM, decider, deployed, available)
 
 	decision, err := r.Route(context.Background(), router.Request{
@@ -66,7 +66,7 @@ func TestRouterMapsSidecarRosterModelBackToCatalogDecision(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, "moonshotai/kimi-k2.7", decision.Model)
+	assert.Equal(t, "claude-sonnet-4-6", decision.Model)
 	assert.NotNil(t, decision.Metadata)
 	assert.Equal(t, "display marker", decision.Metadata.DisplayMarker)
 	assert.Equal(t, "route-1", decision.Metadata.RouteID)
@@ -78,7 +78,7 @@ func TestRouterMapsSidecarRosterModelBackToCatalogDecision(t *testing.T) {
 	assert.Equal(t, "roster-v2", decision.Metadata.RosterVersion)
 	assert.Equal(t, "policy_router_v1", decision.Metadata.SidecarSchemaVersion)
 	assert.Equal(t, "debug-1", decision.Metadata.DebugRef)
-	assert.Equal(t, map[string]float32{"moonshotai/kimi-k2.7": 0.8}, decision.Metadata.CandidateScores)
+	assert.Equal(t, map[string]float32{"claude-sonnet-4-6": 0.8}, decision.Metadata.CandidateScores)
 	assert.Equal(t, "hello", decider.query.PromptText)
 	assert.Equal(t, router.StrategyHMM, decider.query.Strategy)
 	assert.Equal(t, "org-1", decider.query.OrganizationID)
@@ -91,27 +91,27 @@ func TestRouterMapsSidecarRosterModelBackToCatalogDecision(t *testing.T) {
 	assert.Equal(t, []router.ConversationMessage{{Role: "user", Text: "latest hello"}}, decider.query.ConversationMessages)
 	require.Len(t, decider.query.Candidates, 1)
 	candidate := decider.query.Candidates[0]
-	assert.Equal(t, "moonshotai/kimi-k2.7-code", candidate.RosterID)
-	assert.Equal(t, "moonshotai/kimi-k2.7", candidate.CatalogID)
-	assert.Equal(t, providers.ProviderFireworks, candidate.Provider)
-	assert.Equal(t, 0.95, candidate.InputUSDPer1M)
-	assert.Equal(t, 4.0, candidate.OutputUSDPer1M)
-	assert.InDelta(t, 0.0000095, candidate.EstimatedCostUSD, 1e-12)
-	assert.Equal(t, 262144, candidate.Capabilities.ContextWindow)
-	assert.Equal(t, "high", candidate.Capabilities.Tier)
+	assert.Equal(t, "anthropic/claude-sonnet-4.6", candidate.RosterID)
+	assert.Equal(t, "claude-sonnet-4-6", candidate.CatalogID)
+	assert.Equal(t, providers.ProviderAnthropic, candidate.Provider)
+	assert.Equal(t, 3.0, candidate.InputUSDPer1M)
+	assert.Equal(t, 15.0, candidate.OutputUSDPer1M)
+	assert.InDelta(t, 0.00003, candidate.EstimatedCostUSD, 1e-12)
+	assert.Equal(t, 200000, candidate.Capabilities.ContextWindow)
+	assert.Equal(t, "mid", candidate.Capabilities.Tier)
 	assert.True(t, candidate.Capabilities.SupportsTools)
-	assert.False(t, candidate.Capabilities.SupportsImages)
+	assert.True(t, candidate.Capabilities.SupportsImages)
 }
 
 func TestRouterUsesSeparatelySelectableHMMStrategies(t *testing.T) {
 	for _, strategy := range []router.Strategy{router.StrategyHMMEmbedding, router.StrategyHMMBeta} {
 		t.Run(string(strategy), func(t *testing.T) {
-			decider := &fakeDecider{res: Result{Model: "moonshotai/kimi-k2.7-code"}}
+			decider := &fakeDecider{res: Result{Model: "anthropic/claude-sonnet-4.6"}}
 			r := newWithRoutingTargets(
 				strategy,
 				decider,
-				map[string]struct{}{"moonshotai/kimi-k2.7": {}},
-				map[string]struct{}{providers.ProviderFireworks: {}},
+				map[string]struct{}{"claude-sonnet-4-6": {}},
+				map[string]struct{}{providers.ProviderAnthropic: {}},
 			)
 
 			decision, err := r.Route(context.Background(), router.Request{PromptText: "hello"})
@@ -127,9 +127,9 @@ func TestRouterUsesSeparatelySelectableHMMStrategies(t *testing.T) {
 
 func TestRouterKeepsGeneratedRouteIDWhenSidecarOmitsIt(t *testing.T) {
 	decider := &fakeDecider{res: Result{
-		Model: "moonshotai/kimi-k2.7-code",
+		Model: "anthropic/claude-sonnet-4.6",
 	}}
-	r := newWithRoutingTargets(router.StrategyHMM, decider, map[string]struct{}{"moonshotai/kimi-k2.7": {}}, map[string]struct{}{providers.ProviderFireworks: {}})
+	r := newWithRoutingTargets(router.StrategyHMM, decider, map[string]struct{}{"claude-sonnet-4-6": {}}, map[string]struct{}{providers.ProviderAnthropic: {}})
 
 	decision, err := r.Route(context.Background(), router.Request{PromptText: "hello"})
 
@@ -141,7 +141,7 @@ func TestRouterKeepsGeneratedRouteIDWhenSidecarOmitsIt(t *testing.T) {
 
 func TestRouterFailsClosedOnUnknownReturnedModel(t *testing.T) {
 	decider := &fakeDecider{res: Result{Model: "unknown/model"}}
-	r := newWithRoutingTargets(router.StrategyHMM, decider, map[string]struct{}{"moonshotai/kimi-k2.7": {}}, map[string]struct{}{providers.ProviderFireworks: {}})
+	r := newWithRoutingTargets(router.StrategyHMM, decider, map[string]struct{}{"claude-sonnet-4-6": {}}, map[string]struct{}{providers.ProviderAnthropic: {}})
 
 	_, err := r.Route(context.Background(), router.Request{PromptText: "hello"})
 
@@ -150,8 +150,8 @@ func TestRouterFailsClosedOnUnknownReturnedModel(t *testing.T) {
 }
 
 func TestRouterFailsClosedOnReturnedProviderMismatch(t *testing.T) {
-	decider := &fakeDecider{res: Result{Model: "moonshotai/kimi-k2.7-code", Provider: providers.ProviderOpenRouter}}
-	r := newWithRoutingTargets(router.StrategyHMM, decider, map[string]struct{}{"moonshotai/kimi-k2.7": {}}, map[string]struct{}{providers.ProviderFireworks: {}})
+	decider := &fakeDecider{res: Result{Model: "anthropic/claude-sonnet-4.6", Provider: providers.ProviderOpenAI}}
+	r := newWithRoutingTargets(router.StrategyHMM, decider, map[string]struct{}{"claude-sonnet-4-6": {}}, map[string]struct{}{providers.ProviderAnthropic: {}})
 
 	_, err := r.Route(context.Background(), router.Request{PromptText: "hello"})
 
@@ -159,11 +159,14 @@ func TestRouterFailsClosedOnReturnedProviderMismatch(t *testing.T) {
 	assert.ErrorIs(t, err, ErrHMMUnavailable)
 }
 
-func TestRouterDoesNotOfferOpenRouterFallbackCandidates(t *testing.T) {
+func TestRouterDoesNotOfferCandidatesForUnservedProvider(t *testing.T) {
+	// A provider the deployment registers but no catalog row binds yields an
+	// empty candidate set, and the router fails closed without asking the
+	// sidecar to choose.
 	decider := &fakeDecider{res: Result{Model: "minimax/minimax-m3"}}
 	r := New(
 		decider,
-		map[string]struct{}{providers.ProviderOpenRouter: {}},
+		map[string]struct{}{"unserved-provider": {}},
 	)
 
 	candidates := r.resolver.Resolve(router.Request{}).Candidates
@@ -179,15 +182,9 @@ func TestRouterDoesNotOfferOpenRouterFallbackCandidates(t *testing.T) {
 
 func TestCatalogRoutingTargetsResolveCurrentHMMRosterArmsToProviders(t *testing.T) {
 	available := map[string]struct{}{
-		providers.ProviderAnthropic:  {},
-		providers.ProviderOpenAI:     {},
-		providers.ProviderGoogle:     {},
-		providers.ProviderOpenRouter: {},
-		providers.ProviderFireworks:  {},
-		providers.ProviderBedrock:    {},
-		providers.ProviderMakora:     {},
-		providers.ProviderTogether:   {},
-		providers.ProviderXAI:        {},
+		providers.ProviderAnthropic: {},
+		providers.ProviderOpenAI:    {},
+		providers.ProviderAIAND:     {},
 	}
 	r := New(&fakeDecider{}, available)
 
@@ -195,25 +192,21 @@ func TestCatalogRoutingTargetsResolveCurrentHMMRosterArmsToProviders(t *testing.
 
 	gotRosterIDs := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {
-		assert.NotEqual(t, providers.ProviderOpenRouter, candidate.Provider, candidate.RosterID)
+		assert.NotEmpty(t, candidate.Provider, "%s has no dispatch provider", candidate.RosterID)
 		gotRosterIDs = append(gotRosterIDs, candidate.RosterID)
 	}
 	for _, rosterID := range []string{
-		"deepseek/deepseek-v4.1-flash",
-		"qwen/qwen3-coder-next",
-		"openai/gpt-5.4-nano",
-		"minimax/minimax-m3",
-		"moonshotai/kimi-k2.7-code",
-		"google/gemini-3.5-flash",
-		"anthropic/claude-sonnet-5",
+		// alias-mapped bare first-party IDs
+		"anthropic/claude-haiku-4.5",
+		"anthropic/claude-sonnet-4.6",
+		// provider-prefixed first-party IDs
 		"anthropic/claude-opus-5",
 		"openai/gpt-5.6-terra",
 		"openai/gpt-5.6-luna-pro",
 		"openai/gpt-5.6-sol-pro",
-		"z-ai/glm-5.2",
-		"google/gemini-3.1-pro-preview",
-		"x-ai/grok-4.6",
-		"x-ai/grok-4.7",
+		// slash-form OSS IDs served by AIand
+		"moonshotai/kimi-k3",
+		"deepseek-ai/deepseek-v4.1-flash",
 	} {
 		assert.Contains(t, gotRosterIDs, rosterID)
 	}
@@ -248,7 +241,10 @@ func TestRosterIDForMapsBareMuseSparkToMetaRosterSlug(t *testing.T) {
 	got := DeployedModelsForRosterIDs([]string{"meta/muse-spark-1.3", "meta/muse-spark-1.3:xhigh"})
 	require.Len(t, got, 1)
 	assert.Equal(t, "muse-spark-1.3", got[0].Model)
-	assert.Equal(t, providers.ProviderMeta, got[0].Provider)
+	// Muse Spark keeps an alias-based roster ID but its catalog row has no
+	// provider binding after the AIand-only cut, so the deployed entry is
+	// provider-less.
+	assert.Empty(t, got[0].Provider)
 }
 
 func TestRouterOffersAndSelectsTerraWithoutLegacyDeployedSet(t *testing.T) {
@@ -302,11 +298,11 @@ func candidateRosterIDs(candidates []Candidate) []string {
 	return ids
 }
 
-func TestRosterIDForSkipsAmbiguousBareProviderIDs(t *testing.T) {
+func TestRosterIDForSkipsBareIDsWithoutAPrefixRule(t *testing.T) {
 	got := rosterIDFor(catalog.Model{
 		ID: "bare-provider-model",
 		Providers: []catalog.ProviderBinding{{
-			Provider: providers.ProviderFireworks,
+			Provider: providers.ProviderAIAND,
 		}},
 	})
 

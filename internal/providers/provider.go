@@ -49,35 +49,11 @@ func ObserveUpstreamHeaders(ctx context.Context, h http.Header) {
 // even though the provider looked "enabled" at boot. ValidateDispatchable and
 // the table test catch this at boot instead of in production.
 const (
-	ProviderAnthropic  = "anthropic"
-	ProviderOpenAI     = "openai"
-	ProviderGoogle     = "google"
-	ProviderOpenRouter = "openrouter"
-	ProviderFireworks  = "fireworks"
-	ProviderDeepInfra  = "deepinfra"
-	ProviderBedrock    = "bedrock"
-	ProviderMakora     = "makora"
-	ProviderMiniMax    = "minimax"
-	ProviderTogether   = "together"
-	ProviderXAI        = "xai"
-	// ProviderMeta is Meta's Model API (api.meta.ai), OpenAI-compatible Chat Completions surface.
-	ProviderMeta = "meta"
+	ProviderAnthropic = "anthropic"
+	ProviderOpenAI    = "openai"
 	// ProviderAIAND is AIand (api.aiand.com), an OpenAI-compatible surface serving
 	// an open-weights model catalog under slash-form model IDs.
 	ProviderAIAND = "aiand"
-	// ProviderWafer is Wafer Serverless' OpenAI-compatible surface; see
-	// ProviderWaferAnthropic for the Anthropic-spec surface (shared WAFER_API_KEY).
-	ProviderWafer = "wafer"
-	// ProviderWaferAnthropic is Wafer Serverless' Anthropic-spec Messages surface
-	// (pass.wafer.ai/v1/messages, bearer auth); shares WAFER_API_KEY with ProviderWafer.
-	ProviderWaferAnthropic = "wafer_anthropic"
-	// ProviderAnthropicGateway is an Anthropic-spec enterprise gateway using
-	// Bearer auth; its endpoint is per-tenant with no deployment default.
-	ProviderAnthropicGateway = "anthropic_gateway"
-	// ProviderOpenAIGateway is the OpenAI-Chat-Completions-spec counterpart
-	// to ProviderAnthropicGateway: a per-tenant endpoint, bearer auth, no
-	// deployment default. Serves model classes the Anthropic spec cannot carry.
-	ProviderOpenAIGateway = "openai_gateway"
 )
 
 // TranslationFamily is the wire-format family a provider speaks; the proxy
@@ -90,39 +66,24 @@ const (
 	// FamilyUnknown is the zero value (no ProviderFamilies entry).
 	// ValidateDispatchable panics at boot if a registered provider maps to it.
 	FamilyUnknown TranslationFamily = iota
-	// FamilyAnthropic speaks the Anthropic Messages wire format natively
-	// (Anthropic itself plus Anthropic-compatible gateways such as Wafer's).
+	// FamilyAnthropic speaks the Anthropic Messages wire format (Anthropic
+	// itself; translated Claude-Code ingress dispatches off this).
 	FamilyAnthropic
 	// FamilyOpenAICompat speaks the OpenAI Chat Completions wire format
-	// (OpenAI itself plus every OpenAI-compatible upstream: OpenRouter,
-	// Fireworks, DeepInfra, Bedrock's OpenAI-compat surface, Makora, MiniMax,
-	// Together, XAI, Wafer).
+	// (OpenAI itself plus AIand's OpenAI-compatible surface).
 	FamilyOpenAICompat
 	// FamilyGemini speaks the Google Generative Language (Gemini) wire format.
+	// No provider is registered on it in the AIand-only build; the otel usage
+	// extractor and translation plan still branch on it for historical traffic.
 	FamilyGemini
 )
 
 // ProviderFamilies is the single source of truth for cross-format dispatch;
 // keep it covering EVERY Provider* constant (see the three-map note above).
 var ProviderFamilies = map[string]TranslationFamily{
-	ProviderAnthropic:  FamilyAnthropic,
-	ProviderOpenAI:     FamilyOpenAICompat,
-	ProviderGoogle:     FamilyGemini,
-	ProviderOpenRouter: FamilyOpenAICompat,
-	ProviderFireworks:  FamilyOpenAICompat,
-	ProviderDeepInfra:  FamilyOpenAICompat,
-	ProviderBedrock:    FamilyOpenAICompat,
-	ProviderMakora:     FamilyOpenAICompat,
-	ProviderMiniMax:    FamilyOpenAICompat,
-	ProviderTogether:   FamilyOpenAICompat,
-	ProviderXAI:        FamilyOpenAICompat,
-	ProviderMeta:       FamilyOpenAICompat,
-	ProviderAIAND:      FamilyOpenAICompat,
-	ProviderWafer:      FamilyOpenAICompat,
-
-	ProviderWaferAnthropic:   FamilyAnthropic,
-	ProviderAnthropicGateway: FamilyAnthropic,
-	ProviderOpenAIGateway:    FamilyOpenAICompat,
+	ProviderAnthropic: FamilyAnthropic,
+	ProviderOpenAI:    FamilyOpenAICompat,
+	ProviderAIAND:     FamilyOpenAICompat,
 }
 
 // FamilyFor returns the translation family for a provider, or FamilyUnknown
@@ -138,15 +99,10 @@ func IsOpenAICompat(provider string) bool {
 }
 
 // IsGateway reports whether the provider is a customer-hosted gateway rather
-// than a vendor API. A gateway serves only the models its key's aliases name,
-// so routing treats it as the installation's exclusive upstream.
+// than a vendor API.
 func IsGateway(provider string) bool {
-	switch provider {
-	case ProviderAnthropicGateway, ProviderOpenAIGateway:
-		return true
-	default:
-		return false
-	}
+	// Gateway providers were cut in the AIand-only split; no gateway surface remains.
+	return false
 }
 
 // SupportsAnthropicServerTools reports whether the provider natively executes
@@ -186,28 +142,10 @@ func ValidateDispatchable(registered []string) error {
 }
 
 // APIKeyEnvVars maps provider name to the env var providing its deployment-level upstream API key.
-// Bedrock uses AWS-issued long-term Bedrock API keys (static bearer tokens), not SigV4 access keys.
 var APIKeyEnvVars = map[string]string{
-	ProviderAnthropic:  "ANTHROPIC_API_KEY",
-	ProviderOpenAI:     "OPENAI_API_KEY",
-	ProviderGoogle:     "GOOGLE_API_KEY",
-	ProviderOpenRouter: "OPENROUTER_API_KEY",
-	ProviderFireworks:  "FIREWORKS_API_KEY",
-	ProviderDeepInfra:  "DEEPINFRA_API_KEY",
-	ProviderBedrock:    "AWS_BEARER_TOKEN_BEDROCK",
-	ProviderMakora:     "MAKORA_API_KEY",
-	ProviderMiniMax:    "MINIMAX_API_KEY",
-	ProviderTogether:   "TOGETHER_API_KEY",
-	ProviderXAI:        "XAI_API_KEY",
-	ProviderMeta:       "META_API_KEY",
-	ProviderAIAND:      "AIAND_API_KEY",
-	// Wafer's two surfaces share a single account key.
-	ProviderWafer:          "WAFER_API_KEY",
-	ProviderWaferAnthropic: "WAFER_API_KEY",
-	// Pairs with ANTHROPIC_GATEWAY_BASE_URL, the endpoint the token is scoped to.
-	ProviderAnthropicGateway: "ANTHROPIC_GATEWAY_TOKEN",
-	// Pairs with OPENAI_GATEWAY_BASE_URL, likewise.
-	ProviderOpenAIGateway: "OPENAI_GATEWAY_TOKEN",
+	ProviderAnthropic: "ANTHROPIC_API_KEY",
+	ProviderOpenAI:    "OPENAI_API_KEY",
+	ProviderAIAND:     "AIAND_API_KEY",
 }
 
 // APIKeyEnvVar returns the env-var name for the given provider, or empty
@@ -216,18 +154,11 @@ func APIKeyEnvVar(provider string) string {
 	return APIKeyEnvVars[provider]
 }
 
-// baseURLRequiredProviders have no vendor endpoint to default to, so a
-// credential without a base URL is undispatchable.
-var baseURLRequiredProviders = map[string]struct{}{
-	ProviderAnthropicGateway: {},
-	ProviderOpenAIGateway:    {},
-}
-
 // RequiresBaseURL reports whether a BYOK credential for this provider must
-// carry its own endpoint.
+// carry its own endpoint. The only entries were the self-hosted gateways, which
+// went away with the AIand-only split, so no provider requires one any more.
 func RequiresBaseURL(provider string) bool {
-	_, ok := baseURLRequiredProviders[provider]
-	return ok
+	return false
 }
 
 // CacheTTL is the best-effort upstream prompt-cache lifetime per provider.
@@ -236,22 +167,9 @@ func RequiresBaseURL(provider string) bool {
 // so a pin can outlive the cache — the planner uses this to stop crediting a
 // stale pin a cache-read discount it no longer earns.
 var CacheTTL = map[string]time.Duration{
-	ProviderAnthropic:      time.Hour,
-	ProviderOpenAI:         5 * time.Minute,
-	ProviderGoogle:         5 * time.Minute,
-	ProviderOpenRouter:     5 * time.Minute,
-	ProviderFireworks:      5 * time.Minute,
-	ProviderDeepInfra:      5 * time.Minute,
-	ProviderBedrock:        5 * time.Minute,
-	ProviderXAI:            5 * time.Minute,
-	ProviderMeta:           5 * time.Minute,
-	ProviderAIAND:          5 * time.Minute,
-	ProviderWafer:          5 * time.Minute,
-	ProviderWaferAnthropic: 5 * time.Minute,
-	// A gateway publishes no prompt-cache lifetime of its own, so it keeps the
-	// conservative window rather than inheriting Anthropic's 1h extended cache.
-	ProviderAnthropicGateway: 5 * time.Minute,
-	ProviderOpenAIGateway:    5 * time.Minute,
+	ProviderAnthropic: time.Hour,
+	ProviderOpenAI:    5 * time.Minute,
+	ProviderAIAND:     5 * time.Minute,
 }
 
 // DefaultCacheTTL is the conservative fallback cache lifetime for providers

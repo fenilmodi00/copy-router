@@ -13,13 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGLM53FlashFlags_OpenRouter_ToolStreamSet(t *testing.T) {
+func TestGLM53FlashFlags_OpenAISameFormat_ToolStreamSet(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
 	env, err := translate.ParseOpenAI(body)
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "z-ai/glm-5.3-flash",
-		TargetProvider: providers.ProviderOpenRouter,
+		TargetProvider: providers.ProviderAIAND,
 		Capabilities:   router.Lookup("z-ai/glm-5.3-flash"),
 	})
 	require.NoError(t, err)
@@ -42,13 +42,13 @@ func TestGLM53FlashFlags_AnthropicCrossFormat_ToolStreamSet(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "z-ai/glm-5.3-flash",
-		TargetProvider: providers.ProviderOpenRouter,
+		TargetProvider: providers.ProviderAIAND,
 		Capabilities:   router.Lookup("z-ai/glm-5.3-flash"),
 	})
 	require.NoError(t, err)
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(prep.Body, &out))
-	assert.Equal(t, true, out["tool_stream"], "anthropic→openrouter glm-5.3-flash must receive tool_stream=true")
+	assert.Equal(t, true, out["tool_stream"], "anthropic→aiand glm-5.3-flash must receive tool_stream=true")
 }
 
 func TestGLM53FlashFlags_ClientSetToolStreamPreserved(t *testing.T) {
@@ -57,7 +57,7 @@ func TestGLM53FlashFlags_ClientSetToolStreamPreserved(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "z-ai/glm-5.3-flash",
-		TargetProvider: providers.ProviderOpenRouter,
+		TargetProvider: providers.ProviderAIAND,
 		Capabilities:   router.Lookup("z-ai/glm-5.3-flash"),
 	})
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestGLM53FlashFlags_NotAppliedToOtherModels(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "z-ai/glm-5",
-		TargetProvider: providers.ProviderOpenRouter,
+		TargetProvider: providers.ProviderAIAND,
 		Capabilities:   router.Lookup("z-ai/glm-5"),
 	})
 	require.NoError(t, err)
