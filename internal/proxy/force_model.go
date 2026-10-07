@@ -157,6 +157,7 @@ var forceModelAliases = map[string]string{
 	"deepseek":            "deepseek/deepseek-v4.1-flash",
 	"deepseek-pro":        "deepseek/deepseek-v4-pro",
 	"deepseek-flash":      "deepseek/deepseek-v4.1-flash",
+	"deepseek-v4-flash":   "deepseek/deepseek-v4-flash",
 	"deepseek-v4-1-flash": "deepseek/deepseek-v4.1-flash",
 	"deepseek-v4p1-flash": "deepseek/deepseek-v4.1-flash",
 	"qwen":                "qwen/qwen3-coder",

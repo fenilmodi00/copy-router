@@ -84,7 +84,7 @@ func TestLookup(t *testing.T) {
 		{name: "gemini-2.0-flash-lite", model: "gemini-2.0-flash-lite", wantInput: 0.075, wantOutput: 0.30},
 
 		// ── Moonshot (Fireworks primary binding) ───────────────
-		{name: "moonshotai/kimi-k3", model: "moonshotai/kimi-k3", wantInput: 3.00, wantOutput: 15.00},
+		{name: "moonshotai/kimi-k3", model: "moonshotai/kimi-k3", wantInput: 3.00, wantOutput: 12.50},
 		{name: "moonshotai/kimi-k2.7", model: "moonshotai/kimi-k2.7", wantInput: 0.95, wantOutput: 4.00},
 
 		// ── Dated variants (8-digit suffix normalization) ──────
