@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"weave-os/router/internal/providers"
 )
 
 // aiandRoster mirrors the v0.78 cluster registry
@@ -76,7 +78,7 @@ func assertServedByAIandRoster(t *testing.T, r response) {
 	if gotProvider := r.headers.Get(headerRouterProvider); gotProvider == "" {
 		t.Errorf("missing %s header", headerRouterProvider)
 	} else {
-		assert.Equal(t, "aiand", gotProvider,
+		assert.Equal(t, providers.ProviderAIAND, gotProvider,
 			"decision provider must be AIand on an AIand-only deployment")
 	}
 }

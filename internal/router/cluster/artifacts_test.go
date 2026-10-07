@@ -229,6 +229,7 @@ func TestLatestBundle_OneDeployedModelPerFamily(t *testing.T) {
 	version, err := ResolveVersion(LatestVersion)
 	require.NoError(t, err)
 	bundle, err := LoadBundle(version)
+	require.NoError(t, err, "latest bundle %s must load", version)
 	dups := catalog.FamilyDuplicates(bundle.Registry.Models())
 	// Accepted capability-variant exemption (2026-10-04, parent issue #64):
 	// deepseek-v4-flash and deepseek-v4.1-flash share the family regex
@@ -253,6 +254,7 @@ func TestLatestBundle_OneDeployedModelPerFamily(t *testing.T) {
 	for _, d := range dups {
 		msg += "\n  - " + d.String()
 	}
+	t.Error(msg)
 }
 
 // Catches a typo'd latest pointer.

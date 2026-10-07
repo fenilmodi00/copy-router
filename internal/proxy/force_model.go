@@ -153,11 +153,12 @@ var forceModelAliases = map[string]string{
 	"gemini-3-5-flash-lite": "gemini-3.5-flash-lite",
 	"gemini-3-7-flash":      "gemini-3.7-flash",
 	"gemini-3-8-flash":      "gemini-3.8-flash",
-	// V4 Flash is retired on Makora. Explicit version pins stay versioned.
+	// V4 Flash is retired on Makora. Explicit version pins stay versioned;
+	// the bare deepseek-v4-flash pin targets the AIand roster twin.
 	"deepseek":            "deepseek/deepseek-v4.1-flash",
 	"deepseek-pro":        "deepseek/deepseek-v4-pro",
 	"deepseek-flash":      "deepseek/deepseek-v4.1-flash",
-	"deepseek-v4-flash":   "deepseek/deepseek-v4-flash",
+	"deepseek-v4-flash":   "deepseek-ai/deepseek-v4-flash",
 	"deepseek-v4-1-flash": "deepseek/deepseek-v4.1-flash",
 	"deepseek-v4p1-flash": "deepseek/deepseek-v4.1-flash",
 	"qwen":                "qwen/qwen3-coder",

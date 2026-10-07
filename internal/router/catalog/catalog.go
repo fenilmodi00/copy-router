@@ -839,7 +839,7 @@ var Models = []Model{
 	{ID: "zai-org/glm-5.3", Source: SourceOpenSource, Tier: TierHigh, ContextWindow: 1_048_576, ImageInput: ImageInputUnsupported, Providers: []ProviderBinding{
 		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 1.000, OutputUSDPer1M: 4.000, CacheReadMultiplier: 0.30}},
 	}},
-	{ID: "zai-org/glm-5.3-flash", Source: SourceOpenSource, Tier: TierLow, ContextWindow: 1_048_550, Providers: []ProviderBinding{
+	{ID: "zai-org/glm-5.3-flash", Source: SourceOpenSource, Tier: TierLow, ContextWindow: 1_048_576, Providers: []ProviderBinding{
 		{Provider: providers.ProviderAIAND, Price: Pricing{InputUSDPer1M: 0.150, OutputUSDPer1M: 0.500, CacheReadMultiplier: 0.03 / 0.150}},
 	}},
 	{ID: "qwen/qwen3.8-27b", Source: SourceOpenSource, Tier: TierMid, ContextWindow: 262_144, Providers: []ProviderBinding{

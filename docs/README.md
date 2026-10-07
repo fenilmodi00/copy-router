@@ -16,6 +16,7 @@ Index of Markdown documentation in the `router/` repo.
 | [HMM_GO_SELECTION.md](HMM_GO_SELECTION.md) | Architecture, `policy_router_v3` split, and rollback story for Go-owned HMM roster ownership and deterministic arm selection. |
 | [TRANSLATION_COMPATIBILITY.md](TRANSLATION_COMPATIBILITY.md) | Cross-format translation requirements and rollout modes. |
 | [SMOKE.md](SMOKE.md) | Pre-merge record/replay smoke-suite scenarios, cassettes, and local workflow. |
+| [V079_PROMOTION.md](V079_PROMOTION.md) | Runbook for promoting the v0.79 measured AIand roster bundle (RouterArena labels, 8-model AIand roster). |
 | [CI.md](CI.md) | CI timing baseline, completed improvements, and the remaining optimization backlog. |
 
 For engineering conventions (layer model, package layout, recipes), see the

@@ -1466,6 +1466,13 @@ var modelMaxOutputTokens = map[string]int{
 	"z-ai/glm-5.3-flash":               131072,
 	"google/gemini-3.7-flash":          65536,
 	"google/gemini-3.8-flash":          65536,
+	"zai-org/glm-5.3":                  131072, // Same 128K max output as the legacy z-ai/glm-5.3 arm (docs.z.ai/guides/llm/glm-5.3)
+	"zai-org/glm-5.3-flash":            131072,
+	"deepseek-ai/deepseek-v4-flash":    131072,
+	"deepseek-ai/deepseek-v4.1-flash":  131072,
+	"deepseek-ai/deepseek-v4-pro":      131072,
+	"qwen/qwen3.8-27b":                 65536, // 262K context; conservative output ceiling pending a documented cap
+	"motif-technologies/motif-3":       65536, // 262K context; conservative output ceiling pending a documented cap
 }
 
 const defaultMaxOutputTokenCap = 8192

@@ -312,6 +312,28 @@ func TestOpenAISameFormat_ExplicitMaxTokensNotClampedTo8192ForGLM53(t *testing.T
 	}
 }
 
+// Regression: the AIand-only roster IDs were absent from modelMaxOutputTokens,
+// so an explicit 64000 was clamped to the 8192 fallback and long turns truncated.
+func TestOpenAISameFormat_ExplicitMaxTokensNotClampedTo8192ForAIandRoster(t *testing.T) {
+	for _, model := range []string{
+		"zai-org/glm-5.3",
+		"zai-org/glm-5.3-flash",
+		"deepseek-ai/deepseek-v4-flash",
+		"deepseek-ai/deepseek-v4.1-flash",
+		"deepseek-ai/deepseek-v4-pro",
+		"qwen/qwen3.8-27b",
+		"motif-technologies/motif-3",
+	} {
+		body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":64000}`)
+		opts := translate.EmitOptions{
+			TargetModel:  model,
+			Capabilities: router.Lookup(model),
+		}
+		out := parseAndEmit(t, body, "openai", opts)
+		assert.Equal(t, float64(64000), out["max_tokens"], model)
+	}
+}
+
 // Regression: the Bedrock-primary Qwen arms must stay clamped at Bedrock's
 // 16K output ceiling; a pass-through of Claude Code's 64000 would hard-400.
 func TestOpenAISameFormat_BedrockQwenClampedAt16384Ceiling(t *testing.T) {
