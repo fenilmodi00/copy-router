@@ -122,9 +122,10 @@ func resolveForceModelWithEffort(model string) (canonicalID, provider string, kn
 	if requiredProvider != "" {
 		return unknownID, requiredProvider, false, effort
 	}
-	// Unknown names keep the claude-/gpt- prefix hints (BYOK passthrough still
-	// serves those families); everything else falls through to the AIand
-	// roster — the only auto-served catalog on this deployment.
+	// Unknown names keep the claude-/gpt- prefix hints so the caller surfaces
+	// "model not found" against the family the name implies (no client for
+	// those providers is registered on this deployment); everything else
+	// falls through to the AIand roster — the only served catalog.
 	switch {
 	case strings.HasPrefix(model, "claude-"):
 		return model, providers.ProviderAnthropic, false, effort

@@ -15,8 +15,8 @@ import (
 type sessionAffinityMechanism int
 
 const (
-	mechanismGenericHeader     sessionAffinityMechanism = iota // x-session-affinity
-	mechanismPromptCacheKeyBody                                // prompt_cache_key body field
+	mechanismGenericHeader      sessionAffinityMechanism = iota // x-session-affinity
+	mechanismPromptCacheKeyBody                                 // prompt_cache_key body field
 )
 
 // expectedSessionAffinityMechanism pins the affinity mechanism for every

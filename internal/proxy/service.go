@@ -3492,7 +3492,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	externalID, _ := ctx.Value(ExternalIDContextKey{}).(string)
 	installationID := installationIDFromContext(ctx)
 	clientID := ClientIdentityFrom(ctx)
-	clientBudget := resolveClientBudget(modelVariant1M, r.Header)
+	clientBudget := resolveClientBudget(ctx, modelVariant1M, r.Header)
 	ctx = requestcontext.WithClientBudget(ctx, clientBudget)
 	agentShadowEval, agentShadowMode := AgentShadowEvalFromContext(ctx)
 	bypassEval := hasEvalOverrideHeader(r) || agentShadowMode

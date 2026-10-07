@@ -21,7 +21,6 @@ import (
 	"weave-os/router/internal/router/policy"
 )
 
-const escalationJudgeBaseURL = "https://api.fireworks.ai/inference/v1"
 const escalationJudgeResponseLimit = 128 * 1024
 
 // ErrInvalidEscalationJudgment separates paid malformed responses from transport failures.
@@ -63,7 +62,7 @@ func (j *EscalationJudge) Judge(ctx context.Context, request llmescalation.Judge
 	if err := ctx.Err(); err != nil {
 		return llmescalation.Judgment{}, err
 	}
-	callCtx = requestcontext.WithCredentials(callCtx, &requestcontext.Credentials{APIKey: []byte(j.apiKey), BaseURL: escalationJudgeBaseURL})
+	callCtx = requestcontext.WithCredentials(callCtx, &requestcontext.Credentials{APIKey: []byte(j.apiKey)})
 	judgment := llmescalation.Judgment{CostSource: llmescalation.CostSourceUnknown}
 	transport := dispatch.Buffered{
 		Reason: string(policy.PurposeEscalationJudge),

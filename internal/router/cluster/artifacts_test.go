@@ -274,12 +274,12 @@ func TestResolveVersion_UnknownErrors(t *testing.T) {
 }
 
 // ListVersions must surface exactly the committed bundle directories under
-// artifacts/ — the pre-v0.76 history and the v1 legacy/ tree were cut in the
+// artifacts/ — the pre-v0.78 history and the v1 legacy/ tree were cut in the
 // AIand-only slim, and no pseudo-name (legacy, README.md, latest) leaks in.
 func TestListVersions_KeptVersionsOnly(t *testing.T) {
 	versions, err := ListVersions()
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"v0.76", "v0.77", "v0.78", "v0.79", "v0.80"}, versions)
+	assert.ElementsMatch(t, []string{"v0.78", "v0.79", "v0.80"}, versions)
 }
 
 func TestCheapestModel(t *testing.T) {

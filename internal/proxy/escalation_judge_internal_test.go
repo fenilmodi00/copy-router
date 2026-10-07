@@ -77,7 +77,7 @@ func TestEscalationJudgeIsolatesCredentialsAndPreservesPrompt(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, judgment.Usage.Known)
 	assert.Equal(t, "dedicated-test-key", string(provider.credentials.APIKey))
-	assert.Equal(t, escalationJudgeBaseURL, provider.credentials.BaseURL)
+	assert.Empty(t, provider.credentials.BaseURL, "judge uses the deployment credential; no provider-specific override")
 	assert.Empty(t, provider.credentials.IdentityHeader)
 	assert.Equal(t, llmescalation.SystemPrompt, gjson.GetBytes(provider.prepared.Body, "messages.0.content").String())
 	assert.JSONEq(t, string(llmescalation.ResponseSchema), gjson.GetBytes(provider.prepared.Body, "response_format").Raw)

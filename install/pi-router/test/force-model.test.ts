@@ -93,9 +93,9 @@ test("missing force-model arguments warn without starting a turn", async () => {
 test("parses applied, cleared, and rejected router acknowledgements", () => {
 	assert.deepEqual(
 		parseForceModelAcknowledgement(
-			"✦ **Weave Router** → force-model applied: claude-haiku-4-5 (anthropic) · Use /unforce-model to clear",
+			"✦ **Weave Router** → force-model applied: zai-org/glm-5.3-flash (aiand) · Use /unforce-model to clear",
 		),
-		{ kind: "applied", model: "claude-haiku-4-5" },
+		{ kind: "applied", model: "zai-org/glm-5.3-flash" },
 	);
 	assert.deepEqual(parseForceModelAcknowledgement("Weave Router: force-model cleared; resuming automatic routing"), {
 		kind: "cleared",
@@ -108,13 +108,13 @@ test("parses applied, cleared, and rejected router acknowledgements", () => {
 test("restores the newest effective pin and ignores quoted acknowledgements", () => {
 	const branch = [
 		messageEntry("user", "/force-model opus"),
-		messageEntry("assistant", "force-model applied: claude-opus-4-8 (anthropic)"),
+		messageEntry("assistant", "force-model applied: deepseek-ai/deepseek-v4-pro (aiand)"),
 		messageEntry("user", "/force-model private-model"),
 		messageEntry("assistant", "force-model: \"private-model\" isn't a recognized model"),
 		messageEntry("user", "Someone said: /force-model haiku"),
 		messageEntry("assistant", [{ type: "text", text: "force-model applied: fake-model (quoted)" }]),
 	];
-	assert.equal(forcedModelFromBranch(branch), "claude-opus-4-8");
+	assert.equal(forcedModelFromBranch(branch), "deepseek-ai/deepseek-v4-pro");
 
 	branch.push(messageEntry("user", "/ufm"));
 	branch.push(messageEntry("assistant", "✦ **Weave Router** → force-model cleared · resuming automatic model selection"));
@@ -124,7 +124,7 @@ test("restores the newest effective pin and ignores quoted acknowledgements", ()
 test("server loop breaks clear stale forced status only when they evict the pin", () => {
 	const branch = [
 		messageEntry("user", "/fm opus"),
-		messageEntry("assistant", "force-model applied: claude-opus-4-8 (anthropic)"),
+		messageEntry("assistant", "force-model applied: deepseek-ai/deepseek-v4-pro (aiand)"),
 		messageEntry("user", "Keep working"),
 		messageEntry(
 			"assistant",
@@ -135,18 +135,18 @@ test("server loop breaks clear stale forced status only when they evict the pin"
 
 	const preserved = [
 		messageEntry("user", "/fm opus"),
-		messageEntry("assistant", "force-model applied: claude-opus-4-8 (anthropic)"),
+		messageEntry("assistant", "force-model applied: deepseek-ai/deepseek-v4-pro (aiand)"),
 		messageEntry("user", "Keep working"),
 		messageEntry(
 			"assistant",
-			"✦ **Weave Router** → No-progress loop detected: 3 consecutive requests under this session routed to `claude-opus-4-8` (`anthropic`) with no observable progress in 2m0s. Stopping this turn and preserving the explicit force-model pin for the next message.",
+			"✦ **Weave Router** → No-progress loop detected: 3 consecutive requests under this session routed to `deepseek-ai/deepseek-v4-pro` (`anthropic`) with no observable progress in 2m0s. Stopping this turn and preserving the explicit force-model pin for the next message.",
 		),
 		messageEntry(
 			"assistant",
 			"Quoted example: ✦ **Weave Router** → Tool-call loop detected and clearing the session pin.",
 		),
 	];
-	assert.equal(forcedModelFromBranch(preserved), "claude-opus-4-8");
+	assert.equal(forcedModelFromBranch(preserved), "deepseek-ai/deepseek-v4-pro");
 });
 
 test("forced status replaces automatic routing and savings detail", () => {
@@ -163,8 +163,8 @@ test("forced status replaces automatic routing and savings detail", () => {
 	updateRouterStatus(ctx, {
 		requestedModel: "claude-sonnet-4-6",
 		routedModel: "moonshotai/kimi-k2.7",
-		forcedModel: "claude-haiku-4-5",
+		forcedModel: "zai-org/glm-5.3-flash",
 		savings: aggregateSavings([]),
 	});
-	assert.equal(status, "WEAVE ROUTER — claude-haiku-4-5 [forced]");
+	assert.equal(status, "WEAVE ROUTER — zai-org/glm-5.3-flash [forced]");
 });

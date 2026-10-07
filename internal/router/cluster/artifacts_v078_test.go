@@ -41,9 +41,6 @@ func TestV078BundleLoads(t *testing.T) {
 		assert.False(t, e.Proxy)
 	}
 
-	v077, err := LoadBundle("v0.77")
-	require.NoError(t, err)
-
 	// AIand-only boot: exactly the 8, every candidate on aiand.
 	aiand := map[string]struct{}{providers.ProviderAIAND: {}}
 	s2, err := NewScorer(bundle, DefaultConfig(), &fakeEmbedder{}, aiand)
@@ -65,12 +62,6 @@ func TestV078BundleLoads(t *testing.T) {
 	require.Len(t, s.models, 8, "full-provider boot must keep the registry's 8")
 	for _, c := range s.candidates {
 		assert.Equal(t, providers.ProviderAIAND, c.Provider)
-	}
-
-	// Frozen geometry: centroids byte-identical to v0.77 (and v0.75).
-	require.Equal(t, len(v077.Centroids.Data), len(bundle.Centroids.Data))
-	for i := range v077.Centroids.Data {
-		require.Equal(t, v077.Centroids.Data[i], bundle.Centroids.Data[i], "centroid %d drifted", i)
 	}
 
 	// No dropped model survives either boot.

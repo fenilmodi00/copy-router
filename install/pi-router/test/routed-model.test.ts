@@ -39,7 +39,7 @@ function extensionHarness() {
 	};
 }
 
-function context({ modelId = "claude-haiku-4-5", provider = PROVIDER_NAME } = {}) {
+function context({ modelId = "zai-org/glm-5.3", provider = PROVIDER_NAME } = {}) {
 	return {
 		hasUI: false,
 		model: { provider, id: modelId },
@@ -78,9 +78,9 @@ test("uses the served context-window header only for Pi's active Weave model", (
 		assert.equal(extension.registrations.length, 1);
 		assert.equal(extension.registrations[0]?.name, PROVIDER_NAME);
 		assert.equal(extension.registrations[0]?.config.models?.length, WEAVE_MODELS.length);
-		assert.equal(contextWindow(extension.registrations[0]!, "claude-haiku-4-5"), 1_000_000);
-		assert.equal(contextWindow(extension.registrations[0]!, "grok-4.6"), 500_000);
-		assert.equal(WEAVE_MODELS.find((model) => model.id === "claude-haiku-4-5")?.contextWindow, 200_000);
+		assert.equal(contextWindow(extension.registrations[0]!, "zai-org/glm-5.3"), 1_048_576);
+		assert.equal(contextWindow(extension.registrations[0]!, "qwen/qwen3.8-27b"), 262_144);
+		assert.equal(WEAVE_MODELS.find((model) => model.id === "qwen/qwen3.8-27b")?.contextWindow, 262_144);
 	});
 });
 
@@ -143,7 +143,7 @@ test("returns to the conservative virtual context window after model selection",
 		);
 		extension.emit("model_select", { type: "model_select", model: { id: "claude-haiku-4-5" } }, ctx);
 
-		assert.equal(contextWindow(extension.registrations[0]!, "claude-haiku-4-5"), 1_000_000);
+		assert.equal(contextWindow(extension.registrations[0]!, "zai-org/glm-5.3"), 1_048_576);
 		assert.equal(contextWindow(extension.registrations[1]!, "claude-haiku-4-5"), 200_000);
 	});
 });
@@ -163,7 +163,7 @@ test("does not carry a served context window across a session-tree change", () =
 		);
 		extension.emit("session_tree", { type: "session_tree" }, ctx);
 
-		assert.equal(contextWindow(extension.registrations[0]!, "claude-haiku-4-5"), 1_000_000);
+		assert.equal(contextWindow(extension.registrations[0]!, "zai-org/glm-5.3"), 1_048_576);
 		assert.equal(contextWindow(extension.registrations[1]!, "claude-haiku-4-5"), 200_000);
 	});
 });

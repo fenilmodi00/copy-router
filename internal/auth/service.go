@@ -491,7 +491,7 @@ func (s *Service) UpsertExternalAPIKey(ctx context.Context, installationID strin
 	}
 	if authType == AuthTypeWIF {
 		if !providers.RequiresBaseURL(provider) {
-			return nil, fmt.Errorf("%w: %s does not accept workload identity credentials", ErrInvalidKeypairAuth, provider)
+			return nil, fmt.Errorf("%w: no registered provider accepts workload identity credentials", ErrInvalidKeypairAuth)
 		}
 		// The attestation is minted per request from the router's own identity, so a
 		// pasted secret here would be stored and never used.
@@ -501,7 +501,7 @@ func (s *Service) UpsertExternalAPIKey(ctx context.Context, installationID strin
 	}
 	if authType == AuthTypeAzureEntra {
 		if !providers.RequiresBaseURL(provider) {
-			return nil, fmt.Errorf("%w: %s does not accept Microsoft Entra credentials", ErrInvalidEntraAuth, provider)
+			return nil, fmt.Errorf("%w: no registered provider accepts Microsoft Entra credentials", ErrInvalidEntraAuth)
 		}
 		if rawKey == "" {
 			return nil, fmt.Errorf("%w: %s needs a client secret", ErrInvalidEntraAuth, AuthTypeAzureEntra)
@@ -509,7 +509,7 @@ func (s *Service) UpsertExternalAPIKey(ctx context.Context, installationID strin
 	}
 	if authType == AuthTypeKeypairJWT {
 		if !providers.RequiresBaseURL(provider) {
-			return nil, fmt.Errorf("%w: %s does not accept key-pair credentials", ErrInvalidKeypairAuth, provider)
+			return nil, fmt.Errorf("%w: no registered provider accepts key-pair credentials", ErrInvalidKeypairAuth)
 		}
 		// Reject an unusable private key here rather than at the first upstream
 		// call, where the only symptom is a 401 nobody can trace to the paste.

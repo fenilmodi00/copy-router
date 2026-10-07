@@ -230,13 +230,14 @@ export function providerHeaders(role: Role, key: string): Record<string, string>
 // what the router actually serves; per-request reroutes can still land on a
 // different window, which the served-window header reports on the response.
 export const WEAVE_MODELS: ProviderModelConfig[] = [
-	model("claude-opus-4-8", "Claude Opus 4.8 (via Weave Router)", 64000, 1_000_000),
-	model("claude-opus-4-7", "Claude Opus 4.7 (via Weave Router)", 64000, 1_000_000),
-	model("claude-sonnet-4-6", "Claude Sonnet 4.6 (via Weave Router)", 64000, 1_000_000),
-	model("claude-haiku-4-5", "Claude Haiku 4.5 (via Weave Router)", 32000, 200_000),
-	model("grok-4.6", "Grok 4.6 (via Weave Router)", 131072, 500_000),
-	model("grok-4.7", "Grok 4.7 (via Weave Router)", 131072, 500_000),
-	model("qwen/qwen3.8-max", "Qwen 3.8 Max (via Weave Router)", 131072, 1_000_000),
+	model("zai-org/glm-5.3", "GLM 5.3 (via Weave Router)", 131072, 1_048_576),
+	model("zai-org/glm-5.3-flash", "GLM 5.3 Flash (via Weave Router)", 131072, 1_048_576),
+	model("moonshotai/kimi-k3", "Kimi K3 (via Weave Router)", 131072, 1_048_576),
+	model("deepseek-ai/deepseek-v4-pro", "DeepSeek V4 Pro (via Weave Router)", 131072, 1_048_576),
+	model("deepseek-ai/deepseek-v4.1-flash", "DeepSeek V4.1 Flash (via Weave Router)", 131072, 1_048_576),
+	model("deepseek-ai/deepseek-v4-flash", "DeepSeek V4 Flash (via Weave Router)", 131072, 1_048_576),
+	model("qwen/qwen3.8-27b", "Qwen 3.8 27B (via Weave Router)", 65536, 262_144),
+	model("motif-technologies/motif-3", "Motif 3 (via Weave Router)", 65536, 262_144),
 ];
 
 function model(id: string, name: string, maxTokens: number, contextWindow: number = 200000): ProviderModelConfig {
@@ -262,7 +263,7 @@ export const ROUTED_CONTEXT_WINDOW_HEADER = "x-router-context-window";
 /** Marker a headless child prints to stderr so the parent dispatch can read its routed model. */
 export const ROUTED_MODEL_STDERR_PREFIX = "weave-routed-model:";
 
-export const SUBAGENT_MODEL = process.env.WEAVE_PI_SUBAGENT_MODEL?.trim() || "claude-sonnet-4-6";
+export const SUBAGENT_MODEL = process.env.WEAVE_PI_SUBAGENT_MODEL?.trim() || "zai-org/glm-5.3-flash";
 export const DISPATCH_CONCURRENCY = Math.max(1, numEnv("WEAVE_PI_DISPATCH_CONCURRENCY", 4));
 export const MAX_SUBAGENTS = 8;
 export const SUBAGENT_TIMEOUT_MS = Math.max(1000, numEnv("WEAVE_PI_SUBAGENT_TIMEOUT_MS", 600000));

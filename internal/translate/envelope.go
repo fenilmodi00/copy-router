@@ -1419,7 +1419,7 @@ func resolvePassthroughOverrides(body []byte) (EmitOverrides, bool) {
 
 var modelMaxOutputTokens = map[string]int{
 	"claude-haiku-4-5": 64000,
-	"gpt-4.1":                             32768, "gpt-4.1-mini": 32768, "gpt-4.1-nano": 32768,
+	"gpt-4.1":          32768, "gpt-4.1-mini": 32768, "gpt-4.1-nano": 32768,
 	"gpt-4o": 16384, "gpt-4o-mini": 16384,
 	"gpt-4-turbo": 4096, "gpt-4": 8192,
 	"gpt-5": 128000, "gpt-5-chat": 128000, "gpt-5-pro": 128000,
