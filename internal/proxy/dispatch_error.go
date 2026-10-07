@@ -43,9 +43,6 @@ const (
 	DispatchErrorHMMUnavailable
 	DispatchErrorPolicyUnavailable
 	DispatchErrorClusterUnavailable
-	DispatchErrorCreditsExhausted
-	DispatchErrorSubscriptionPoolExhausted
-	DispatchErrorSubscriptionPoolUnavailable
 	DispatchErrorTranslationIntrinsicallyIncompatible
 	DispatchErrorTranslationProviderUnavailable
 	DispatchErrorUserSpendLimitReached
@@ -119,24 +116,6 @@ func ClassifyDispatchError(err error) (DispatchErrorClass, bool) {
 			Message:    "This model is not included in your plan. Pick a model your plan covers.",
 			LogLevel:   "warn",
 			LogMessage: "Rejected request: model is not eligible for the caller's product",
-		}, true
-	case errors.Is(err, ErrSubscriptionPoolExhausted):
-		return DispatchErrorClass{
-			Kind:       DispatchErrorSubscriptionPoolExhausted,
-			Status:     http.StatusTooManyRequests,
-			Message:    "All enrolled subscription accounts are currently unavailable.",
-			RetryAfter: true,
-			LogLevel:   "warn",
-			LogMessage: "Subscription account pool exhausted",
-		}, true
-	case errors.Is(err, ErrSubscriptionPoolUnavailable):
-		return DispatchErrorClass{
-			Kind:       DispatchErrorSubscriptionPoolUnavailable,
-			Status:     http.StatusServiceUnavailable,
-			Message:    "Subscription account service is temporarily unavailable.",
-			RetryAfter: true,
-			LogLevel:   "error",
-			LogMessage: "Subscription account pool unavailable",
 		}, true
 	case errors.Is(err, ErrHandoffInvalid):
 		return DispatchErrorClass{Kind: DispatchErrorHandoff, Status: http.StatusConflict, Message: ErrHandoffInvalid.Error(), LogLevel: "warn", LogMessage: "Pi handoff rejected"}, true
@@ -306,14 +285,6 @@ func ClassifyDispatchError(err error) (DispatchErrorClass, bool) {
 			RetryAfter: true,
 			LogLevel:   "error",
 			LogMessage: "Spend-limit check unavailable",
-		}, true
-	case errors.Is(err, ErrCreditsExhaustedSubscriptionUnavailable):
-		return DispatchErrorClass{
-			Kind:       DispatchErrorCreditsExhausted,
-			Status:     http.StatusPaymentRequired,
-			Message:    "Your Weave router credits are exhausted and your subscription can't serve this turn (rate-limited, or the requested model isn't subscription-covered). Add credits to re-enable paid routing: " + topUpURL,
-			LogLevel:   "warn",
-			LogMessage: "Subscription-only request refused: credits exhausted and subscription unavailable",
 		}, true
 	case errors.Is(err, cluster.ErrInvalidRoutingKnobs):
 		return DispatchErrorClass{

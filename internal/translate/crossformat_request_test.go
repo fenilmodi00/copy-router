@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"weave-os/router/internal/router"
 	"weave-os/router/internal/translate"
 
 	"github.com/stretchr/testify/assert"
@@ -586,7 +585,7 @@ func TestCrossFormat_OpenAIToGemini_SimpleText(t *testing.T) {
 	env, err := translate.ParseOpenAI(openAISimpleConversation)
 	require.NoError(t, err)
 
-	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-2.5-pro"})
+	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-2.5-pro", Capabilities: capsFor("gemini-2.5-pro")})
 	require.NoError(t, err)
 
 	doc := unmarshalBody(t, prep.Body)
@@ -1119,7 +1118,7 @@ func TestCrossFormat_AnthropicToGemini_SimpleText(t *testing.T) {
 	env, err := translate.ParseAnthropic(anthropicSimpleConversation)
 	require.NoError(t, err)
 
-	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-2.5-pro"})
+	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-2.5-pro", Capabilities: capsFor("gemini-2.5-pro")})
 	require.NoError(t, err)
 
 	doc := unmarshalBody(t, prep.Body)
@@ -1346,7 +1345,7 @@ func TestCrossFormat_AnthropicToOpenAI_ReasoningModelOmitsStop(t *testing.T) {
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:    "gpt-5.4-mini",
 		TargetProvider: "openai",
-		Capabilities:   router.Lookup("gpt-5.4-mini"),
+		Capabilities:   capsFor("gpt-5.4-mini"),
 	})
 	require.NoError(t, err)
 
@@ -1367,7 +1366,7 @@ func TestCrossFormat_OpenAIToGemini_ScalarFieldsCarriedThrough(t *testing.T) {
 	env, err := translate.ParseOpenAI(body)
 	require.NoError(t, err)
 
-	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-2.5-pro"})
+	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-2.5-pro", Capabilities: capsFor("gemini-2.5-pro")})
 	require.NoError(t, err)
 
 	doc := unmarshalBody(t, prep.Body)
@@ -1392,7 +1391,7 @@ func TestCrossFormat_AnthropicToGemini_ScalarFieldsCarriedThrough(t *testing.T) 
 	env, err := translate.ParseAnthropic(body)
 	require.NoError(t, err)
 
-	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-2.5-pro"})
+	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-2.5-pro", Capabilities: capsFor("gemini-2.5-pro")})
 	require.NoError(t, err)
 
 	doc := unmarshalBody(t, prep.Body)

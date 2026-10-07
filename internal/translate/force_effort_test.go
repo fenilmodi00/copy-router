@@ -38,7 +38,7 @@ func TestForceReasoningEffort_ResponsesOverride(t *testing.T) {
 			require.NoError(t, err)
 			prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{
 				TargetModel:          "gpt-5.5",
-				Capabilities:         router.Lookup("gpt-5.5"),
+				Capabilities:         capsFor("gpt-5.5"),
 				ForceReasoningEffort: tc.forceEffort,
 			})
 			if tc.wantErr {
@@ -64,6 +64,7 @@ func TestForceReasoningEffort_GeminiOverride(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{
 		TargetModel:          "gemini-3.1-pro-preview",
+		Capabilities:         capsFor("gemini-3.1-pro-preview"),
 		ForceReasoningEffort: "low",
 	})
 	require.NoError(t, err)
@@ -82,6 +83,7 @@ func TestForceReasoningEffort_GeminiFromOpenAI(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{
 		TargetModel:          "gemini-3.1-pro-preview",
+		Capabilities:         capsFor("gemini-3.1-pro-preview"),
 		ForceReasoningEffort: "low",
 	})
 	require.NoError(t, err)
@@ -115,7 +117,7 @@ func TestForceEffort_GeminiMaxLevel(t *testing.T) {
 		t.Run(level, func(t *testing.T) {
 			prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{
 				TargetModel:          "gemini-3.1-pro-preview",
-				Capabilities:         router.NewSpec(router.CapReasoning),
+				Capabilities:         capsFor("gemini-3.1-pro-preview"),
 				ForceReasoningEffort: level,
 			})
 			require.NoError(t, err)
@@ -189,7 +191,7 @@ func TestForceReasoningEffort_DirectOpenAIToolTurn(t *testing.T) {
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:          "gpt-5.5",
 		TargetProvider:       providers.ProviderOpenAI,
-		Capabilities:         router.Lookup("gpt-5.5"),
+		Capabilities:         capsFor("gpt-5.5"),
 		ForceReasoningEffort: "high",
 	})
 	require.NoError(t, err)

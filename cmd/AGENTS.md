@@ -14,7 +14,7 @@ Composition root. Only place that constructs concrete adapters + wires them toge
   - `buildOtelEmitter` — OTel span exporter
   - `runSessionPinSweep` — TTL sweep loop
   - `resolveHardPinModel` / `resolveCompactionModel` / `resolveDefaultBaselineModel` / `resolveAvailableModels` — boot-time model resolution
-  - `registerDeploymentKeyedProvider` — shared "resolve key → build client → log" registration for the providers whose gating collapses to that shape (Fireworks, Makora, Together, Bedrock, Google); OpenRouter and Anthropic/OpenAI stay bespoke
+  - `registerDeploymentKeyedProvider` — shared "resolve key → build client → log" registration; today only AIand goes through it
   - small env parsers (e.g. `envVarHint`, `parseEnvInt`, `parseEnvFloat`, `parseEnvDurationMs`)
 - **No more heuristic-fallback router.** If cluster routing fails to boot, `main.go` panics. Misconfiguration must abort the process rather than silently degrade.
 - Validate deployment target overrides through `policy.Registry.ValidateDeployment` after provider/model configuration is resolved. A partial or catalog-incompatible explicit target is a startup error, not permission to substitute a default.
@@ -33,6 +33,6 @@ Provider registration:
 
 - Every provider goes into `providerMap` regardless of mode.
 - `envKeyedProviders` (parallel set) tracks which providers have a deployment-level key configured so the hard-pin resolver knows what's safe to pin to.
-- Provider credential mode follows `byokOnly` in `cmd/router/main.go`, not `managed` alone. Preserve installation BYOK opt-in and client subscription routing when changing registration.
+- Provider credential mode follows `byokOnly` in `cmd/router/main.go`, not `managed` alone. Preserve installation BYOK opt-in when changing registration.
 
 Single source of truth for provider→env-var mapping = `providers.APIKeyEnvVars` in [`../internal/providers/provider.go`](../internal/providers/provider.go). Admin `/config` view reads it so it can't drift from actual wiring.

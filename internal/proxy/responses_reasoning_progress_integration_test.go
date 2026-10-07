@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"weave-os/router/internal/providers"
-	"weave-os/router/internal/providers/openai"
 	"weave-os/router/internal/providers/openaicompat"
 	"weave-os/router/internal/router"
 	"weave-os/router/internal/timing"
@@ -42,13 +41,12 @@ const responsesToolTurnBody = `{"model":"motif-technologies/motif-3","stream":tr
 
 func TestResponsesReasoningProgress_LongReasoningCompletes(t *testing.T) {
 	for _, tc := range []struct {
-		name                     string
-		chat, compat, throughput bool
+		name             string
+		chat, throughput bool
 	}{
-		{name: "direct to anthropic"},
 		{name: "direct to chat", chat: true},
-		{name: "openaicompat to anthropic", compat: true},
-		{name: "openaicompat reasoning does not count as slow output", compat: true, throughput: true},
+		{name: "openaicompat to anthropic"},
+		{name: "openaicompat reasoning does not count as slow output", throughput: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			logBuf := captureCompletionLog(t)
@@ -99,14 +97,11 @@ func TestResponsesReasoningProgress_LongReasoningCompletes(t *testing.T) {
 			defer cancel()
 
 			provider := providers.ProviderOpenAI
-			var client providers.Client = openai.NewClientWithStallTimeouts("test-key", upstream.URL, time.Second, 2*time.Second, 300*time.Millisecond)
-			if tc.compat {
-				client = openaicompat.NewClientWithStallTimeouts("test-key", upstream.URL+"/v1", 2*time.Second, 300*time.Millisecond)
-				if tc.throughput {
-					// If reasoning enters the throughput counter, two sparse
-					// productive 150ms windows fail this stream before the answer.
-					client = openaicompat.NewClientWithThroughputGuard("test-key", upstream.URL+"/v1", 150*time.Millisecond, 100*time.Millisecond, 100)
-				}
+			client := openaicompat.NewClientWithStallTimeouts("test-key", upstream.URL+"/v1", 2*time.Second, 300*time.Millisecond)
+			if tc.throughput {
+				// If reasoning enters the throughput counter, two sparse
+				// productive 150ms windows fail this stream before the answer.
+				client = openaicompat.NewClientWithThroughputGuard("test-key", upstream.URL+"/v1", 150*time.Millisecond, 100*time.Millisecond, 100)
 			}
 			svc := makeProxyService(router.Decision{Provider: provider, Model: reasoningProgressModel}, map[string]providers.Client{provider: client}).
 				WithDeploymentKeyedProviders(map[string]struct{}{provider: {}})
@@ -249,7 +244,7 @@ func TestResponsesReasoningProgress_StallAndCancellation(t *testing.T) {
 			if tc.silence {
 				idle, stall = 250*time.Millisecond, 2*time.Second
 			}
-			client := openai.NewClientWithStallTimeouts("test-key", upstream.URL, time.Second, idle, stall)
+			client := openaicompat.NewClientWithStallTimeouts("test-key", upstream.URL+"/v1", idle, stall)
 			svc := makeProxyService(router.Decision{Provider: providers.ProviderOpenAI, Model: reasoningProgressModel}, map[string]providers.Client{providers.ProviderOpenAI: client})
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(responsesToolTurnBody))

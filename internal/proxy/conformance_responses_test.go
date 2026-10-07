@@ -15,14 +15,14 @@ import (
 	"testing"
 
 	"weave-os/router/internal/providers"
-	"weave-os/router/internal/providers/openai"
+	"weave-os/router/internal/providers/openaicompat"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/tidwall/gjson"
 )
 
 func openAIClient(baseURL string) providers.Client {
-	return openai.NewClient("test-key", baseURL)
+	return openaicompat.NewClient("test-key", baseURL+"/v1")
 }
 
 func TestConformance_OpenAIResponses(t *testing.T) {

@@ -28,11 +28,6 @@ import (
 // residual non-deterministic 4xx noise.
 const pinEvictionStrikeThreshold = 2
 
-const (
-	pinEvictionReasonSubscriptionPool  = "subscription_pool_exhausted"
-	pinEvictionReasonSubscriptionModel = "subscription_model_unavailable"
-)
-
 // expireSessionPin writes an already-expired sessionpin.Pin so the next
 // turn's loadPin discards it and the session re-routes via the cluster
 // scorer. Shared by force-model clear, loop-break/no-progress/
@@ -171,45 +166,6 @@ func (s *Service) maybeExpireDeadArmPin(
 	log := observability.FromContext(ctx)
 	if err := s.expireSessionPin(ctx, installationID, sessionKey, role, "dead_arm_rejected"); err != nil {
 		log.Error("pin eviction after dead-arm rejection failed", "err", err, "role", role)
-	}
-}
-
-// maybeExpireSubscriptionArmPin expires a sticky pin when its subscription
-// pool is empty or every available account has denied the selected model.
-// The client-visible errors stay distinct, while both outcomes invalidate an
-// automatic pin. Also expires a pin written on this first unpinned turn so the
-// next request re-scores. Never expires a user force-model pin.
-func (s *Service) maybeExpireSubscriptionArmPin(
-	ctx context.Context,
-	failure error,
-	decisionReason string,
-	installationID uuid.UUID,
-	sessionKey [sessionpin.SessionKeyLen]byte,
-	role string,
-) {
-	reason := subscriptionArmPinEvictionReason(failure)
-	if reason == "" || s.pinStore == nil || installationID == uuid.Nil || sessionKey == ([sessionpin.SessionKeyLen]byte{}) || strings.HasPrefix(decisionReason, translate.ReasonUserForceModel) {
-		return
-	}
-	log := observability.FromContext(ctx)
-	if err := s.expireSessionPin(ctx, installationID, sessionKey, role, reason); err != nil {
-		log.Error("pin eviction after subscription arm became unavailable failed", "err", err, "role", role, "reason", reason)
-		return
-	}
-	log.Info("session pin evicted after subscription arm became unavailable",
-		"role", role,
-		"reason", reason,
-	)
-}
-
-func subscriptionArmPinEvictionReason(err error) string {
-	switch {
-	case isSubscriptionPoolError(err):
-		return pinEvictionReasonSubscriptionPool
-	case anthropicSubscriptionModelRejected(err):
-		return pinEvictionReasonSubscriptionModel
-	default:
-		return ""
 	}
 }
 

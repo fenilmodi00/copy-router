@@ -9,7 +9,6 @@ import (
 
 	"weave-os/router/internal/auth"
 	"weave-os/router/internal/providers"
-	"weave-os/router/internal/providers/openai"
 	"weave-os/router/internal/providers/openaicompat"
 	"weave-os/router/internal/proxy"
 	"weave-os/router/internal/router"
@@ -52,7 +51,7 @@ func TestProxyOpenAIResponses_BlindPassthroughDoesNotRescueOrMutatePins(t *testi
 		}},
 		map[string]providers.Client{
 			providers.ProviderAIAND:  openaicompat.NewClient("test-aiand-key", refusalURL),
-			providers.ProviderOpenAI: openai.NewClient("test-openai-key", fallbackURL),
+			providers.ProviderOpenAI: openaicompat.NewClient("test-openai-key", fallbackURL),
 		},
 		nil, false, nil, store, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", newCaptureTelemetry(),
 	).

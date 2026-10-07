@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"weave-os/router/internal/providers"
-	"weave-os/router/internal/providers/openai"
+	"weave-os/router/internal/providers/openaicompat"
 	"weave-os/router/internal/proxy"
 	"weave-os/router/internal/router"
 
@@ -58,7 +58,7 @@ func directOpenAIService(t *testing.T, baseURL string, broad bool) *proxy.Servic
 	return proxy.NewService(
 		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "motif-technologies/motif-3"}},
 		map[string]providers.Client{
-			providers.ProviderOpenAI: openai.NewClient("test-key", baseURL),
+			providers.ProviderOpenAI: openaicompat.NewClient("test-key", baseURL+"/v1"),
 		},
 		nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderOpenAI: {}}).

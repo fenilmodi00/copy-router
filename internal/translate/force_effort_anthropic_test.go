@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"weave-os/router/internal/router"
 	"weave-os/router/internal/translate"
 )
 
@@ -60,7 +59,7 @@ func TestForceEffort_AnthropicOverrides(t *testing.T) {
 			require.NoError(t, err)
 			prep, err := env.PrepareAnthropic(http.Header{}, translate.EmitOptions{
 				TargetModel:  tc.target,
-				Capabilities: router.Lookup(tc.target),
+				Capabilities: capsFor(tc.target),
 				ForceEffort:  tc.level,
 			})
 			require.NoError(t, err)
@@ -80,7 +79,7 @@ func TestForceEffort_AnthropicRemovesInboundTopLevelEffort(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareAnthropic(http.Header{}, translate.EmitOptions{
 		TargetModel:  "claude-opus-5",
-		Capabilities: router.Lookup("claude-opus-5"),
+		Capabilities: capsFor("claude-opus-5"),
 		ForceEffort:  "low",
 	})
 	require.NoError(t, err)
@@ -100,7 +99,7 @@ func TestForceEffort_AnthropicPassesThroughAlias(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareAnthropic(http.Header{}, translate.EmitOptions{
 		TargetModel:  "claude-opus-4-7",
-		Capabilities: router.Lookup("claude-opus-4-7"),
+		Capabilities: capsFor("claude-opus-4-7"),
 		ForceEffort:  "ultra", // aliases via CanonicalizeEffort to xhigh
 	})
 	require.NoError(t, err)
@@ -119,7 +118,7 @@ func TestForceEffort_NonAdaptiveTargetNoOp(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareAnthropic(http.Header{}, translate.EmitOptions{
 		TargetModel:  "claude-sonnet-4-5",
-		Capabilities: router.Lookup("claude-sonnet-4-5"),
+		Capabilities: capsFor("claude-sonnet-4-5"),
 		ForceEffort:  "low",
 	})
 	require.NoError(t, err)

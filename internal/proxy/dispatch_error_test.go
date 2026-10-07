@@ -26,27 +26,6 @@ func TestClassifyDispatchError_UnknownErrorIsUnmatched(t *testing.T) {
 	assert.False(t, ok, "an error not matching any known sentinel must not be classified")
 }
 
-func TestClassifyDispatchError_SubscriptionPoolFailures(t *testing.T) {
-	tests := []struct {
-		name       string
-		err        error
-		kind       proxy.DispatchErrorKind
-		statusCode int
-	}{
-		{name: "exhausted", err: proxy.ErrSubscriptionPoolExhausted, kind: proxy.DispatchErrorSubscriptionPoolExhausted, statusCode: http.StatusTooManyRequests},
-		{name: "unavailable", err: proxy.ErrSubscriptionPoolUnavailable, kind: proxy.DispatchErrorSubscriptionPoolUnavailable, statusCode: http.StatusServiceUnavailable},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			classification, ok := proxy.ClassifyDispatchError(fmt.Errorf("dispatch: %w", test.err))
-			require.True(t, ok)
-			require.Equal(t, test.kind, classification.Kind)
-			require.Equal(t, test.statusCode, classification.Status)
-			require.True(t, classification.RetryAfter)
-		})
-	}
-}
-
 func TestClassifyDispatchError_ProviderNotConfigured(t *testing.T) {
 	// This is the exact wrapping service.go's dispatch switch uses (fmt.Errorf("%w: %s", ErrProviderNotConfigured, name)).
 	err := fmt.Errorf("%w: %s", proxy.ErrProviderNotConfigured, "some-provider")
@@ -159,18 +138,6 @@ func TestClassifyDispatchError_BanditRLandHMMUnavailableRetry(t *testing.T) {
 		assert.Equal(t, http.StatusServiceUnavailable, cls.Status)
 		assert.True(t, cls.RetryAfter)
 	}
-}
-
-func TestClassifyDispatchError_CreditsExhaustedIs402(t *testing.T) {
-	cls, ok := proxy.ClassifyDispatchError(proxy.ErrCreditsExhaustedSubscriptionUnavailable)
-
-	require.True(t, ok, "the credits-exhausted sentinel must be classified")
-	assert.Equal(t, proxy.DispatchErrorCreditsExhausted, cls.Kind)
-	assert.Equal(t, http.StatusPaymentRequired, cls.Status)
-	assert.Contains(t, cls.Message, "credits are exhausted", "the client message must explain the depleted balance")
-	assert.Contains(t, cls.Message, "weave-router", "the client message must surface the top-up CTA")
-	assert.Equal(t, "warn", cls.LogLevel)
-	assert.False(t, cls.RetryAfter, "a retry won't help until credits are added")
 }
 
 func TestClassifyDispatchError_NotImplementedDoesNotLog(t *testing.T) {

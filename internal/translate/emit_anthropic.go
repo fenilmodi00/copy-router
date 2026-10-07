@@ -90,8 +90,9 @@ func deriveAnthropicHeaders(in http.Header, opts EmitOptions, body []byte) http.
 	} else {
 		h.Set("anthropic-version", "2023-06-01")
 	}
-	beta := filterBetaHeader(in.Get("anthropic-beta"), opts.TargetModel)
-	if opts.EnableExtendedContext && router.Lookup(opts.TargetModel).Supports(router.CapExtendedContext) {
+	spec := anthropicEmitSpec(opts)
+	beta := filterBetaHeader(in.Get("anthropic-beta"), spec)
+	if opts.EnableExtendedContext && spec.Supports(router.CapExtendedContext) {
 		beta = ensureBetaToken(beta, context1MBeta)
 	}
 	if gjson.GetBytes(body, "context_management").Exists() {
@@ -168,11 +169,21 @@ func ensureBetaToken(beta, token string) string {
 	return beta + "," + token
 }
 
-func filterBetaHeader(beta, targetModel string) string {
+// anthropicEmitSpec resolves the capabilities the Anthropic emit must honor:
+// the spec the request declares, else the registry row. Callers that know the
+// target's capabilities (the proxy) pass them; the handover summarizer emits
+// with a bare TargetModel and relies on the registry row.
+func anthropicEmitSpec(opts EmitOptions) router.ModelSpec {
+	if len(opts.Capabilities.Reasoning().Levels) > 0 {
+		return opts.Capabilities
+	}
+	return router.Lookup(opts.TargetModel)
+}
+
+func filterBetaHeader(beta string, spec router.ModelSpec) string {
 	if beta == "" {
 		return ""
 	}
-	spec := router.Lookup(targetModel)
 	return joinKept(beta, func(token string) bool {
 		return betaCompatible(token, spec)
 	})

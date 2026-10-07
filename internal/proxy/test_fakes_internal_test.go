@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"weave-os/router/internal/providers"
+	"weave-os/router/internal/requestcontext"
 	"weave-os/router/internal/router"
+	"weave-os/router/internal/subscriptions/entitlement"
 	"weave-os/router/internal/translate"
 
 	"github.com/stretchr/testify/require"
@@ -19,6 +21,47 @@ import (
 	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
 	tracev1 "go.opentelemetry.io/proto/otlp/trace/v1"
 )
+
+// ctxWithCreds stashes explicit credentials on a fresh context.
+func ctxWithCreds(creds *Credentials) context.Context {
+	return context.WithValue(context.Background(), CredentialsContextKey{}, creds)
+}
+
+// testInstallationID is a fixed installation uuid for router-keyed test ctx.
+const testInstallationID = "11111111-1111-1111-1111-111111111111"
+
+// anthropicMessagesBody is a minimal Anthropic Messages body with tools.
+func anthropicMessagesBody() []byte {
+	return []byte(`{"model":"zai-org/glm-5.3","max_tokens":1024,"stream":true,"messages":[{"role":"user","content":"read main.go"}],"tools":[{"name":"read_file","input_schema":{"type":"object","properties":{"path":{"type":"string"}}}}]}`)
+}
+
+// openaiChatBody is a minimal OpenAI Chat Completions streaming body.
+func openaiChatBody() []byte {
+	return []byte(`{"model":"moonshotai/kimi-k3","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+}
+
+// ctxWithAllowedModels stashes an installation model allowlist on a fresh context.
+func ctxWithAllowedModels(models ...string) context.Context {
+	return context.WithValue(context.Background(), InstallationAllowedModelsContextKey{}, models)
+}
+
+// planOwnedContext builds a product-scoped (Max) request context.
+func planOwnedContext() context.Context {
+	return planOwnedContextFor(entitlement.PlanMax)
+}
+
+func planOwnedContextFor(plan entitlement.Plan) context.Context {
+	alpha := 0.9
+	ctx := requestcontext.WithServingIdentity(context.Background(), requestcontext.ServingIdentity{Plan: string(plan)})
+	ctx = entitlement.WithProductScope(ctx, plan)
+	ctx = context.WithValue(ctx, InstallationAllowedModelsContextKey{}, []string{"customer-allowed"})
+	ctx = context.WithValue(ctx, InstallationExcludedModelsContextKey{}, []string{"customer-excluded"})
+	ctx = context.WithValue(ctx, InstallationExcludedProvidersContextKey{}, []string{"customer-provider"})
+	ctx = context.WithValue(ctx, InstallationPreferredModelsContextKey{}, []string{"customer-preferred"})
+	ctx = context.WithValue(ctx, InstallationFastModeModelsContextKey{}, []string{"customer-fast"})
+	ctx = context.WithValue(ctx, ClusterModelListsContextKey{}, map[string][]string{"cluster": {"customer-arm"}})
+	return router.WithRoutingKnobs(ctx, &router.Overrides{Alpha: &alpha})
+}
 
 // bypassFakeProvider is an internal-package fake providers.Client that records
 // what it received, so a test can assert on the dispatched request and on

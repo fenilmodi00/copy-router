@@ -15,7 +15,6 @@ import (
 	classifierapi "weave-os/router/internal/api/classifier"
 	feedbackapi "weave-os/router/internal/api/feedback"
 	openaiapi "weave-os/router/internal/api/openai"
-	subscriptionsapi "weave-os/router/internal/api/subscriptions"
 	"weave-os/router/internal/auth"
 	"weave-os/router/internal/billing"
 	"weave-os/router/internal/policyclient"
@@ -25,7 +24,6 @@ import (
 	"weave-os/router/internal/router/hmm/rosterdata"
 	"weave-os/router/internal/router/policy"
 	"weave-os/router/internal/server/middleware"
-	"weave-os/router/internal/subscriptions/entitlement"
 	"weave-os/router/internal/trafficcapture"
 
 	"github.com/gin-gonic/gin"
@@ -121,10 +119,6 @@ type Features struct {
 	// Nil keeps legacy/self-hosted workers on their existing admission path.
 	ServingAdmission *middleware.ServingAdmissionConfig
 	TestPlans        *policyregistry.TestPlanTools
-	// SubscriberAllowance gates inference on an individual Max/Boost
-	// subscriber's included Router allowance. Nil leaves every request on the
-	// org/prepaid billing gates alone.
-	SubscriberAllowance *entitlement.Service
 }
 
 // RegisterWithFeatures is Register with optional request features enabled.
@@ -157,14 +151,6 @@ func RegisterWithFeatures(engine *gin.Engine, authSvc *auth.Service, proxySvc *p
 	var policyPinMiddleware []gin.HandlerFunc
 	if features.PolicyPinEnabled {
 		policyPinMiddleware = []gin.HandlerFunc{middleware.WithPolicyPinOverride()}
-	}
-	// Ahead of the org billing gates: included turns skip them, while exhausted
-	// turns continue into the same organization balance and spend-limit path.
-	var subscriberAllowanceMiddleware []gin.HandlerFunc
-	var subscriberProductScopeMiddleware []gin.HandlerFunc
-	if features.SubscriberAllowance != nil {
-		subscriberAllowanceMiddleware = []gin.HandlerFunc{middleware.WithSubscriberAllowance(features.SubscriberAllowance)}
-		subscriberProductScopeMiddleware = []gin.HandlerFunc{middleware.WithSubscriberProductScope(features.SubscriberAllowance)}
 	}
 	var servingAdmissionMiddleware []gin.HandlerFunc
 	if features.ServingAdmission != nil {
@@ -237,11 +223,6 @@ func RegisterWithFeatures(engine *gin.Engine, authSvc *auth.Service, proxySvc *p
 			internalGroup.DELETE("/test-plans/launches/:id", admin.InternalTestPlanRevokeHandler(features.TestPlans))
 		}
 		internalGroup.POST("/provider-keys/models", admin.InternalListUpstreamModelsHandler(authSvc, proxySvc))
-		if authSvc.SubscriptionAccountsEnabled() {
-			internalGroup.GET("/subscription-accounts/:subscriberID", admin.InternalListSubscriptionAccountsHandler(authSvc))
-			internalGroup.PATCH("/subscription-accounts/:subscriberID/:accountID", admin.InternalUpdateSubscriptionAccountHandler(authSvc))
-			internalGroup.DELETE("/subscription-accounts/:subscriberID/:accountID", admin.InternalDeleteSubscriptionAccountHandler(authSvc))
-		}
 		// Inference-policy inspection: the reviewed registry, the deployment's
 		// view of it, and a resolution preview. Read-only and content-free; the
 		// control plane mirrors these into its policy inventory.
@@ -262,11 +243,6 @@ func RegisterWithFeatures(engine *gin.Engine, authSvc *auth.Service, proxySvc *p
 	adminAuthed.Use(servingAdmissionMiddleware...)
 	adminAuthed.GET("/validate", admin.ValidateHandler)
 	adminAuthed.POST("/v1/client-events", admin.ClientEventHandler(authSvc))
-	if authSvc.SubscriptionAccountsEnabled() {
-		subscriptionGroup := engine.Group("/v1", middleware.WithTimeout(adminTimeout), middleware.WithAuth(authSvc, byokRequiresOptIn, features.ServingAdmission))
-		subscriptionGroup.Use(servingAdmissionMiddleware...)
-		subscriptionsapi.Register(subscriptionGroup, authSvc)
-	}
 
 	if mode == DeploymentModeSelfHosted {
 		engine.GET("/", func(c *gin.Context) { c.Redirect(http.StatusFound, "/ui") })
@@ -325,7 +301,6 @@ func RegisterWithFeatures(engine *gin.Engine, authSvc *auth.Service, proxySvc *p
 	}
 	messagesMiddleware = append(messagesMiddleware, servingAdmissionMiddleware...)
 	messagesMiddleware = append(messagesMiddleware, middleware.WithAgentShadowEvaluation())
-	messagesMiddleware = append(messagesMiddleware, subscriberAllowanceMiddleware...)
 	if billingSvc != nil {
 		messagesMiddleware = append(messagesMiddleware,
 			middleware.WithBillingSpan(),
@@ -356,7 +331,6 @@ func RegisterWithFeatures(engine *gin.Engine, authSvc *auth.Service, proxySvc *p
 		middleware.WithAuth(authSvc, byokRequiresOptIn, features.ServingAdmission),
 	}
 	chatCompletionMiddleware = append(chatCompletionMiddleware, servingAdmissionMiddleware...)
-	chatCompletionMiddleware = append(chatCompletionMiddleware, subscriberAllowanceMiddleware...)
 	if billingSvc != nil {
 		chatCompletionMiddleware = append(chatCompletionMiddleware,
 			middleware.WithBillingSpan(),
@@ -414,7 +388,6 @@ func RegisterWithFeatures(engine *gin.Engine, authSvc *auth.Service, proxySvc *p
 		middleware.WithAuth(authSvc, byokRequiresOptIn, features.ServingAdmission),
 	}
 	routeMiddleware = append(routeMiddleware, servingAdmissionMiddleware...)
-	routeMiddleware = append(routeMiddleware, subscriberProductScopeMiddleware...)
 	if billingSvc != nil {
 		routeMiddleware = append(routeMiddleware,
 			middleware.WithBillingSpan(),
@@ -444,7 +417,6 @@ func RegisterWithFeatures(engine *gin.Engine, authSvc *auth.Service, proxySvc *p
 		middleware.WithAuth(authSvc, byokRequiresOptIn, features.ServingAdmission),
 	}
 	previewMiddleware = append(previewMiddleware, servingAdmissionMiddleware...)
-	previewMiddleware = append(previewMiddleware, subscriberProductScopeMiddleware...)
 	previewMiddleware = append(previewMiddleware,
 		middleware.WithEmbedOnlyUserMessageOverride(),
 		middleware.WithRouterStrategyDefault(defaultStrategy, strategyAvailability, registeredStrategies...),

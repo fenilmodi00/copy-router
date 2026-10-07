@@ -59,7 +59,7 @@ func TestSignedTestAuthSkipsEmailSubscriptionsAndProviderSecrets(t *testing.T) {
 	repo := &fakeAPIKeyRepository{byHash: map[string]fakeKeyRow{auth.HashAPIKeySHA256(credential): {apiKey: key, installation: installation}}}
 	routingPolicies := &assignedTestRoutingPolicyRepo{}
 	service := auth.NewService(fakeInstallationRepository{}, repo, &forbiddenTestSecrets{}, nil, auth.NoOpAPIKeyCache{}, nil, time.Now).
-		WithRequestIdentities(forbiddenTestIdentity{}).WithSubscriptionAccounts(forbiddenTestSubscriptions{}).
+		WithRequestIdentities(forbiddenTestIdentity{}).
 		WithRoutingPolicies(routingPolicies, nil)
 	signer, err := policyregistry.NewAssertionSigner([]byte(strings.Repeat("s", 32)), time.Now)
 	require.NoError(t, err)

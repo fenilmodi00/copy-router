@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"weave-os/router/internal/providers"
-	"weave-os/router/internal/router"
 	"weave-os/router/internal/translate"
 
 	"github.com/stretchr/testify/assert"
@@ -28,7 +27,7 @@ func prepareChatOnResponses(t *testing.T, body string, opts translate.EmitOption
 }
 
 func chatOnResponsesOpts() translate.EmitOptions {
-	return translate.EmitOptions{TargetModel: "gpt-5.6-luna", Capabilities: router.Lookup("gpt-5.6-luna")}
+	return translate.EmitOptions{TargetModel: "gpt-5.6-luna", Capabilities: capsFor("gpt-5.6-luna")}
 }
 
 // A tool turn from a chat client: the history becomes typed Responses input
@@ -187,7 +186,7 @@ func TestPrepareOpenAIResponses_FromChatCompletions_NamedToolChoice(t *testing.T
 // Requests using a chat-only knob must report as such so the proxy keeps them
 // on chat/completions instead of silently dropping the field.
 func TestRequiresChatCompletionsParams_OpenAIChatOnlyKnobs(t *testing.T) {
-	caps := router.Lookup("gpt-5.6-luna")
+	caps := capsFor("gpt-5.6-luna")
 	for _, tc := range []struct {
 		name  string
 		extra string
@@ -217,7 +216,7 @@ func TestRequiresChatCompletionsParams_OpenAIInlineAudio(t *testing.T) {
       {"type":"input_audio","input_audio":{"data":"AAA","format":"wav"}}
     ]}]}`))
 	require.NoError(t, err)
-	assert.True(t, env.RequiresChatCompletionsParams(router.Lookup("gpt-5.6-luna")))
+	assert.True(t, env.RequiresChatCompletionsParams(capsFor("gpt-5.6-luna")))
 }
 
 // The compiled validator must cover chat function tools too, or a chat-ingress

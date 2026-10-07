@@ -10,7 +10,7 @@ at boot. The `latest` pointer file names the default served version;
 artifacts/
 ├── README.md      (this file)
 ├── latest         (version pointer, e.g. "v0.80")
-└── v0.76/ … v0.80/   (kept bundles, newest first)
+└── v0.78/ … v0.80/   (kept bundles, newest first)
     ├── centroids.bin
     ├── model_registry.json
     ├── quality_means.json   (v2 only)
@@ -27,7 +27,7 @@ artifacts/
   output_cost_ratio are baked in at training time. Listed in
   `metadata.yaml` for provenance but not runtime-tunable. The loader
   still accepts v1, but the AIand-only prune removed every v1 bundle
-  (and the older v2 history) from the tree — only v0.76–v0.80 remain.
+  (and the older v2 history) from the tree — only v0.78–v0.80 remain.
 
 - **v2**: `quality_means.json` holds the per-(cluster, model) shrunk
   quality means `Q̄[k][m]` (pre-blend). `model_axes.json` holds the
@@ -68,8 +68,7 @@ training prompts identically to how the Go runtime embeds requests, or
 the bundle silently misroutes — there is no runtime error for a
 training/serving embedding mismatch beyond the ID/dim guard.
 
-For a `qwen3-embedding-0.6b-int8` bundle (the format used by the pre-prune
-v0.53–v0.75 generation):
+For a `qwen3-embedding-0.6b-int8` bundle (the pre-prune generation):
 
 | Aspect | Required value |
 |---|---|
@@ -92,13 +91,12 @@ HTTP 503, not degraded routing.
 
 - Use `train_cluster_router.py` to write a new version; the script
   auto-bumps from `latest` and never overwrites an existing directory.
-- Pass `--write-v2` to emit a v2 bundle (the default since the v0.53
-  generation).
+- Pass `--write-v2` to emit a v2 bundle (the default).
 - Promote a candidate by editing `latest` to its name and redeploying.
 - Never edit `centroids.bin`, `rankings.json`, `quality_means.json`, or
   `model_axes.json` by hand; only `model_registry.json` is
   hand-editable (the trainer reads it).
 
 Older v1-format bundles are no longer shipped: the AIand-only prune deleted
-the `legacy/` tree and everything before v0.76. `bundleDirForVersion` now
+the `legacy/` tree and everything before v0.78. `bundleDirForVersion` now
 resolves bundles directly under `artifacts/`.

@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"testing"
 
-	"weave-os/router/internal/router"
 	"weave-os/router/internal/translate"
 
 	"github.com/stretchr/testify/assert"
@@ -22,7 +21,7 @@ func TestContextManagement_InjectsRequiredBeta(t *testing.T) {
 
 			prep, err := env.PrepareAnthropic(http.Header{}, translate.EmitOptions{
 				TargetModel:   target,
-				Capabilities:  router.Lookup(target),
+				Capabilities:  capsFor(target),
 				ModelSwitched: true,
 			})
 
@@ -44,7 +43,7 @@ func TestContextManagement_DedupesClientBeta(t *testing.T) {
 
 	prep, err := env.PrepareAnthropic(in, translate.EmitOptions{
 		TargetModel:  "claude-opus-4-8",
-		Capabilities: router.Lookup("claude-opus-4-8"),
+		Capabilities: capsFor("claude-opus-4-8"),
 	})
 
 	require.NoError(t, err)
@@ -57,7 +56,7 @@ func TestContextManagement_AbsentDoesNotInjectBeta(t *testing.T) {
 
 	prep, err := env.PrepareAnthropic(http.Header{}, translate.EmitOptions{
 		TargetModel:  "claude-opus-4-8",
-		Capabilities: router.Lookup("claude-opus-4-8"),
+		Capabilities: capsFor("claude-opus-4-8"),
 	})
 
 	require.NoError(t, err)

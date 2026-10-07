@@ -267,11 +267,6 @@ func committed(b *preludeBuffer) bool {
 	return b.Committed()
 }
 
-// sameBindingRetryBudget caps wall-clock across managed-subscription account
-// rotations on one binding; per-target transient retries are bounded by the
-// dispatch executor.
-const sameBindingRetryBudget = 10 * time.Second
-
 // clockNow reads the current time through the injectable clock, falling back
 // to time.Now when no fake is wired.
 func (s *Service) clockNow() time.Time {

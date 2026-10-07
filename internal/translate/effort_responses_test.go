@@ -3,7 +3,6 @@ package translate_test
 import (
 	"testing"
 
-	"weave-os/router/internal/router"
 	"weave-os/router/internal/translate"
 
 	"github.com/stretchr/testify/assert"
@@ -57,7 +56,7 @@ func TestApplyOpenAIResponsesEffort(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			caps := router.Lookup(tc.model)
+			caps := capsFor(tc.model)
 			out, err := translate.ApplyOpenAIResponsesEffort([]byte(body), translate.EmitOptions{
 				TargetModel:          tc.model,
 				Capabilities:         caps,

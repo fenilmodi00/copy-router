@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"weave-os/router/internal/providers"
-	"weave-os/router/internal/providers/openai"
 	"weave-os/router/internal/providers/openaicompat"
 	"weave-os/router/internal/proxy"
 	"weave-os/router/internal/router"
@@ -102,7 +101,7 @@ func cyberRefusalService(
 			Metadata: &router.RoutingMetadata{CandidateModels: []string{"moonshotai/kimi-k3"}},
 		}},
 		map[string]providers.Client{
-			providers.ProviderOpenAI: openai.NewClient("test-openai-key", openAIURL),
+			providers.ProviderOpenAI: openaicompat.NewClient("test-openai-key", openAIURL),
 			providers.ProviderAIAND:  openaicompat.NewClient("test-aiand-key", aiandURL),
 		},
 		nil, false, nil, store, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", telemetry,

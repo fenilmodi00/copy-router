@@ -23,9 +23,9 @@ Package compiles in **two layered modes via build tags**:
 
 Every committed bundle lives at `artifacts/v<X.Y>/` with four files: `centroids.bin`, `rankings.json`, `model_registry.json`, `metadata.yaml`.
 
-- `artifacts/latest` pointer file (single line, e.g. `v0.37`) names the version the runtime serves by default; `ROUTER_CLUSTER_VERSION` env overrides.
+- `artifacts/latest` pointer file (single line, e.g. `v0.80`) names the version the runtime serves by default; `ROUTER_CLUSTER_VERSION` env overrides.
 - Promotion = one-line edit to `latest` + redeploy.
-- Committed history spans v0.21 through the current `latest` — earlier versions are pruned once they fall out of eval comparison.
+- Committed history is the retained bundles (`v0.78`–`v0.80` today) through the current `latest` — earlier versions are pruned once they fall out of eval comparison.
 
 ### Multi-version build flag
 
@@ -35,7 +35,7 @@ Go runtime builds **only the served default version** by default (`cmd/router/ma
 
 ### Centroids/rankings are write-once
 
-`train_cluster_router.py` always writes to `artifacts/v<X.Y>/` and never overwrites a previous version (auto-bumps from `latest` when `--version` is omitted). Pass `--from v0.36` to clone the previous version's `model_registry.json` before training a new one. **Never edit `centroids.bin` / `rankings.json` by hand.** `model_registry.json` is the only hand-editable file in a bundle (the training script reads it).
+`train_cluster_router.py` always writes to `artifacts/v<X.Y>/` and never overwrites a previous version (auto-bumps from `latest` when `--version` is omitted). Pass `--from v0.79` to clone the previous version's `model_registry.json` before training a new one. **Never edit `centroids.bin` / `rankings.json` by hand.** `model_registry.json` is the only hand-editable file in a bundle (the training script reads it).
 
 ### `metadata.yaml`
 
@@ -47,7 +47,7 @@ Embedder is a **per-bundle property**: each bundle's `metadata.yaml` `embedder.m
 
 Registered specs (`embedder.go` `embedderSpecs`):
 
-- `jina-v2-base-code-int8` — 768d BERT encoder, mean-pooled by hugot. Legacy default; all bundles ≤ v0.66.
+- `jina-v2-base-code-int8` — 768d BERT encoder, mean-pooled by hugot. The default for every retained bundle (v0.78–v0.80).
 - `qwen3-embedding-0.6b-int8` — 1024d Qwen3-Embedding-0.6B, **last-token pooling baked into the ONNX graph** (export emits 2D `[batch, dim]`, which hugot returns as-is; hugot only mean-pools 3D outputs). Produced by `scripts/export_qwen3_onnx.py`.
 
 `cluster.EmbedderSet` (composition root) owns one shared ORT session and lazily constructs one pipeline per embedder ID actually required by built bundles — prod (single default version) loads exactly one model into memory.
@@ -79,5 +79,5 @@ Used in α-blend, live in `train_cluster_router.py`'s `DEFAULT_COST_PER_1K_INPUT
 - **Don't confine gateway-exclusive utility turns to the bundle roster.** `RequestBindings.candidates` widens the hard-pin/tier-clamp selectors with catalog models a gateway key aliases but this bundle never trained on — the endpoint serves whatever its aliases name, and an installation aliasing only off-roster models would otherwise have nothing routable. Scoring stays roster-only: an untrained model has no rankings to argmax over.
 - **Don't add fail-open fallbacks.** Cluster scorer returns `ErrClusterUnavailable` on every failure path (embed timeout, embed error, embedding dim mismatch, alpha-vector length mismatch, empty argmax). API handlers map it to HTTP 503. The previous `heuristic` fallback was removed because it silently degraded routing — every request that should have hit the cluster scorer instead got `claude-haiku-4-5`, masking real regressions in eval + prod. New failure modes return the sentinel; no default-model shortcut "for safety".
 - **Don't change the centroid format without bumping the magic string.** `loadCentroids` uses magic + version header to refuse mismatched binaries; if the layout changes, bump `centroidsMagic` from `CRT1` to `CRT2` so the next deploy refuses old binaries instead of silently misrouting.
-- **Don't overwrite a previously committed artifact version.** Versions are frozen for comparison — once `v0.37` is committed, train to `v0.38` rather than re-running `train_cluster_router.py` against `v0.37`. Training script auto-bumps; only override with `--version v0.X` for in-place fixes intended to land as a separate commit.
+- **Don't overwrite a previously committed artifact version.** Versions are frozen for comparison — once `v0.80` is committed, train to `v0.81` rather than re-running `train_cluster_router.py` against `v0.80`. Training script auto-bumps; only override with `--version v0.X` for in-place fixes intended to land as a separate commit.
 - **Don't bypass the version pointer.** `artifacts/latest` is the single source of truth for the default served version. Don't hardcode a version in `cmd/router/main.go`; let `cluster.ResolveVersion` read the pointer.

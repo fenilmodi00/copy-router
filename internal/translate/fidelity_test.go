@@ -328,7 +328,7 @@ func TestPrepareGemini_DeduplicatesFunctionDeclarations(t *testing.T) {
 func TestPrepareOpenAIResponses_PreservesMediumReasoningEffort(t *testing.T) {
 	env, err := translate.ParseAnthropic([]byte(`{"messages":[{"role":"user","content":"hi"}],"reasoning_effort":"medium"}`))
 	require.NoError(t, err)
-	prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{TargetModel: "gpt-5.5", Capabilities: router.Lookup("gpt-5.5")})
+	prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{TargetModel: "gpt-5.5", Capabilities: capsFor("gpt-5.5")})
 	require.NoError(t, err)
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(prep.Body, &out))
@@ -340,7 +340,7 @@ func TestAdaptiveReasoningDelegatesToCrossFormatTargetDefault(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("OpenAI Responses", func(t *testing.T) {
-		prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{TargetModel: "gpt-5.5", Capabilities: router.Lookup("gpt-5.5")})
+		prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{TargetModel: "gpt-5.5", Capabilities: capsFor("gpt-5.5")})
 		require.NoError(t, err)
 		var out map[string]any
 		require.NoError(t, json.Unmarshal(prep.Body, &out))
@@ -348,7 +348,7 @@ func TestAdaptiveReasoningDelegatesToCrossFormatTargetDefault(t *testing.T) {
 	})
 
 	t.Run("Gemini", func(t *testing.T) {
-		prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-3.1-pro-preview"})
+		prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-3.1-pro-preview", Capabilities: capsFor("gemini-3.1-pro-preview")})
 		require.NoError(t, err)
 		var out map[string]any
 		require.NoError(t, json.Unmarshal(prep.Body, &out))
@@ -370,7 +370,7 @@ func TestApplyReasoningIntent_ClampsAndRejectsUnsupportedSemantics(t *testing.T)
 }
 
 func TestApplyReasoningIntent_MuseSparkAcceptsEveryLevelAndNeverDisables(t *testing.T) {
-	spec := router.Lookup("muse-spark-1.3")
+	spec := capsFor("muse-spark-1.3")
 	for _, level := range []string{"low", "medium", "high", "xhigh"} {
 		got, err := translate.ApplyReasoningIntent(translate.ReasoningIntent{Kind: translate.ReasoningLevel, Level: level, Explicit: true}, spec, "")
 		require.NoError(t, err, level)

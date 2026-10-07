@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"testing"
 
-	"weave-os/router/internal/router"
 	"weave-os/router/internal/translate"
 
 	"github.com/stretchr/testify/assert"
@@ -19,7 +18,7 @@ func TestAnthropicSameFormat_DefaultMaxTokensInjectedWhenAbsent(t *testing.T) {
 	body := []byte(`{"model":"claude-sonnet-4-20250514","messages":[{"role":"user","content":"hi"}]}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "claude-opus-4-7",
-		Capabilities: router.Lookup("claude-opus-4-7"),
+		Capabilities: capsFor("claude-opus-4-7"),
 	}
 	out := parseAndEmit(t, body, "anthropic", opts)
 	assert.Equal(t, float64(16000), out["max_tokens"])
@@ -29,7 +28,7 @@ func TestAnthropicSameFormat_ExistingMaxTokensUnchanged(t *testing.T) {
 	body := []byte(`{"model":"claude-sonnet-4-20250514","messages":[{"role":"user","content":"hi"}],"max_tokens":1024}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "claude-opus-4-7",
-		Capabilities: router.Lookup("claude-opus-4-7"),
+		Capabilities: capsFor("claude-opus-4-7"),
 	}
 	out := parseAndEmit(t, body, "anthropic", opts)
 	assert.Equal(t, float64(1024), out["max_tokens"])
@@ -39,7 +38,7 @@ func TestPrepareAnthropic_ClampsTitleGenerationOutputToHaikuLimit(t *testing.T) 
 	body := []byte(`{"model":"claude-opus-5-5","max_tokens":128000,"messages":[{"role":"user","content":"Give this conversation a title"}]}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "claude-haiku-4-5",
-		Capabilities: router.Lookup("claude-haiku-4-5"),
+		Capabilities: capsFor("claude-haiku-4-5"),
 	}
 	out := parseAndEmit(t, body, "anthropic", opts)
 	assert.Equal(t, "claude-haiku-4-5", out["model"])
@@ -51,7 +50,7 @@ func TestPrepareAnthropic_ClampsTitleGenerationOutputToHaikuLimit(t *testing.T) 
 
 	opusOutput := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
 		TargetModel:  "claude-opus-5-5",
-		Capabilities: router.Lookup("claude-opus-5-5"),
+		Capabilities: capsFor("claude-opus-5-5"),
 	})
 	assert.Equal(t, float64(128000), opusOutput["max_tokens"])
 }
@@ -62,7 +61,7 @@ func TestPrepareAnthropic_ClampsCrossFormatOutputToHaikuLimit(t *testing.T) {
 	require.NoError(t, err)
 	prepared, err := env.PrepareAnthropic(http.Header{}, translate.EmitOptions{
 		TargetModel:  "claude-haiku-4-5",
-		Capabilities: router.Lookup("claude-haiku-4-5"),
+		Capabilities: capsFor("claude-haiku-4-5"),
 	})
 	require.NoError(t, err)
 	var output map[string]any
@@ -78,14 +77,14 @@ func TestAnthropicSameFormat_AdaptiveDefaultsHaveReasoningHeadroom(t *testing.T)
 	} {
 		t.Run(model, func(t *testing.T) {
 			out := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
-				TargetModel: model, Capabilities: router.Lookup(model),
+				TargetModel: model, Capabilities: capsFor(model),
 			})
 			assert.Equal(t, float64(16000), out["max_tokens"])
 		})
 	}
 
 	control := parseAndEmit(t, body, "anthropic", translate.EmitOptions{
-		TargetModel: "claude-opus-4-5", Capabilities: router.Lookup("claude-opus-4-5"),
+		TargetModel: "claude-opus-4-5", Capabilities: capsFor("claude-opus-4-5"),
 	})
 	assert.Equal(t, float64(8192), control["max_tokens"])
 }
@@ -96,7 +95,7 @@ func TestAnthropicCrossFormat_AdaptiveDefaultHasReasoningHeadroom(t *testing.T) 
 	require.NoError(t, err)
 	prep, err := env.PrepareAnthropic(http.Header{}, translate.EmitOptions{
 		TargetModel:  "claude-opus-4-7",
-		Capabilities: router.Lookup("claude-opus-4-7"),
+		Capabilities: capsFor("claude-opus-4-7"),
 	})
 	require.NoError(t, err)
 	var out map[string]any
@@ -110,7 +109,7 @@ func TestAnthropicCrossFormat_AdaptiveDefaultHasReasoningHeadroom(t *testing.T) 
 	require.NoError(t, err)
 	prep, err = env.PrepareAnthropic(http.Header{}, translate.EmitOptions{
 		TargetModel:  "claude-opus-4-7",
-		Capabilities: router.Lookup("claude-opus-4-7"),
+		Capabilities: capsFor("claude-opus-4-7"),
 	})
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(prep.Body, &out))
@@ -121,7 +120,7 @@ func TestOpenAISameFormat_DefaultMaxTokensInjectedForNonReasoningTarget(t *testi
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "gpt-4o",
-		Capabilities: router.Lookup("gpt-4o"),
+		Capabilities: capsFor("gpt-4o"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
 	assert.Equal(t, float64(8192), out["max_tokens"])
@@ -132,7 +131,7 @@ func TestOpenAISameFormat_DefaultMaxCompletionTokensInjectedForReasoningTarget(t
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "o3",
-		Capabilities: router.Lookup("o3"),
+		Capabilities: capsFor("o3"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
 	assert.Equal(t, float64(8192), out["max_completion_tokens"])
@@ -145,7 +144,7 @@ func TestOpenAISameFormat_DefaultRespectsLowerPerModelCap(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "gpt-4-turbo",
-		Capabilities: router.Lookup("gpt-4-turbo"),
+		Capabilities: capsFor("gpt-4-turbo"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
 	assert.Equal(t, float64(4096), out["max_tokens"])
@@ -157,7 +156,7 @@ func TestOpenAISameFormat_DefaultCappedByGlobalCap(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "gpt-4.1",
-		Capabilities: router.Lookup("gpt-4.1"),
+		Capabilities: capsFor("gpt-4.1"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
 	assert.Equal(t, float64(8192), out["max_tokens"])
@@ -167,7 +166,7 @@ func TestOpenAISameFormat_DefaultNotInjectedWhenMaxTokensPresent(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":512}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "gpt-4o",
-		Capabilities: router.Lookup("gpt-4o"),
+		Capabilities: capsFor("gpt-4o"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
 	assert.Equal(t, float64(512), out["max_tokens"])
@@ -177,7 +176,7 @@ func TestOpenAISameFormat_DefaultNotInjectedWhenMaxCompletionTokensPresent(t *te
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_completion_tokens":512}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "o3",
-		Capabilities: router.Lookup("o3"),
+		Capabilities: capsFor("o3"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
 	assert.Equal(t, float64(512), out["max_completion_tokens"])
@@ -191,7 +190,7 @@ func TestCrossFormat_OpenAIToAnthropic_DefaultMaxTokensInjectedWhenAbsent(t *tes
 	require.NoError(t, err)
 	prep, err := env.PrepareAnthropic(http.Header{}, translate.EmitOptions{
 		TargetModel:  "claude-opus-4-7",
-		Capabilities: router.Lookup("claude-opus-4-7"),
+		Capabilities: capsFor("claude-opus-4-7"),
 	})
 	require.NoError(t, err)
 	var out map[string]any
@@ -206,7 +205,7 @@ func TestCrossFormat_AnthropicToOpenAI_DefaultMaxTokensInjectedWhenAbsent(t *tes
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:  "gpt-4o",
-		Capabilities: router.Lookup("gpt-4o"),
+		Capabilities: capsFor("gpt-4o"),
 	})
 	require.NoError(t, err)
 	var out map[string]any
@@ -222,7 +221,7 @@ func TestCrossFormat_AnthropicToOpenAI_DefaultMaxCompletionTokensForReasoning(t 
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:  "o3",
-		Capabilities: router.Lookup("o3"),
+		Capabilities: capsFor("o3"),
 	})
 	require.NoError(t, err)
 	var out map[string]any
@@ -241,7 +240,7 @@ func TestAnthropicSameFormat_DefaultInjectionPreservesSourceBytes(t *testing.T) 
 	require.NoError(t, err)
 	_, err = env.PrepareAnthropic(http.Header{}, translate.EmitOptions{
 		TargetModel:  "claude-opus-4-7",
-		Capabilities: router.Lookup("claude-opus-4-7"),
+		Capabilities: capsFor("claude-opus-4-7"),
 	})
 	require.NoError(t, err)
 
@@ -256,7 +255,7 @@ func TestOpenAISameFormat_ExplicitMaxTokensClampsToKimiK3Ceiling(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":32000}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "moonshotai/kimi-k3",
-		Capabilities: router.Lookup("moonshotai/kimi-k3"),
+		Capabilities: capsFor("moonshotai/kimi-k3"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
 	assert.Equal(t, float64(32000), out["max_completion_tokens"])
@@ -269,7 +268,7 @@ func TestOpenAISameFormat_ExplicitMaxTokensNotClampedTo8192ForQwen38Max(t *testi
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":32000}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "qwen/qwen3.8-max",
-		Capabilities: router.Lookup("qwen/qwen3.8-max"),
+		Capabilities: capsFor("qwen/qwen3.8-max"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
 	assert.Equal(t, float64(32000), out["max_tokens"])
@@ -281,7 +280,7 @@ func TestOpenAISameFormat_ExplicitMaxTokensNotClampedTo8192ForGPT6Astra(t *testi
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":64000}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "gpt-6-astra",
-		Capabilities: router.Lookup("gpt-6-astra"),
+		Capabilities: capsFor("gpt-6-astra"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
 	assert.Equal(t, float64(64000), out["max_completion_tokens"])
@@ -292,7 +291,7 @@ func TestOpenAISameFormat_ExplicitMaxTokensNotClampedTo8192ForGPT61Sol(t *testin
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":64000}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "gpt-6.1-sol",
-		Capabilities: router.Lookup("gpt-6.1-sol"),
+		Capabilities: capsFor("gpt-6.1-sol"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
 	assert.Equal(t, float64(64000), out["max_completion_tokens"])
@@ -306,7 +305,7 @@ func TestOpenAISameFormat_ExplicitMaxTokensNotClampedTo8192ForGLM53(t *testing.T
 		body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":64000}`)
 		opts := translate.EmitOptions{
 			TargetModel:  model,
-			Capabilities: router.Lookup(model),
+			Capabilities: capsFor(model),
 		}
 		out := parseAndEmit(t, body, "openai", opts)
 		assert.Equal(t, float64(64000), out["max_tokens"], model)
@@ -328,7 +327,7 @@ func TestOpenAISameFormat_ExplicitMaxTokensNotClampedTo8192ForAIandRoster(t *tes
 		body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":64000}`)
 		opts := translate.EmitOptions{
 			TargetModel:  model,
-			Capabilities: router.Lookup(model),
+			Capabilities: capsFor(model),
 		}
 		out := parseAndEmit(t, body, "openai", opts)
 		assert.Equal(t, float64(64000), out["max_completion_tokens"], model)
@@ -343,7 +342,7 @@ func TestOpenAISameFormat_BedrockQwenClampedAt16384Ceiling(t *testing.T) {
 		body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":64000}`)
 		opts := translate.EmitOptions{
 			TargetModel:  model,
-			Capabilities: router.Lookup(model),
+			Capabilities: capsFor(model),
 		}
 		out := parseAndEmit(t, body, "openai", opts)
 		assert.Equal(t, float64(16384), out["max_tokens"], model)
@@ -356,7 +355,7 @@ func TestOpenAISameFormat_Qwen38MaxClampsAt64000Ceiling(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":65536}`)
 	opts := translate.EmitOptions{
 		TargetModel:  "qwen/qwen3.8-max",
-		Capabilities: router.Lookup("qwen/qwen3.8-max"),
+		Capabilities: capsFor("qwen/qwen3.8-max"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
 	assert.Equal(t, float64(64000), out["max_tokens"])
@@ -367,7 +366,7 @@ func TestOpenAISameFormat_GPT56ProClampsAt128000Ceiling(t *testing.T) {
 		body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":131072}`)
 		opts := translate.EmitOptions{
 			TargetModel:  model,
-			Capabilities: router.Lookup(model),
+			Capabilities: capsFor(model),
 		}
 		out := parseAndEmit(t, body, "openai", opts)
 		assert.Equal(t, float64(128000), out["max_completion_tokens"], model)
@@ -383,7 +382,7 @@ func TestCrossFormat_AnthropicToOpenAI_Qwen38MaxExplicitMaxTokensPassedThrough(t
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:  "qwen/qwen3.8-max",
-		Capabilities: router.Lookup("qwen/qwen3.8-max"),
+		Capabilities: capsFor("qwen/qwen3.8-max"),
 	})
 	require.NoError(t, err)
 	var out map[string]any

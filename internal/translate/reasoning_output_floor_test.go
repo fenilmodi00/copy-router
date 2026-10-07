@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"weave-os/router/internal/router"
 	"weave-os/router/internal/translate"
 )
 
@@ -28,7 +27,7 @@ func geminiGenConfig(t *testing.T, target string) map[string]any {
 	require.NoError(t, err)
 	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{
 		TargetModel:  target,
-		Capabilities: router.Lookup(target),
+		Capabilities: capsFor(target),
 	})
 	require.NoError(t, err)
 	out := mustUnmarshal(t, prep.Body)
@@ -60,7 +59,7 @@ func TestPrepareGemini_TinyBudgetFlooredWhenEffortForced(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{
 		TargetModel:          "gemini-2.5-flash",
-		Capabilities:         router.Lookup("gemini-2.5-flash"),
+		Capabilities:         capsFor("gemini-2.5-flash"),
 		ForceReasoningEffort: "medium",
 	})
 	require.NoError(t, err)
@@ -77,7 +76,7 @@ func TestPrepareGemini_FromOpenAI_TinyBudgetFlooredWhenThinkingAlwaysOn(t *testi
 	require.NoError(t, err)
 	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{
 		TargetModel:  "gemini-3.1-flash-lite-preview",
-		Capabilities: router.Lookup("gemini-3.1-flash-lite-preview"),
+		Capabilities: capsFor("gemini-3.1-flash-lite-preview"),
 	})
 	require.NoError(t, err)
 	gc := mustUnmarshal(t, prep.Body)["generationConfig"].(map[string]any)
@@ -92,7 +91,7 @@ func TestPrepareOpenAI_FromAnthropic_TinyBudgetFlooredForReasoningTarget(t *test
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:  "o3",
-		Capabilities: router.Lookup("o3"),
+		Capabilities: capsFor("o3"),
 	})
 	require.NoError(t, err)
 	out := mustUnmarshal(t, prep.Body)
@@ -106,7 +105,7 @@ func TestPrepareOpenAI_FromAnthropic_TinyBudgetKeptWhenEffortNone(t *testing.T) 
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:          "o3",
-		Capabilities:         router.Lookup("o3"),
+		Capabilities:         capsFor("o3"),
 		ForceReasoningEffort: "none",
 	})
 	require.NoError(t, err)
@@ -120,7 +119,7 @@ func TestPrepareOpenAI_FromAnthropic_TinyBudgetKeptForNonReasoningTarget(t *test
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel:  "gpt-4o",
-		Capabilities: router.Lookup("gpt-4o"),
+		Capabilities: capsFor("gpt-4o"),
 	})
 	require.NoError(t, err)
 	out := mustUnmarshal(t, prep.Body)

@@ -6,7 +6,7 @@ Identity domain. Types, repos, `Service.VerifyAPIKey`, `APIKeyCache`, ID/hashing
 
 ## Adding a method to `*auth.Service`
 
-1. **Define method on `*auth.Service`** in [`service.go`](service.go). No I/O directly here — push into repo. Inner-ring imports (`router`, `providers`, `translate`, `observability`, `internal/router/*` helper packages, `internal/proxy/usage`) + small utility libs are fine.
+1. **Define method on `*auth.Service`** in [`service.go`](service.go). No I/O directly here — push into repo. Inner-ring imports (`router`, `providers`, `translate`, `observability`, `internal/router/*` helper packages) + small utility libs are fine.
 2. **If you need new repo methods**, add to the interfaces in [`installation.go`](installation.go) / [`api_key.go`](api_key.go) / sibling files. Interface = contract; the Postgres adapter must satisfy it.
 3. **Implement new repo method in [`../postgres/repository.go`](../postgres/repository.go)** (or sibling in `internal/postgres/`), adding the SQLC query in `db/queries/`. Run `make generate` to regenerate `internal/sqlc/`.
 4. **Update matching `service_test.go` fakes** to satisfy the expanded interface. Tests use fakes; assert on real return values, not just that mocks were called.

@@ -9,13 +9,10 @@ This page is the exhaustive reference; the [README](../README.md) has the
 
 - [Provider API keys](#provider-api-keys)
   - [AIand-only deployment](#aiand-only-deployment)
-  - [Key-pair auth](#key-pair-auth)
-  - [Workload identity federation](#workload-identity-federation)
 - [Postgres](#postgres)
 - [Server](#server)
 - [Managed serving (`ROUTER_SERVING_*`)](#managed-serving-router_serving_)
 - [Routing](#routing)
-- [Plan-aware subscription routing](#plan-aware-subscription-routing)
 - [Provider and model exclusions](#provider-and-model-exclusions)
 - [Policy sidecars](#policy-sidecars)
 - [BYOK encryption](#byok-encryption)
@@ -26,111 +23,34 @@ This page is the exhaustive reference; the [README](../README.md) has the
 
 AIand is the only registered upstream: the router builds exactly one provider
 client, from `AIAND_API_KEY`, and every route lands on its curated roster.
-Rows below whose upstream is no longer registered are historical — they are
-not read at boot.
 
-| Variable              | Default                                                   | Effect |
-| --------------------- | --------------------------------------------------------- | ------ |
-| `OPENROUTER_API_KEY`  | *(none)*                                                  | **Recommended baseline.** Enables OpenRouter and the full OSS-model pool the cluster scorer is trained against. |
-| *(none — OpenRouter was removed with the AIand-only cut)* | | |
-| `ROUTER_MODEL_ID_MAP` | *(none)* | Comma-separated `catalog=upstream` pairs rewritten on the OpenRouter client's request body only. Catalog IDs, logs, `x-router-model`, and billing stay unchanged. Empty/unset is a no-op; invalid pairs fail boot. |
-| `MINIMAX_API_KEY`     | *(none)*                                                   | Enables the native MiniMax provider through its OpenAI-compatible API. |
-| `MINIMAX_REGION`      | `global`                                                   | Set to `cn` (or `china`) to use the mainland-China endpoint. |
-| `MINIMAX_BASE_URL`    | regional default                                           | Override the MiniMax endpoint; defaults to `https://api.minimax.io/v1` globally or `https://api.minimaxi.com/v1` for mainland China. |
-| `AIAND_API_KEY`       | *(none)*                                                   | Enables the AIand provider (api.aiand.com), serving its open-weights catalog through an OpenAI-compatible API. |
-| `AIAND_BASE_URL`      | `https://api.aiand.com/v1`                                 | Override for the AIand endpoint. |
-| `ROUTER_SUBSCRIPTION_POOLS_ENABLED` | `false`                                         | Enables encrypted server-side subscription enrollment and account-management endpoints. Set `false` as the emergency pool-disable switch. |
-| `WEAVE_CODEX_OAUTH_ISSUER` | `https://auth.openai.com` | Optional Codex OAuth issuer override for self-hosted testing. |
-| `WEAVE_ANTHROPIC_OAUTH_AUTHORIZE` | `https://claude.ai/oauth/authorize` | Optional Claude OAuth authorization endpoint override used by the enrollment CLI. |
-| `WEAVE_ANTHROPIC_OAUTH_TOKEN` | `https://console.anthropic.com/v1/oauth/token` | Optional Claude OAuth token endpoint override used by enrollment and server-side refresh. |
-| `GOOGLE_API_KEY`      | *(none)*                                                  | Enables Gemini via its OpenAI-compatible endpoint. |
-| `GOOGLE_BASE_URL`     | `https://generativelanguage.googleapis.com/v1beta/openai` | Override for Gemini. |
-| `ANTHROPIC_GATEWAY_BASE_URL` | *(none)*                                           | Base URL of an Anthropic-compatible gateway; `/v1/messages` is appended to it. |
-| `ANTHROPIC_GATEWAY_TOKEN`    | *(none)*                                           | Token for that gateway, sent as `Authorization: Bearer`. Only used when `ANTHROPIC_GATEWAY_BASE_URL` is also set. |
-| `OPENAI_GATEWAY_BASE_URL`    | *(none)*                                           | Base URL of an OpenAI-compatible gateway; `/chat/completions` is appended to it. |
-| `OPENAI_GATEWAY_TOKEN`       | *(none)*                                           | Token for that gateway, sent as `Authorization: Bearer`. Only used when `OPENAI_GATEWAY_BASE_URL` is also set. |
-| `WAFER_API_KEY`   | *(none)*                                                  | Enables Wafer Serverless (both its OpenAI-compatible `wafer` and Anthropic-compatible `wafer_anthropic` surfaces; one key covers both). |
-| `WAFER_BASE_URL`  | `https://pass.wafer.ai/v1`                                | Override for the Wafer OpenAI-compatible endpoint (`wafer_anthropic` uses the fixed `/v1/messages` endpoint). |
+| Variable         | Default                    | Effect |
+| ---------------- | -------------------------- | ------ |
+| `AIAND_API_KEY`  | *(none)*                   | Enables the AIand provider (api.aiand.com), serving its open-weights catalog through an OpenAI-compatible API. |
+| `AIAND_BASE_URL` | `https://api.aiand.com/v1` | Override for the AIand endpoint. |
 
-**Anthropic-compatible gateway.** Some enterprises front Claude with their own
-gateway that speaks the Anthropic Messages spec but authenticates with a bearer
-token instead of `x-api-key`. The router serves the Claude family through it on
-the same translation path as direct Anthropic. There is no default endpoint: an
-unconfigured gateway does *not* fall back to `api.anthropic.com`. The provider
-is always registered so BYOK installations can point at their own gateway
-without deployment-level credentials; the env vars above are only for a
-deployment that has a gateway of its own. *(Historical: with the AIand-only
-cut no gateway provider is registered, so these variables are inert.)*
+**Historical provider keys — none are read at boot in the AIand-only build:**
+`OPENROUTER_API_KEY`, `ROUTER_MODEL_ID_MAP`, `MINIMAX_API_KEY`,
+`MINIMAX_REGION`, `MINIMAX_BASE_URL`, `GOOGLE_BASE_URL`,
+`ANTHROPIC_GATEWAY_BASE_URL`, `ANTHROPIC_GATEWAY_TOKEN`,
+`OPENAI_GATEWAY_BASE_URL`, `OPENAI_GATEWAY_TOKEN`, `WAFER_API_KEY`,
+`WAFER_BASE_URL`, `ROUTER_SUBSCRIPTION_POOLS_ENABLED`,
+`WEAVE_CODEX_OAUTH_ISSUER`, `WEAVE_ANTHROPIC_OAUTH_AUTHORIZE`,
+`WEAVE_ANTHROPIC_OAUTH_TOKEN`. `GOOGLE_API_KEY`'s Gemini-model-provider role is
+gone as well; the variable is still read by the HMM embedding sidecar (see
+[Self-hosted frozen HMM sidecar](#self-hosted-frozen-hmm-sidecar)).
 
-**Native web search on a gateway.** An Anthropic-spec gateway relays to a
-backend that implements function tools only, so Claude Code's WebSearch turn
-comes back as `tool type 'web_search_20250305' is not supported for this
-model`. For Snowflake Cortex the capability exists on a different endpoint —
-`POST /api/v2/cortex/agent:run` with a `web_search` tool spec — so the router
-executes the search there, on the tenant's own credential, and returns the
-`server_tool_use` / `web_search_tool_result` blocks the client expects. The
-base URL and token come from the request's gateway key (WIF included), so no
-extra deployment config is needed.
+**BYOK (per-installation keys).** A deployment that leaves `AIAND_API_KEY`
+unset can let each installation supply its own AIand key through the dashboard
+(**Settings → Provider API keys**); those are stored in Postgres and used only
+for that installation's traffic, and the API refuses a dashboard key for a
+provider already configured by env var. See [BYOK encryption](#byok-encryption).
+`aiand` is the only registered provider, so a key stored under any other
+provider name is never dispatched.
 
-The turn is intercepted on capability — a native `web_search_*` tool, an
-isolated one-shot search turn, and no enabled provider that runs Anthropic
-server tools natively — which also describes an Anthropic-spec gateway that is
-not Cortex. The executor therefore refuses any gateway whose host is not
-Snowflake's, and such turns stay on normal routing.
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `ROUTER_CORTEX_WEB_SEARCH` | `true` | Kill switch. `false` leaves native web-search turns on normal routing (they fail upstream on gateways that reject the tool). |
-| `SNOWFLAKE_AGENT_ROLE` | *(none)* | Sent as `X-Snowflake-Role` on `agent:run`. Leave unset to use the service user's default role. |
-| `SNOWFLAKE_AGENT_HOST_SUFFIX` | `snowflakecomputing.com` | Host suffix a gateway base URL must match before `agent:run` is attempted. Only for pointing at a local stub in tests. |
-| `SNOWFLAKE_AGENT_TIMEOUT_MS` | `90000` | Budget for one agent run, applied both as the request deadline and as the time-to-first-byte guard (`agent:run` buffers the whole run). Observed runs are 15–30s; expiring early costs the turn the upstream 400 this path exists to avoid. |
-
-Snowflake-side prerequisites: an ACCOUNTADMIN must enable web search at the
-account level, and the authenticating user needs a role with agent privileges
-plus a default warehouse it can USAGE (or an explicit `SNOWFLAKE_AGENT_ROLE`
-that has one). Cortex's web search is served from Brave's index, so queries
-and results leave Snowflake's perimeter under Snowflake's vendor agreement.
-
-**OpenAI-compatible gateway.** `openai_gateway` is the same arrangement one
-wire family over: a customer endpoint speaking OpenAI Chat Completions, bearer
-auth, no default endpoint. Use it for gateways that serve models the Anthropic
-spec can't carry.
-
-An endpoint that publishes both surfaces is configured as two keys pointing at
-the same base URL. Snowflake Cortex, for example, serves Claude at
-`/api/v2/cortex/v1/messages` and everything else (GPT, Llama, Mistral,
-DeepSeek, Arctic) at `/api/v2/cortex/v1/chat/completions`:
-
-```bash
-# Claude family over the Anthropic surface.
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"anthropic_gateway","key":"<snowflake PAT>",
-       "base_url":"https://<account>.snowflakecomputing.com/api/v2/cortex/v1"}'
-
-# Everything else over the Chat Completions surface, under Cortex's own IDs.
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"openai_gateway","key":"<snowflake PAT>",
-       "base_url":"https://<account>.snowflakecomputing.com/api/v2/cortex/v1",
-       "model_aliases":{"gpt-5":"openai-gpt-5"}}'
-```
-
-Both keys carry the same PAT; per model, the catalog's binding order decides
-which surface serves it, so Claude prefers the Anthropic one (it carries
-thinking blocks and `cache_control` natively) and falls back to the other. A
-tenant that can't issue a long-lived PAT configures each key with an RSA
-private key instead — see [Key-pair auth](#key-pair-auth) — or with no secret
-at all, see [Workload identity federation](#workload-identity-federation).
-
-**BYOK (per-installation keys).** Instead of (or in addition to) the env vars
-above, each installation can supply its own provider keys via the dashboard.
-Those are stored in Postgres and used only for that installation's traffic.
-See [BYOK encryption](#byok-encryption).
-
-Each key may also carry its own endpoint, which overrides the deployment's base
-URL for that provider on that installation's requests. Set it in **Settings →
-Provider API keys → Endpoint URL**, or through the admin API:
+Each key may carry its own endpoint — overriding the deployment's base URL for
+that provider on that installation's requests — and a model-alias map. Set both
+in the dashboard or through the admin API:
 
 ```bash
 # /admin/v1 mutations take the dashboard cookie, not an rk_ bearer.
@@ -139,40 +59,54 @@ curl -sS -c jar -X POST https://<router>/admin/v1/auth/login \
 
 curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
   -H 'content-type: application/json' \
-  -d '{"provider":"anthropic_gateway","key":"<token>","base_url":"https://gateway.example.com/api"}'
+  -d '{"provider":"aiand","key":"<key>","base_url":"https://aiand.internal/v1",
+       "model_aliases":{"zai-org/glm-5.3":"internal.glm-5.3"}}'
 ```
 
-The value must be an absolute `http(s)` URL; anything else is rejected with
-`400`. A trailing slash is stripped, and the provider appends its own API path
-(`/v1/messages` for the Anthropic family, `/chat/completions` for the OpenAI
-one), so give the base only. Omit the field to keep the deployment endpoint —
-except for `anthropic_gateway` and `openai_gateway`, which have no default to
-fall back to and reject a key without one.
+The base URL must be an absolute `http(s)` URL; anything else is rejected with
+`400`. A trailing slash is stripped and the client appends its own API path
+(`/chat/completions`), so give the base only. Omit the field to keep the
+deployment endpoint.
 
-A key may also carry a model alias map for endpoints that publish the catalog's
-models under their own names:
-
-```bash
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"anthropic_gateway","key":"<token>","base_url":"https://gateway.example.com/api",
-       "model_aliases":{"claude-fable-5":"internal.claude-fable-5"}}'
-```
-
-Keys are catalog model IDs (an ID outside the deployed catalog is rejected with
-`400`) and values are what goes on the wire to that endpoint. Only the outbound
-model name changes: routing, pricing, and analytics stay keyed on the catalog
-ID. Omit the field to send catalog IDs unchanged.
-
-The map is editable in **Settings → Provider API keys → Edit aliases**, or on
-its own endpoint, which replaces the whole map and leaves the stored secret
-alone — so retargeting model names doesn't need the credential re-entered:
+Model-alias keys are catalog model IDs (an ID outside the deployed catalog is
+rejected with `400`) and values are what goes on the wire to that endpoint. Only
+the outbound model name changes: routing, pricing, and analytics stay keyed on
+the catalog ID. The map is editable in **Settings → Provider API keys → Edit
+aliases**, or on its own endpoint, which replaces the whole map and leaves the
+stored secret alone:
 
 ```bash
 curl -sS -b jar -X PUT https://<router>/admin/v1/provider-keys/<key id>/model-aliases \
   -H 'content-type: application/json' \
-  -d '{"model_aliases":{"claude-fable-5":"internal.claude-fable-5"}}'
+  -d '{"model_aliases":{"zai-org/glm-5.3":"internal.glm-5.3"}}'
 ```
+
+A key can also name a header its endpoint wants the caller's identity in
+(`identity_header` plus `identity_header_format`), and carry the client's own
+correlation headers across the hop (`forwarded_client_headers`,
+`baggage_header`):
+
+```bash
+curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
+  -H 'content-type: application/json' \
+  -d '{"provider":"aiand","key":"<key>",
+       "identity_header":"X-Caller-Identity","identity_header_format":"json",
+       "forwarded_client_headers":["X-Client-Trace","X-Claude-Code-Session-Id"],
+       "baggage_header":"X-Client-Baggage"}'
+```
+
+`identity_header_format` is `email` (the bare address) or `json` (a
+percent-encoded property bag: `user_email`, `user_name`, `session_id`,
+`client_app`, empty fields omitted). The header is set on the upstream request
+after the client's own headers, so a caller can't attribute their turns to
+someone else by sending it themselves, and nothing is sent when the request
+carries no identity. `forwarded_client_headers` are copied verbatim from the
+inbound request (up to 16, blanks and duplicates dropped). `baggage_header` is
+re-emitted with `"on-behalf-of": "<X-Weave-User-Email>"` and a boolean
+`"passthrough"` field added — other keys are preserved, and client-supplied
+values for those fields are replaced. Naming a request-critical header
+(`Authorization`, `x-api-key`, `Host`, `Content-Type`, `Content-Length`,
+`Accept`) is rejected with `400`. Omit all three fields to forward nothing.
 
 ### AIand-only deployment
 
@@ -191,198 +125,33 @@ Recommended settings:
 | `AIAND_API_KEY` | your key | the only provider key needed |
 | `ROUTER_DEFAULT_BASELINE_MODEL` | `zai-org/glm-5.3` | savings math compares against the roster's frontier anchor instead of an Anthropic price the deploy cannot serve |
 | `ROUTER_HARD_PIN_MODEL` | `deepseek-ai/deepseek-v4-flash` | compaction/explore utility turns stay on AIand's fast lane (the roster's cheap model) |
-| `ROUTER_EXCLUDED_PROVIDERS` | comma list of the 16 non-aiand providers | optional hard pin that also blocks per-request vendor BYOK widening |
+| `ROUTER_EXCLUDED_PROVIDERS` | comma list of provider names to exclude | optional deployment-wide hard pin that also blocks per-request vendor BYOK widening; with AIand the only registered provider there is nothing else to exclude |
 
-### Key-pair auth
+### Removed in the AIand-only build
 
-A gateway whose tenant forbids long-lived tokens can be given an RSA private
-key instead: the router signs a short-lived RS256 JWT for the configured
-principal and sends it as the bearer, re-signing well before the one-hour
-ceiling upstreams like Snowflake impose on such tokens. The key is stored in
-the same encrypted column as a PAT (see [BYOK encryption](#byok-encryption))
-and is never returned by the API or rendered back in the dashboard.
+Every gateway and federated-credential flow was cut with the AIand-only split,
+and the walkthroughs that documented them were removed with it. They cannot
+succeed now: `providers.RequiresBaseURL` is `false` for every registered
+provider, so `auth.UpsertExternalAPIKey` rejects `auth_type` `keypair_jwt`,
+`wif`, and `azure_entra` with a `400` ("no registered provider accepts …").
 
-```bash
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"openai_gateway","auth_type":"keypair_jwt",
-       "auth_account":"MYORG-MYACCOUNT","auth_user":"SERVICE_USER",
-       "key":"-----BEGIN PRIVATE KEY-----\n...",
-       "base_url":"https://<account>.snowflakecomputing.com/api/v2/cortex/v1"}'
-```
+- **Anthropic- and OpenAI-compatible gateways** (`anthropic_gateway`,
+  `openai_gateway`, and the `ANTHROPIC_GATEWAY_*` / `OPENAI_GATEWAY_*` env
+  vars) — no gateway provider is registered, so no client dispatches to one.
+- **Snowflake Cortex native web search** (`ROUTER_CORTEX_WEB_SEARCH`,
+  `SNOWFLAKE_AGENT_ROLE`, `SNOWFLAKE_AGENT_HOST_SUFFIX`,
+  `SNOWFLAKE_AGENT_TIMEOUT_MS`) — the executor only ran for a gateway key, and
+  these variables are no longer read.
+- **Key-pair auth** (`auth_type: "keypair_jwt"`) — rejected at write time.
+- **Workload identity federation** (`auth_type: "wif"`) — rejected at write
+  time. `ROUTER_WIF_PROVIDER`, `ROUTER_WIF_AUDIENCE`, and
+  `ROUTER_WIF_OIDC_TOKEN_FILE` are still parsed at boot, but no key can carry a
+  `wif` credential.
+- **Microsoft Entra client credentials** (`auth_type: "azure_entra"`) —
+  rejected at write time.
 
-The key must be an unencrypted PKCS#1 or PKCS#8 RSA key of at least 2048 bits —
-passphrase-protected keys are rejected, since there is nobody to prompt. Its
-public half must already be assigned to the upstream user (Snowflake:
-`ALTER USER ... SET RSA_PUBLIC_KEY`), whose default role needs
-`SNOWFLAKE.CORTEX_USER` (or `SNOWFLAKE.CORTEX_REST_API_USER`). Account locators
-drop their region and cloud suffixes (`xy12345.us-east-1.aws` → `XY12345`);
-org-qualified identifiers (`myorg-myaccount`) are used as they are. The same
-fields are available in **Settings → Provider API keys → Authentication**;
-`auth_type` defaults to `bearer`, which sends the stored secret verbatim as
-today.
-
-The minted token claims `iss = ACCOUNT.USER.SHA256:<public key fingerprint>`
-and `sub = ACCOUNT.USER`, uppercased, valid 55 minutes and re-signed after 45,
-so rotating the stored key takes effect on the next request rather than at the
-old token's expiry. Only the auth type and principal are readable back:
-
-```bash
-curl -sS -b jar https://<router>/admin/v1/provider-keys
-# {"keys":[{"provider":"openai_gateway","auth_type":"keypair_jwt",
-#           "auth_account":"MYORG-MYACCOUNT","auth_user":"SERVICE_USER", ...}]}
-```
-
-A key whose token can't be signed (wrong secret pasted, unreadable key) is
-dropped from that request's credentials rather than sent upstream as-is, so
-routing falls back to another binding instead of leaking the key. Misconfigured
-input is rejected at write time with a `400`: a non-RSA or under-2048-bit key,
-a passphrase-protected key, a missing account or user, or key-pair auth on a
-vendor provider (only `anthropic_gateway` and `openai_gateway` accept it).
-
-### Workload identity federation
-
-A tenant that wants no credential in the router's database at all can trust the
-router's *own* cloud identity instead. The router attests itself per request —
-a Google-signed ID token for the service account it runs as, or a projected
-OIDC token mounted into its pod — and sends the attestation as the bearer:
-
-```text
-Authorization: Bearer WIF.GCP.<attestation>
-X-Snowflake-Authorization-Token-Type: WORKLOAD_IDENTITY_FEDERATION
-```
-
-The attestation source is deployment-wide, not per key, because it identifies
-the router process rather than a tenant:
-
-| Variable                     | Default                  | Effect |
-| ---------------------------- | ------------------------ | ------ |
-| `ROUTER_WIF_PROVIDER`        | *(none)*                 | `GCP` or `OIDC`. Unset disables workload identity: a `wif` key is dropped from that request's credentials. Any other value aborts boot. |
-| `ROUTER_WIF_AUDIENCE`        | `snowflakecomputing.com` | Audience of the minted GCP ID token. Snowflake requires the default; override only for a non-Snowflake upstream. |
-| `ROUTER_WIF_OIDC_TOKEN_FILE` | *(none)*                 | Path to the projected token, re-read per request so a rotated token is picked up. Required when `ROUTER_WIF_PROVIDER=OIDC`; boot aborts without it. |
-
-A key then carries no secret at all:
-
-```bash
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"openai_gateway","auth_type":"wif",
-       "base_url":"https://<account>.snowflakecomputing.com/api/v2/cortex/v1"}'
-```
-
-Upstream, the service user is created without a password or key and is bound to
-the workload's identity (Snowflake:
-`CREATE SECURITY INTEGRATION ... TYPE = WORKLOAD_IDENTITY` plus a
-`WORKLOAD_IDENTITY` on the user; see Snowflake's
-[workload identity federation](https://docs.snowflake.com/en/user-guide/workload-identity-federation)
-guide), with the same `SNOWFLAKE.CORTEX_USER` grant key-pair auth needs. Note
-that every installation using `wif` authenticates as the *same* workload — the
-router's — so spend attribution upstream is per deployment, not per tenant; use
-`identity_header` below if the endpoint needs the calling user.
-
-As with key-pair auth, a key whose attestation can't be obtained (no source
-wired, metadata server unreachable, token file missing) is dropped from that
-request's credentials rather than dispatched with an empty bearer. Passing
-`key`, `auth_account`, or `auth_user` alongside `auth_type: "wif"` is rejected
-with a `400` — the principal lives in the attestation, and a stored secret would
-never be used. The mode is also available in **Settings → Provider API keys →
-Authentication**.
-
-An endpoint that authenticates the org rather than the person can be given the
-calling user in a header of its choosing:
-
-```bash
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"anthropic_gateway","key":"<token>",
-       "identity_header":"X-Caller-Identity","identity_header_format":"json"}'
-```
-
-`email` sends the bare address; `json` sends a percent-encoded JSON property bag
-(`user_email`, `user_name`, `session_id`, `client_app`, empty fields omitted).
-The header is set on the upstream request after the client's own headers, so a
-caller can't attribute their turns to someone else by sending it themselves, and
-nothing is sent when the request carries no identity. Naming a header the
-request depends on (`Authorization`, `x-api-key`, `Host`, `Content-Type`,
-`Content-Length`, `Accept`) is rejected with `400`. Omit both fields to forward
-nothing — identity only ever reaches the endpoint configured to receive it.
-
-An endpoint that runs its own observability (Snowflake Cortex) can also have the
-caller's own correlation headers survive the hop, and its baggage header
-re-emitted with the router-resolved user:
-
-```bash
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"anthropic_gateway","key":"<token>",
-       "forwarded_client_headers":["X-SNOWFLAKE-APPLICATION","X-Claude-Code-Session-Id"],
-       "baggage_header":"X-SNOWFLAKE-BAGGAGE"}'
-```
-
-`forwarded_client_headers` are copied verbatim from the inbound request (up to
-16, blanks and duplicates dropped). `baggage_header` is read as a raw JSON
-object and re-sent with `"on-behalf-of": "<X-Weave-User-Email>"` and a boolean
-`"passthrough"` field added — other keys are preserved, and client-supplied
-values for those fields are replaced so attribution and routing state stay the
-router's. When no email resolves, any existing `on-behalf-of` value is
-preserved; a bag that isn't a JSON object travels unchanged. Both
-fields reject the same request-critical header names as `identity_header`, and
-both are applied after the client's headers so nothing upstream-critical can be
-overwritten. Omit both to forward nothing.
-
-
-### Microsoft Entra client credentials
-
-A tenant that uses Microsoft Foundry or Azure OpenAI can give the router an
-Entra application instead of a long-lived inference token. The stored secret is
-the application's client secret; the router exchanges it for a short-lived
-bearer token at the tenant's Microsoft identity endpoint and refreshes it before
-expiry. The secret is never sent to the inference endpoint.
-
-Use `azure_entra` only with `anthropic_gateway` (Foundry Claude) or
-`openai_gateway` (Azure OpenAI v1). The `auth_account` is the Entra tenant ID
-and `auth_user` is the application/client ID. The endpoint URL must be the
-provider's base URL; the router appends `/v1/messages` or `/chat/completions`.
-Azure deployment names belong in `model_aliases`:
-
-```bash
-# Foundry Claude: https://<resource>.services.ai.azure.com/anthropic/v1/messages
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"anthropic_gateway","auth_type":"azure_entra",
-       "key":"<entra-client-secret>",
-       "auth_account":"<tenant-id>",
-       "auth_user":"<client-id>",
-       "base_url":"https://<resource>.services.ai.azure.com/anthropic",
-       "model_aliases":{"claude-opus-5":"<deployment-name>"}}'
-
-# Azure OpenAI v1: https://<resource>.openai.azure.com/openai/v1/chat/completions
-curl -sS -b jar -X POST https://<router>/admin/v1/provider-keys \
-  -H 'content-type: application/json' \
-  -d '{"provider":"openai_gateway","auth_type":"azure_entra",
-       "key":"<entra-client-secret>",
-       "auth_account":"<tenant-id>",
-       "auth_user":"<client-id>",
-       "base_url":"https://<resource>.openai.azure.com/openai/v1",
-       "model_aliases":{"gpt-5":"<deployment-name>"}}'
-```
-
-The application must have permission to call the Azure resource (for example,
-**Foundry User** for Foundry Claude or **Cognitive Services OpenAI User** for
-Azure OpenAI). The token scope follows the endpoint: `https://ai.azure.com/.default`
-for Foundry, and `https://cognitiveservices.azure.com/.default` for
-`*.openai.azure.com` resources.
-
-The router runs on GCP Cloud Run, so Azure managed identity is not available to
-it. Use a service principal for this mode. Workload identity federation from a
-GCP service account is a separate deployment-wide mode and is not the same as a
-per-tenant Entra application credential.
-
-Azure OpenAI's older dated `/openai/deployments/...` route is not supported by
-this gateway configuration; use the v1 endpoint shape above. Azure-hosted
-Foundry Claude deployments have a narrower feature set than Anthropic-hosted
-deployments, including restrictions on server-side tools, MCP, structured
-outputs, Agent Skills, programmatic tool calling, and the Files API.
+`bearer` — the default when `auth_type` is omitted — is the only usable auth
+type.
 
 In `selfhosted` mode BYOK is always active (it's the only credentialing path).
 In `managed` mode it is opt-in per installation: the control plane sets
@@ -474,7 +243,7 @@ Keep the signing key identical on gateway and workers of the same environment.
 | Variable                          | Default                      | Purpose |
 | --------------------------------- | ---------------------------- | ------- |
 | `ROUTER_DEFAULT_STRATEGY`         | `cluster`                    | Strategy used when an installation has no persisted strategy. Change only after the policy rollout gate passes. The router refuses to boot, and `/readyz` fails, when this strategy has no router configured (e.g. `hmm_embedding` without `ROUTER_POLICY_ENVIRONMENT`). Managed serving workers (`ROUTER_DEPLOYMENT_MODE=managed` with `ROUTER_SERVING_ASSERTION_KEY`) additionally refuse to boot unless it is set to one of the policy strategies they register (`hmm`, `hmm_embedding`); the legacy `router` service, self-hosted deployments and the gateway keep the `cluster` default. |
-| `ROUTER_CLUSTER_VERSION`          | *(reads `artifacts/latest`)* | Pin a specific cluster artifact version (e.g. `v0.27`). |
+| `ROUTER_CLUSTER_VERSION`          | *(reads `artifacts/latest`)* | Pin a specific cluster artifact version (e.g. `v0.79`). |
 | `ROUTER_CLUSTER_EMBED_TIMEOUT_MS` | `200`                        | Per-request ONNX embed timeout. Increase for slower hosts. |
 | `ROUTER_EMBED_ONLY_USER_MESSAGE`  | `true`                       | Feed only user-role text to the embedder. Set `false` to embed the full concatenated turn. |
 | `ROUTER_STICKY_DECISION_TTL_MS`   | `0` (disabled)               | Reuse a routing decision per API key for this many ms. |
@@ -491,7 +260,7 @@ Keep the signing key identical on gateway and workers of the same environment.
 | `ROUTER_HANDOVER_MODEL`           | `zai-org/glm-5.3-flash`      | Model for switch-turn handover summaries. Must be one of the `handover_summary` policy's fixed catalog models in [`POLICY_INFERENCE.md`](POLICY_INFERENCE.md); any other value fails boot rather than substituting a default. |
 | `ROUTER_COMPACTION_MODEL`         | `deepseek-ai/deepseek-v4-pro`| Fallback Anthropic family for compaction when no eligible session model is available. Selection upgrades to the newest eligible catalog version in that family, including session-derived choices. The configured model must bind on `ROUTER_HANDOVER_PROVIDER` and belong to the compaction policies' reviewed catalog set in [`POLICY_INFERENCE.md`](POLICY_INFERENCE.md); otherwise boot fails. Claude Code's client-side compaction still requires direct Anthropic; Codex checkpoint compaction can reuse other providers. Explicit `ROUTER_HARD_PIN_MODEL` overrides remain exact. |
 | `ROUTER_COMPACTION_TIMEOUT_MS`    | `90000`                      | Hard timeout for one compaction-handover summary call (separate from `ROUTER_HANDOVER_TIMEOUT_MS`; a Sonnet-class summary of a near-full window is slow). On timeout the full history is kept. |
-| `ROUTER_ESCALATION_JUDGE_ENABLED` | `false` | Enables the optional Weave-funded Switchyard LLM judge and requires `FIREWORKS_API_KEY`. The judge uses only the Fireworks binding for `z-ai/glm-5.3-flash`. |
+| `ROUTER_ESCALATION_JUDGE_ENABLED` | `false` | Enables the optional Weave-funded Switchyard LLM judge, which runs on the AIand binding for `zai-org/glm-5.3-flash`. |
 | `ROUTER_ESCALATION_JUDGE_ACTIVE_ENABLED` | `false` | Allows `switchyard_llm_v1` to be selected as the active classifier. Keep false during shadow evaluation; requires `ROUTER_ESCALATION_JUDGE_ENABLED=true`. |
 | `ROUTER_ONNX_ASSETS_DIR`          | `/opt/router/assets`         | Directory containing `model.onnx` + `tokenizer.json`. |
 | `ROUTER_ONNX_LIBRARY_DIR`         | *(system default)*           | Path to `libonnxruntime` (e.g. `/opt/homebrew/lib` on Apple Silicon). |
@@ -522,29 +291,10 @@ pins, utility turns, deadline fallbacks, and active escalation floors still win.
 A content-free `authoritative upgrade evidence` log records mode, applied,
 holdout, outcome, reason, margin, votes, and served model.
 
-## Plan-aware subscription routing
-
-`subscription_plan_aware_routing_enabled` is an organization-only boolean in
-`router.model_router_installations.flag_overrides`. It defaults to `false`;
-clearing the override also turns it off. The former
-`ROUTER_SUBSCRIPTION_PLAN_AWARE_ROUTING` environment variable is no longer read.
-
-In the managed control plane, open **Admin → Router → Flags**, select the
-organization, and use **On**, **Off**, or **Clear** for this flag. This is the
-internal-admin UI, not a customer-facing settings control. The router publishes
-the definition at startup; saving uses the existing installation-cache
-invalidation path, so a setting change does not require a redeploy.
-
-When enabled, models covered only by an exhausted Claude/Codex plan are excluded
-while another linked plan has headroom. Unknown or all-exhausted states restore
-normal eligibility. `subscription_routing_disabled` suppresses this feature even
-when the org flag is on. This setting does not enable subscription-account
-enrollment or change how quota is observed.
-
 ## Provider and model exclusions
 
 Exclusions keep traffic away from a provider or model — the control to reach
-for when an installation may only talk to, say, its own enterprise gateway.
+for when an installation must stay off a particular provider or model.
 
 | Variable                     | Default  | Purpose |
 | ---------------------------- | -------- | ------- |
@@ -809,7 +559,7 @@ of the assets root, keyed by embedder ID:
 - `jina-v2-base-code-int8/` — from the public
   [`jinaai/jina-embeddings-v2-base-code`](https://huggingface.co/jinaai/jina-embeddings-v2-base-code)
   HuggingFace repo (Jina's own INT8 export; we don't maintain our own
-  quantization). Default for every bundle through v0.66; the flat legacy
+  quantization). The default for every retained bundle; the flat legacy
   layout (`<root>/model.onnx`) still resolves for this embedder.
 - `qwen3-embedding-0.6b-int8/` — produced by `scripts/export_qwen3_onnx.py`
   (Qwen3-Embedding-0.6B with last-token pooling baked into the graph) and

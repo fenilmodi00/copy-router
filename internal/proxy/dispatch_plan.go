@@ -96,9 +96,8 @@ func (e dispatchAbort) Unwrap() error { return e.err }
 
 // dispatchPlanned runs the surface's attempt closure through the dispatch
 // executor for a resolved plan, keeping the surface-level failover contract:
-// per-binding headers, credential re-resolution on fallback, managed
-// subscription leasing and account rotation, prelude discard on retry, and
-// the entry point's own error rendering on exhaustion.
+// per-binding headers, credential re-resolution on fallback, prelude discard
+// on retry, and the entry point's own error rendering on exhaustion.
 func (s *Service) dispatchPlanned(ctx context.Context, in failoverInputs, plan inference.ResolvedPlan) (winnerIdx int, err error) {
 	log := observability.FromContext(ctx)
 	executor, err := s.inferenceExecutor()
@@ -107,7 +106,6 @@ func (s *Service) dispatchPlanned(ctx context.Context, in failoverInputs, plan i
 	}
 
 	lastIdx := 0
-	managedBinding := false
 	transport := dispatch.Transport{
 		OperationID: string(in.purpose),
 		Committed:   func() bool { return committed(in.buf) },
@@ -130,9 +128,7 @@ func (s *Service) dispatchPlanned(ctx context.Context, in failoverInputs, plan i
 			var abort dispatchAbort
 			return errors.As(err, &abort)
 		},
-		// A managed-subscription turn never fails over to a paid binding; a
-		// transient error on it still gets the same-binding retries.
-		Bound: func(dispatch.Attempt, error) bool { return managedBinding },
+		Bound: func(dispatch.Attempt, error) bool { return false },
 		// Nil unless transient_rate_limit is on for this request.
 		RetryDelay: s.throttleRetryDelay(ctx),
 	}
@@ -140,68 +136,30 @@ func (s *Service) dispatchPlanned(ctx context.Context, in failoverInputs, plan i
 		decision := in.initialDecision
 		decision.Provider = attempt.Target.Provider
 		guarded := dispatch.GuardTarget(client, attempt.Target)
-		retryStart := s.clockNow()
-		for account := 0; ; account++ {
-			if !committed(in.buf) {
-				in.w.Header().Set(HeaderRouterProvider, decision.Provider)
-				in.w.Header().Set(HeaderRouterModel, decision.Model)
-				in.w.Header().Set(HeaderRouterContextWindow, strconv.Itoa(contextWindowForRequest(decision.Model, decision.Provider)))
-				if attempt.Index > 0 {
-					in.w.Header().Set(HeaderRouterFallbackFrom, in.bindings[0].Provider)
-					in.w.Header().Set(HeaderRouterFallbackAttempt, attemptIdxLabel(attempt.Index))
-				}
+		if !committed(in.buf) {
+			in.w.Header().Set(HeaderRouterProvider, decision.Provider)
+			in.w.Header().Set(HeaderRouterModel, decision.Model)
+			in.w.Header().Set(HeaderRouterContextWindow, strconv.Itoa(contextWindowForRequest(decision.Model, decision.Provider)))
+			if attempt.Index > 0 {
+				in.w.Header().Set(HeaderRouterFallbackFrom, in.bindings[0].Provider)
+				in.w.Header().Set(HeaderRouterFallbackAttempt, attemptIdxLabel(attempt.Index))
 			}
-			credentialCtx, lease, managedAttempt, leaseErr := s.leaseManagedSubscription(attemptCtx, decision.Provider, decision.Model)
-			if leaseErr != nil {
-				return dispatchAbort{err: leaseErr}
-			}
-			managedBinding = managedBinding || managedAttempt
-			attemptErr := in.attempt(credentialCtx, decision, guarded)
-			if !committed(in.buf) {
-				s.recordSubscriptionModelRejection(credentialCtx, decision.Provider, decision.Model, attemptErr)
-			}
-			lease.Release()
-			if attemptErr == nil {
-				if managedAttempt {
-					s.markManagedSubscriptionServed(ctx, credentialCtx)
-					s.recordManagedSubscriptionSuccess(credentialCtx, decision.Provider, decision.Model, lease)
-				}
-				if attempt.Index > 0 {
-					log.Info("dispatchWithFallback: succeeded on fallback",
-						"model", decision.Model,
-						"primary_provider", in.bindings[0].Provider,
-						"final_provider", decision.Provider,
-						"attempt_index", attempt.Index)
-				}
-				return nil
-			}
-			rotate := managedAttempt && s.recordManagedSubscriptionFailure(credentialCtx, decision.Provider, decision.Model, lease, attemptErr)
-			if committed(in.buf) || !rotate {
-				if providers.IsUpstreamModelNotFound(attemptErr) {
-					s.rememberGatewayLacksModel(attemptCtx, decision.Provider, decision.Model)
-				}
-				return attemptErr
-			}
-			if spent := s.clockNow().Sub(retryStart); spent >= sameBindingRetryBudget {
-				log.Warn("dispatchWithFallback: subscription account rotation budget spent, not retrying",
-					"model", decision.Model,
-					"provider", decision.Provider,
-					"spent_ms", spent.Milliseconds(),
-					"budget_ms", sameBindingRetryBudget.Milliseconds(),
-					"subscription_account_attempt", account+1,
-					"err", attemptErr)
-				return attemptErr
-			}
-			if in.buf != nil {
-				in.buf.Discard()
-			}
-			log.Warn("dispatchWithFallback: retrying with another subscription account",
-				"model", decision.Model,
-				"provider", decision.Provider,
-				"account_id", lease.AccountID,
-				"same_binding_retry", account+1,
-				"err", attemptErr)
 		}
+		attemptErr := in.attempt(attemptCtx, decision, guarded)
+		if attemptErr == nil {
+			if attempt.Index > 0 {
+				log.Info("dispatchWithFallback: succeeded on fallback",
+					"model", decision.Model,
+					"primary_provider", in.bindings[0].Provider,
+					"final_provider", decision.Provider,
+					"attempt_index", attempt.Index)
+			}
+			return nil
+		}
+		if providers.IsUpstreamModelNotFound(attemptErr) {
+			s.rememberGatewayLacksModel(attemptCtx, decision.Provider, decision.Model)
+		}
+		return attemptErr
 	}
 
 	req := inference.InvocationRequest{Purpose: in.purpose, RequestID: observability.RequestIDFromContext(ctx)}

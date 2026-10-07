@@ -50,10 +50,7 @@ These are the complete production `providers.Client.Proxy`/`Passthrough` call si
 Real upstream HTTP is implemented only in these adapter areas:
 
 - `internal/providers/anthropic/client.go` and `list_models.go`
-- `internal/providers/openai/client.go`
-- `internal/providers/google/native_client.go`
 - `internal/providers/openaicompat/client.go` and `list_models.go`
-- `internal/providers/cortexagents/client.go` for the explicit web-search tool executor
 
 The composition root `cmd/router/main.go` is the only non-adapter package allowed to import concrete provider packages. The architecture fixtures prove that aliases and blank imports do not bypass this rule.
 
@@ -65,7 +62,6 @@ These clients are explicitly classified so they cannot be mistaken for inference
 | --- | --- |
 | `internal/policyclient/client.go` | policy-sidecar health, capabilities, roster, decision, preview, outcome, and feedback control-plane I/O |
 | `internal/router/rl/client.go` | legacy policy-sidecar decision I/O |
-| `internal/subscriptions/oauth.go` | subscription OAuth token refresh |
 | `internal/entra/client_credentials.go` | Entra client-credential minting |
 | `internal/observability/otel/emitter.go` | telemetry export |
 
@@ -82,7 +78,7 @@ The migration baseline is covered by:
 - fallback and binding behavior: `internal/proxy/fallback_test.go`, `baseline_failover_integration_test.go`, `sibling_failover_integration_test.go`
 - compaction and handover: `internal/proxy/compaction_test.go`, `handover_internal_test.go`, `internal/translate/compaction_test.go`, `handover_test.go`
 - translation and streaming: `internal/proxy/conformance_*_test.go`, `internal/translate/stream_*_test.go`, `responses_to_anthropic_writer_stream_test.go`
-- subscriptions, BYOK, and gateways: `internal/proxy/subscription_*_test.go`, `managed_subscriptions_test.go`, `gateway_*_test.go`, provider credential tests
+- BYOK credentials and gateways: `internal/proxy/gateway_responses_integration_test.go`, `credentials_test.go`, provider credential tests
 - telemetry: `internal/proxy/planner_telemetry_internal_test.go`, `turn_signal_telemetry_internal_test.go`, `fire_telemetry_panic_internal_test.go`
 - metadata passthrough: `internal/proxy/count_tokens_test.go`, `upstream_models_test.go`
 

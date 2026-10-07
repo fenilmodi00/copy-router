@@ -334,8 +334,6 @@ func armStrikeLogFieldsWithPrimaryReason(primaryDemoted string, primaryReason se
 //   - a 404 is the gateway lacking the model, remembered per endpoint by
 //     rememberGatewayLacksModel, so striking the arm would double-count it;
 //   - a 529 is provider capacity, owned by maybeDisableProviderAfterOverload;
-//   - a managed-subscription pool error has no upstream at all and is owned by
-//     maybeExpireSubscriptionArmPin;
 //   - a bare context cancellation is the client going away, not the arm.
 //
 // The upstream watchdog sentinels are checked before the cancellation check
@@ -355,7 +353,7 @@ func isRescuedPrimaryFailure(err error) bool {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
-	if providers.IsUpstreamModelNotFound(err) || isSubscriptionPoolError(err) {
+	if providers.IsUpstreamModelNotFound(err) {
 		return false
 	}
 	return upstreamStatus(err) != providerOverloadedStatus

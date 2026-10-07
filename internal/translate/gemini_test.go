@@ -204,7 +204,7 @@ func TestPrepareGemini_ReasoningEffortMapsToThinkingBudget(t *testing.T) {
 	for effort, budget := range cases {
 		body := []byte(`{"messages":[{"role":"user","content":"x"}],"reasoning_effort":"` + effort + `"}`)
 		env, _ := translate.ParseOpenAI(body)
-		prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-2.5-pro"})
+		prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-2.5-pro", Capabilities: capsFor("gemini-2.5-pro")})
 		require.NoError(t, err, effort)
 		out := mustUnmarshal(t, prep.Body)
 		gc := out["generationConfig"].(map[string]any)
@@ -219,7 +219,7 @@ func TestPrepareGemini_ReasoningEffortMapsToThinkingLevel_Gemini3x(t *testing.T)
 	for _, effort := range []string{"low", "medium", "high"} {
 		body := []byte(`{"messages":[{"role":"user","content":"x"}],"reasoning_effort":"` + effort + `"}`)
 		env, _ := translate.ParseOpenAI(body)
-		prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-3.1-pro-preview"})
+		prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-3.1-pro-preview", Capabilities: capsFor("gemini-3.1-pro-preview")})
 		require.NoError(t, err, effort)
 		out := mustUnmarshal(t, prep.Body)
 		gc := out["generationConfig"].(map[string]any)
@@ -241,7 +241,7 @@ func TestPrepareGemini_AnthropicAdaptiveThinkingMapsToGemini35Flash(t *testing.T
 	env, err := translate.ParseAnthropic(body)
 	require.NoError(t, err)
 
-	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-3.5-flash"})
+	prep, err := env.PrepareGemini(http.Header{}, translate.EmitOptions{TargetModel: "gemini-3.5-flash", Capabilities: capsFor("gemini-3.5-flash")})
 	require.NoError(t, err)
 	out := mustUnmarshal(t, prep.Body)
 	generationConfig := out["generationConfig"].(map[string]any)

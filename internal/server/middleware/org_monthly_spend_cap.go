@@ -24,13 +24,6 @@ func WithOrgMonthlySpendCap(svc *billing.Service) gin.HandlerFunc {
 			return
 		}
 
-		// A turn covered by an individual Max/Boost allowance debits 0, so it
-		// adds nothing to the org's monthly spend and the cap does not bound it.
-		if subscriberAllowanceCovers(c) {
-			c.Next()
-			return
-		}
-
 		installation := InstallationFrom(c)
 		if installation == nil || installation.ExternalID == "" {
 			// Should never happen: WithAuth runs first and would have 401'd.
@@ -47,12 +40,6 @@ func WithOrgMonthlySpendCap(svc *billing.Service) gin.HandlerFunc {
 			return
 		}
 
-		// The cap bounds PAID spend, not free subscription usage: a request
-		// presenting a Claude/Codex credential that covers this route serves at
-		// $0 on the caller's own plan, so exempt it from the cap-reached 402 below
-		// (mirrors WithBalanceCheck).
-		subscriptionExempt := proxy.RequestPresentsCoveringSubscription(c.Request.Context(), c.Request.Header, c.FullPath())
-
 		result, err := svc.CheckOrgMonthlySpend(c.Request.Context(), orgID)
 		if err != nil {
 			log.Error("Org monthly spend cap check failed; refusing request", "err", err, "organization_id", orgID)
@@ -64,19 +51,6 @@ func WithOrgMonthlySpendCap(svc *billing.Service) gin.HandlerFunc {
 		}
 
 		if result.LimitReached() {
-			if subscriptionExempt {
-				// Not 402'd: flag subscription-only so the proxy serves on the
-				// caller's own subscription (or refuses a would-be-paid turn) and
-				// never fails over to a paid model. Paid spend stays bounded at the cap.
-				log.Info("Org monthly cap reached but subscription covers the route: serving subscription-only",
-					"organization_id", orgID,
-					"spent_usd_micros", result.SpentMicros,
-					"monthly_limit_usd_micros", *result.LimitMicros,
-				)
-				c.Request = c.Request.WithContext(billing.WithSubscriptionOnly(c.Request.Context(), billing.SubscriptionOnlyCreditsDepleted))
-				c.Next()
-				return
-			}
 			log.Info("Request rejected: org monthly spend cap reached",
 				"organization_id", orgID,
 				"spent_usd_micros", result.SpentMicros,

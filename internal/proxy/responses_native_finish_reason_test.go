@@ -18,14 +18,22 @@ import (
 
 const nativeResponsesInstallationID = "3f4c1c2e-2b4d-4c3a-9f6d-0d1a2b3c4d5e"
 
-// codexNativeResponsesCtx mimics a Codex turn: the ChatGPT subscription pair
-// makes ProxyOpenAIResponses dispatch the caller's original bytes verbatim,
-// which is the path that runs no translator.
+// codexNativeResponsesCtx mimics a Codex turn: the ChatGPT subscription bearer
+// (set on the request headers by the caller) makes ProxyOpenAIResponses
+// dispatch the caller's original bytes verbatim, which is the path that runs
+// no translator.
 func codexNativeResponsesCtx() context.Context {
-	ctx := context.WithValue(context.Background(), proxy.OpenAISubscriptionContextKey{}, "eyJhbGciOiJSUzI1NiJ9.codex.sig")
-	ctx = context.WithValue(ctx, proxy.OpenAIAccountIDContextKey{}, "acct-123")
-	ctx = context.WithValue(ctx, proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppCodex})
+	ctx := context.WithValue(context.Background(), proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppCodex})
 	return context.WithValue(ctx, proxy.InstallationIDContextKey{}, nativeResponsesInstallationID)
+}
+
+// codexNativeResponsesRequest builds the /v1/responses request carrying the
+// Codex OAuth bearer pair that selects verbatim passthrough.
+func codexNativeResponsesRequest() *http.Request {
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
+	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiJ9.codex.sig")
+	req.Header.Set("ChatGPT-Account-ID", "acct-123")
+	return req
 }
 
 // nativeResponsesStream frames a native Responses SSE turn ending in terminal.
@@ -90,7 +98,7 @@ func TestService_ProxyOpenAIResponses_NativeTurnRecordsTerminalFinishReason(t *t
 
 			body := []byte(`{"model":"moonshotai/kimi-k3","stream":true,"input":[{"type":"reasoning","id":"rs_0","encrypted_content":"opaque"},{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]}`)
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
+			req := codexNativeResponsesRequest()
 			require.NoError(t, svc.ProxyOpenAIResponses(codexNativeResponsesCtx(), body, rec, req))
 
 			require.Len(t, provider.proxyEndpoints, 1)
@@ -122,7 +130,7 @@ func TestService_ProxyOpenAIResponses_NativeFailedTerminalRecordsNoFinishReason(
 
 	body := []byte(`{"model":"moonshotai/kimi-k3","stream":true,"input":[{"type":"reasoning","id":"rs_0","encrypted_content":"opaque"},{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]}`)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
+	req := codexNativeResponsesRequest()
 	require.NoError(t, svc.ProxyOpenAIResponses(codexNativeResponsesCtx(), body, rec, req))
 
 	row := telemetry.firstRow(t)

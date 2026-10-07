@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"weave-os/router/internal/providers"
-	"weave-os/router/internal/router"
 	"weave-os/router/internal/translate"
 
 	"github.com/stretchr/testify/assert"
@@ -33,7 +32,7 @@ func TestPrepareOpenAI_AnthropicToolFallbackDisablesReasoning(t *testing.T) {
 			require.NoError(t, err)
 			opts := translate.EmitOptions{
 				TargetModel: chatEffortModel, TargetProvider: providers.ProviderOpenAI,
-				Capabilities: router.Lookup(chatEffortModel), ForceReasoningEffort: tc.forceReasoningEffort,
+				Capabilities: capsFor(chatEffortModel), ForceReasoningEffort: tc.forceReasoningEffort,
 				ForceEffort: tc.forceEffort,
 			}
 			chat, err := env.PrepareOpenAI(http.Header{}, opts)
@@ -68,7 +67,7 @@ func TestPrepareOpenAI_AnthropicToolFallbackPreservesOutputBudget(t *testing.T) 
 			require.NoError(t, err)
 			prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 				TargetModel: chatEffortModel, TargetProvider: providers.ProviderOpenAI,
-				Capabilities: router.Lookup(chatEffortModel),
+				Capabilities: capsFor(chatEffortModel),
 			})
 			require.NoError(t, err)
 			assert.Equal(t, "none", gjson.GetBytes(prep.Body, "reasoning_effort").String())
@@ -83,7 +82,7 @@ func TestPrepareOpenAI_StrippedServerToolsDoNotDisableReasoning(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAI(http.Header{}, translate.EmitOptions{
 		TargetModel: chatEffortModel, TargetProvider: providers.ProviderOpenAI,
-		Capabilities: router.Lookup(chatEffortModel),
+		Capabilities: capsFor(chatEffortModel),
 	})
 	require.NoError(t, err)
 	assert.False(t, gjson.GetBytes(prep.Body, "reasoning_effort").Exists())

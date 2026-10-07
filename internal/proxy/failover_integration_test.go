@@ -13,7 +13,6 @@ import (
 
 	"weave-os/router/internal/providers"
 	"weave-os/router/internal/providers/anthropic"
-	"weave-os/router/internal/providers/openai"
 	"weave-os/router/internal/providers/openaicompat"
 	"weave-os/router/internal/proxy"
 	"weave-os/router/internal/router"
@@ -494,7 +493,7 @@ func TestProxyMessages_ResponsesFailureBeforeOutputFallsBackToBaseline(t *testin
 	svc := proxy.NewService(
 		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "deepseek-ai/deepseek-v4-flash", Reason: "test"}},
 		map[string]providers.Client{
-			providers.ProviderOpenAI: openai.NewClient("test-key", openAIUpstream.URL),
+			providers.ProviderOpenAI: openaicompat.NewClient("test-key", openAIUpstream.URL),
 			providers.ProviderAIAND:  baseline,
 		},
 		nil, false, nil, nil, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil,
@@ -532,7 +531,7 @@ func TestProxyMessages_BaselineFailoverSkipsBaselineOverContextWindow(t *testing
 	svc := proxy.NewService(
 		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "deepseek-ai/deepseek-v4-flash", Reason: "test"}},
 		map[string]providers.Client{
-			providers.ProviderOpenAI: openai.NewClient("test-key", openAIUpstream.URL),
+			providers.ProviderOpenAI: openaicompat.NewClient("test-key", openAIUpstream.URL),
 			providers.ProviderAIAND:  baseline,
 		},
 		nil, false, nil, nil, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil,

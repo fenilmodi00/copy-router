@@ -22,7 +22,6 @@ func (s *Service) anthropicRoutingRequest(
 	headers http.Header,
 	ingress string,
 ) (context.Context, router.Request, error) {
-	ctx = s.withUsageObserver(ctx, headers, routePathMessages)
 	log := observability.FromContext(ctx)
 	cleanBody, err := stripRoutingMarkerFromMessages(body)
 	if err != nil {
@@ -69,15 +68,11 @@ func (s *Service) anthropicRoutingRequest(
 	}
 
 	enabledProviders := s.enabledProvidersForRequest(ctx, providers.ProviderAnthropic, headers)
-	if paidFallbackForbidden(ctx) {
-		enabledProviders = restrictToSubscriptionProviders(ctx, headers, enabledProviders)
-	}
 	outputReserve := contextWindowOutputReserve
 	if features.MaxTokens > outputReserve {
 		outputReserve = features.MaxTokens
 	}
-	excluded := s.excludeCodexOAuthOnlyModels(ctx, headers, enabledProviders, s.excludedModelsForRequest(ctx))
-	excluded = s.excludeUnavailableSubscriptionModels(ctx, headers, enabledProviders, excluded)
+	excluded := s.excludedModelsForRequest(ctx)
 	excluded, _ = excludeContextOverflowModels(
 		env.ContextOverflowTokenEstimate(),
 		env.SignatureTokenSavings(),
@@ -94,30 +89,28 @@ func (s *Service) anthropicRoutingRequest(
 		installationID = id.String()
 	}
 	return ctx, router.Request{
-		RequestedModel:                   features.Model,
-		ClientBudget:                     requestcontext.ClientBudgetFrom(ctx),
-		EstimatedInputTokens:             features.Tokens,
-		HasTools:                         features.HasTools,
-		HasImages:                        features.HasImages,
-		TranslationRequirements:          env.TranslationRequirements(router.EndpointAnthropicMessages),
-		ReasoningConfigurationSHA256:     env.ReasoningConfigurationSHA256(),
-		ToolConfigurationSHA256:          env.ToolConfigurationSHA256(),
-		PromptText:                       promptText,
-		ConversationMessages:             conversationMessagesForRouting(env),
-		AvailableTools:                   availableToolsForRouting(env),
-		Tools:                            toolsForRouting(env),
-		OrganizationID:                   organizationID,
-		InstallationID:                   installationID,
-		ClientSessionID:                  clientSessionIDForRequest(ctx, env),
-		EnabledProviders:                 enabledProviders,
-		CustomBindings:                   s.customBindingsForRequest(ctx),
-		GatewayProviders:                 s.gatewayProvidersForRequest(ctx),
-		ExcludedModels:                   excluded,
-		AllowedModels:                    allowedModelsForRequest(ctx),
-		PreferredModels:                  s.preferredModelsForRequest(ctx),
-		SubscriptionStatePreferredModels: subscriptionStatePreferredModelsFromContext(ctx),
-		SubsidizedModelCostFactor:        s.subsidyFactors(ctx, headers),
-		RoutingKnobs:                     routingKnobsForRequest(ctx),
+		RequestedModel:               features.Model,
+		ClientBudget:                 requestcontext.ClientBudgetFrom(ctx),
+		EstimatedInputTokens:         features.Tokens,
+		HasTools:                     features.HasTools,
+		HasImages:                    features.HasImages,
+		TranslationRequirements:      env.TranslationRequirements(router.EndpointAnthropicMessages),
+		ReasoningConfigurationSHA256: env.ReasoningConfigurationSHA256(),
+		ToolConfigurationSHA256:      env.ToolConfigurationSHA256(),
+		PromptText:                   promptText,
+		ConversationMessages:         conversationMessagesForRouting(env),
+		AvailableTools:               availableToolsForRouting(env),
+		Tools:                        toolsForRouting(env),
+		OrganizationID:               organizationID,
+		InstallationID:               installationID,
+		ClientSessionID:              clientSessionIDForRequest(ctx, env),
+		EnabledProviders:             enabledProviders,
+		CustomBindings:               s.customBindingsForRequest(ctx),
+		GatewayProviders:             s.gatewayProvidersForRequest(ctx),
+		ExcludedModels:               excluded,
+		AllowedModels:                allowedModelsForRequest(ctx),
+		PreferredModels:              s.preferredModelsForRequest(ctx),
+		RoutingKnobs:                 routingKnobsForRequest(ctx),
 	}, nil
 }
 

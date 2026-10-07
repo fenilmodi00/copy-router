@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"weave-os/router/internal/providers"
-	"weave-os/router/internal/router"
 	"weave-os/router/internal/translate"
 
 	"github.com/stretchr/testify/assert"
@@ -19,7 +18,7 @@ func prepareWithFallback(t *testing.T, in http.Header, body string, opts transla
 	t.Helper()
 	env, err := translate.ParseAnthropic([]byte(body))
 	require.NoError(t, err)
-	opts.Capabilities = router.Lookup(opts.TargetModel)
+	opts.Capabilities = capsFor(opts.TargetModel)
 	prep, err := env.PrepareAnthropic(in, opts)
 	require.NoError(t, err)
 	return prep

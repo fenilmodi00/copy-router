@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -42,7 +41,6 @@ import (
 	providerHTTP "weave-os/router/internal/providers/httputil"
 	openaiCompatProvider "weave-os/router/internal/providers/openaicompat"
 	"weave-os/router/internal/proxy"
-	"weave-os/router/internal/proxy/usage"
 	routerpubsub "weave-os/router/internal/pubsub"
 	"weave-os/router/internal/router"
 	"weave-os/router/internal/router/bandit"
@@ -61,9 +59,6 @@ import (
 	"weave-os/router/internal/router/sessionstrategy"
 	"weave-os/router/internal/server"
 	"weave-os/router/internal/server/middleware"
-	"weave-os/router/internal/subscriptions"
-	"weave-os/router/internal/subscriptions/entitlement"
-	"weave-os/router/internal/websearch"
 	"weave-os/router/internal/wif"
 
 	_ "time/tzdata"
@@ -326,28 +321,6 @@ func main() {
 		WithEntraTokenSource(buildEntraTokenSource(logger)).
 		WithFlagOverridesDisabled(flagOverridesDisabled).
 		WithRequestIdentities(repo.RequestIdentities)
-	subscriptionPoolsEnabled := config.GetOr("ROUTER_SUBSCRIPTION_POOLS_ENABLED", "false") == "true"
-	var subscriptionRuntime *subscriptions.Runtime
-	if subscriptionPoolsEnabled {
-		authSvc.WithSubscriptionAccounts(repo.SubscriptionAccounts)
-		codexTokenURL := ""
-		if codexIssuer := strings.TrimRight(config.GetOr("WEAVE_CODEX_OAUTH_ISSUER", ""), "/"); codexIssuer != "" {
-			codexTokenURL = codexIssuer + "/oauth/token"
-		}
-		subscriptionRuntime = subscriptions.NewRuntime(
-			authSvc,
-			subscriptions.NewOAuthClient(
-				&http.Client{Timeout: subscriptions.RefreshHTTPTimeout},
-				codexTokenURL,
-				config.GetOr("WEAVE_ANTHROPIC_OAUTH_TOKEN", ""),
-				time.Now,
-			),
-			time.Now,
-		)
-		logger.Info("Server-side subscription account pools enabled")
-	} else {
-		logger.Info("Server-side subscription account pools disabled")
-	}
 
 	// Fans out Pub/Sub invalidations to this replica's cache; the 5-min TTL
 	// is the safety net if the listener falls behind.
@@ -1088,7 +1061,6 @@ func main() {
 		WithPlanner(plannerCfg).
 		WithSummarizer(summarizer).
 		WithCompactionHandoverSummarizer(compactionHandoverSz).
-		WithWebSearchExecutor(cortexWebSearch(logger)).
 		WithCompactionModel(compactionModel).
 		WithCompactionHardPin(compactionHardPin).
 		WithAvailableModels(servedModels).
@@ -1100,9 +1072,6 @@ func main() {
 		panic(err)
 	}
 	proxySvc = proxySvc.WithInferenceExecutor(inferenceExecutor).WithInferencePlans(inferencePlans).WithInferenceDeployment(inferenceDeployment)
-	if subscriptionRuntime != nil {
-		proxySvc.WithManagedSubscriptions(subscriptionRuntime)
-	}
 	for _, spec := range configuredPolicySpecs {
 		proxySvc = proxySvc.WithPolicyStrategy(spec)
 		logger.Info("Generic policy sidecar wired", "strategy", spec.Strategy, "candidate_models", len(routingTargets))
@@ -1157,48 +1126,6 @@ func main() {
 		logger.Info("Provider exclusion override active", "excluded_providers", cleaned)
 	}
 
-	// The usage observer is always wired (cheap, side-effect-free) even though
-	// the cost discount below is env-gated: it also feeds the per-installation
-	// usage-bypass gate, which is DB-gated and can't know the env flag's state.
-	subscriptionTTL := 10 * time.Minute
-	if v, err := time.ParseDuration(config.GetOr("ROUTER_SUBSCRIPTION_OBSERVATION_TTL", "10m")); err == nil {
-		subscriptionTTL = v
-	}
-	observerSalt := make([]byte, 16)
-	if _, err := rand.Read(observerSalt); err != nil {
-		logger.Error("Failed to seed subscription usage observer salt", "err", err)
-		panic(err)
-	}
-	usageObserver := usage.NewObserver(observerSalt, subscriptionTTL, time.Now)
-	// Bound memory: evict expired observations periodically (the usage package
-	// spawns no goroutines of its own).
-	go func() {
-		t := time.NewTicker(time.Minute)
-		defer t.Stop()
-		for range t.C {
-			usageObserver.Sweep()
-		}
-	}()
-	proxySvc = proxySvc.WithUsageObserver(usageObserver)
-
-	// Discounts a covered model's cost term by the caller's observed
-	// subscription rate-limit headroom (~epsilon with slack, →1 as it binds).
-	// Defaults ON; only affects turns with an observed subscription, so
-	// blast radius is narrow. Disabling here leaves the observer/bypass gate wired.
-	if config.GetOr("ROUTER_SUBSCRIPTION_AWARE_ROUTING", "true") == "true" {
-		epsilon := 0.05
-		if v, err := strconv.ParseFloat(config.GetOr("ROUTER_SUBSCRIPTION_COST_EPSILON", "0.05"), 64); err == nil {
-			epsilon = v
-		}
-		gamma := 2.0
-		if v, err := strconv.ParseFloat(config.GetOr("ROUTER_SUBSCRIPTION_COST_GAMMA", "2"), 64); err == nil {
-			gamma = v
-		}
-		proxySvc = proxySvc.WithSubscriptionAwareRouting(usageObserver, epsilon, gamma)
-		logger.Info("Subscription-aware routing configured", "epsilon", epsilon, "gamma", gamma, "observation_ttl", subscriptionTTL)
-	} else {
-		logger.Info("Usage observer wired; subscription-aware cost discount disabled", "observation_ttl", subscriptionTTL)
-	}
 	trafficCapture, err := newTrafficCaptureFromEnvironment()
 	if err != nil {
 		logger.Error("Unable to initialize local HTTP traffic capture", "err", err)
@@ -1237,19 +1164,6 @@ func main() {
 	if policyPinEnabled {
 		logger.Info("Policy pin header enabled", "header", middleware.PolicyPinOverrideHeader)
 	}
-	// ROUTER_SUBSCRIBER_ALLOWANCE_ENABLED=true enforces and meters individual
-	// Max/Boost allowances. Needs billing wired: enforcement only means
-	// anything where the same turn would otherwise debit an org balance.
-	var subscriberAllowanceSvc *entitlement.Service
-	if billingSvc != nil && strings.EqualFold(config.GetOr("ROUTER_SUBSCRIBER_ALLOWANCE_ENABLED", "false"), "true") {
-		subscriberAllowanceSvc = entitlement.NewService(
-			postgres.NewSubscriberEntitlementRepo(pool),
-			postgres.NewSubscriberAllowanceRepo(pool),
-		)
-		billingSvc = billingSvc.
-			WithSubscriberAllowance(subscriberAllowanceSvc)
-		logger.Info("Individual subscriber allowance enforcement enabled")
-	}
 	var testPlans *policyregistry.TestPlanTools
 	if testPlansEnabled {
 		if servingAdmission == nil || billingSvc == nil {
@@ -1258,10 +1172,9 @@ func main() {
 		testPlans = &policyregistry.TestPlanTools{Repository: servingpostgres.NewTestPlanRepo(pool), Store: servingAdmission.Store, Clock: time.Now}
 	}
 	serverFeatures := server.Features{
-		TestPlans:           testPlans,
-		PolicyPinEnabled:    policyPinEnabled,
-		ServingAdmission:    servingAdmission,
-		SubscriberAllowance: subscriberAllowanceSvc,
+		TestPlans:        testPlans,
+		PolicyPinEnabled: policyPinEnabled,
+		ServingAdmission: servingAdmission,
 	}
 	if trafficCapture != nil {
 		serverFeatures.TrafficCapture = trafficCapture
@@ -1898,13 +1811,6 @@ func runSessionTurnClockSweep(ctx context.Context, store *postgres.SessionTurnCl
 			cancel()
 		}
 	}
-}
-
-// cortexWebSearch builds the Cortex Agents web-search executor. The gateway
-// surface was cut in the AIand-only split, so this always returns nil today;
-// the knob and builder are kept for when a managed tenant re-enables it.
-func cortexWebSearch(logger *slog.Logger) websearch.Executor {
-	return nil
 }
 
 // resolveDefaultBaselineModel returns the cost-comparison baseline used when

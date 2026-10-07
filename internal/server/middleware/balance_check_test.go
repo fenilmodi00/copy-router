@@ -10,9 +10,7 @@ import (
 
 	"weave-os/router/internal/auth"
 	"weave-os/router/internal/billing"
-	"weave-os/router/internal/proxy"
 	"weave-os/router/internal/server/middleware"
-	"weave-os/router/internal/subscriptions/entitlement"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -248,17 +246,6 @@ func TestWithBalanceCheck_SkipsWhenInstallationMissing(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestWithBalanceCheck_ExemptsSubscriptionRequest(t *testing.T) {
-	// A $0 balance must still pass when the request carries a Claude subscription
-	// bearer — that turn is served on the caller's own plan and debits $0, so
-	// prepaid credits don't apply.
-	repo := &stubBillingRepo{balance: 0}
-	setInstall := func(c *gin.Context) { withInstallation(c, "org_sub") }
-	w, reached := runMiddlewareWith(t, repo, 0, "/v1/messages", setInstall, "Bearer sk-ant-oat-abc123")
-	assert.True(t, reached, "subscription request must pass even at zero balance")
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
 func TestWithBalanceCheck_402sWithoutSubscriptionCredential(t *testing.T) {
 	// NO subscription credential, NO usage-bypass gate — the turn routes to
 	// a paid model, so a depleted balance must still 402.
@@ -267,29 +254,6 @@ func TestWithBalanceCheck_402sWithoutSubscriptionCredential(t *testing.T) {
 	w, reached := runMiddlewareWith(t, repo, 0, "/v1/messages", setInstall, "")
 	assert.False(t, reached, "no subscription credential means the paid path is gated")
 	assert.Equal(t, http.StatusPaymentRequired, w.Code)
-}
-
-func TestWithBalanceCheck_ExemptsSubscriptionRegardlessOfUsageBypass(t *testing.T) {
-	// Subscription bearer present, but the org has NOT enabled the usage-bypass
-	// gate. The exemption now depends only on the presence of a covering
-	// subscription credential — not on UsageBypassEnabled, which controls the
-	// routing bypass lane, not the billing gate. A subscription-turn is always
-	// free for the org, so a depleted prepaid balance must NOT 402 it.
-	repo := &stubBillingRepo{balance: 0}
-	setInstall := func(c *gin.Context) { withInstallation(c, "org_prepaid") }
-	w, reached := runMiddlewareWith(t, repo, 0, "/v1/messages", setInstall, "Bearer sk-ant-oat-abc123")
-	assert.True(t, reached, "a subscription request must pass regardless of usage-bypass config")
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestWithBalanceCheck_ExemptsSubscriptionWhenBalanceRowMissing(t *testing.T) {
-	// The original 402 bug: a subscription org that never had a balance row.
-	// Its turns are free, so a missing row must exempt, not 402.
-	repo := &stubBillingRepo{balanceErr: billing.ErrBalanceRowMissing}
-	setInstall := func(c *gin.Context) { withUsageBypassInstallation(c, "org_sub") }
-	w, reached := runMiddlewareWith(t, repo, 0, "/v1/messages", setInstall, "Bearer sk-ant-oat-abc123")
-	assert.True(t, reached, "subscription request with no balance row must pass")
-	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 // runMiddlewarePrep drives WithBalanceCheck with a caller-supplied prep hook
@@ -319,147 +283,6 @@ func runMiddlewarePrep(t *testing.T, repo billing.Repo, threshold int64, routePa
 	return w, reached, hasOverride
 }
 
-// stashAnthropicSub plants a Claude OAuth value on the request context.
-func stashAnthropicSub(c *gin.Context, value string) {
-	ctx := context.WithValue(c.Request.Context(), proxy.AnthropicSubscriptionContextKey{}, value)
-	c.Request = c.Request.WithContext(ctx)
-}
-
-// stashCodexSub plants a dedicated Codex subscription (JWT + account id) on the
-// request context the way WithAuth does. Both are required for a usable Codex sub.
-func stashCodexSub(c *gin.Context, token, accountID string) {
-	ctx := context.WithValue(c.Request.Context(), proxy.OpenAISubscriptionContextKey{}, token)
-	ctx = context.WithValue(ctx, proxy.OpenAIAccountIDContextKey{}, accountID)
-	c.Request = c.Request.WithContext(ctx)
-}
-
-func TestWithBalanceCheck_402sJunkAnthropicOAuth(t *testing.T) {
-	// A junk OAuth value is never injected as a
-	// subscription (injection requires sk-ant-oat), so the gate must NOT treat
-	// it as one — otherwise a bypass org routes paid turns on deployment keys at
-	// $0. Detection validates the credential, not a bare presence check.
-	repo := &stubBillingRepo{balance: 0}
-	prep := func(c *gin.Context) {
-		withUsageBypassInstallation(c, "org_sub")
-		stashAnthropicSub(c, "not-a-real-token")
-	}
-	w, reached, _ := runMiddlewarePrep(t, repo, 0, "/v1/messages", prep)
-	assert.False(t, reached, "junk OAuth value must not exempt the gate")
-	assert.Equal(t, http.StatusPaymentRequired, w.Code)
-}
-
-func TestWithBalanceCheck_ExemptsValidAnthropicOAuth(t *testing.T) {
-	// A valid sk-ant-oat token on the authenticated request must exempt,
-	// mirroring credential injection's acceptance.
-	repo := &stubBillingRepo{balance: 0}
-	prep := func(c *gin.Context) {
-		withUsageBypassInstallation(c, "org_sub")
-		stashAnthropicSub(c, "sk-ant-oat01-valid-token")
-	}
-	w, reached, _ := runMiddlewarePrep(t, repo, 0, "/v1/messages", prep)
-	assert.True(t, reached, "a valid subscription must exempt the gate")
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestWithBalanceCheck_OverrideFlagSetEvenForSubscriptionRequest(t *testing.T) {
-	// An override org that also presents a subscription credential must still get
-	// the override context flag (so the debit hook writes delta=0 for ALL turns),
-	// not be short-circuited by the subscription exemption before CheckBalance.
-	repo := &stubBillingRepo{override: true}
-	prep := func(c *gin.Context) {
-		withUsageBypassInstallation(c, "org_override")
-		stashAnthropicSub(c, "sk-ant-oat01-valid-token")
-	}
-	w, reached, hasOverride := runMiddlewarePrep(t, repo, 0, "/v1/messages", prep)
-	assert.True(t, reached, "override org must reach the handler")
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.True(t, hasOverride, "override flag must be planted even when a subscription is present")
-}
-
-func TestWithBalanceCheck_ExemptsCodexSubscriptionOnOpenAIRoute(t *testing.T) {
-	// A Codex subscription covers the OpenAI chat/responses APIs, so a bypass
-	// org presenting one on /v1/responses at $0 balance must be exempt.
-	repo := &stubBillingRepo{balance: 0}
-	prep := func(c *gin.Context) {
-		withUsageBypassInstallation(c, "org_codex")
-		stashCodexSub(c, "eyJhbGciOi.codex.jwt", "acct-abc-123")
-	}
-	w, reached, _ := runMiddlewarePrep(t, repo, 0, "/v1/responses", prep)
-	assert.True(t, reached, "a Codex subscription must exempt an OpenAI-route request")
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestWithBalanceCheck_402sCodexSubscriptionOnAnthropicRoute(t *testing.T) {
-	// The greptile P1: a Codex subscription can't serve /v1/messages, so the turn
-	// would route to a paid Anthropic model. The exemption is route-scoped, so a
-	// Codex sub on the Anthropic route must NOT exempt — a depleted balance 402s.
-	repo := &stubBillingRepo{balance: 0}
-	prep := func(c *gin.Context) {
-		withUsageBypassInstallation(c, "org_codex")
-		stashCodexSub(c, "eyJhbGciOi.codex.jwt", "acct-abc-123")
-	}
-	w, reached, _ := runMiddlewarePrep(t, repo, 0, "/v1/messages", prep)
-	assert.False(t, reached, "a Codex sub must not exempt an Anthropic-route request")
-	assert.Equal(t, http.StatusPaymentRequired, w.Code)
-}
-
-func TestWithBalanceCheck_SubscriptionOnlyAtDepletedBalance(t *testing.T) {
-	// At the prepaid threshold, a subscription-covered request is NOT 402'd: it
-	// passes through flagged subscription-only so the proxy serves it on the
-	// caller's own subscription (or refuses a would-be-paid turn), never on a
-	// paid model.
-	repo := &stubBillingRepo{balance: 0}
-	gin.SetMode(gin.TestMode)
-	svc := billing.NewService(repo)
-	engine := gin.New()
-	reached := false
-	subOnly := false
-	engine.GET("/v1/messages", func(c *gin.Context) {
-		withInstallation(c, "org_sub")
-		c.Request.Header.Set("Authorization", "Bearer sk-ant-oat-abc123")
-		middleware.WithBalanceCheck(svc, 0)(c)
-		if c.IsAborted() {
-			return
-		}
-		reached = true
-		subOnly = billing.SubscriptionOnlyFromContext(c.Request.Context())
-		c.Status(http.StatusOK)
-	})
-	w := httptest.NewRecorder()
-	engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/messages", nil))
-	assert.True(t, reached, "subscription request at the prepaid threshold must pass through")
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.True(t, subOnly, "at the prepaid threshold the request must be flagged subscription-only")
-}
-
-func TestWithBalanceCheck_SubscriptionOnlyWhenBalanceRowMissing(t *testing.T) {
-	// A missing balance row is equivalent to depleted prepaid credits for a
-	// subscription-covered request: allow the caller's own subscription, but do
-	// not permit paid failover.
-	repo := &stubBillingRepo{balanceErr: billing.ErrBalanceRowMissing}
-	gin.SetMode(gin.TestMode)
-	svc := billing.NewService(repo)
-	engine := gin.New()
-	reached := false
-	subOnly := false
-	engine.GET("/v1/messages", func(c *gin.Context) {
-		withInstallation(c, "org_sub")
-		c.Request.Header.Set("Authorization", "Bearer sk-ant-oat-abc123")
-		middleware.WithBalanceCheck(svc, 0)(c)
-		if c.IsAborted() {
-			return
-		}
-		reached = true
-		subOnly = billing.SubscriptionOnlyFromContext(c.Request.Context())
-		c.Status(http.StatusOK)
-	})
-	w := httptest.NewRecorder()
-	engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/messages", nil))
-	assert.True(t, reached, "subscription request with no balance row must pass through")
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.True(t, subOnly, "missing balance row must force subscription-only serving")
-}
-
 func TestWithBalanceCheck_NonSubscriptionStill402sBelowZero(t *testing.T) {
 	// The subscription-only pass-through is scoped to subscription-covered
 	// requests. A regular prepaid org (no subscription credential) below zero
@@ -471,25 +294,4 @@ func TestWithBalanceCheck_NonSubscriptionStill402sBelowZero(t *testing.T) {
 	assert.Equal(t, http.StatusPaymentRequired, w.Code)
 }
 
-// stashSubscriberCoverage plants the Max/Boost coverage WithSubscriberAllowance
 // attaches upstream of the org billing gates.
-func stashSubscriberCoverage(c *gin.Context) {
-	coverage := entitlement.Coverage{
-		SubscriberID:       "11111111-1111-1111-1111-111111111111",
-		EntitlementVersion: 1,
-		Plan:               entitlement.PlanMax,
-	}
-	c.Request = c.Request.WithContext(entitlement.WithCoverage(c.Request.Context(), coverage))
-}
-
-func TestWithBalanceCheck_ExemptsSubscriberAllowanceCoveredRequest(t *testing.T) {
-	// A covered turn debits 0 on the org balance and settles against the
-	// subscriber's allowance, so a depleted org balance must not 402 it.
-	repo := &stubBillingRepo{balance: 0}
-	w, reached, _ := runMiddlewarePrep(t, repo, 0, "/v1/messages", func(c *gin.Context) {
-		withInstallation(c, "org_subscriber")
-		stashSubscriberCoverage(c)
-	})
-	assert.True(t, reached, "an allowance-covered turn is not gated on org prepaid credits")
-	assert.Equal(t, http.StatusOK, w.Code)
-}

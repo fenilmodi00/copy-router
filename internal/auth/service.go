@@ -83,7 +83,6 @@ type Service struct {
 	userClusterCache       UserClusterListCache
 	blindExperimentCache   BlindExperimentCache
 	blindExperimentFetches singleflight.Group
-	subscriptionAccounts   SubscriptionAccountRepository
 	requestIdentities      RequestIdentityRepository
 	requestIdentityCache   *expirable.LRU[string, string]
 	notifier               InstallationChangeNotifier
@@ -113,12 +112,6 @@ type Service struct {
 	adminLoginMu       sync.Mutex
 
 	onboarding OnboardingObserver
-}
-
-// WithSubscriptionAccounts wires encrypted server-side subscription storage.
-func (s *Service) WithSubscriptionAccounts(repo SubscriptionAccountRepository) *Service {
-	s.subscriptionAccounts = repo
-	return s
 }
 
 // WithCredentialSubjectLookup wires the current eligibility projection used by read-only key checks.

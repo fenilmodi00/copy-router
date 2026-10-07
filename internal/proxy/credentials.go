@@ -105,14 +105,6 @@ func ExtractClientCredentials(provider string, headers http.Header) *Credentials
 	return requestcontext.ExtractClientCredentials(provider, headers)
 }
 
-func subscriptionCredsFromToken(token string) *Credentials {
-	return requestcontext.SubscriptionCredsFromToken(strings.TrimSpace(token))
-}
-
-func codexSubscriptionCreds(token, accountID string) *Credentials {
-	return requestcontext.CodexSubscriptionCreds(token, accountID)
-}
-
 // clearCredentials sets an explicit nil so CredentialsFromContext reports
 // none and the provider client falls back to its deployment key. Used to
 // keep a caller's subscription off synthetic upstream calls (e.g. the

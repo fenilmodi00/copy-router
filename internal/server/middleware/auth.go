@@ -142,29 +142,6 @@ func withAPIKey(svc *auth.Service, byokRequiresOptIn bool, serving ...*ServingAd
 		}
 		if apiKey != nil {
 			ctx = context.WithValue(ctx, proxy.APIKeyIDContextKey{}, apiKey.ID)
-			ctx = proxy.WithManagedSubscriptionUsage(ctx)
-			owner := subscriptionOwnerForRequest(c, svc, apiKey)
-			c.Set(ctxKeySubscriptionOwner, owner)
-			ctx = proxy.WithSubscriptionOwner(ctx, owner)
-			if testPlan == nil && svc.SubscriptionAccountsEnabled() {
-				accounts, listErr := svc.ListSubscriptionAccounts(ctx, owner)
-				if listErr != nil {
-					observability.FromContext(ctx).Error("Failed to load subscription account enrollment", "err", listErr)
-					ctx = context.WithValue(ctx, proxy.ManagedSubscriptionEnrollmentUnavailableContextKey{}, true)
-				} else {
-					enrolled := make(map[auth.SubscriptionProvider]struct{})
-					for _, account := range accounts {
-						enrolled[account.Provider] = struct{}{}
-					}
-					if len(enrolled) > 0 {
-						ctx = context.WithValue(ctx, proxy.ManagedSubscriptionProvidersContextKey{}, enrolled)
-					}
-					planStates := proxy.ManagedSubscriptionPlanStates(accounts, svc.CurrentTime())
-					if len(planStates) > 0 {
-						ctx = context.WithValue(ctx, proxy.ManagedSubscriptionPlanStatesContextKey{}, planStates)
-					}
-				}
-			}
 		}
 		if installation != nil {
 			if installation.ExternalID != "" {
@@ -178,12 +155,6 @@ func withAPIKey(svc *auth.Service, byokRequiresOptIn bool, serving ...*ServingAd
 			}
 			if len(installation.AllowedModels) > 0 {
 				ctx = context.WithValue(ctx, proxy.InstallationAllowedModelsContextKey{}, installation.AllowedModels)
-			}
-			if len(installation.ModelsWhenSubscriptionActive) > 0 {
-				ctx = context.WithValue(ctx, proxy.InstallationSubscriptionPreferredModelsWhenActiveContextKey{}, installation.ModelsWhenSubscriptionActive)
-			}
-			if len(installation.ModelsWhenSubscriptionInactive) > 0 {
-				ctx = context.WithValue(ctx, proxy.InstallationSubscriptionPreferredModelsWhenInactiveContextKey{}, installation.ModelsWhenSubscriptionInactive)
 			}
 			if len(installation.ExcludedProviders) > 0 {
 				ctx = context.WithValue(ctx, proxy.InstallationExcludedProvidersContextKey{}, installation.ExcludedProviders)
@@ -200,15 +171,6 @@ func withAPIKey(svc *auth.Service, byokRequiresOptIn bool, serving ...*ServingAd
 				ctx = context.WithValue(ctx, proxy.InstallationRoutingKnobsContextKey{}, &router.Overrides{
 					QualityBias: installation.RoutingQualityWeight,
 				})
-			}
-			if installation.UsageBypassEnabled {
-				ctx = context.WithValue(ctx, proxy.InstallationUsageBypassContextKey{}, proxy.UsageBypassConfig{
-					Enabled:   true,
-					Threshold: installation.UsageBypassThreshold,
-				})
-			}
-			if installation.SubscriptionRoutingDisabled {
-				ctx = context.WithValue(ctx, proxy.InstallationSubscriptionRoutingDisabledContextKey{}, true)
 			}
 			if installation.HideTerminalSurfaces {
 				ctx = context.WithValue(ctx, proxy.InstallationHideTerminalSurfacesContextKey{}, true)

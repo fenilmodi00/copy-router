@@ -231,33 +231,6 @@ func TestWithAuthPrefersRouterKeyHeader(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code)
 }
 
-func TestWithAuthLeavesControlPlaneAvailableWhenSubscriptionEnrollmentLookupFails(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	const routerToken = "rk_subscription_lookup"
-	hash, prefix, suffix := auth.APITokenFingerprint(routerToken)
-	apiKey := &auth.APIKey{ID: "key-subscription-lookup", KeyHash: hash, KeyPrefix: prefix, KeySuffix: suffix}
-	repo := &fakeAPIKeyRepository{byHash: map[string]fakeKeyRow{
-		hash: {apiKey: apiKey, installation: &auth.Installation{ID: "inst-1"}},
-	}}
-	svc := auth.NewService(fakeInstallationRepository{}, repo, nil, nil, auth.NoOpAPIKeyCache{}, nil, time.Now).
-		WithSubscriptionAccounts(failingSubscriptionAccountRepository{err: errors.New("database unavailable")})
-
-	engine := gin.New()
-	engine.Use(middleware.WithAuth(svc, false))
-	engine.GET("/validate", func(c *gin.Context) {
-		unavailable, _ := c.Request.Context().Value(proxy.ManagedSubscriptionEnrollmentUnavailableContextKey{}).(bool)
-		require.True(t, unavailable)
-		c.Status(http.StatusOK)
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/validate", nil)
-	req.Header.Set(middleware.RouterKeyHeader, routerToken)
-	recorder := httptest.NewRecorder()
-	engine.ServeHTTP(recorder, req)
-
-	require.Equal(t, http.StatusOK, recorder.Code)
-}
-
 func TestWithAuthPropagatesContentCaptureOverride(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	const routerToken = "rk_capture"

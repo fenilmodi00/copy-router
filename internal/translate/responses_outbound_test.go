@@ -65,7 +65,7 @@ func TestPrepareOpenAIResponses_RequestShape(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{
 		TargetModel:          "gpt-5.5",
-		Capabilities:         router.Lookup("gpt-5.5"),
+		Capabilities:         capsFor("gpt-5.5"),
 		ForceReasoningEffort: "high",
 	})
 	require.NoError(t, err)
@@ -141,7 +141,7 @@ func TestPrepareOpenAIResponses_SanitizesHistoricalToolName(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{
 		TargetModel:  "gpt-5.6-luna",
-		Capabilities: router.Lookup("gpt-5.6-luna"),
+		Capabilities: capsFor("gpt-5.6-luna"),
 	})
 	require.NoError(t, err)
 
@@ -223,7 +223,7 @@ func TestPrepareOpenAIResponses_StaticFieldsPrecedeInput(t *testing.T) {
 			require.NoError(t, err)
 			prepared, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{
 				TargetModel:  "gpt-4.1",
-				Capabilities: router.Lookup("gpt-4.1"),
+				Capabilities: capsFor("gpt-4.1"),
 			})
 			require.NoError(t, err)
 
@@ -264,7 +264,7 @@ func TestPrepareOpenAIResponses_ToolChoiceVariants(t *testing.T) {
 			require.NoError(t, err)
 			prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{
 				TargetModel:  "gpt-5.5",
-				Capabilities: router.Lookup("gpt-5.5"),
+				Capabilities: capsFor("gpt-5.5"),
 			})
 			require.NoError(t, err)
 
@@ -302,7 +302,7 @@ func TestPrepareOpenAIResponses_FloorsMaxOutputTokensForReasoning(t *testing.T) 
 			require.NoError(t, err)
 			prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{
 				TargetModel:  "gpt-5.4-mini",
-				Capabilities: router.Lookup("gpt-5.4-mini"),
+				Capabilities: capsFor("gpt-5.4-mini"),
 			})
 			require.NoError(t, err)
 			var out map[string]any
@@ -334,7 +334,7 @@ func TestPrepareOpenAIResponses_ClampsGeminiThoughtSignatureCallID(t *testing.T)
 	}`)
 	env, err := translate.ParseAnthropic(body)
 	require.NoError(t, err)
-	prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{TargetModel: "gpt-5.5", Capabilities: router.Lookup("gpt-5.5"), ForceReasoningEffort: "high"})
+	prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{TargetModel: "gpt-5.5", Capabilities: capsFor("gpt-5.5"), ForceReasoningEffort: "high"})
 	require.NoError(t, err)
 
 	var out map[string]any
@@ -373,7 +373,7 @@ func TestPrepareOpenAIResponses_ReplaysSignedReasoning(t *testing.T) {
 	}`)
 	env, err := translate.ParseAnthropic(body)
 	require.NoError(t, err)
-	prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{TargetModel: "gpt-5.5", Capabilities: router.Lookup("gpt-5.5"), ForceReasoningEffort: "high", ReasoningReplayScope: "scope_a"})
+	prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{TargetModel: "gpt-5.5", Capabilities: capsFor("gpt-5.5"), ForceReasoningEffort: "high", ReasoningReplayScope: "scope_a"})
 	require.NoError(t, err)
 
 	var out map[string]any
@@ -411,7 +411,7 @@ func TestPrepareOpenAIResponses_ReplaysSignedReasoningAfterModelSwitch(t *testin
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{
 		TargetModel:          "gpt-5.5",
-		Capabilities:         router.Lookup("gpt-5.5"),
+		Capabilities:         capsFor("gpt-5.5"),
 		ModelSwitched:        true,
 		ForceReasoningEffort: "high",
 		ReasoningReplayScope: "scope_a",
@@ -461,7 +461,7 @@ func TestPrepareOpenAIResponses_DropsReasoningMintedOnAnotherAccount(t *testing.
 		t.Run(name, func(t *testing.T) {
 			prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{
 				TargetModel:          "gpt-5.5",
-				Capabilities:         router.Lookup("gpt-5.5"),
+				Capabilities:         capsFor("gpt-5.5"),
 				ForceReasoningEffort: "high",
 				ReasoningReplayScope: scope,
 			})
@@ -494,7 +494,7 @@ func TestPrepareOpenAIResponses_EffortLadder(t *testing.T) {
 		body := []byte(`{"model":"claude-opus-4-8","max_tokens":1024,"messages":[{"role":"user","content":"hi"}],"reasoning_effort":"` + tc.level + `"}`)
 		env, err := translate.ParseAnthropic(body)
 		require.NoError(t, err)
-		prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{TargetModel: "gpt-5.5", Capabilities: router.Lookup("gpt-5.5")})
+		prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{TargetModel: "gpt-5.5", Capabilities: capsFor("gpt-5.5")})
 		require.NoError(t, err)
 		var out map[string]any
 		require.NoError(t, json.Unmarshal(prep.Body, &out))
@@ -587,7 +587,7 @@ func TestPrepareGemini_ThinkingBudgetToThinkingConfig(t *testing.T) {
 			require.NoError(t, err)
 			prep, err := env.PrepareGemini(nil, translate.EmitOptions{
 				TargetModel:  "gemini-3.7-flash",
-				Capabilities: router.Lookup("gemini-3.7-flash"),
+				Capabilities: capsFor("gemini-3.7-flash"),
 			})
 			require.NoError(t, err)
 
@@ -608,7 +608,7 @@ func TestPrepareGemini_ThinkingBudget_Legacy25(t *testing.T) {
 	body := []byte(`{"model":"claude-opus-4-8","max_tokens":1024,"messages":[{"role":"user","content":"hi"}],"thinking":{"type":"enabled","budget_tokens":31999}}`)
 	env, err := translate.ParseAnthropic(body)
 	require.NoError(t, err)
-	prep, err := env.PrepareGemini(nil, translate.EmitOptions{TargetModel: "gemini-2.5-pro"})
+	prep, err := env.PrepareGemini(nil, translate.EmitOptions{TargetModel: "gemini-2.5-pro", Capabilities: capsFor("gemini-2.5-pro")})
 	require.NoError(t, err)
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(prep.Body, &out))
@@ -621,7 +621,7 @@ func TestPrepareGemini_ThinkingBudget_Legacy25(t *testing.T) {
 }
 
 func TestUseOpenAIResponsesAPI(t *testing.T) {
-	caps := router.Lookup("gpt-5.4-mini")
+	caps := capsFor("gpt-5.4-mini")
 	route := func(provider string, caps router.ModelSpec, hasTools, chatOnly, broad bool) translate.ResponsesRoute {
 		return translate.ResponsesRoute{
 			Provider:       provider,
@@ -634,7 +634,7 @@ func TestUseOpenAIResponsesAPI(t *testing.T) {
 	assert.True(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderOpenAI, caps, true, false, true)))
 	assert.True(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderOpenAI, caps, false, false, true)),
 		"broad rollout serves every expressible direct-OpenAI turn, tools or not")
-	assert.True(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderOpenAI, router.Lookup("gpt-4o"), true, false, true)),
+	assert.True(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderOpenAI, capsFor("gpt-4o"), true, false, true)),
 		"non-reasoning direct-OpenAI models go to Responses too")
 	assert.False(t, translate.UseOpenAIResponsesAPI(route(providers.ProviderOpenAI, caps, true, true, true)),
 		"a turn using a chat-only parameter stays on chat/completions")
@@ -664,7 +664,7 @@ func TestPrepareOpenAIResponses_ImageBlocks(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{
 		TargetModel:  "gpt-4.1",
-		Capabilities: router.Lookup("gpt-4.1"),
+		Capabilities: capsFor("gpt-4.1"),
 	})
 	require.NoError(t, err)
 
@@ -707,7 +707,7 @@ func TestPrepareOpenAIResponses_ToolResultImageHoisted(t *testing.T) {
 	require.NoError(t, err)
 	prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{
 		TargetModel:  "gpt-4.1",
-		Capabilities: router.Lookup("gpt-4.1"),
+		Capabilities: capsFor("gpt-4.1"),
 	})
 	require.NoError(t, err)
 
@@ -755,7 +755,7 @@ func TestPrepareOpenAIResponses_Samplers(t *testing.T) {
 		t.Run(tc.model, func(t *testing.T) {
 			prep, err := env.PrepareOpenAIResponses(http.Header{}, translate.EmitOptions{
 				TargetModel:  tc.model,
-				Capabilities: router.Lookup(tc.model),
+				Capabilities: capsFor(tc.model),
 			})
 			require.NoError(t, err)
 			var out map[string]any
@@ -777,8 +777,8 @@ func TestPrepareOpenAIResponses_Samplers(t *testing.T) {
 // Stop sequences have no Responses equivalent, so a turn using them keeps the
 // chat/completions projection rather than losing them.
 func TestRequiresChatCompletionsParams(t *testing.T) {
-	nonReasoning := router.Lookup("gpt-4.1")
-	reasoning := router.Lookup("gpt-5.4-mini")
+	nonReasoning := capsFor("gpt-4.1")
+	reasoning := capsFor("gpt-5.4-mini")
 
 	withStops, err := translate.ParseAnthropic([]byte(
 		`{"model":"claude-opus-4-8","max_tokens":16,"stop_sequences":["\n\n"],"messages":[{"role":"user","content":"hi"}]}`))
