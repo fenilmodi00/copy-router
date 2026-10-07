@@ -46,15 +46,7 @@ func (s *Service) anthropicRoutingRequest(
 		return ctx, router.Request{}, fmt.Errorf("parse request: %w", err)
 	}
 
-	clientIdentity := ClientIdentityFrom(ctx)
-	headerIdentity := ClientIdentityFromHeaders(headers)
-	if clientIdentity.ClientApp == "" {
-		clientIdentity.ClientApp = headerIdentity.ClientApp
-	}
-	if clientIdentity.UserAgent == "" {
-		clientIdentity.UserAgent = headerIdentity.UserAgent
-	}
-	ctx = requestcontext.WithClientBudget(ctx, resolveClientBudget(clientIdentity, headers, env.Model(), modelVariant1M))
+	ctx = requestcontext.WithClientBudget(ctx, resolveClientBudget(modelVariant1M, headers))
 
 	apiKeyID, _ := ctx.Value(APIKeyIDContextKey{}).(string)
 	var sessionKey [sessionpin.SessionKeyLen]byte

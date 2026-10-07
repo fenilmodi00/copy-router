@@ -24,21 +24,21 @@ import (
 func claudeOpusPinnedDecision() router.Decision {
 	return router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-opus-5",
+		Model:    "zai-org/glm-5.3",
 		Reason:   translate.ReasonLoopEscalation,
 		Metadata: &router.RoutingMetadata{
-			CandidateModels:    []string{"claude-opus-5", "gpt-5.6-luna"},
-			CandidateProviders: map[string]string{"gpt-5.6-luna": providers.ProviderOpenAI},
+			CandidateModels:    []string{"zai-org/glm-5.3", "zai-org/glm-5.3-flash"},
+			CandidateProviders: map[string]string{"zai-org/glm-5.3-flash": providers.ProviderOpenAI},
 		},
 	}
 }
 
 func openaiChatBody() []byte {
-	return []byte(`{"model":"gpt-5.6-sol","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	return []byte(`{"model":"moonshotai/kimi-k3","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 }
 
 func anthropicMessagesBody() []byte {
-	return []byte(`{"model":"claude-opus-5","max_tokens":1024,"stream":true,"messages":[{"role":"user","content":"read main.go"}],"tools":[{"name":"read_file","input_schema":{"type":"object","properties":{"path":{"type":"string"}}}}]}`)
+	return []byte(`{"model":"zai-org/glm-5.3","max_tokens":1024,"stream":true,"messages":[{"role":"user","content":"read main.go"}],"tools":[{"name":"read_file","input_schema":{"type":"object","properties":{"path":{"type":"string"}}}}]}`)
 }
 
 func TestProxyOpenAIChatCompletion_SubscriptionPoolExhaustionRescuesSibling(t *testing.T) {
@@ -51,7 +51,7 @@ func TestProxyOpenAIChatCompletion_SubscriptionPoolExhaustionRescuesSibling(t *t
 			providers.ProviderAnthropic: &fakeClient{name: providers.ProviderAnthropic},
 			providers.ProviderOpenAI:    rescue,
 		},
-		nil, false, nil, store, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, store, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithManagedSubscriptions(leaser).
 		WithDeploymentKeyedProviders(map[string]struct{}{
 			providers.ProviderAnthropic: {},
@@ -81,7 +81,7 @@ func TestProxyOpenAIChatCompletion_SubscriptionOnlyKeepsPoolExhaustion(t *testin
 			providers.ProviderAnthropic: &fakeClient{name: providers.ProviderAnthropic},
 			providers.ProviderOpenAI:    rescue,
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithManagedSubscriptions(leaser).
 		WithDeploymentKeyedProviders(map[string]struct{}{
 			providers.ProviderAnthropic: {},
@@ -108,7 +108,7 @@ func TestProxyMessages_SubscriptionPoolExhaustionRescuesSibling(t *testing.T) {
 			providers.ProviderAnthropic: &fakeClient{name: providers.ProviderAnthropic},
 			providers.ProviderOpenAI:    rescue,
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithManagedSubscriptions(leaser).
 		WithDeploymentKeyedProviders(map[string]struct{}{
 			providers.ProviderAnthropic: {},
@@ -172,9 +172,9 @@ func TestProxyEndpoints_CachedManagedModelDenialEvictsAutomaticPin(t *testing.T)
 			svc := NewService(
 				staticRouter{decision: claudeOpusPinnedDecision()},
 				map[string]providers.Client{providers.ProviderAnthropic: upstream},
-				nil, false, nil, store, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+				nil, false, nil, store, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 			).WithManagedSubscriptions(leaser)
-			svc.subscriptionModels.denyManaged(auth.SubscriptionOwner{APIKeyID: "key-1"}.PoolKey(), "opaque-claude", providers.ProviderAnthropic, "claude-opus-5", time.Now().Add(time.Minute))
+			svc.subscriptionModels.denyManaged(auth.SubscriptionOwner{APIKeyID: "key-1"}.PoolKey(), "opaque-claude", providers.ProviderAnthropic, "zai-org/glm-5.3", time.Now().Add(time.Minute))
 
 			installationID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
 			ctx := billing.WithSubscriptionOnly(managedSubscriptionContext(auth.SubscriptionProviderClaude), billing.SubscriptionOnlyCreditsDepleted)

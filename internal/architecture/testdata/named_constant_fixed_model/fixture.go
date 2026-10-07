@@ -5,8 +5,8 @@ import (
 	"weave-os/router/internal/router"
 )
 
-const fixedModel = "claude-haiku-4-5"
+const fixedModel = "moonshotai/kimi-k3"
 
 func decision() router.Decision {
-	return router.Decision{Provider: providers.ProviderAnthropic, Model: fixedModel}
+	return router.Decision{Provider: providers.ProviderAIAND, Model: fixedModel}
 }

@@ -16,7 +16,6 @@ import (
 	"weave-os/router/internal/providers/openai"
 	"weave-os/router/internal/providers/openaicompat"
 	"weave-os/router/internal/router"
-	"weave-os/router/internal/router/catalog"
 	"weave-os/router/internal/timing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,7 +23,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const reasoningProgressModel = string(catalog.ModelIDGPT55)
+const reasoningProgressModel = "deepseek-ai/deepseek-v4-flash"
 
 func completedReasoningFrame(index int) string {
 	return fmt.Sprintf(`{"type":"response.output_item.done","output_index":%d,"item":{"type":"reasoning","id":"rs_%d","encrypted_content":"opaque_%d","summary":[]}}`, index, index, index)
@@ -38,7 +37,7 @@ func flushResponsesFrame(w http.ResponseWriter, frame string) bool {
 
 // responsesToolTurnBody is a reasoning-capable tool turn, expressible on the
 // Responses API, used to drive the reasoning-progress assertions.
-const responsesToolTurnBody = `{"model":"gpt-5.4-mini","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"list files"}],` +
+const responsesToolTurnBody = `{"model":"motif-technologies/motif-3","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"list files"}],` +
 	`"tools":[{"name":"read_file","input_schema":{"type":"object","properties":{"path":{"type":"string"}}}}]}`
 
 func TestResponsesReasoningProgress_LongReasoningCompletes(t *testing.T) {

@@ -23,40 +23,40 @@ func TestOrderBandPair_ByTier(t *testing.T) {
 	}
 
 	anchorLarge := sessionpin.Pin{
-		Provider: "anthropic", Model: "claude-opus-4-7",
-		PairedProvider: "anthropic", PairedModel: "claude-haiku-4-5",
+		Provider: providers.ProviderAIAND, Model: "zai-org/glm-5.3",
+		PairedProvider: providers.ProviderAIAND, PairedModel: "zai-org/glm-5.3-flash",
 	}
 	l, s := orderBandPair(anchorLarge)
-	want(l, s, "claude-opus-4-7", "claude-haiku-4-5")
+	want(l, s, "zai-org/glm-5.3", "zai-org/glm-5.3-flash")
 
 	// Same pair, anchor and runner-up swapped -> identical large/small split.
 	anchorSmall := sessionpin.Pin{
-		Provider: "anthropic", Model: "claude-haiku-4-5",
-		PairedProvider: "anthropic", PairedModel: "claude-opus-4-7",
+		Provider: providers.ProviderAIAND, Model: "zai-org/glm-5.3-flash",
+		PairedProvider: providers.ProviderAIAND, PairedModel: "zai-org/glm-5.3",
 	}
 	l, s = orderBandPair(anchorSmall)
-	want(l, s, "claude-opus-4-7", "claude-haiku-4-5")
+	want(l, s, "zai-org/glm-5.3", "zai-org/glm-5.3-flash")
 }
 
 // With the swap head disabled the sticky turn must serve the pin's anchor.
 func TestBandSwapServed_DisabledServesAnchor(t *testing.T) {
 	s := &Service{} // bandSwap nil
 	pin := sessionpin.Pin{
-		Provider: "anthropic", Model: "claude-opus-4-7",
-		PairedProvider: "anthropic", PairedModel: "claude-haiku-4-5", Reason: "cluster",
+		Provider: providers.ProviderAIAND, Model: "zai-org/glm-5.3",
+		PairedProvider: providers.ProviderAIAND, PairedModel: "zai-org/glm-5.3-flash", Reason: "cluster",
 	}
 	got := s.bandSwapServed(context.Background(), turntype.MainLoop, pin, router.Decision{}, false, nil, nil)
-	if got.Model != "claude-opus-4-7" {
-		t.Fatalf("served %q, want anchor claude-opus-4-7", got.Model)
+	if got.Model != "zai-org/glm-5.3" {
+		t.Fatalf("served %q, want anchor zai-org/glm-5.3", got.Model)
 	}
 }
 
 // A pin with no runner-up can never swap, even if the head were enabled.
 func TestBandSwapServed_NoPairServesAnchor(t *testing.T) {
 	s := &Service{}
-	pin := sessionpin.Pin{Provider: "anthropic", Model: "claude-opus-4-7", Reason: "cluster"}
+	pin := sessionpin.Pin{Provider: providers.ProviderAIAND, Model: "zai-org/glm-5.3", Reason: "cluster"}
 	got := s.bandSwapServed(context.Background(), turntype.MainLoop, pin, router.Decision{}, false, nil, nil)
-	if got.Model != "claude-opus-4-7" {
+	if got.Model != "zai-org/glm-5.3" {
 		t.Fatalf("served %q, want anchor", got.Model)
 	}
 }
@@ -79,10 +79,10 @@ func TestBandSwapServed_UnservableChoiceFallsBackToAnchor(t *testing.T) {
 		t.Fatal("PredictBand not ok for valid-width embedding")
 	}
 
-	// opus is the LARGE-tier member, haiku the SMALL-tier one, so orderBandPair
+	// glm-5.3 is the LARGE-tier member, glm-5.3-flash the SMALL-tier one, so orderBandPair
 	// is deterministic. Anchor the pin on whichever member the head would NOT
 	// pick, so honoring the head is a real swap away from the anchor.
-	const large, small = "claude-opus-4-7", "claude-haiku-4-5"
+	const large, small = "zai-org/glm-5.3", "zai-org/glm-5.3-flash"
 	served := large
 	if band == bandswap.Small {
 		served = small
@@ -96,11 +96,11 @@ func TestBandSwapServed_UnservableChoiceFallsBackToAnchor(t *testing.T) {
 		embedOnlyUserMessage: true,
 		bandSwap:             clf,
 		availableModels:      map[string]struct{}{large: {}, small: {}},
-		clients:              dispatch.NewClients(map[string]providers.Client{"anthropic": nil}),
+		clients:              dispatch.NewClients(map[string]providers.Client{providers.ProviderAIAND: nil}),
 	}
 	pin := sessionpin.Pin{
-		Provider: "anthropic", Model: anchor,
-		PairedProvider: "anthropic", PairedModel: paired, Reason: "cluster",
+		Provider: providers.ProviderAIAND, Model: anchor,
+		PairedProvider: providers.ProviderAIAND, PairedModel: paired, Reason: "cluster",
 	}
 	fresh := router.Decision{Metadata: &router.RoutingMetadata{Embedding: emb}}
 

@@ -9,9 +9,6 @@ import (
 	"weave-os/router/internal/providers"
 )
 
-// ModelGPT6Luna is the canonical GPT-6 Luna model ID.
-const ModelGPT6Luna = "gpt-6-luna"
-
 // Tier is the coarse capability bucket. Higher is stronger; integer
 // ordering is load-bearing (planner compares freshTier > pinTier).
 type Tier int
@@ -166,16 +163,9 @@ const (
 )
 
 // ModelID is a catalog model identifier. Production lookup still uses string IDs
-// because the table is data, but call sites that name a known catalog model
+// because the table is data; call sites that name a known catalog model
 // should use these constants instead of repeating raw strings.
 type ModelID string
-
-const (
-	ModelIDClaudeHaiku45  ModelID = "claude-haiku-4-5"
-	ModelIDClaudeSonnet46 ModelID = "claude-sonnet-4-6"
-	ModelIDClaudeOpus48   ModelID = "claude-opus-4-8"
-	ModelIDGPT55          ModelID = "gpt-5.5"
-)
 
 func (id ModelID) String() string {
 	return string(id)
@@ -183,8 +173,8 @@ func (id ModelID) String() string {
 
 // Model is one logical model — the unit the router decides on.
 type Model struct {
-	// ID is the public slash-form (or bare) model ID exposed to clients,
-	// e.g. "claude-opus-4-7" or "deepseek/deepseek-v4-pro".
+	// ID is the public slash-form model ID exposed to clients,
+	// e.g. "deepseek-ai/deepseek-v4-pro" or "moonshotai/kimi-k3".
 	ID string
 	// Source is how the model's weights are published. Required on every row:
 	// products sold as open-source-only read dispatch eligibility from it, and
@@ -222,8 +212,7 @@ type Model struct {
 	CodexSubscriptionFallback bool
 	// Providers is the ordered fallback list. First binding whose
 	// Provider name is in the available set wins. Non-empty for every
-	// dispatchable row; AIand-only-cut rows pending Phase 3 deletion carry
-	// no bindings.
+	// dispatchable row.
 	Providers []ProviderBinding
 }
 
@@ -244,236 +233,6 @@ func (m Model) PrimaryProvider() string {
 // intersect catalog targets with their own roster. This catalog controls
 // pricing and dispatch for every strategy.
 var Models = []Model{
-	// --- Anthropic ---
-	// $1/$5 per the published table (the $0.80/$4 rate that used to sit here
-	// is Haiku 3.5's row — Haiku 4.5 never shipped at that price).
-	{ID: "claude-haiku-4-5", Source: SourceClosedSource, Tier: TierLow, ContextWindow: 200_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 1.00, OutputUSDPer1M: 5.00, CacheReadMultiplier: 0.10}},
-	}},
-	{ID: "claude-sonnet-4-5", Source: SourceClosedSource, Tier: TierMid, ContextWindow: 200_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 3.00, OutputUSDPer1M: 15.00, CacheReadMultiplier: 0.10}},
-	}},
-	{ID: "claude-sonnet-4-6", Source: SourceClosedSource, Tier: TierMid, ContextWindow: 200_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 3.00, OutputUSDPer1M: 15.00, CacheReadMultiplier: 0.10}},
-	}},
-	// 1M context is behind the context-1m beta (catalog carries 200K like the
-	// rest of Sonnet). Priced at standard $3/$15, not the $2/$10 introductory
-	// rate (through 2026-08-31) — avoids a compile-time price going stale.
-	{ID: "claude-sonnet-5", Source: SourceClosedSource, Tier: TierMid, ContextWindow: 200_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 3.00, OutputUSDPer1M: 15.00, CacheReadMultiplier: 0.10}},
-	}},
-	// Sonnet 5.5: $2/$10, cache reads at $0.20/MTok (0.1x), no fast tier.
-	// Native 1M context; thinking cannot be disabled (between_tools is the
-	// floor) and forced tool_choice is rejected, like Opus 5.5.
-	{ID: "claude-sonnet-5-5", Source: SourceClosedSource, Tier: TierMid, ContextWindow: 1_000_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 2.00, OutputUSDPer1M: 10.00, CacheReadMultiplier: 0.10}},
-	}},
-	// Legacy Opus IDs kept passthrough-priced (no Tier — not a routing
-	// target; see gpt-4o below for the same pattern) so BYOK/direct-model
-	// requests billing-debit at real cost instead of catalog.PrimaryPriceFor
-	// silently returning $0. Prices per the opus-4-6 comment below: 4.1 and
-	// earlier were $15/$75; 4.5 is the first $5/$25 release.
-	{ID: "claude-opus-4-0", Source: SourceClosedSource, ContextWindow: 200_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 15.00, OutputUSDPer1M: 75.00, CacheReadMultiplier: 0.10}},
-	}},
-	{ID: "claude-opus-4-1", Source: SourceClosedSource, ContextWindow: 200_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 15.00, OutputUSDPer1M: 75.00, CacheReadMultiplier: 0.10}},
-	}},
-	{ID: "claude-opus-4-5", Source: SourceClosedSource, ContextWindow: 200_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 5.00, OutputUSDPer1M: 25.00, CacheReadMultiplier: 0.10}},
-	}},
-	// Opus 4.5+ is $5/$25 per MTok (down from $15/$75 on 4.1 and earlier).
-	// 4.6+/4.7+/4.8 support 1M context via the context-1m-2025-08-07 beta; the
-	// catalog reports 200K and the pre-filter expands to 1M when the beta
-	// header is present (contextWindowForRequest in proxy/service.go).
-	{ID: "claude-opus-4-6", Source: SourceClosedSource, Tier: TierHigh, ContextWindow: 200_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 5.00, OutputUSDPer1M: 25.00, CacheReadMultiplier: 0.10}},
-	}},
-	{ID: "claude-opus-4-7", Source: SourceClosedSource, Tier: TierHigh, ContextWindow: 200_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 5.00, OutputUSDPer1M: 25.00, CacheReadMultiplier: 0.10}},
-	}},
-	// Opus 4.8 retired from routing; kept as priced passthrough so lingering BYOK/direct pins bill at real cost.
-	{ID: "claude-opus-4-8", Source: SourceClosedSource, ContextWindow: 200_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 5.00, OutputUSDPer1M: 25.00, CacheReadMultiplier: 0.10}, FastPrice: Pricing{InputUSDPer1M: 10.00, OutputUSDPer1M: 50.00}},
-	}},
-	// 1M context natively (no context-1m beta header), same $5/$25 as opus-4-8.
-	{ID: "claude-opus-5", Source: SourceClosedSource, Tier: TierHigh, ContextWindow: 1_000_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 5.00, OutputUSDPer1M: 25.00, CacheReadMultiplier: 0.10}, FastPrice: Pricing{InputUSDPer1M: 10.00, OutputUSDPer1M: 50.00}},
-	}},
-	// Opus 5.5: $4/$20, cache reads at $0.20/MTok (0.05x), fast mode $8/$40.
-	// Native 1M context, adaptive thinking always on, forced tool_choice
-	// rejected like Fable 5.1. Not a cluster roster member until it has
-	// quality labels.
-	{ID: "claude-opus-5-5", Source: SourceClosedSource, Tier: TierHigh, ContextWindow: 1_000_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 4.00, OutputUSDPer1M: 20.00, CacheReadMultiplier: 0.05}, FastPrice: Pricing{InputUSDPer1M: 8.00, OutputUSDPer1M: 40.00}},
-	}},
-	// Fable 5 retired from routing; kept as priced passthrough so lingering
-	// BYOK/direct pins and the compaction summarizer bill at real cost.
-	// Safety classifiers can return stop_reason "refusal" (HTTP 200); see
-	// mapStopReason in translate.
-	{ID: "claude-fable-5", Source: SourceClosedSource, ContextWindow: 1_000_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 10.00, OutputUSDPer1M: 50.00, CacheReadMultiplier: 0.10}},
-	}},
-	// Fable 5.1: same $10/$50 as Fable 5, cache reads at $0.25/MTok (0.025x).
-	// Native 1M context, adaptive thinking always on, stop_reason "refusal"
-	// like Fable 5. Not a cluster roster member until it has quality labels.
-	{ID: "claude-fable-5-1", Source: SourceClosedSource, Tier: TierHigh, ContextWindow: 1_000_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderAnthropic, Price: Pricing{InputUSDPer1M: 10.00, OutputUSDPer1M: 50.00, CacheReadMultiplier: 0.025}},
-	}},
-
-	// --- OpenAI GPT-4.x (legacy) ---
-	{ID: "gpt-4.1-nano", Source: SourceClosedSource, Tier: TierLow, ContextWindow: 1_047_576, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 0.10, OutputUSDPer1M: 0.40, CacheReadMultiplier: 0.25}, FastPrice: Pricing{InputUSDPer1M: 0.20, OutputUSDPer1M: 0.80}},
-	}},
-	{ID: "gpt-4.1-mini", Source: SourceClosedSource, Tier: TierLow, ContextWindow: 1_047_576, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 0.40, OutputUSDPer1M: 1.60, CacheReadMultiplier: 0.25}, FastPrice: Pricing{InputUSDPer1M: 0.70, OutputUSDPer1M: 2.80}},
-	}},
-	{ID: "gpt-4.1", Source: SourceClosedSource, Tier: TierMid, ContextWindow: 1_047_576, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 2.00, OutputUSDPer1M: 8.00, CacheReadMultiplier: 0.25}, FastPrice: Pricing{InputUSDPer1M: 3.50, OutputUSDPer1M: 14.00}},
-	}},
-	// gpt-4o family: priced for passthrough, not a routing target.
-	{ID: "gpt-4o-mini", Source: SourceClosedSource, ContextWindow: 128_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 0.15, OutputUSDPer1M: 0.60, CacheReadMultiplier: 0.50}, FastPrice: Pricing{InputUSDPer1M: 0.25, OutputUSDPer1M: 1.00}},
-	}},
-	{ID: "gpt-4o", Source: SourceClosedSource, ContextWindow: 128_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 2.50, OutputUSDPer1M: 10.00, CacheReadMultiplier: 0.50}, FastPrice: Pricing{InputUSDPer1M: 4.25, OutputUSDPer1M: 17.00}},
-	}},
-
-	// --- OpenAI GPT-5 ---
-	{ID: "gpt-5-nano", Source: SourceClosedSource, ContextWindow: 400_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 0.10, OutputUSDPer1M: 0.40, CacheReadMultiplier: 0.10}},
-	}},
-	{ID: "gpt-5-mini", Source: SourceClosedSource, ContextWindow: 400_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 0.50, OutputUSDPer1M: 2.00, CacheReadMultiplier: 0.10}, FastPrice: Pricing{InputUSDPer1M: 0.45, OutputUSDPer1M: 3.60}},
-	}},
-	{ID: "gpt-5", Source: SourceClosedSource, Tier: TierHigh, ContextWindow: 400_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 2.50, OutputUSDPer1M: 10.00, CacheReadMultiplier: 0.10}, FastPrice: Pricing{InputUSDPer1M: 2.50, OutputUSDPer1M: 20.00}},
-	}},
-	{ID: "gpt-5-chat", Source: SourceClosedSource, ContextWindow: 400_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 2.50, OutputUSDPer1M: 10.00, CacheReadMultiplier: 0.10}},
-	}},
-
-	// --- OpenAI GPT-5.4 ---
-	// gpt-5.4-nano serves a 400K window (OpenRouter listing + direct-OpenAI
-	// capacity), not 1M — overstating lets the overflow pre-filter route a
-	// >400K request onto a model that hard-400s upstream. gpt-5.4/-mini share
-	// the family's 400K ceiling.
-	{ID: "gpt-5.4-nano", Source: SourceClosedSource, Tier: TierMid, ContextWindow: 400_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 0.20, OutputUSDPer1M: 1.25, CacheReadMultiplier: 0.10}},
-	}},
-	{ID: "gpt-5.4-mini", Source: SourceClosedSource, Tier: TierMid, ContextWindow: 400_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 0.75, OutputUSDPer1M: 4.50, CacheReadMultiplier: 0.10}, FastPrice: Pricing{InputUSDPer1M: 1.50, OutputUSDPer1M: 9.00}},
-	}},
-	{ID: "gpt-5.4", Source: SourceClosedSource, Tier: TierHigh, ContextWindow: 1_000_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 2.50, OutputUSDPer1M: 15.00, CacheReadMultiplier: 0.10}, FastPrice: Pricing{InputUSDPer1M: 5.00, OutputUSDPer1M: 30.00}},
-	}},
-	{ID: "gpt-5.4-pro", Source: SourceClosedSource, Tier: TierHigh, ContextWindow: 1_000_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 30.00, OutputUSDPer1M: 180.00, CacheReadMultiplier: 1.0}},
-	}},
-
-	// --- OpenAI GPT-5.5 ---
-	{ID: "gpt-5.5-nano", Source: SourceClosedSource, Tier: TierMid, ContextWindow: 1_000_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 0.15, OutputUSDPer1M: 0.60, CacheReadMultiplier: 0.10}},
-	}},
-	{ID: "gpt-5.5-mini", Source: SourceClosedSource, Tier: TierMid, ContextWindow: 1_000_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 0.50, OutputUSDPer1M: 2.50, CacheReadMultiplier: 0.10}},
-	}},
-	// gpt-5.5 retired from routing; kept as priced passthrough so lingering
-	// session pins and direct requests still bill at real cost. The HMM rosters
-	// dropped it, but an untiered row is what also removes it from cluster
-	// candidates — leaving it tiered kept the legacy strategy selecting it.
-	{ID: "gpt-5.5", Source: SourceClosedSource, ContextWindow: 1_050_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 5.00, OutputUSDPer1M: 30.00, CacheReadMultiplier: 0.10}, FastPrice: Pricing{InputUSDPer1M: 12.50, OutputUSDPer1M: 75.00}},
-	}},
-	{ID: "gpt-5.5-pro", Source: SourceClosedSource, Tier: TierHigh, ContextWindow: 1_000_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{InputUSDPer1M: 30.00, OutputUSDPer1M: 180.00, CacheReadMultiplier: 1.0}},
-	}},
-
-	// --- OpenAI GPT-5.6 --- Sol/Terra/Luna family, GA 2026-07-09.
-	{ID: "gpt-5.6-luna", Source: SourceClosedSource, Tier: TierMid, CodexSubscription: true, ContextWindow: 1_050_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{
-			InputUSDPer1M: 0.20, OutputUSDPer1M: 1.20, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 0.40, OutputUSDPer1M: 1.80, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}, FastPrice: Pricing{
-			InputUSDPer1M: 0.40, OutputUSDPer1M: 2.40, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 0.80, OutputUSDPer1M: 3.60, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}},
-	}},
-	// Pi roster aliases dispatch to their native OpenAI model IDs.
-	{ID: "gpt-5.6-luna-pro", Source: SourceClosedSource, HMMTarget: true, ContextWindow: 1_050_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, UpstreamID: "gpt-5.6-luna", Price: Pricing{
-			InputUSDPer1M: 0.20, OutputUSDPer1M: 1.20, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 0.40, OutputUSDPer1M: 1.80, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}, FastPrice: Pricing{
-			InputUSDPer1M: 0.40, OutputUSDPer1M: 2.40, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 0.80, OutputUSDPer1M: 3.60, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}},
-	}},
-	{ID: "gpt-5.6-terra", Source: SourceClosedSource, Tier: TierHigh, CodexSubscription: true, ContextWindow: 1_050_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{
-			InputUSDPer1M: 2.00, OutputUSDPer1M: 12.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 4.00, OutputUSDPer1M: 18.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}, FastPrice: Pricing{
-			InputUSDPer1M: 4.00, OutputUSDPer1M: 24.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 8.00, OutputUSDPer1M: 36.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}},
-	}},
-	{ID: "gpt-5.6-sol", Source: SourceClosedSource, Tier: TierHigh, CodexSubscription: true, ContextWindow: 1_050_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{
-			InputUSDPer1M: 4.00, OutputUSDPer1M: 20.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 8.00, OutputUSDPer1M: 30.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}, FastPrice: Pricing{
-			InputUSDPer1M: 8.00, OutputUSDPer1M: 40.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 16.00, OutputUSDPer1M: 60.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}},
-	}},
-	{ID: "gpt-5.6-sol-pro", Source: SourceClosedSource, HMMTarget: true, ContextWindow: 1_050_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, UpstreamID: "gpt-5.6-sol", Price: Pricing{
-			InputUSDPer1M: 4.00, OutputUSDPer1M: 20.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 8.00, OutputUSDPer1M: 30.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}, FastPrice: Pricing{
-			InputUSDPer1M: 8.00, OutputUSDPer1M: 40.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 16.00, OutputUSDPer1M: 60.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}},
-	}},
-	{ID: "gpt-6-astra", Source: SourceClosedSource, Tier: TierHigh, ContextWindow: 1_050_000, CodexSubscriptionFallback: true, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{
-			InputUSDPer1M: 10.00, OutputUSDPer1M: 50.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 20.00, OutputUSDPer1M: 75.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}, FastPrice: Pricing{
-			InputUSDPer1M: 20.00, OutputUSDPer1M: 100.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 40.00, OutputUSDPer1M: 150.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}},
-	}},
-	// --- OpenAI GPT-6 Sol/Luna --- same >272K (2x in, 1.5x out) and 2x fast
-	// schedule as Astra.
-	{ID: "gpt-6-sol", Source: SourceClosedSource, Tier: TierHigh, CodexSubscription: true, ContextWindow: 1_050_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{
-			InputUSDPer1M: 2.00, OutputUSDPer1M: 10.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 4.00, OutputUSDPer1M: 15.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}, FastPrice: Pricing{
-			InputUSDPer1M: 4.00, OutputUSDPer1M: 20.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 8.00, OutputUSDPer1M: 30.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}},
-	}},
-	{ID: "gpt-6.1-sol", Source: SourceClosedSource, Tier: TierHigh, CodexSubscription: true, ContextWindow: 1_050_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{
-			InputUSDPer1M: 2.00, OutputUSDPer1M: 10.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.05,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 4.00, OutputUSDPer1M: 15.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.05},
-		}, FastPrice: Pricing{
-			InputUSDPer1M: 4.00, OutputUSDPer1M: 20.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.05,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 8.00, OutputUSDPer1M: 30.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.05},
-		}},
-	}},
-	{ID: ModelGPT6Luna, Source: SourceClosedSource, Tier: TierMid, CodexSubscription: true, ContextWindow: 1_050_000, Providers: []ProviderBinding{
-		{Provider: providers.ProviderOpenAI, Price: Pricing{
-			InputUSDPer1M: 0.10, OutputUSDPer1M: 0.50, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 0.20, OutputUSDPer1M: 0.75, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}, FastPrice: Pricing{
-			InputUSDPer1M: 0.20, OutputUSDPer1M: 1.00, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10,
-			LongContext: &LongContextPricing{ThresholdTokens: 272_000, InputUSDPer1M: 0.40, OutputUSDPer1M: 1.50, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10},
-		}},
-	}},
 
 	// --- OSS pool ---
 	//

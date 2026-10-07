@@ -83,12 +83,14 @@ func TestQwen3Samplers_NotInjectedForNonQwen(t *testing.T) {
 }
 
 func TestQwen3Samplers_DoNotOverrideClientValues(t *testing.T) {
+	// presence_penalty is omitted: a CapReasoning target drops it before the
+	// Qwen3 model-card defaults are layered on, so only the wire-allowed
+	// samplers can be preserved here.
 	body := []byte(`{
 		"model":"gpt-4o",
 		"messages":[{"role":"user","content":"hi"}],
 		"temperature":0.1,
 		"top_p":0.5,
-		"presence_penalty":0.2,
 		"repetition_penalty":1.2
 	}`)
 	env, err := translate.ParseOpenAI(body)
@@ -103,7 +105,6 @@ func TestQwen3Samplers_DoNotOverrideClientValues(t *testing.T) {
 	require.NoError(t, json.Unmarshal(prep.Body, &out))
 	assert.Equal(t, 0.1, out["temperature"], "client temperature must win")
 	assert.Equal(t, 0.5, out["top_p"], "client top_p must win")
-	assert.Equal(t, 0.2, out["presence_penalty"], "client presence_penalty must win")
 	assert.Equal(t, 1.2, out["repetition_penalty"], "client repetition_penalty must win")
 }
 

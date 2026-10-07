@@ -12,20 +12,26 @@ import (
 
 	"weave-os/router/internal/providers"
 	"weave-os/router/internal/router"
+	"weave-os/router/internal/router/catalog"
 	"weave-os/router/internal/router/policy"
 	"weave-os/router/internal/router/sessionpin"
 	"weave-os/router/internal/translate"
 )
 
 const (
-	demotedPinModel = "claude-opus-4-7"
-	freshTurnModel  = "claude-sonnet-5"
+	demotedPinModel = "deepseek-ai/deepseek-v4-pro"
+	freshTurnModel  = "deepseek-ai/deepseek-v4.1-flash"
 )
+
+// demotionTurnRole is the session-pin role runTurnLoop derives from
+// demotionTurnLoopEnv's requested model: zai-org/glm-5.3 is TierHigh, so the
+// turn reads the "…_high" row rather than the bare default role.
+var demotionTurnRole = roleForTier(catalog.TierFor("zai-org/glm-5.3"))
 
 func demotionTurnLoopEnv(t *testing.T) (*translate.RequestEnvelope, translate.RoutingFeatures) {
 	t.Helper()
 	env, err := translate.ParseAnthropic(
-		[]byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"continue"}]}`),
+		[]byte(`{"model":"zai-org/glm-5.3","messages":[{"role":"user","content":"continue"}]}`),
 	)
 	require.NoError(t, err)
 	return env, env.RoutingFeatures(false)
@@ -71,7 +77,7 @@ func demotedPin(model string, demoted ...string) sessionpin.Pin {
 func TestTurnLoopExcludesDemotedModelUnderAuthoritativePolicy(t *testing.T) {
 	strategy := router.Strategy("arm-demotion-authoritative-test")
 	store := &rolePinStore{byRole: map[string]sessionpin.Pin{
-		sessionpin.DefaultRole: demotedPin(demotedPinModel, demotedPinModel),
+		demotionTurnRole: demotedPin(demotedPinModel, demotedPinModel),
 	}}
 	policyRouter := &authoritativeTestRouter{decision: router.Decision{
 		Provider: providers.ProviderAnthropic,
@@ -79,7 +85,7 @@ func TestTurnLoopExcludesDemotedModelUnderAuthoritativePolicy(t *testing.T) {
 		Reason:   "arm-demotion-authoritative-test_policy",
 	}}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithPolicyStrategy(policy.StrategySpec{
 			Strategy: strategy,
 			Router:   policyRouter,
@@ -101,7 +107,7 @@ func TestTurnLoopExcludesDemotedModelUnderAuthoritativePolicy(t *testing.T) {
 // session stays glued to the arm that just died mid-stream.
 func TestTurnLoopDropsDemotedPinOnScorerPath(t *testing.T) {
 	store := &rolePinStore{byRole: map[string]sessionpin.Pin{
-		sessionpin.DefaultRole: demotedPin(demotedPinModel, demotedPinModel),
+		demotionTurnRole: demotedPin(demotedPinModel, demotedPinModel),
 	}}
 	scorer := &authoritativeTestRouter{decision: router.Decision{
 		Provider: providers.ProviderAnthropic,
@@ -109,7 +115,7 @@ func TestTurnLoopDropsDemotedPinOnScorerPath(t *testing.T) {
 		Reason:   "cluster:v0.2",
 	}}
 	svc := NewService(scorer, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	res := runDemotionTurnLoop(t, svc, context.Background())
 
@@ -123,8 +129,8 @@ func TestTurnLoopDropsDemotedPinOnScorerPath(t *testing.T) {
 // there has to count even when the base pin knows nothing about it.
 func TestTurnLoopHonoursDemotionRecordedOnHMMHistory(t *testing.T) {
 	store := &rolePinStore{byRole: map[string]sessionpin.Pin{
-		sessionpin.DefaultRole:                 demotedPin(demotedPinModel),
-		hmmHistoryRole(sessionpin.DefaultRole): demotedPin(demotedPinModel, demotedPinModel),
+		demotionTurnRole:                 demotedPin(demotedPinModel),
+		hmmHistoryRole(demotionTurnRole): demotedPin(demotedPinModel, demotedPinModel),
 	}}
 	scorer := &authoritativeTestRouter{decision: router.Decision{
 		Provider: providers.ProviderAnthropic,
@@ -132,7 +138,7 @@ func TestTurnLoopHonoursDemotionRecordedOnHMMHistory(t *testing.T) {
 		Reason:   "cluster:v0.2",
 	}}
 	svc := NewService(scorer, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	res := runDemotionTurnLoop(t, svc, context.Background())
 
@@ -146,14 +152,14 @@ func TestTurnLoopHonoursDemotionRecordedOnHMMHistory(t *testing.T) {
 func TestTurnLoopKeepsForcedModelDespiteDemotion(t *testing.T) {
 	forced := demotedPin(demotedPinModel, demotedPinModel)
 	forced.Reason = translate.ReasonUserForceModel
-	store := &rolePinStore{byRole: map[string]sessionpin.Pin{sessionpin.DefaultRole: forced}}
+	store := &rolePinStore{byRole: map[string]sessionpin.Pin{demotionTurnRole: forced}}
 	scorer := &authoritativeTestRouter{decision: router.Decision{
 		Provider: providers.ProviderAnthropic,
 		Model:    freshTurnModel,
 		Reason:   "cluster:v0.2",
 	}}
 	svc := NewService(scorer, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	res := runDemotionTurnLoop(t, svc, context.Background())
 

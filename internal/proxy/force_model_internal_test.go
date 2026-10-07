@@ -23,21 +23,11 @@ func TestResolveForceModel(t *testing.T) {
 		// when the model name doesn't follow the bare-prefix heuristic. These
 		// resolve to a real catalog entry, so known is true.
 		{
-			name:         "catalog anthropic",
-			input:        "claude-opus-4-7",
-			wantID:       "claude-opus-4-7",
-			wantProvider: providers.ProviderAnthropic,
-			wantKnown:    true,
-		},
-		{
-			// The Gemini catalog rows survive for historical traffic but carry
-			// no bindings, so a gemini-* pin has no servable catalog match and
-			// falls to the heuristic default arm.
-			name:         "gemini catalog row with no bindings falls to default",
-			input:        "gemini-3.1-flash-lite-preview",
-			wantID:       "gemini-3.1-flash-lite-preview",
+			name:         "catalog aiand — deepseek pro",
+			input:        "deepseek-ai/deepseek-v4-pro",
+			wantID:       "deepseek-ai/deepseek-v4-pro",
 			wantProvider: providers.ProviderAIAND,
-			wantKnown:    false,
+			wantKnown:    true,
 		},
 		{
 			// The Bedrock-bound qwen rows went with the provider cut; this is
@@ -56,54 +46,57 @@ func TestResolveForceModel(t *testing.T) {
 			wantProvider: providers.ProviderAIAND,
 			wantKnown:    true,
 		},
+		// The gpt/sol aliases went with their catalog rows in the AIand-only
+		// cut; the names no longer resolve a servable model, so the pin is
+		// rejected rather than served by something else.
 		{
-			name:         "alias gpt",
+			name:         "retired alias gpt is not known",
 			input:        "gpt",
-			wantID:       "gpt-6.1-sol",
-			wantProvider: providers.ProviderOpenAI,
-			wantKnown:    true,
+			wantID:       "gpt",
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
 		},
 		{
-			name:         "alias gpt hyphen minor version",
+			name:         "retired alias gpt hyphen minor version is not known",
 			input:        "gpt-5-5",
-			wantID:       "gpt-5.5",
+			wantID:       "gpt-5-5",
 			wantProvider: providers.ProviderOpenAI,
-			wantKnown:    true,
+			wantKnown:    false,
 		},
 		{
-			name:         "explicit sol 6 remains pinned",
+			name:         "retired pinned sol is not known",
 			input:        "gpt6sol",
-			wantID:       "gpt-6-sol",
-			wantProvider: providers.ProviderOpenAI,
-			wantKnown:    true,
+			wantID:       "gpt6sol",
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
 		},
 		{
-			name:         "sol follows 6.1",
+			name:         "retired alias sol is not known",
 			input:        "sol",
-			wantID:       "gpt-6.1-sol",
-			wantProvider: providers.ProviderOpenAI,
-			wantKnown:    true,
+			wantID:       "sol",
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
 		},
 		{
-			name:         "native openai prefix",
+			name:         "native openai prefix on a retired model is not known",
 			input:        "openai/gpt-5.6-luna",
 			wantID:       "gpt-5.6-luna",
 			wantProvider: providers.ProviderOpenAI,
-			wantKnown:    true,
+			wantKnown:    false,
 		},
 		{
-			name:         "native openai prefix with version alias",
+			name:         "native openai prefix with retired version alias is not known",
 			input:        "openai/gpt-5.6",
-			wantID:       "gpt-5.6-sol",
+			wantID:       "gpt-5.6",
 			wantProvider: providers.ProviderOpenAI,
-			wantKnown:    true,
+			wantKnown:    false,
 		},
 		{
-			name:         "native openai prefix with model alias",
+			name:         "native openai prefix with retired model alias is not known",
 			input:        "openai/luna",
-			wantID:       "gpt-6-luna",
+			wantID:       "luna",
 			wantProvider: providers.ProviderOpenAI,
-			wantKnown:    true,
+			wantKnown:    false,
 		},
 		{
 			name:         "native openai prefix rejects cross-provider alias",
@@ -112,78 +105,74 @@ func TestResolveForceModel(t *testing.T) {
 			wantProvider: providers.ProviderOpenAI,
 			wantKnown:    false,
 		},
+		// The claude/opus aliases were deleted with their rows, so the names
+		// fall to the heuristic default arm and resolve no servable model.
 		{
-			name:         "alias claude",
+			name:         "retired alias claude is not known",
 			input:        "claude",
-			wantID:       "claude-opus-5-5",
-			wantProvider: providers.ProviderAnthropic,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias opus",
-			input:        "opus",
-			wantID:       "claude-opus-5-5",
-			wantProvider: providers.ProviderAnthropic,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias opus dotted version",
-			input:        "opus-4.8",
-			wantID:       "claude-opus-4-8",
-			wantProvider: providers.ProviderAnthropic,
-			wantKnown:    true,
-		},
-		{
-			name:         "alias mixed case and whitespace",
-			input:        "  Gemini  ",
-			wantID:       "gemini-3-pro-preview",
+			wantID:       "claude",
 			wantProvider: providers.ProviderAIAND,
 			wantKnown:    false,
 		},
-		// The qwen rows kept their IDs but lost their vendor bindings in the
-		// AIand-only cut, so every spelling below still canonicalizes while
-		// naming no servable catalog entry (known=false).
+		{
+			name:         "retired alias opus is not known",
+			input:        "opus",
+			wantID:       "opus",
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
+		},
+		{
+			name:         "retired alias opus dotted version is not known",
+			input:        "opus-4.8",
+			wantID:       "opus-4.8",
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
+		},
+		{
+			// The gemini aliases were deleted with their rows, so a gemini-*
+			// pin has no alias and no catalog match — it falls to the
+			// heuristic default arm.
+			name:         "alias mixed case and whitespace",
+			input:        "  Gemini  ",
+			wantID:       "gemini",
+			wantProvider: providers.ProviderAIAND,
+			wantKnown:    false,
+		},
+		// qwen aliases target the single surviving AIand roster row.
 		{
 			name:         "alias qwen",
 			input:        "qwen",
-			wantID:       "qwen/qwen3-coder",
+			wantID:       "qwen/qwen3.8-27b",
 			wantProvider: providers.ProviderAIAND,
-			wantKnown:    false,
-		},
-		{
-			name:         "canonical qwen3.8-max with vendor prefix",
-			input:        "qwen/qwen3.8-max",
-			wantID:       "qwen/qwen3.8-max",
-			wantProvider: providers.ProviderAIAND,
-			wantKnown:    false,
+			wantKnown:    true,
 		},
 		{
 			name:         "dash spelling qwen/qwen-3.8-max",
 			input:        "qwen/qwen-3.8-max",
-			wantID:       "qwen/qwen3.8-max",
+			wantID:       "qwen/qwen3.8-27b",
 			wantProvider: providers.ProviderAIAND,
-			wantKnown:    false,
+			wantKnown:    true,
 		},
 		{
 			name:         "dash spelling qwen-3.8-max",
 			input:        "qwen-3.8-max",
-			wantID:       "qwen/qwen3.8-max",
+			wantID:       "qwen/qwen3.8-27b",
 			wantProvider: providers.ProviderAIAND,
-			wantKnown:    false,
+			wantKnown:    true,
 		},
 		{
 			name:         "dash spelling qwen-3.8",
 			input:        "qwen-3.8",
-			wantID:       "qwen/qwen3.8-max",
+			wantID:       "qwen/qwen3.8-27b",
 			wantProvider: providers.ProviderAIAND,
-			wantKnown:    false,
+			wantKnown:    true,
 		},
 		{
-			name:         "gpt-6 alias resolves to Astra",
+			name:         "gpt-6 alias is no longer known",
 			input:        "gpt-6",
-			wantID:       "gpt-6-astra",
+			wantID:       "gpt-6",
 			wantProvider: providers.ProviderOpenAI,
-			wantKnown:    true,
+			wantKnown:    false,
 		},
 		// Heuristic fallback: not in the catalog, so known is false. The
 		// provider is a best-effort guess for logging only; the handler rejects
@@ -197,17 +186,17 @@ func TestResolveForceModel(t *testing.T) {
 		},
 		{
 			name:         "heuristic aiand — unknown slash model",
-			input:        "mistral/mistral-small-2603",
-			wantID:       "mistral/mistral-small-2603",
+			input:        "unknown-vendor/unknown-model",
+			wantID:       "unknown-vendor/unknown-model",
 			wantProvider: providers.ProviderAIAND,
 			wantKnown:    false,
 		},
 		{
-			name:         "native openai gpt-6 alias resolves to Astra",
+			name:         "native openai gpt-6 alias is no longer known",
 			input:        "openai/gpt-6",
-			wantID:       "gpt-6-astra",
+			wantID:       "gpt-6",
 			wantProvider: providers.ProviderOpenAI,
-			wantKnown:    true,
+			wantKnown:    false,
 		},
 		{
 			name:         "heuristic aiand — unknown bareword",
@@ -262,8 +251,8 @@ func TestResolveForceModel(t *testing.T) {
 		{
 			// The bare-name table is exact too: a tail fragment is not a tail.
 			name:         "fragment of a bare name is not known",
-			input:        "mimo",
-			wantID:       "mimo",
+			input:        "motif",
+			wantID:       "motif",
 			wantProvider: providers.ProviderAIAND,
 			wantKnown:    false,
 		},
@@ -331,14 +320,14 @@ func TestBareCatalogNames_AliasesTakePrecedence(t *testing.T) {
 	}
 }
 
-// grok-4.5 is retired; family aliases (grok, xai) still follow flagship 4.7.
-// The grok rows lost their bindings in the AIand-only cut, so the alias
-// canonicalizes but names no servable model — the pin is rejected.
+// The grok/xai family aliases were deleted with the grok rows in the
+// AIand-only cut, so the names now fall to the heuristic default arm and
+// resolve no servable model — the pin is rejected.
 func TestResolveForceModel_GrokFamilyAlias(t *testing.T) {
 	for _, input := range []string{"grok", "xai"} {
 		t.Run(input, func(t *testing.T) {
 			gotID, gotProvider, gotKnown := resolveForceModel(input)
-			assert.Equal(t, "grok-4.7", gotID, "canonical id")
+			assert.Equal(t, input, gotID, "canonical id")
 			assert.Equal(t, providers.ProviderAIAND, gotProvider, "provider")
 			assert.False(t, gotKnown, "known")
 		})
@@ -347,8 +336,8 @@ func TestResolveForceModel_GrokFamilyAlias(t *testing.T) {
 
 // An explicit :level suffix must survive resolution to its catalog model.
 func TestResolveForceModel_EffortSuffixPreserved(t *testing.T) {
-	gotID, _, gotKnown, gotEffort := resolveForceModelWithEffort("claude-opus-4-7:high")
-	assert.Equal(t, "claude-opus-4-7", gotID, "canonical id")
+	gotID, _, gotKnown, gotEffort := resolveForceModelWithEffort("zai-org/glm-5.3:medium")
+	assert.Equal(t, "zai-org/glm-5.3", gotID, "canonical id")
 	assert.True(t, gotKnown, "known")
-	assert.Equal(t, "high", gotEffort, "effort")
+	assert.Equal(t, "medium", gotEffort, "effort")
 }

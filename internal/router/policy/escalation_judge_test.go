@@ -36,7 +36,7 @@ func TestEscalationJudgeDeploymentIsOptional(t *testing.T) {
 	// purpose is enabled, and enabling it needs the reviewed slug's AIand row.
 	config := policy.DeploymentPolicyConfig{AvailableProviders: providerSet(providers.ProviderOpenAI, providers.ProviderAIAND), TargetOverrides: []policy.PurposeTargetOverride{}}
 	for _, purpose := range []policy.Purpose{policy.PurposeTitleGeneration, policy.PurposeClassifier, policy.PurposeProbe, policy.PurposeSubAgentDispatch, policy.PurposeClientCompaction} {
-		config.TargetOverrides = append(config.TargetOverrides, policy.PurposeTargetOverride{Purpose: purpose, Target: policy.TargetOverride{Source: policy.OverrideSourceDeployment, CatalogID: "gpt-5.6-luna", Provider: providers.ProviderOpenAI}})
+		config.TargetOverrides = append(config.TargetOverrides, policy.PurposeTargetOverride{Purpose: purpose, Target: policy.TargetOverride{Source: policy.OverrideSourceDeployment, CatalogID: "zai-org/glm-5.3", Provider: providers.ProviderAIAND}})
 	}
 	require.NoError(t, policy.DefaultRegistry().ValidateDeployment(config))
 	// The judge policy owns its target; deployment overrides are rejected.

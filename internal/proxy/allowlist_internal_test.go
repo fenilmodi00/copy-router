@@ -49,13 +49,13 @@ func TestAllowedModelsForRequest_SubscriptionPreferenceWithoutAllowlistIsUnrestr
 }
 
 func TestAllowedModelsForRequest_ActiveCodexPreferenceKeepsCrossProviderModels(t *testing.T) {
-	ctx := ctxWithAllowedModels("gpt-5.6-sol", "grok-4.6", "claude-fable-5-1")
-	ctx = context.WithValue(ctx, SubscriptionStatePreferredModelsContextKey{}, []string{"gpt-5.6-sol"})
+	ctx := ctxWithAllowedModels("moonshotai/kimi-k3", "deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3")
+	ctx = context.WithValue(ctx, SubscriptionStatePreferredModelsContextKey{}, []string{"moonshotai/kimi-k3"})
 
 	assert.Equal(t, map[string]struct{}{
-		"gpt-5.6-sol":      {},
-		"grok-4.6":         {},
-		"claude-fable-5-1": {},
+		"moonshotai/kimi-k3":          {},
+		"deepseek-ai/deepseek-v4-pro": {},
+		"zai-org/glm-5.3":             {},
 	}, allowedModelsForRequest(ctx))
 }
 

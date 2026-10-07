@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	testSol   = "gpt-5.6-sol"
-	testTerra = "gpt-5.6-terra"
-	testOpus  = "claude-opus-5"
+	testDeepseek = "deepseek-ai/deepseek-v4-pro"
+	testKimi     = "moonshotai/kimi-k3"
+	testGlm      = "zai-org/glm-5.3"
 )
 
 func ctxWithRequestSubset(ctx context.Context, models ...string) context.Context {
@@ -26,14 +26,14 @@ func ctxWithRequestSubset(ctx context.Context, models ...string) context.Context
 }
 
 func TestParseAllowedModelsHeader_ResolvesAliasesAndDedupes(t *testing.T) {
-	got, err := ParseAllowedModelsHeader(" gpt-5-6-sol, terra ,gpt-5.6-sol,", nil)
+	got, err := ParseAllowedModelsHeader(" deepseek-pro, kimi ,deepseek-ai/deepseek-v4-pro,", nil)
 	require.NoError(t, err)
-	assert.Equal(t, []string{testSol, testTerra}, got.Requested)
-	assert.Equal(t, []string{testSol, testTerra}, got.Effective)
+	assert.Equal(t, []string{testDeepseek, testKimi}, got.Requested)
+	assert.Equal(t, []string{testDeepseek, testKimi}, got.Effective)
 }
 
 func TestParseAllowedModelsHeader_UnknownAliasRejected(t *testing.T) {
-	_, err := ParseAllowedModelsHeader("sol,not-a-model", nil)
+	_, err := ParseAllowedModelsHeader("glm,not-a-model", nil)
 	var headerErr *AllowedModelsHeaderError
 	require.ErrorAs(t, err, &headerErr)
 	assert.Contains(t, headerErr.Reason, "not-a-model")
@@ -46,17 +46,17 @@ func TestParseAllowedModelsHeader_BlankRejected(t *testing.T) {
 }
 
 func TestParseAllowedModelsHeader_IntersectsInstallationAllowlist(t *testing.T) {
-	got, err := ParseAllowedModelsHeader("gpt-5-6-sol,terra", []string{testSol, testOpus})
+	got, err := ParseAllowedModelsHeader("deepseek-pro,kimi", []string{testDeepseek, testGlm})
 	require.NoError(t, err)
-	assert.Equal(t, []string{testSol, testTerra}, got.Requested)
-	assert.Equal(t, []string{testSol}, got.Effective)
+	assert.Equal(t, []string{testDeepseek, testKimi}, got.Requested)
+	assert.Equal(t, []string{testDeepseek}, got.Effective)
 }
 
 func TestParseAllowedModelsHeader_EmptyIntersectionFailsClosed(t *testing.T) {
-	_, err := ParseAllowedModelsHeader("terra", []string{testSol})
+	_, err := ParseAllowedModelsHeader("kimi", []string{testDeepseek})
 	var headerErr *AllowedModelsHeaderError
 	require.ErrorAs(t, err, &headerErr)
-	assert.Contains(t, headerErr.Reason, testTerra)
+	assert.Contains(t, headerErr.Reason, testKimi)
 }
 
 func TestAllowedModelsForRequest_SubsetNarrowsPolicyAllowlist(t *testing.T) {
@@ -102,62 +102,62 @@ func TestTelemetryDecisionReason_PrefixesOnlyWithSubset(t *testing.T) {
 func TestRequestedAllowedModelsForTelemetry(t *testing.T) {
 	assert.Nil(t, requestedAllowedModelsForTelemetry(context.Background()))
 	ctx := context.WithValue(context.Background(), RequestAllowedModelsContextKey{}, RequestAllowedModels{
-		Requested: []string{testTerra, testSol},
-		Effective: []string{testSol},
+		Requested: []string{testKimi, testDeepseek},
+		Effective: []string{testDeepseek},
 	})
-	assert.Equal(t, []string{testSol, testTerra}, requestedAllowedModelsForTelemetry(ctx))
+	assert.Equal(t, []string{testDeepseek, testKimi}, requestedAllowedModelsForTelemetry(ctx))
 }
 
 func TestReadmitForcedModel_LiftsSubsetOnlyExclusion(t *testing.T) {
-	s := &Service{availableModels: map[string]struct{}{testSol: {}, testTerra: {}, testOpus: {}}}
-	ctx := ctxWithRequestSubset(context.Background(), testSol)
-	env, err := translate.ParseAnthropic([]byte(`{"model":"claude-opus-5","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`))
+	s := &Service{availableModels: map[string]struct{}{testDeepseek: {}, testKimi: {}, testGlm: {}}}
+	ctx := ctxWithRequestSubset(context.Background(), testDeepseek)
+	env, err := translate.ParseAnthropic([]byte(`{"model":"zai-org/glm-5.3","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`))
 	require.NoError(t, err)
 	req := router.Request{ExcludedModels: s.excludedModelsForRequest(ctx)}
-	require.Contains(t, req.ExcludedModels, testTerra)
+	require.Contains(t, req.ExcludedModels, testKimi)
 
-	pin := sessionpin.Pin{Model: testTerra, Provider: providers.ProviderOpenAI}
+	pin := sessionpin.Pin{Model: testKimi, Provider: providers.ProviderAIAND}
 	got := s.readmitForcedModel(ctx, req, env, translate.RoutingFeatures{MaxTokens: 16}, pin)
-	assert.NotContains(t, got, testTerra)
-	assert.Contains(t, got, testOpus)
-	assert.Contains(t, req.ExcludedModels, testTerra, "input map must not be mutated")
+	assert.NotContains(t, got, testKimi)
+	assert.Contains(t, got, testGlm)
+	assert.Contains(t, req.ExcludedModels, testKimi, "input map must not be mutated")
 }
 
 func TestReadmitForcedModel_KeepsPolicyExclusion(t *testing.T) {
-	s := &Service{availableModels: map[string]struct{}{testSol: {}, testTerra: {}, testOpus: {}}}
-	ctx := ctxWithRequestSubset(ctxWithAllowedModels(testSol, testTerra), testSol)
-	env, err := translate.ParseAnthropic([]byte(`{"model":"claude-opus-5","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`))
+	s := &Service{availableModels: map[string]struct{}{testDeepseek: {}, testKimi: {}, testGlm: {}}}
+	ctx := ctxWithRequestSubset(ctxWithAllowedModels(testDeepseek, testKimi), testDeepseek)
+	env, err := translate.ParseAnthropic([]byte(`{"model":"zai-org/glm-5.3","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`))
 	require.NoError(t, err)
 	req := router.Request{ExcludedModels: s.excludedModelsForRequest(ctx)}
 
-	pin := sessionpin.Pin{Model: testOpus, Provider: providers.ProviderAnthropic}
+	pin := sessionpin.Pin{Model: testGlm, Provider: providers.ProviderAIAND}
 	got := s.readmitForcedModel(ctx, req, env, translate.RoutingFeatures{MaxTokens: 16}, pin)
-	assert.Contains(t, got, testOpus)
+	assert.Contains(t, got, testGlm)
 }
 
 func TestReadmitForcedModel_NoSubsetIsNoOp(t *testing.T) {
-	s := &Service{availableModels: map[string]struct{}{testSol: {}, testTerra: {}}}
-	req := router.Request{ExcludedModels: map[string]struct{}{testTerra: {}}}
-	got := s.readmitForcedModel(context.Background(), req, nil, translate.RoutingFeatures{}, sessionpin.Pin{Model: testTerra})
-	assert.Contains(t, got, testTerra)
+	s := &Service{availableModels: map[string]struct{}{testDeepseek: {}, testKimi: {}}}
+	req := router.Request{ExcludedModels: map[string]struct{}{testKimi: {}}}
+	got := s.readmitForcedModel(context.Background(), req, nil, translate.RoutingFeatures{}, sessionpin.Pin{Model: testKimi})
+	assert.Contains(t, got, testKimi)
 }
 
 func TestModelInRequestSubset(t *testing.T) {
-	assert.True(t, modelInRequestSubset(context.Background(), testOpus))
-	ctx := ctxWithRequestSubset(context.Background(), testSol)
-	assert.True(t, modelInRequestSubset(ctx, testSol))
-	assert.False(t, modelInRequestSubset(ctx, testOpus))
+	assert.True(t, modelInRequestSubset(context.Background(), testGlm))
+	ctx := ctxWithRequestSubset(context.Background(), testDeepseek)
+	assert.True(t, modelInRequestSubset(ctx, testDeepseek))
+	assert.False(t, modelInRequestSubset(ctx, testGlm))
 }
 
 func TestForcedModelBinding_IgnoresRequestSubset(t *testing.T) {
-	s := &Service{availableModels: map[string]struct{}{testSol: {}, testTerra: {}, testOpus: {}}}
-	ctx := ctxWithRequestSubset(ctxWithAllowedModels(testSol, testTerra), testSol)
+	s := &Service{availableModels: map[string]struct{}{testDeepseek: {}, testKimi: {}, testGlm: {}}}
+	ctx := ctxWithRequestSubset(ctxWithAllowedModels(testDeepseek, testKimi), testDeepseek)
 
-	binding, reason := s.forcedModelBinding(ctx, testTerra, providers.ProviderOpenAI)
+	binding, reason := s.forcedModelBinding(ctx, testKimi, providers.ProviderAIAND)
 	assert.Empty(t, reason)
-	assert.Equal(t, providers.ProviderOpenAI, binding)
+	assert.Equal(t, providers.ProviderAIAND, binding)
 
-	_, reason = s.forcedModelBinding(ctx, testOpus, providers.ProviderAnthropic)
+	_, reason = s.forcedModelBinding(ctx, testGlm, providers.ProviderAIAND)
 	assert.NotEmpty(t, reason, "installation allowlist still binds a forced model")
 }
 
@@ -166,38 +166,38 @@ func TestForcedModelBinding_IgnoresRequestSubset(t *testing.T) {
 func TestTurnLoop_StickyPinOutsideRequestSubsetReroutes(t *testing.T) {
 	newSvc := func(fr *tierProbeRouter) *Service {
 		store := &overwritingPinStore{pin: sessionpin.Pin{
-			Provider:    providers.ProviderAnthropic,
-			Model:       testOpus,
+			Provider:    providers.ProviderAIAND,
+			Model:       testGlm,
 			Reason:      "cluster:v0.2",
 			PinnedUntil: time.Now().Add(time.Hour),
 		}, found: true}
 		return NewService(fr, nil, nil, false, nil, store, false,
-			providers.ProviderAnthropic, "claude-haiku-4-5", nil).
-			WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic, providers.ProviderOpenAI))
+			providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil).
+			WithDeploymentKeyedProviders(keyed(providers.ProviderAIAND, providers.ProviderAIAND))
 	}
 	env := forceCommandEnv(t)
 	feats := env.RoutingFeatures(false)
 
-	fr := &tierProbeRouter{available: map[string]struct{}{testOpus: {}, "gpt-5.4-mini": {}}}
+	fr := &tierProbeRouter{available: map[string]struct{}{testGlm: {}, "zai-org/glm-5.3-flash": {}}}
 	svc := newSvc(fr)
-	ctx := ctxWithRequestSubset(context.Background(), "gpt-5.4-mini")
+	ctx := ctxWithRequestSubset(context.Background(), "zai-org/glm-5.3-flash")
 	res, err := svc.runTurnLoop(ctx, env, feats, "key-1", uuid.New(), "", nil,
 		router.Request{RequestedModel: feats.Model, ExcludedModels: svc.excludedModelsForRequest(ctx)})
 	require.NoError(t, err)
-	assert.Equal(t, "gpt-5.4-mini", res.Decision.Model)
+	assert.Equal(t, "zai-org/glm-5.3-flash", res.Decision.Model)
 	assert.False(t, res.StickyHit)
 
-	fr = &tierProbeRouter{available: map[string]struct{}{testOpus: {}, "gpt-5.4-mini": {}}}
+	fr = &tierProbeRouter{available: map[string]struct{}{testGlm: {}, "zai-org/glm-5.3-flash": {}}}
 	svc = newSvc(fr)
-	ctx = ctxWithRequestSubset(context.Background(), testOpus, "gpt-5.4-mini")
+	ctx = ctxWithRequestSubset(context.Background(), testGlm, "zai-org/glm-5.3-flash")
 	res, err = svc.runTurnLoop(ctx, env, feats, "key-1", uuid.New(), "", nil,
 		router.Request{RequestedModel: feats.Model, ExcludedModels: svc.excludedModelsForRequest(ctx)})
 	require.NoError(t, err)
-	assert.Equal(t, testOpus, res.Decision.Model)
+	assert.Equal(t, testGlm, res.Decision.Model)
 }
 
 func TestRequestAllowedModelsPresent(t *testing.T) {
 	assert.False(t, requestAllowedModelsPresent(context.Background()))
 	assert.True(t, requestAllowedModelsPresent(
-		ctxWithRequestSubset(context.Background(), testSol)))
+		ctxWithRequestSubset(context.Background(), testDeepseek)))
 }

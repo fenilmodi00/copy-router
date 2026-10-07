@@ -20,45 +20,44 @@ import (
 )
 
 func TestBoostLinkedFirstHonorsForcedModel(t *testing.T) {
-	const astraModel = "gpt-6-astra"
-	const opusModel = "claude-opus-5"
+	const astraModel = "deepseek-ai/deepseek-v4-pro"
+	const opusModel = "zai-org/glm-5.3"
+	// Every roster row is AIand-served, so the linked Codex (OpenAI)
+	// subscription covers none of them: linked-first funding must still honor
+	// the forced model and serve it on infrastructure credentials.
 	for _, tc := range []struct {
 		name      string
 		model     string
-		provider  string
 		stored    bool
 		responses bool
 		messages  bool
 	}{
-		{name: "Astra header", model: astraModel, provider: providers.ProviderOpenAI},
-		{name: "Astra stored pin", model: astraModel, provider: providers.ProviderOpenAI, stored: true},
-		{name: "Astra Responses", model: astraModel, provider: providers.ProviderOpenAI, responses: true},
-		{name: "Astra Messages", model: astraModel, provider: providers.ProviderOpenAI, messages: true},
-		{name: "Opus outside linked provider", model: opusModel, provider: providers.ProviderAnthropic},
+		{name: "Astra header", model: astraModel},
+		{name: "Astra stored pin", model: astraModel, stored: true},
+		{name: "Astra Responses", model: astraModel, responses: true},
+		{name: "Astra Messages", model: astraModel, messages: true},
+		{name: "Glm Messages", model: opusModel, messages: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			selection := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-6.1-sol"}}
-			upstream := &fakeProvider{proxyResponse: codexResponsesStream}
-			if tc.provider == providers.ProviderAnthropic {
-				upstream.proxyResponse = bypassStreamResponse
-			}
+			selection := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: astraModel}}
+			upstream := &fakeProvider{proxyResponse: streamResponses(aiandRescueChatSSE)}
 			store := newFakePinStore()
 			if tc.stored {
 				store.hasPin = true
 				store.pin = sessionpin.Pin{
-					Model: tc.model, Provider: tc.provider, Effort: "high",
+					Model: tc.model, Provider: providers.ProviderAIAND, Effort: "high",
 					Reason: translate.ReasonUserForceModel, PinnedUntil: time.Now().Add(time.Hour),
 				}
 			}
 			service := proxy.NewService(selection, map[string]providers.Client{
-				tc.provider: upstream,
-			}, nil, false, nil, store, false, providers.ProviderOpenAI, "gpt-6.1-sol", nil).
-				WithDeploymentKeyedProviders(map[string]struct{}{tc.provider: {}})
-			body := `{"model":"gpt-6.1-sol","messages":[{"role":"user","content":"Review this change."}],"max_tokens":4096,"stream":true}`
+				providers.ProviderAIAND: upstream,
+			}, nil, false, nil, store, false, providers.ProviderAIAND, astraModel, nil).
+				WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAIAND: {}})
+			body := `{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"Review this change."}],"max_tokens":4096,"stream":true}`
 			if tc.responses {
-				body = `{"model":"gpt-6.1-sol","input":[{"role":"user","content":"Review this change."}],"stream":true}`
+				body = `{"model":"deepseek-ai/deepseek-v4-pro","input":[{"role":"user","content":"Review this change."}],"stream":true}`
 			} else if tc.messages {
-				body = `{"model":"claude-opus-5","messages":[{"role":"user","content":"Review this change."}],"max_tokens":4096,"stream":true}`
+				body = `{"model":"zai-org/glm-5.3","messages":[{"role":"user","content":"Review this change."}],"max_tokens":4096,"stream":true}`
 			}
 			recorder, request := codexSubRequest(t, body)
 			if !tc.stored {
@@ -80,14 +79,9 @@ func TestBoostLinkedFirstHonorsForcedModel(t *testing.T) {
 			assert.Equal(t, tc.model, recorder.Header().Get(proxy.HeaderRouterModel))
 			require.Len(t, upstream.proxyBodies, 1)
 			assert.Equal(t, tc.model, gjson.GetBytes(upstream.proxyBodies[0], "model").String())
-			if tc.provider == providers.ProviderOpenAI {
-				assert.Equal(t, "high", gjson.GetBytes(upstream.proxyBodies[0], "reasoning.effort").String())
-			}
-			if tc.provider == providers.ProviderOpenAI {
-				require.NotNil(t, upstream.proxyCreds[0])
-				assert.True(t, upstream.proxyCreds[0].OAuth, "an out-of-roster forced model must try the linked subscription first")
-			} else if upstream.proxyCreds[0] != nil {
-				assert.False(t, upstream.proxyCreds[0].OAuth, "a model outside the linked provider must use infrastructure credentials")
+			if upstream.proxyCreds[0] != nil {
+				assert.False(t, upstream.proxyCreds[0].OAuth,
+					"a model outside the linked Codex subscription must use infrastructure credentials")
 			}
 			assert.NotContains(t, recorder.Body.String(), "could not be served")
 			assert.Equal(t, http.StatusOK, recorder.Code)

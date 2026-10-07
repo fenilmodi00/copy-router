@@ -148,7 +148,7 @@ func TestDeriveSessionKeyForRequest_CodexVolatileSystemPromptKeepsOneKey(t *test
 	// per-turn cwd/timestamp state. That rerolled the key (and the upstream
 	// prompt_cache_key) every turn despite an unchanged Session-Id.
 	turn1, err := translate.ParseOpenAI([]byte(`{
-		"model": "gpt-5.6-sol",
+		"model": "moonshotai/kimi-k3",
 		"messages": [
 			{"role": "system", "content": "You are Codex. cwd=/repo now=10:00:01"},
 			{"role": "user", "content": "deploy the stack"}
@@ -156,7 +156,7 @@ func TestDeriveSessionKeyForRequest_CodexVolatileSystemPromptKeepsOneKey(t *test
 	}`))
 	require.NoError(t, err)
 	turn2, err := translate.ParseOpenAI([]byte(`{
-		"model": "gpt-5.6-sol",
+		"model": "moonshotai/kimi-k3",
 		"messages": [
 			{"role": "system", "content": "You are Codex. cwd=/repo/sub now=10:04:22"},
 			{"role": "user", "content": "deploy the stack"},

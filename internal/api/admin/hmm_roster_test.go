@@ -33,8 +33,8 @@ func TestHMMRosterHandler_PreservesRosterArmsAndCatalogModels(t *testing.T) {
 			RosterSHA256: "sha-1",
 			Clusters: map[string][]string{
 				"high": {
-					"anthropic/claude-opus-5:xhigh",
-					"x-ai/grok-4.6",
+					"zai-org/glm-5.3",
+					"deepseek-ai/deepseek-v4-pro",
 				},
 			},
 		},
@@ -55,10 +55,10 @@ func TestHMMRosterHandler_PreservesRosterArmsAndCatalogModels(t *testing.T) {
 	require.Len(t, body.Clusters, 1)
 	assert.Equal(t, "sha-1", body.RosterSHA256)
 	assert.Equal(t, []string{
-		"anthropic/claude-opus-5:xhigh",
-		"x-ai/grok-4.6",
+		"zai-org/glm-5.3",
+		"deepseek-ai/deepseek-v4-pro",
 	}, body.Clusters[0].Arms)
-	assert.Equal(t, []string{"claude-opus-5", "grok-4.6"}, body.Clusters[0].Models)
+	assert.Equal(t, []string{"zai-org/glm-5.3", "deepseek-ai/deepseek-v4-pro"}, body.Clusters[0].Models)
 }
 
 func TestHMMRosterHandler_SelectsBetaPolicy(t *testing.T) {
@@ -66,8 +66,8 @@ func TestHMMRosterHandler_SelectsBetaPolicy(t *testing.T) {
 
 	engine := gin.New()
 	engine.GET("/v1/router/hmm-roster", admin.HMMRosterHandler(map[router.Strategy]policy.RosterSource{
-		router.StrategyHMM:     fakeRosterSource{snapshot: policy.RosterSnapshot{Lane: "stable", Clusters: map[string][]string{"high": {"openai/gpt-5.6-sol"}}}},
-		router.StrategyHMMBeta: fakeRosterSource{snapshot: policy.RosterSnapshot{Lane: "beta", Clusters: map[string][]string{"high": {"x-ai/grok-4.6"}}}},
+		router.StrategyHMM:     fakeRosterSource{snapshot: policy.RosterSnapshot{Lane: "stable", Clusters: map[string][]string{"high": {"zai-org/glm-5.3"}}}},
+		router.StrategyHMMBeta: fakeRosterSource{snapshot: policy.RosterSnapshot{Lane: "beta", Clusters: map[string][]string{"high": {"zai-org/glm-5.3"}}}},
 	}))
 
 	rec := httptest.NewRecorder()

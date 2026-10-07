@@ -14,7 +14,6 @@ import (
 
 	"weave-os/router/internal/providers"
 	"weave-os/router/internal/router"
-	"weave-os/router/internal/router/catalog"
 	"weave-os/router/internal/router/policy"
 )
 
@@ -362,8 +361,8 @@ func TestScorer_PicksOtherClusterWhenAligned(t *testing.T) {
 	assert.Equal(t, "claude-haiku-4-5", got.Model)
 }
 
-// imageFilterArtifacts: K=1 fixture ranking text-only glm-5.1 above
-// image-capable opus; an image in the request must drop glm-5.1.
+// imageFilterArtifacts: K=1 fixture ranking text-only glm-5.3 above
+// image-capable opus; an image in the request must drop glm-5.3.
 func imageFilterArtifacts(t *testing.T) (centroidsBlob, rankingsBlob, registryBlob []byte) {
 	t.Helper()
 	dim := EmbedDim
@@ -372,12 +371,12 @@ func imageFilterArtifacts(t *testing.T) (centroidsBlob, rankingsBlob, registryBl
 	centroidsBlob = buildCentroidsBlob(t, 1, dim, c0)
 	rankingsBlob = []byte(`{
 		"rankings": {
-			"0": {"z-ai/glm-5.1": 0.9, "claude-opus-4-7": 0.1}
+			"0": {"zai-org/glm-5.3": 0.9, "claude-opus-4-7": 0.1}
 		}
 	}`)
 	registryBlob = []byte(`{
 		"deployed_models": [
-			{"model": "z-ai/glm-5.1", "provider": "fireworks", "bench_column": "x", "proxy": true},
+			{"model": "zai-org/glm-5.3", "provider": "aiand", "bench_column": "x", "proxy": true},
 			{"model": "claude-opus-4-7", "provider": "anthropic", "bench_column": "y", "proxy": true}
 		]
 	}`)
@@ -387,22 +386,22 @@ func imageFilterArtifacts(t *testing.T) (centroidsBlob, rankingsBlob, registryBl
 func TestScorer_DropsTextOnlyModelOnImageTurn(t *testing.T) {
 	cb, rb, regb := imageFilterArtifacts(t)
 	bundle := bundleFromBlobs(t, "v-test", cb, rb, regb)
-	available := map[string]struct{}{"anthropic": {}, "fireworks": {}}
+	available := map[string]struct{}{"anthropic": {}, providers.ProviderAIAND: {}}
 	s, err := NewScorer(bundle, cfgForTest(), &fakeEmbedder{vec: makeOpusVec()}, available)
 	require.NoError(t, err)
 
 	// No image: the higher-ranked text-only model wins.
 	textTurn, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100)})
 	require.NoError(t, err)
-	assert.Equal(t, "z-ai/glm-5.1", textTurn.Model, "text turn routes to the cluster-preferred model")
+	assert.Equal(t, "zai-org/glm-5.3", textTurn.Model, "text turn routes to the cluster-preferred model")
 
-	// Image present: glm-5.1 is dropped, opus is the only image-capable candidate.
+	// Image present: glm-5.3 is dropped, opus is the only image-capable candidate.
 	imageTurn, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100), HasImages: true})
 	require.NoError(t, err)
 	assert.Equal(t, "claude-opus-4-7", imageTurn.Model, "image turn must skip the text-only model")
-	assert.NotContains(t, imageTurn.Metadata.CandidateModels, "z-ai/glm-5.1",
+	assert.NotContains(t, imageTurn.Metadata.CandidateModels, "zai-org/glm-5.3",
 		"text-only model must be absent from the image-turn candidate set")
-	assert.NotContains(t, imageTurn.Metadata.ScorerRescuePool, "z-ai/glm-5.1")
+	assert.NotContains(t, imageTurn.Metadata.ScorerRescuePool, "zai-org/glm-5.3")
 	assert.Contains(t, imageTurn.Metadata.ScorerRescuePool, "claude-opus-4-7")
 }
 
@@ -411,17 +410,17 @@ func TestScorer_KeepsTextOnlyPoolWhenNoImageCapableCandidate(t *testing.T) {
 	c0 := make([]float32, dim)
 	c0[0] = 1
 	cb := buildCentroidsBlob(t, 1, dim, c0)
-	rb := []byte(`{"rankings": {"0": {"z-ai/glm-5.1": 0.9}}}`)
-	regb := []byte(`{"deployed_models": [{"model": "z-ai/glm-5.1", "provider": "fireworks", "bench_column": "x", "proxy": true}]}`)
+	rb := []byte(`{"rankings": {"0": {"zai-org/glm-5.3": 0.9}}}`)
+	regb := []byte(`{"deployed_models": [{"model": "zai-org/glm-5.3", "provider": "aiand", "bench_column": "x", "proxy": true}]}`)
 	bundle := bundleFromBlobs(t, "v-test", cb, rb, regb)
-	s, err := NewScorer(bundle, cfgForTest(), &fakeEmbedder{vec: makeOpusVec()}, map[string]struct{}{"fireworks": {}})
+	s, err := NewScorer(bundle, cfgForTest(), &fakeEmbedder{vec: makeOpusVec()}, map[string]struct{}{providers.ProviderAIAND: {}})
 	require.NoError(t, err)
 
 	// No image-capable candidate deployed: the scorer still returns a
 	// decision rather than erroring; upstream reports the rejection.
 	got, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100), HasImages: true})
 	require.NoError(t, err)
-	assert.Equal(t, "z-ai/glm-5.1", got.Model)
+	assert.Equal(t, "zai-org/glm-5.3", got.Model)
 	assert.Empty(t, got.Metadata.ScorerRescuePool)
 }
 
@@ -689,100 +688,10 @@ func TestScorer_FiltersOutUnregisteredProvider(t *testing.T) {
 	assert.Contains(t, got.Reason, "provider=openai")
 }
 
-// kimi-k2.5's catalog bindings are [bedrock, openrouter]. A self-hoster
-// wiring only OpenRouter must still route to it via the trailing binding,
-// not drop it because the registry's Provider field says "bedrock".
-func TestScorer_MultiBindingResolvesFallbackProviderAtBoot(t *testing.T) {
-	dim := EmbedDim
-	c0 := make([]float32, dim)
-	c0[0] = 1
-	cb := buildCentroidsBlob(t, 1, dim, c0)
-	rb := []byte(`{"rankings": {"0": {
-		"moonshotai/kimi-k2.5": 0.9,
-		"claude-haiku-4-5": 0.1
-	}}}`)
-	// Registry row's provider is "bedrock" (the SOC 2-isolated primary).
-	regb := []byte(`{
-		"deployed_models": [
-			{"model": "moonshotai/kimi-k2.5", "provider": "bedrock", "bench_column": "routerarena_moonshotai/kimi-k2.5"},
-			{"model": "claude-haiku-4-5", "provider": "anthropic", "bench_column": "routerarena_claude-haiku-4-5"}
-		]
-	}`)
-	cfg := cfgForTest()
-	cfg.TopP = 1
-
-	// Self-hoster: only OpenRouter wired. The catalog's openrouter fallback
-	// binding must keep kimi-k2.5 in the candidate set.
-	s, err := NewScorer(bundleFromBlobs(t, "v-test", cb, rb, regb), cfg, &fakeEmbedder{vec: makeOpusVec()},
-		map[string]struct{}{"openrouter": {}})
-	require.NoError(t, err)
-	got, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100)})
-	require.NoError(t, err)
-	assert.Equal(t, "moonshotai/kimi-k2.5", got.Model)
-	assert.Equal(t, "openrouter", got.Provider, "self-hoster should route via the trailing OpenRouter binding")
-	assert.Contains(t, got.Reason, "provider=openrouter")
-}
-
-// When both primary and fallback bindings are wired, the primary (first
-// in catalog order) wins.
-func TestScorer_MultiBindingPrefersPrimaryWhenBothAvailable(t *testing.T) {
-	dim := EmbedDim
-	c0 := make([]float32, dim)
-	c0[0] = 1
-	cb := buildCentroidsBlob(t, 1, dim, c0)
-	rb := []byte(`{"rankings": {"0": {
-		"moonshotai/kimi-k2.5": 0.9,
-		"claude-haiku-4-5": 0.1
-	}}}`)
-	regb := []byte(`{
-		"deployed_models": [
-			{"model": "moonshotai/kimi-k2.5", "provider": "bedrock", "bench_column": "routerarena_moonshotai/kimi-k2.5"},
-			{"model": "claude-haiku-4-5", "provider": "anthropic", "bench_column": "routerarena_claude-haiku-4-5"}
-		]
-	}`)
-	cfg := cfgForTest()
-	cfg.TopP = 1
-
-	s, err := NewScorer(bundleFromBlobs(t, "v-test", cb, rb, regb), cfg, &fakeEmbedder{vec: makeOpusVec()},
-		map[string]struct{}{"bedrock": {}, "openrouter": {}, "anthropic": {}})
-	require.NoError(t, err)
-	got, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100)})
-	require.NoError(t, err)
-	assert.Equal(t, "moonshotai/kimi-k2.5", got.Model)
-	assert.Equal(t, "bedrock", got.Provider, "with both providers wired, the primary binding wins")
-}
-
-// Per-request EnabledProviders re-resolves the binding: openrouter-only
-// walks down the fallback list even though bedrock is also wired.
-func TestScorer_MultiBindingPerRequestResolvesNarrowedSet(t *testing.T) {
-	dim := EmbedDim
-	c0 := make([]float32, dim)
-	c0[0] = 1
-	cb := buildCentroidsBlob(t, 1, dim, c0)
-	rb := []byte(`{"rankings": {"0": {
-		"moonshotai/kimi-k2.5": 0.9,
-		"claude-haiku-4-5": 0.1
-	}}}`)
-	regb := []byte(`{
-		"deployed_models": [
-			{"model": "moonshotai/kimi-k2.5", "provider": "bedrock", "bench_column": "routerarena_moonshotai/kimi-k2.5"},
-			{"model": "claude-haiku-4-5", "provider": "anthropic", "bench_column": "routerarena_claude-haiku-4-5"}
-		]
-	}`)
-	cfg := cfgForTest()
-	cfg.TopP = 1
-
-	s, err := NewScorer(bundleFromBlobs(t, "v-test", cb, rb, regb), cfg, &fakeEmbedder{vec: makeOpusVec()},
-		map[string]struct{}{"bedrock": {}, "openrouter": {}, "anthropic": {}})
-	require.NoError(t, err)
-	got, err := s.Route(context.Background(), router.Request{
-		PromptText:       strings.Repeat("x", 100),
-		EnabledProviders: map[string]struct{}{"openrouter": {}},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "moonshotai/kimi-k2.5", got.Model)
-	assert.Equal(t, "openrouter", got.Provider, "per-request EnabledProviders={openrouter} must re-resolve to the openrouter fallback binding")
-}
+// NOTE: multi-binding fallback coverage (primary vs trailing provider) now
+// lives in the catalog package (ResolveBinding/EnumerateBindings tests). No
+// AIand-only catalog row carries more than one binding, so a scorer-level
+// fixture can no longer exercise it.
 
 func TestScorer_DedupesDuplicateRegistryEntries(t *testing.T) {
 	dim := EmbedDim
@@ -957,20 +866,39 @@ func TestScorer_EnabledProvidersGatesArgmax(t *testing.T) {
 }
 
 // An exclusive binding set must route only the aliased model, so the
-// unaliased gpt-5 never reaches an upstream it was not declared for.
+// unaliased model never reaches an upstream it was not declared for.
 func TestScorer_GatewayExclusiveRoutesOnlyAliasedModel(t *testing.T) {
-	emb := &fakeEmbedder{vec: makeOpusVec()}
-	s := newTwoProviderScorer(t, emb)
+	dim := EmbedDim
+	c0 := make([]float32, dim)
+	c0[0] = 1
+	cb := buildCentroidsBlob(t, 1, dim, c0)
+	// The unaliased model outranks the aliased one, so only the gateway gate
+	// can produce the expected pick.
+	rb := []byte(`{"rankings": {"0": {
+		"zai-org/glm-5.3": 0.9,
+		"deepseek-ai/deepseek-v4-pro": 0.1
+	}}}`)
+	regb := []byte(`{
+		"deployed_models": [
+			{"model": "zai-org/glm-5.3", "provider": "aiand", "bench_column": "x", "proxy": true},
+			{"model": "deepseek-ai/deepseek-v4-pro", "provider": "aiand", "bench_column": "y", "proxy": true}
+		]
+	}`)
+	cfg := cfgForTest()
+	cfg.TopP = 1
+	s, err := NewScorer(bundleFromBlobs(t, "v-test-gw", cb, rb, regb), cfg, &fakeEmbedder{vec: makeOpusVec()},
+		map[string]struct{}{providers.ProviderAIAND: {}})
+	require.NoError(t, err)
 
 	got, err := s.Route(context.Background(), router.Request{
 		PromptText:       strings.Repeat("x", 100),
 		EnabledProviders: map[string]struct{}{providers.ProviderAIAND: {}},
 		GatewayProviders: map[string]struct{}{providers.ProviderAIAND: {}},
-		CustomBindings:   map[string][]string{"claude-opus-4-7": {providers.ProviderAIAND}},
+		CustomBindings:   map[string][]string{"deepseek-ai/deepseek-v4-pro": {providers.ProviderAIAND}},
 	})
 	require.NoError(t, err)
-	// Ungated, gpt-5 wins cluster 0 and would ship an unaliased name upstream.
-	assert.Equal(t, "claude-opus-4-7", got.Model)
+	// Ungated, glm-5.3 wins cluster 0 and would ship an unaliased name upstream.
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", got.Model)
 	assert.Equal(t, providers.ProviderAIAND, got.Provider)
 }
 
@@ -1097,135 +1025,9 @@ func TestScorer_AllowlistEmptyingPoolReturnsErrAllowlistEmptiesPool(t *testing.T
 	assert.False(t, errors.Is(err, ErrClusterUnavailable))
 }
 
-// has_tools=true must subtract catalog.ToolUseLowSet from the argmax pool
-// so weak tool-callers like qwen3-235b-Instruct aren't picked for agentic work.
-func TestScorer_HasToolsExcludesToolUseLowFromArgmax(t *testing.T) {
-	dim := EmbedDim
-	c0 := make([]float32, dim)
-	c0[0] = 1
-	cb := buildCentroidsBlob(t, 1, dim, c0)
-	// Ranking puts qwen3-235b above claude-opus so without the filter it
-	// would win; the filter must demote it on has_tools=true.
-	rb := []byte(`{"rankings": {"0": {
-		"qwen/qwen3-235b-a22b-2507": 0.95,
-		"claude-opus-4-7": 0.10
-	}}}`)
-	regb := []byte(`{
-		"deployed_models": [
-			{"model": "qwen/qwen3-235b-a22b-2507", "provider": "bedrock", "bench_column": "routerarena_qwen/qwen3-235b-a22b-2507"},
-			{"model": "claude-opus-4-7", "provider": "anthropic", "bench_column": "gpt-5", "proxy": true}
-		]
-	}`)
-	cfg := cfgForTest()
-	cfg.TopP = 1
-	s, err := NewScorer(bundleFromBlobs(t, "v-test-toolfilter", cb, rb, regb), cfg, &fakeEmbedder{vec: makeOpusVec()},
-		map[string]struct{}{"bedrock": {}, "anthropic": {}})
-	require.NoError(t, err)
-
-	// No tools: qwen3-235b wins (highest score).
-	got, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100)})
-	require.NoError(t, err)
-	assert.Equal(t, "qwen/qwen3-235b-a22b-2507", got.Model, "without tools, qwen3-235b should win on score")
-
-	// With tools: filter drops qwen3-235b → claude-opus wins.
-	got, err = s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100), HasTools: true})
-	require.NoError(t, err)
-	assert.Equal(t, "claude-opus-4-7", got.Model, "has_tools=true must drop ToolUseLow models from argmax")
-}
-
-// has_tools=true must subtract catalog.AgenticLowSet from the argmax pool
-// so a model that emits valid tool calls but can't drive the agentic
-// harness (minimax-m3) can't win — a price-leaning dial should demote to
-// a cheaper harness-capable model, not the cheapest model overall.
-func TestScorer_HasToolsExcludesAgenticLowFromArgmax(t *testing.T) {
-	dim := EmbedDim
-	c0 := make([]float32, dim)
-	c0[0] = 1
-	cb := buildCentroidsBlob(t, 1, dim, c0)
-	// Ranking puts minimax-m3 above claude-opus so without the filter it would
-	// win; the agentic-harness filter must demote it on has_tools=true.
-	rb := []byte(`{"rankings": {"0": {
-		"minimax/minimax-m3": 0.95,
-		"claude-opus-4-7": 0.10
-	}}}`)
-	regb := []byte(`{
-		"deployed_models": [
-			{"model": "minimax/minimax-m3", "provider": "fireworks", "bench_column": "routerarena_minimax/minimax-m3"},
-			{"model": "claude-opus-4-7", "provider": "anthropic", "bench_column": "gpt-5", "proxy": true}
-		]
-	}`)
-	cfg := cfgForTest()
-	cfg.TopP = 1
-	s, err := NewScorer(bundleFromBlobs(t, "v-test-agenticfilter", cb, rb, regb), cfg, &fakeEmbedder{vec: makeOpusVec()},
-		map[string]struct{}{"fireworks": {}, "anthropic": {}})
-	require.NoError(t, err)
-
-	// No tools: minimax-m3 wins (highest score).
-	got, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100)})
-	require.NoError(t, err)
-	assert.Equal(t, "minimax/minimax-m3", got.Model, "without tools, minimax-m3 should win on score")
-
-	// With tools: filter drops minimax-m3 → claude-opus wins.
-	got, err = s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100), HasTools: true})
-	require.NoError(t, err)
-	assert.Equal(t, "claude-opus-4-7", got.Model, "has_tools=true must drop AgenticLow models from argmax")
-}
-
-// If the AgenticLow filter would empty the eligible pool, fall back to
-// the unfiltered set rather than 4xx-ing.
-func TestScorer_HasToolsFallsBackWhenAgenticFilterEmptiesPool(t *testing.T) {
-	dim := EmbedDim
-	c0 := make([]float32, dim)
-	c0[0] = 1
-	cb := buildCentroidsBlob(t, 1, dim, c0)
-	rb := []byte(`{"rankings": {"0": {
-		"minimax/minimax-m3": 0.95
-	}}}`)
-	regb := []byte(`{
-		"deployed_models": [
-			{"model": "minimax/minimax-m3", "provider": "fireworks", "bench_column": "routerarena_minimax/minimax-m3"}
-		]
-	}`)
-	cfg := cfgForTest()
-	cfg.TopP = 1
-	s, err := NewScorer(bundleFromBlobs(t, "v-test-agenticfallback", cb, rb, regb), cfg, &fakeEmbedder{vec: makeOpusVec()},
-		map[string]struct{}{"fireworks": {}})
-	require.NoError(t, err)
-
-	// has_tools=true: filter would empty the pool, so we keep minimax-m3
-	// rather than returning an error.
-	got, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100), HasTools: true})
-	require.NoError(t, err)
-	assert.Equal(t, "minimax/minimax-m3", got.Model, "filter must fall back when it would empty the pool")
-}
-
-// If the ToolUseLow filter would empty the eligible pool, fall back to
-// the unfiltered set — this is a quality preference, not a correctness gate.
-func TestScorer_HasToolsFallsBackWhenFilterEmptiesPool(t *testing.T) {
-	dim := EmbedDim
-	c0 := make([]float32, dim)
-	c0[0] = 1
-	cb := buildCentroidsBlob(t, 1, dim, c0)
-	rb := []byte(`{"rankings": {"0": {
-		"qwen/qwen3-235b-a22b-2507": 0.95
-	}}}`)
-	regb := []byte(`{
-		"deployed_models": [
-			{"model": "qwen/qwen3-235b-a22b-2507", "provider": "bedrock", "bench_column": "routerarena_qwen/qwen3-235b-a22b-2507"}
-		]
-	}`)
-	cfg := cfgForTest()
-	cfg.TopP = 1
-	s, err := NewScorer(bundleFromBlobs(t, "v-test-fallback", cb, rb, regb), cfg, &fakeEmbedder{vec: makeOpusVec()},
-		map[string]struct{}{"bedrock": {}})
-	require.NoError(t, err)
-
-	// has_tools=true: filter would empty the pool, so we keep qwen3-235b
-	// rather than returning an error.
-	got, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100), HasTools: true})
-	require.NoError(t, err)
-	assert.Equal(t, "qwen/qwen3-235b-a22b-2507", got.Model, "filter must fall back when it would empty the pool")
-}
+// NOTE: the ToolUseLow/AgenticLow argmax filters are inert on the AIand-only
+// catalog — no surviving row carries either flag, so the soft empty-pool
+// fallback is unreachable through real catalog rows and its fixtures are gone.
 
 // DeployedModels returns the full provider-filtered candidate list, not the
 // per-request eligible subset.
@@ -1243,43 +1045,11 @@ func TestScorer_DeployedModelsReturnsBootCandidates(t *testing.T) {
 	assert.Contains(t, models, "claude-opus-4-7")
 }
 
-// A bundle is frozen at training time, so its registry keeps naming models
-// the catalog has since retired (untiered). Those must not stay routable.
-func TestScorer_DropsCatalogRetiredRegistryEntries(t *testing.T) {
-	const retired = "deepseek/deepseek-v4-pro"
-	m, ok := catalog.ByID(retired)
-	require.True(t, ok, "test premise: retired model is still in the catalog for passthrough")
-	require.Equal(t, catalog.TierUnknown, m.Tier, "test premise: retired model is untiered")
-
-	dim := EmbedDim
-	c0 := make([]float32, dim)
-	c0[0] = 1
-	cb := buildCentroidsBlob(t, 1, dim, c0)
-	rb := []byte(`{"rankings": {"0": {
-		"deepseek/deepseek-v4-pro": 0.99,
-		"deepseek/deepseek-v4.1-flash": 0.50
-	}}}`)
-	regb := []byte(`{
-		"deployed_models": [
-			{"model": "deepseek/deepseek-v4-pro", "provider": "together", "bench_column": "x", "proxy": true},
-			{"model": "deepseek/deepseek-v4.1-flash", "provider": "makora", "bench_column": "y", "proxy": true}
-		]
-	}`)
-	cfg := cfgForTest()
-	cfg.TopP = 1
-	s, err := NewScorer(bundleFromBlobs(t, "v-test-retired", cb, rb, regb), cfg, &fakeEmbedder{vec: makeOpusVec()},
-		map[string]struct{}{"together": {}, "makora": {}})
-	require.NoError(t, err)
-
-	for _, e := range s.DeployedModels() {
-		assert.NotEqual(t, retired, e.Model, "retired catalog model must not be a cluster candidate")
-	}
-
-	// It outranks flash in the bundle, so it would win argmax if eligible.
-	got, err := s.Route(context.Background(), router.Request{PromptText: strings.Repeat("x", 100)})
-	require.NoError(t, err)
-	assert.Equal(t, "deepseek/deepseek-v4.1-flash", got.Model)
-}
+// NOTE: the catalog-retired-registry drop is inert on the AIand-only catalog —
+// every surviving row is tiered, and catalog.ByID no longer resolves retired
+// slugs, so the untiered-passthrough branch is unreachable through real data
+// and its fixture is gone. Off-catalog registry rows still resolve via their
+// recorded provider (defense in depth, covered by the boot-candidate tests).
 
 func TestScorer_V2DynamicScoring(t *testing.T) {
 	emb := &fakeEmbedder{vec: makeOpusVec()}

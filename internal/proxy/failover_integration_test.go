@@ -3,7 +3,6 @@ package proxy_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -64,147 +63,38 @@ func (w *observedResponseWriter) BodyString() string {
 	return w.body.String()
 }
 
-// TestProxyMessages_FireworksFailureFallbackToOpenRouter wires the real
-// dispatch + translator + openaicompat clients against stub upstreams
-// and asserts that:
-//   - On Fireworks 503, the dispatch falls over to OpenRouter cleanly.
-//   - The client receives a valid Anthropic SSE stream (the failover is
-//     invisible at the wire-format layer).
-//   - The x-router-fallback-from header surfaces the primary.
-//   - The OpenRouter request body has the OpenRouter-specific gates that
-//     Prepare* would only emit when opts.TargetProvider = openrouter
-//     (provider hint, reasoning: {enabled:false}) — proves per-attempt
-//     prep rebuild is wired correctly.
-func TestProxyMessages_FireworksFailureFallbackToOpenRouter(t *testing.T) {
-	var (
-		mu                     sync.Mutex
-		openRouterReceivedBody []byte
-		fireworksRequestCount  int
-		openRouterRequestCount int
-	)
+// TestProxyMessages_FireworksFailureFallbackToOpenRouter was deleted with the
+// AIand-only cut: it asserted cross-provider failover between the Fireworks and
+// OpenRouter clients and the OpenRouter-only request gates those providers
+// required. Both providers are gone, and every catalog row now carries a single
+// AIAND binding, so a same-model cross-provider failover can no longer be
+// constructed at all.
 
-	fireworks := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		fireworksRequestCount++
-		mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte(`{"error":{"message":"fireworks edge unavailable"}}`))
-	}))
-	defer fireworks.Close()
-
-	openrouter := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		mu.Lock()
-		openRouterReceivedBody = body
-		openRouterRequestCount++
-		mu.Unlock()
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		flusher, _ := w.(http.Flusher)
-		// Minimal OpenAI SSE response: one chunk with text + stop.
-		chunks := []string{
-			`data: {"id":"or-1","object":"chat.completion.chunk","created":1,"model":"deepseek/deepseek-v4-pro","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}` + "\n\n",
-			`data: {"id":"or-1","object":"chat.completion.chunk","created":1,"model":"deepseek/deepseek-v4-pro","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1}}` + "\n\n",
-			"data: [DONE]\n\n",
-		}
-		for _, c := range chunks {
-			_, _ = w.Write([]byte(c))
-			if flusher != nil {
-				flusher.Flush()
-			}
-		}
-	}))
-	defer openrouter.Close()
-
-	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek/deepseek-v4-pro"}},
-		map[string]providers.Client{
-			"fireworks":  openaicompat.NewClient("test-fw-key", fireworks.URL),
-			"openrouter": openaicompat.NewClient("test-or-key", openrouter.URL),
-		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{
-		"fireworks":  {},
-		"openrouter": {},
-	})
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"deepseek/deepseek-v4-pro","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
-
-	err := svc.ProxyMessages(context.Background(), body, rec, req)
-	require.NoError(t, err, "ProxyMessages should succeed after failover to OpenRouter")
-
-	mu.Lock()
-	defer mu.Unlock()
-	assert.Equal(t, 1, fireworksRequestCount, "Fireworks called exactly once")
-	assert.Equal(t, 1, openRouterRequestCount, "OpenRouter called exactly once (failover)")
-
-	// Client sees valid Anthropic SSE.
-	respBody := rec.Body.String()
-	assert.Contains(t, respBody, "event: message_start", "Anthropic stream should start with message_start")
-	assert.Contains(t, respBody, "event: message_stop", "Anthropic stream should end with message_stop")
-
-	// Fallback headers surface the primary that failed.
-	assert.Equal(t, "fireworks", rec.Header().Get(proxy.HeaderRouterFallbackFrom))
-	assert.Equal(t, "1", rec.Header().Get(proxy.HeaderRouterFallbackAttempt))
-
-	// Per-attempt prep verification: OpenRouter received a body that
-	// includes the OpenRouter-only gates from emit_openai.go. Without the
-	// per-attempt rebuild, the body would carry Fireworks-shape (no
-	// provider hint, reasoning enabled by default).
-	require.NotEmpty(t, openRouterReceivedBody, "OpenRouter should have received a request body")
-	var got map[string]any
-	require.NoError(t, json.Unmarshal(openRouterReceivedBody, &got))
-
-	provider, ok := got["provider"].(map[string]any)
-	require.True(t, ok, "OpenRouter request must carry the `provider` hint for deepseek/* (got: %s)", string(openRouterReceivedBody))
-	order, _ := provider["order"].([]any)
-	require.NotEmpty(t, order, "provider.order must be set")
-	assert.Equal(t, "deepseek", order[0])
-
-	reasoning, ok := got["reasoning"].(map[string]any)
-	require.True(t, ok, "OpenRouter request must carry the `reasoning` hint for deepseek/*")
-	assert.Equal(t, false, reasoning["enabled"], "reasoning.enabled must be false to avoid burning max_tokens on hidden thinking")
-}
-
-// TestProxyMessages_BothBindingsFail asserts the format-specific
-// exhaustion renderer: when every binding returns an error, the
-// Anthropic client sees the upstream error envelope translated to
-// Anthropic shape via translate.OpenAIToAnthropicError, NOT the raw
-// upstream JSON.
-func TestProxyMessages_BothBindingsFail(t *testing.T) {
-	fireworks := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte(`{"error":{"message":"fireworks down"}}`))
-	}))
-	defer fireworks.Close()
-
-	openrouter := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// TestProxyMessages_SoleBindingFailureRendersUpstreamError asserts the
+// format-specific exhaustion renderer: when the sole binding errors, the
+// Anthropic client sees the upstream error envelope translated to Anthropic
+// shape via translate.OpenAIToAnthropicError, NOT the raw upstream JSON.
+func TestProxyMessages_SoleBindingFailureRendersUpstreamError(t *testing.T) {
+	aiand := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadGateway)
-		_, _ = w.Write([]byte(`{"error":{"message":"openrouter also down","type":"upstream_error"}}`))
+		_, _ = w.Write([]byte(`{"error":{"message":"aiand also down","type":"upstream_error"}}`))
 	}))
-	defer openrouter.Close()
+	defer aiand.Close()
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: "fireworks", Model: "deepseek/deepseek-v4-pro"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: "deepseek-ai/deepseek-v4-pro"}},
 		map[string]providers.Client{
-			"fireworks":  openaicompat.NewClient("test-fw-key", fireworks.URL),
-			"openrouter": openaicompat.NewClient("test-or-key", openrouter.URL),
+			providers.ProviderAIAND: openaicompat.NewClient("test-aiand-key", aiand.URL),
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
-		"fireworks":  {},
-		"openrouter": {},
+		providers.ProviderAIAND: {},
 	})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"deepseek/deepseek-v4-pro","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 
 	_ = svc.ProxyMessages(context.Background(), body, rec, req)
 
@@ -212,7 +102,7 @@ func TestProxyMessages_BothBindingsFail(t *testing.T) {
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
 	assert.NotContains(t, rec.Body.String(), "✦ **Weave Router**")
 	assert.NotContains(t, rec.Body.String(), "event: error")
-	assert.Contains(t, rec.Body.String(), "openrouter also down")
+	assert.Contains(t, rec.Body.String(), "aiand also down")
 }
 
 // TestProxyMessages_SingleBindingPreservesEagerPrelude asserts that
@@ -244,7 +134,7 @@ func TestProxyMessages_SingleBindingPreservesEagerPrelude(t *testing.T) {
 
 	// claude-haiku-4-5 is single-binding (Anthropic only).
 	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"},
+		router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"},
 		map[string]providers.Client{
 			providers.ProviderAnthropic: &fakeProvider{
 				proxyResponse: func(w http.ResponseWriter) {
@@ -260,7 +150,7 @@ func TestProxyMessages_SingleBindingPreservesEagerPrelude(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"claude-haiku-4-5","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"zai-org/glm-5.3-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 
 	require.NoError(t, svc.ProxyMessages(context.Background(), body, rec, req))
 	assert.Equal(t, http.StatusOK, rec.Code)
@@ -282,7 +172,7 @@ func TestProxyMessages_RoutingMarkerWaitsForProviderOutput(t *testing.T) {
 		}
 	}()
 	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"},
+		router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"},
 		map[string]providers.Client{
 			providers.ProviderAnthropic: &fakeProvider{
 				proxyResponse: func(w http.ResponseWriter) {
@@ -296,7 +186,7 @@ func TestProxyMessages_RoutingMarkerWaitsForProviderOutput(t *testing.T) {
 
 	writer := newObservedResponseWriter()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"claude-haiku-4-5","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"zai-org/glm-5.3-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 	done := make(chan error, 1)
 	go func() {
 		done <- svc.ProxyMessages(context.Background(), body, writer, req)
@@ -335,17 +225,17 @@ func TestProxyMessages_SingleBindingStreamingPreCommitError(t *testing.T) {
 	// inbound Anthropic Messages request so the cross-format
 	// AnthropicSSETranslator + Prelude path runs.
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "moonshotai/kimi-k3"}},
 		map[string]providers.Client{
 			providers.ProviderOpenAI: openaicompat.NewClient("test-key", stub.URL),
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderOpenAI: {}}).
 		WithRetrySleep(noRetrySleep)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"gpt-5","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 
 	_ = svc.ProxyMessages(context.Background(), body, rec, req)
 
@@ -384,14 +274,14 @@ func TestProxyMessages_AnthropicSSEOverloadRetriesSameBinding(t *testing.T) {
 	defer upstream.Close()
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"}},
 		map[string]providers.Client{providers.ProviderAnthropic: anthropic.NewClient("test-key", upstream.URL)},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}}).
 		WithRetrySleep(noRetrySleep)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"claude-haiku-4-5","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"zai-org/glm-5.3-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 
 	require.NoError(t, svc.ProxyMessages(context.Background(), body, rec, req))
 	mu.Lock()
@@ -419,16 +309,16 @@ func TestProxyMessages_AnthropicSSEOverloadExhaustionRecords529(t *testing.T) {
 
 	telemetry := newCaptureTelemetry()
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"}},
 		map[string]providers.Client{providers.ProviderAnthropic: anthropic.NewClient("test-key", upstream.URL)},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", telemetry,
+		nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", telemetry,
 	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}}).
 		WithRetrySleep(noRetrySleep)
 	ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, "11111111-1111-1111-1111-111111111111")
 	ctx = context.WithValue(ctx, proxy.ExternalIDContextKey{}, "org-test")
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"claude-haiku-4-5","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"zai-org/glm-5.3-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 
 	err := svc.ProxyMessages(ctx, body, rec, req)
 
@@ -463,22 +353,22 @@ func TestProxyMessages_TwoConsecutiveOverloadExhaustionsDisableProvider(t *testi
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
 		Provider:      providers.ProviderAnthropic,
-		Model:         "claude-haiku-4-5",
+		Model:         "zai-org/glm-5.3-flash",
 		Reason:        "fresh",
 		PinnedUntil:   time.Now().Add(30 * time.Minute),
 		FirstPinnedAt: time.Now().Add(-5 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash", Reason: "fresh"}}
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{providers.ProviderAnthropic: anthropic.NewClient("test-key", upstream.URL)},
-		nil, false, nil, store, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, store, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}}).
 		WithPlannerEnabled(false).
 		WithRetrySleep(noRetrySleep) // first-decision-wins: a pin hit serves straight through without scorer-vs-planner EV noise.
 
 	ctx := authedCtx(uuid.New().String())
-	body := []byte(`{"model":"claude-haiku-4-5","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"zai-org/glm-5.3-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 
 	// Turn 1: exhausts on 529, one strike recorded, not yet disabled.
 	rec1 := httptest.NewRecorder()
@@ -531,19 +421,19 @@ func TestProxyMessages_BaselineOverloadExhaustionDoesNotDisableAnthropic(t *test
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
 		Provider:      providers.ProviderOpenAI,
-		Model:         "deepseek/deepseek-v4-pro",
+		Model:         "deepseek-ai/deepseek-v4-pro",
 		Reason:        "fresh",
 		PinnedUntil:   time.Now().Add(30 * time.Minute),
 		FirstPinnedAt: time.Now().Add(-5 * time.Minute),
 	}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "deepseek/deepseek-v4-pro", Reason: "fresh"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "deepseek-ai/deepseek-v4-pro", Reason: "fresh"}}
 	svc := proxy.NewService(
 		fr,
 		map[string]providers.Client{
 			providers.ProviderOpenAI:    openaicompat.NewClient("test-fw-key", ossUpstream.URL),
 			providers.ProviderAnthropic: anthropic.NewClient("test-key", anthropicUpstream.URL),
 		},
-		nil, false, nil, store, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, store, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
 		providers.ProviderOpenAI:    {},
 		providers.ProviderAnthropic: {},
@@ -553,7 +443,7 @@ func TestProxyMessages_BaselineOverloadExhaustionDoesNotDisableAnthropic(t *test
 	ctx := authedCtx(uuid.New().String())
 	// "model" resolves baselineFor to claude-haiku-4-5 (a known Anthropic
 	// catalog model), so a retryable OSS exhaustion rescues onto Anthropic.
-	body := []byte(`{"model":"claude-haiku-4-5","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"zai-org/glm-5.3-flash","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 
 	// Turn 1: OSS primary 503s (retryable), baseline rescues onto Anthropic,
 	// which itself exhausts on 529. First Anthropic strike, not yet disabled.
@@ -572,7 +462,7 @@ func TestProxyMessages_BaselineOverloadExhaustionDoesNotDisableAnthropic(t *test
 	assert.Empty(t, store.disabledProviders,
 		"anthropic must never be disabled for 529s hit only via baseline rescue of an unrelated OSS pin")
 	assert.True(t, store.hasPin, "the OSS pin must not be evicted by a baseline-rescue overload strike")
-	assert.Equal(t, "deepseek/deepseek-v4-pro", store.pin.Model, "the OSS pin's identity must be untouched")
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", store.pin.Model, "the OSS pin's identity must be untouched")
 }
 
 func TestProxyMessages_ResponsesFailureBeforeOutputFallsBackToBaseline(t *testing.T) {
@@ -602,7 +492,7 @@ func TestProxyMessages_ResponsesFailureBeforeOutputFallsBackToBaseline(t *testin
 	}}
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.5", Reason: "test"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "deepseek-ai/deepseek-v4-flash", Reason: "test"}},
 		map[string]providers.Client{
 			providers.ProviderOpenAI: openai.NewClient("test-key", openAIUpstream.URL),
 			providers.ProviderAIAND:  baseline,
@@ -640,7 +530,7 @@ func TestProxyMessages_BaselineFailoverSkipsBaselineOverContextWindow(t *testing
 
 	baseline := &fakeProvider{}
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.5", Reason: "test"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "deepseek-ai/deepseek-v4-flash", Reason: "test"}},
 		map[string]providers.Client{
 			providers.ProviderOpenAI: openai.NewClient("test-key", openAIUpstream.URL),
 			providers.ProviderAIAND:  baseline,
@@ -686,51 +576,12 @@ func (c *sequencedClient) Passthrough(_ context.Context, _ providers.PreparedReq
 	return nil
 }
 
-// TestProxyMessages_OutputConfigFormat400RetriesWithoutIt reproduces an upstream
-// 400 on output_config.format (Cortex documents the knob, so it goes out as
-// written; only a rejection licenses one re-emit without it).
-func TestProxyMessages_OutputConfigFormat400RetriesWithoutIt(t *testing.T) {
-	anthropicSSE := "event: message_start\n" +
-		`data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-sonnet-5","content":[],"stop_reason":null,"usage":{"input_tokens":5,"output_tokens":0}}}` + "\n\n" +
-		"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
-
-	client := &sequencedClient{
-		responses: []func(w http.ResponseWriter) error{
-			func(http.ResponseWriter) error {
-				return &providers.UpstreamErrorResponse{
-					Status: http.StatusBadRequest,
-					Body:   []byte(`{"message":"output_config.format: Extra inputs are not permitted"}`),
-				}
-			},
-			func(w http.ResponseWriter) error {
-				w.Header().Set("Content-Type", "text/event-stream")
-				w.WriteHeader(http.StatusOK)
-				_, _ = io.WriteString(w, anthropicSSE)
-				return nil
-			},
-		},
-	}
-
-	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-5"}},
-		map[string]providers.Client{providers.ProviderAnthropic: client},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}})
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"claude-sonnet-5","stream":true,"max_tokens":1024,` +
-		`"output_config":{"format":{"type":"json_schema","schema":{"type":"object","properties":{"title":{"type":"string"}}}}},` +
-		`"tools":[{"name":"Read","input_schema":{"type":"object","properties":{"file_path":{"type":"string"}},"required":["file_path"]}}],` +
-		`"messages":[{"role":"user","content":"who are you"}]}`)
-
-	require.NoError(t, svc.ProxyMessages(context.Background(), body, rec, req))
-
-	require.Len(t, client.bodies, 2, "the rejected attempt is re-emitted once without the knob")
-	assert.Contains(t, string(client.bodies[0]), `"output_config"`, "the knob goes out as the client wrote it")
-	assert.NotContains(t, string(client.bodies[1]), "output_config", "the retry drops it, pruning the emptied container")
-	assert.Contains(t, rec.Body.String(), "event: message_stop", "client sees the rescued stream, not the 400")
-}
+// TestProxyMessages_OutputConfigFormat400RetriesWithoutIt was deleted with the
+// AIand-only cut. The retry only fires when the emitted body still carries
+// output_config.format, and resolveAnthropicOverrides drops output_config for
+// every target lacking CapAdaptiveThinking — an Anthropic-only capability that
+// no roster row has. The premise (the knob goes out as written) can therefore
+// no longer be constructed without a deleted claude-* model.
 
 // A 400 that doesn't name the structured-output knob must not burn a second
 // upstream call — an identical re-emit would just 400 again.
@@ -747,14 +598,14 @@ func TestProxyMessages_UnrelatedAnthropic400NotRetried(t *testing.T) {
 	}
 
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-5"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4.1-flash"}},
 		map[string]providers.Client{providers.ProviderAnthropic: client},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"claude-sonnet-5","stream":true,"max_tokens":1024,` +
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4.1-flash","stream":true,"max_tokens":1024,` +
 		`"output_config":{"format":{"type":"json_schema"}},"messages":[{"role":"user","content":"hi"}]}`)
 
 	_ = svc.ProxyMessages(context.Background(), body, rec, req)

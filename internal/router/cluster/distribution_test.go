@@ -52,7 +52,7 @@ func TestDialToAlpha_NoCalibrationIsIdentity(t *testing.T) {
 
 func TestComputeDialCalibration_AscendingPinnedEndpoints(t *testing.T) {
 	// Real bundle: breakpoints must be strictly ascending, pinned at 0 and 1.
-	s := loadV0_67(t)
+	s := loadV076Bundle(t)
 	bp := s.dialAlphaBreakpoints
 	require.GreaterOrEqual(t, len(bp), 4, "expected several mix breakpoints on the real bundle")
 	assert.Equal(t, 0.0, bp[0], "first breakpoint pins the price extreme")
@@ -62,12 +62,14 @@ func TestComputeDialCalibration_AscendingPinnedEndpoints(t *testing.T) {
 	}
 }
 
-// loadV0_67 loads the committed v0.67 bundle via a fake embedder (matching
-// its jina-v2 id/dim) — RoutingDistribution never embeds, so no ONNX runtime
-// is needed and the test stays hermetic.
-func loadV0_67(t *testing.T) *Scorer {
+// loadV076Bundle loads the frozen multi-provider v0.76 bundle — the last kept
+// bundle carrying the wide pre-AIand roster and the inherited dial knobs (the
+// AIand-only v0.78+ bundles narrow to 8 models). Loaded via a fake embedder
+// matching its jina-v2 id/dim: RoutingDistribution never embeds, so no ONNX
+// runtime is needed and the test stays hermetic.
+func loadV076Bundle(t *testing.T) *Scorer {
 	t.Helper()
-	bundle, err := LoadBundle("v0.67")
+	bundle, err := LoadBundle("v0.76")
 	require.NoError(t, err)
 	require.True(t, bundle.IsV2)
 	s, err := NewScorer(bundle, DefaultConfig(), &fakeEmbedder{dim: bundle.Centroids.Dim}, allProviders())
@@ -75,8 +77,21 @@ func loadV0_67(t *testing.T) *Scorer {
 	return s
 }
 
+// loadFloorlessDialBundle is loadV076Bundle with the per-cluster alpha floors
+// disabled, exposing the plain dial mechanics. Every shipped bundle floors its
+// low dial positions, which saturates the price end by design; the dial-sweep
+// invariants below (no dead zone, price extreme = cheapest mix) only hold on
+// the floorless path.
+func loadFloorlessDialBundle(t *testing.T) *Scorer {
+	t.Helper()
+	s := loadV076Bundle(t)
+	s.metadata.Training.DefaultRoutingKnobs = nil
+	s.dialAlphaBreakpoints = s.computeDialCalibration()
+	return s
+}
+
 func TestRoutingDistribution_EndpointsAndGradient(t *testing.T) {
-	s := loadV0_67(t)
+	s := loadFloorlessDialBundle(t)
 	const grid = 21
 	points, err := s.RoutingDistribution(grid, nil, nil)
 	require.NoError(t, err)
@@ -119,7 +134,7 @@ func TestRoutingDistribution_EndpointsAndGradient(t *testing.T) {
 }
 
 func TestRoutingDistribution_DefaultGridAndV1Guard(t *testing.T) {
-	s := loadV0_67(t)
+	s := loadFloorlessDialBundle(t)
 	points, err := s.RoutingDistribution(0, nil, nil) // 0 -> default grid
 	require.NoError(t, err)
 	assert.Len(t, points, defaultDistributionGrid)
@@ -128,7 +143,7 @@ func TestRoutingDistribution_DefaultGridAndV1Guard(t *testing.T) {
 func TestRoutingDistribution_NoDeadZone(t *testing.T) {
 	// Regression guard: a run of identical mixes across adjacent dial steps is
 	// what made "50% look like 20%" — the calibration must keep steps live.
-	s := loadV0_67(t)
+	s := loadFloorlessDialBundle(t)
 	points, err := s.RoutingDistribution(21, nil, nil)
 	require.NoError(t, err)
 
@@ -147,7 +162,7 @@ func TestRoutingDistribution_NoDeadZone(t *testing.T) {
 func TestRoutingDistribution_MidDialIsPricierThanLowDial(t *testing.T) {
 	// Reported bug: mid dial (0.5) used to route the same all-cheapest mix as
 	// low dial (0.2); it must now route a meaningfully pricier mix.
-	s := loadV0_67(t)
+	s := loadFloorlessDialBundle(t)
 	points, err := s.RoutingDistribution(21, nil, nil)
 	require.NoError(t, err)
 
@@ -166,23 +181,11 @@ func TestRoutingDistribution_MidDialIsPricierThanLowDial(t *testing.T) {
 		"the 50%% dial must route a meaningfully pricier (higher-quality) mix than the 20%% dial")
 }
 
-// loadV0_70 loads the committed v0.70 bundle (default alpha protects
-// agentic/code clusters at 0.96, lets conversational cheapen at 0.8).
-func loadV0_70(t *testing.T) *Scorer {
-	t.Helper()
-	bundle, err := LoadBundle("v0.70")
-	require.NoError(t, err)
-	require.True(t, bundle.IsV2)
-	s, err := NewScorer(bundle, DefaultConfig(), &fakeEmbedder{dim: bundle.Centroids.Dim}, allProviders())
-	require.NoError(t, err)
-	return s
-}
-
 func TestApplyDialAlpha_HoldsEachClusterAtItsDeclaredFloor(t *testing.T) {
-	s := loadV0_70(t)
+	s := loadV076Bundle(t)
 	knobs := s.defaultActiveKnobs()
 	floor := knobs.AlphaFloor
-	require.Len(t, floor, s.centroids.K, "v0.70 must ship a full per-cluster alpha_floor")
+	require.Len(t, floor, s.centroids.K, "the shipped bundle must ship a full per-cluster alpha_floor")
 
 	// At the price extreme (t=0, dialToAlpha=0) every cluster is held at exactly
 	// its declared floor — no cluster collapses to alpha 0 (the cheapest model).
@@ -204,7 +207,7 @@ func TestApplyDialAlpha_HoldsEachClusterAtItsDeclaredFloor(t *testing.T) {
 func TestApplyDialAlpha_NilFloorIsUniformDial(t *testing.T) {
 	// A bundle that ships no alpha_floor keeps the legacy uniform-dial behavior:
 	// every cluster gets dialToAlpha(t) verbatim.
-	s := loadV0_70(t)
+	s := loadV076Bundle(t)
 	knobs := s.defaultActiveKnobs()
 	s.applyDialAlpha(0.3, knobs.Alpha, nil)
 	want := s.dialToAlpha(0.3)
@@ -220,7 +223,7 @@ func TestApplyDialAlpha_AgenticStaysOnCapableModelAtLowDial(t *testing.T) {
 	// weight (old 0.88 floor pinned Opus, killing the dial) and onto the
 	// candidate pool: has_tools turns drop catalog.AgenticLowSet, so a low dial
 	// demotes to the cheapest harness-capable model instead of an incapable one.
-	s := loadV0_70(t)
+	s := loadV076Bundle(t)
 
 	// Realized agentic alpha at the price extreme = the declared floor.
 	knobs := s.defaultActiveKnobs()
@@ -228,6 +231,9 @@ func TestApplyDialAlpha_AgenticStaysOnCapableModelAtLowDial(t *testing.T) {
 	top := topPNearest(s.centroids.Row(0), s.centroids, s.cfg.TopP)
 
 	low := catalog.AgenticLowSet()
+	if len(low) == 0 {
+		t.Skip("no catalog model is flagged AgenticLow after the AIand-only cut; the gate is inert on the shipped roster")
+	}
 
 	// Precondition: without the gate, the price extreme falls through to an
 	// agentic-incapable model — the bug the gate exists to fix.
@@ -256,7 +262,7 @@ func TestRoutingDistribution_ExcludedModelNeverAppears(t *testing.T) {
 	// Preview must agree with Route: an excluded model never appears, and its
 	// clusters fall through to the next-best eligible model (shares still sum
 	// to 1). Excludes the quality-extreme winner as the load-bearing case.
-	s := loadV0_70(t)
+	s := loadV076Bundle(t)
 
 	full, err := s.RoutingDistribution(21, nil, nil)
 	require.NoError(t, err)
@@ -292,7 +298,7 @@ func TestRoutingDistribution_ExcludedModelNeverAppears(t *testing.T) {
 func TestRoutingDistribution_EmptyPoolErrors(t *testing.T) {
 	// Excluding every deployed model empties the pool; the preview must return
 	// ErrNoEligibleProvider like Route does, not points summing to 0.
-	s := loadV0_70(t)
+	s := loadV076Bundle(t)
 	all := make(map[string]struct{}, len(s.models))
 	for _, m := range s.models {
 		all[m] = struct{}{}
@@ -306,7 +312,7 @@ func TestRoutingDistribution_EmptyPoolErrors(t *testing.T) {
 func TestRoutingDistribution_ExcludedProviderDropsSingleBindingModels(t *testing.T) {
 	// Excluding a provider must drop every model whose only binding is that
 	// provider, mirroring Route's EnabledProviders gate.
-	s := loadV0_70(t)
+	s := loadV076Bundle(t)
 
 	full, err := s.RoutingDistribution(21, nil, nil)
 	require.NoError(t, err)

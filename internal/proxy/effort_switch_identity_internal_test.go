@@ -14,18 +14,18 @@ import (
 // and the prompt-cache prefix exactly like a model change, so it must count as a switch.
 func TestModelSwitched_EffortChangeOnSameModelCountsAsSwitch(t *testing.T) {
 	res := turnLoopResult{
-		PriorServedModel: "claude-opus-5:low",
-		Decision:         router.Decision{Model: "claude-opus-5", Effort: "xhigh"},
+		PriorServedModel: "zai-org/glm-5.3:low",
+		Decision:         router.Decision{Model: "zai-org/glm-5.3", Effort: "high"},
 	}
 
 	assert.True(t, res.modelSwitched(),
-		"low -> xhigh on the same model must count as a switch")
+		"low -> high on the same model must count as a switch")
 }
 
 func TestModelSwitched_SameModelAndEffortIsNotASwitch(t *testing.T) {
 	res := turnLoopResult{
-		PriorServedModel: "claude-opus-5:xhigh",
-		Decision:         router.Decision{Model: "claude-opus-5", Effort: "xhigh"},
+		PriorServedModel: "zai-org/glm-5.3:high",
+		Decision:         router.Decision{Model: "zai-org/glm-5.3", Effort: "high"},
 	}
 
 	assert.False(t, res.modelSwitched(),
@@ -36,8 +36,8 @@ func TestModelSwitched_SameModelAndEffortIsNotASwitch(t *testing.T) {
 // conservative direction — rather than the unsafe one.
 func TestModelSwitched_LegacyBarePinReportsSwitchAgainstEffortIdentity(t *testing.T) {
 	res := turnLoopResult{
-		PriorServedModel: "claude-opus-5",
-		Decision:         router.Decision{Model: "claude-opus-5", Effort: "high"},
+		PriorServedModel: "zai-org/glm-5.3",
+		Decision:         router.Decision{Model: "zai-org/glm-5.3", Effort: "high"},
 	}
 
 	assert.True(t, res.modelSwitched(),
@@ -46,12 +46,12 @@ func TestModelSwitched_LegacyBarePinReportsSwitchAgainstEffortIdentity(t *testin
 
 func TestModelSwitched_NoEffortEitherSideBehavesAsBefore(t *testing.T) {
 	same := turnLoopResult{
-		PriorServedModel: "claude-opus-5",
-		Decision:         router.Decision{Model: "claude-opus-5"},
+		PriorServedModel: "zai-org/glm-5.3",
+		Decision:         router.Decision{Model: "zai-org/glm-5.3"},
 	}
 	changed := turnLoopResult{
-		PriorServedModel: "claude-opus-5",
-		Decision:         router.Decision{Model: "gpt-5.6-sol"},
+		PriorServedModel: "zai-org/glm-5.3",
+		Decision:         router.Decision{Model: "moonshotai/kimi-k3"},
 	}
 
 	assert.False(t, same.modelSwitched(), "effort-free no-op must not switch")
@@ -59,39 +59,39 @@ func TestModelSwitched_NoEffortEitherSideBehavesAsBefore(t *testing.T) {
 }
 
 func TestServedIdentity_FoldsEffortAndOmitsWhenAbsent(t *testing.T) {
-	assert.Equal(t, "claude-opus-5:xhigh",
-		router.Decision{Model: "claude-opus-5", Effort: "xhigh"}.ServedIdentity())
-	assert.Equal(t, "claude-opus-5",
-		router.Decision{Model: "claude-opus-5"}.ServedIdentity())
+	assert.Equal(t, "zai-org/glm-5.3:high",
+		router.Decision{Model: "zai-org/glm-5.3", Effort: "high"}.ServedIdentity())
+	assert.Equal(t, "zai-org/glm-5.3",
+		router.Decision{Model: "zai-org/glm-5.3"}.ServedIdentity())
 }
 
 // ExcludedModels / SafetyExcludedModels are keyed on bare catalog IDs;
 // leaving effort on would silently disable loop-breaking for effort-carrying turns.
 func TestMaxedOutServedModel_StripsEffortSoExclusionMatches(t *testing.T) {
 	pin := sessionpin.Pin{
-		LastServedModel:   "claude-opus-5:xhigh",
+		LastServedModel:   "zai-org/glm-5.3:high",
 		LastOutputTokens:  8192,
 		LastTurnEndedAt:   time.Unix(100, 0),
 		LastOutputLimitAt: time.Unix(100, 0),
 	}
 
-	assert.Equal(t, "claude-opus-5", maxedOutServedModel(pin),
+	assert.Equal(t, "zai-org/glm-5.3", maxedOutServedModel(pin),
 		"exclusion keys are bare catalog IDs")
 }
 
 func TestMaxedOutServedModel_BareIdentityUnchanged(t *testing.T) {
 	pin := sessionpin.Pin{
-		LastServedModel:   "claude-opus-5",
+		LastServedModel:   "zai-org/glm-5.3",
 		LastOutputTokens:  8192,
 		LastTurnEndedAt:   time.Unix(100, 0),
 		LastOutputLimitAt: time.Unix(100, 0),
 	}
 
-	assert.Equal(t, "claude-opus-5", maxedOutServedModel(pin))
+	assert.Equal(t, "zai-org/glm-5.3", maxedOutServedModel(pin))
 }
 
 func TestBaseModelOf(t *testing.T) {
-	assert.Equal(t, "claude-opus-5", baseModelOf("claude-opus-5:xhigh"))
-	assert.Equal(t, "claude-opus-5", baseModelOf("claude-opus-5"))
+	assert.Equal(t, "zai-org/glm-5.3", baseModelOf("zai-org/glm-5.3:high"))
+	assert.Equal(t, "zai-org/glm-5.3", baseModelOf("zai-org/glm-5.3"))
 	assert.Equal(t, "", baseModelOf(""))
 }

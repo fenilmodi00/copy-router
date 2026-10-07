@@ -44,17 +44,17 @@ func TestPublicSurfaces_DispatchThroughResolvedPlan(t *testing.T) {
 		upstream func(http.ResponseWriter)
 	}{
 		"anthropic messages": {
-			provider: providers.ProviderAnthropic, model: "claude-haiku-4-5",
+			provider: providers.ProviderAnthropic, model: "zai-org/glm-5.3-flash",
 			purpose: inference.PurposeAnthropicMessages, policyID: "main-anthropic-messages",
 			upstream: jsonUpstream(`{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":1,"output_tokens":1}}`),
 			run: func(svc *proxy.Service, w http.ResponseWriter) error {
-				body := []byte(`{"model":"claude-haiku-4-5","max_tokens":4096,"messages":[{"role":"user","content":"hi"}]}`)
+				body := []byte(`{"model":"zai-org/glm-5.3-flash","max_tokens":4096,"messages":[{"role":"user","content":"hi"}]}`)
 				return svc.ProxyMessages(authedCtx("00000000-0000-0000-0000-000000000001"), body, w,
 					httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader("")))
 			},
 		},
 		"openai chat completions": {
-			provider: providers.ProviderOpenAI, model: "gpt-5.6-luna",
+			provider: providers.ProviderOpenAI, model: "zai-org/glm-5.3-flash",
 			purpose: inference.PurposeOpenAIChatCompletions, policyID: "main-openai-chat-completions",
 			upstream: jsonUpstream(`{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`),
 			run: func(svc *proxy.Service, w http.ResponseWriter) error {
@@ -64,11 +64,11 @@ func TestPublicSurfaces_DispatchThroughResolvedPlan(t *testing.T) {
 			},
 		},
 		"openai responses": {
-			provider: providers.ProviderOpenAI, model: "gpt-5.5",
+			provider: providers.ProviderOpenAI, model: "deepseek-ai/deepseek-v4-flash",
 			purpose: inference.PurposeOpenAIResponses, policyID: "main-openai-responses",
 			upstream: jsonUpstream(`{"id":"resp_1","object":"response","output":[{"type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}]}`),
 			run: func(svc *proxy.Service, w http.ResponseWriter) error {
-				body := []byte(`{"model":"gpt-5.5","input":"hi"}`)
+				body := []byte(`{"model":"deepseek-ai/deepseek-v4-flash","input":"hi"}`)
 				return svc.ProxyOpenAIResponses(context.Background(), body, w,
 					httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader("")))
 			},
@@ -112,11 +112,11 @@ func TestHardPinnedUtilityTurns_DispatchUnderOwnPurpose(t *testing.T) {
 		policyID inference.PolicyID
 	}{
 		"probe": {
-			body:    `{"model":"claude-sonnet-4-6","max_tokens":1,"messages":[{"role":"user","content":"ping"}]}`,
+			body:    `{"model":"deepseek-ai/deepseek-v4.1-flash","max_tokens":1,"messages":[{"role":"user","content":"ping"}]}`,
 			purpose: inference.PurposeProbe, policyID: "aux-probe",
 		},
 		"title generation": {
-			body:    `{"model":"claude-sonnet-4-6","max_tokens":512,"output_config":{"format":{"type":"json_schema","schema":{"type":"object","properties":{"title":{"type":"string"}}}}},"messages":[{"role":"user","content":"Please write a title for this conversation."}]}`,
+			body:    `{"model":"deepseek-ai/deepseek-v4.1-flash","max_tokens":512,"output_config":{"format":{"type":"json_schema","schema":{"type":"object","properties":{"title":{"type":"string"}}}}},"messages":[{"role":"user","content":"Please write a title for this conversation."}]}`,
 			purpose: inference.PurposeTitleGeneration, policyID: "aux-title-generation",
 		},
 	}
@@ -127,8 +127,8 @@ func TestHardPinnedUtilityTurns_DispatchUnderOwnPurpose(t *testing.T) {
 			sink := &purposeSink{}
 			executor, err := dispatch.NewExecutor(dispatch.NewClients(clients), dispatch.WithAttemptSink(sink))
 			require.NoError(t, err)
-			fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-6", Reason: "test"}}
-			svc := proxy.NewService(fr, clients, nil, false, nil, newFakePinStore(), false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+			fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4.1-flash", Reason: "test"}}
+			svc := proxy.NewService(fr, clients, nil, false, nil, newFakePinStore(), false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 				WithInferenceExecutor(executor)
 
 			rec := httptest.NewRecorder()
@@ -141,7 +141,7 @@ func TestHardPinnedUtilityTurns_DispatchUnderOwnPurpose(t *testing.T) {
 			assert.Equal(t, tc.purpose, event.Purpose)
 			assert.Equal(t, tc.policyID, event.PolicyID)
 			assert.Equal(t, inference.AttemptOutcomeServed, event.Outcome)
-			assert.Equal(t, "claude-haiku-4-5", event.Target.CatalogID)
+			assert.Equal(t, "zai-org/glm-5.3-flash", event.Target.CatalogID)
 			assert.Equal(t, providers.ProviderAnthropic, event.Target.Provider)
 		})
 	}
@@ -151,15 +151,15 @@ func TestHardPinnedUtilityTurns_DispatchUnderOwnPurpose(t *testing.T) {
 // main-inference policy and served on the scorer's pick, not the hard pin.
 func TestClassifierTurn_DispatchUnderSurfacePurpose(t *testing.T) {
 	const anthropicOK = `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"output_tokens":1}}`
-	body := `{"model":"claude-sonnet-4-6","max_tokens":64,"messages":[{"role":"user","content":"is this safe? yes/no"}]}`
+	body := `{"model":"deepseek-ai/deepseek-v4.1-flash","max_tokens":64,"messages":[{"role":"user","content":"is this safe? yes/no"}]}`
 
 	provider := &fakeProvider{proxyResponse: jsonUpstream(anthropicOK)}
 	clients := map[string]providers.Client{providers.ProviderAnthropic: provider}
 	sink := &purposeSink{}
 	executor, err := dispatch.NewExecutor(dispatch.NewClients(clients), dispatch.WithAttemptSink(sink))
 	require.NoError(t, err)
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-6", Reason: "test"}}
-	svc := proxy.NewService(fr, clients, nil, false, nil, newFakePinStore(), false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4.1-flash", Reason: "test"}}
+	svc := proxy.NewService(fr, clients, nil, false, nil, newFakePinStore(), false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithInferenceExecutor(executor)
 
 	rec := httptest.NewRecorder()
@@ -172,5 +172,5 @@ func TestClassifierTurn_DispatchUnderSurfacePurpose(t *testing.T) {
 	assert.Equal(t, inference.PurposeAnthropicMessages, event.Purpose)
 	assert.Equal(t, inference.PolicyID("main-anthropic-messages"), event.PolicyID)
 	assert.Equal(t, inference.AttemptOutcomeServed, event.Outcome)
-	assert.Equal(t, "claude-sonnet-4-6", event.Target.CatalogID)
+	assert.Equal(t, "deepseek-ai/deepseek-v4.1-flash", event.Target.CatalogID)
 }

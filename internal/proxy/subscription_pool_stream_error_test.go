@@ -30,11 +30,11 @@ func TestProxyMessages_ManagedPoolStreamingFailureLeavesRenderingToHandler(t *te
 	svc := NewService(
 		fixedRouter{decision: router.Decision{
 			Provider: providers.ProviderAnthropic,
-			Model:    "claude-opus-4-8",
-			Metadata: &router.RoutingMetadata{CandidateModels: []string{"claude-opus-4-8"}},
+			Model:    "zai-org/glm-5.3",
+			Metadata: &router.RoutingMetadata{CandidateModels: []string{"zai-org/glm-5.3"}},
 		}},
 		map[string]providers.Client{providers.ProviderAnthropic: anthropic},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithManagedSubscriptions(leaser).
 		WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}})
 
@@ -42,7 +42,7 @@ func TestProxyMessages_ManagedPoolStreamingFailureLeavesRenderingToHandler(t *te
 		InstallationIDContextKey{}, "44444444-4444-4444-4444-444444444444")
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"claude-opus-4-8","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"zai-org/glm-5.3","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 
 	err := svc.ProxyMessages(ctx, body, rec, req)
 
@@ -66,11 +66,11 @@ func TestProxyMessages_ManagedPoolFailureBeforeAnyBytesLeavesRenderingToHandler(
 	svc := NewService(
 		fixedRouter{decision: router.Decision{
 			Provider: providers.ProviderAnthropic,
-			Model:    "claude-opus-4-8",
-			Metadata: &router.RoutingMetadata{CandidateModels: []string{"claude-opus-4-8"}},
+			Model:    "zai-org/glm-5.3",
+			Metadata: &router.RoutingMetadata{CandidateModels: []string{"zai-org/glm-5.3"}},
 		}},
 		map[string]providers.Client{providers.ProviderAnthropic: anthropic},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithManagedSubscriptions(leaser).
 		WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}})
 
@@ -78,7 +78,7 @@ func TestProxyMessages_ManagedPoolFailureBeforeAnyBytesLeavesRenderingToHandler(
 		InstallationIDContextKey{}, "66666666-6666-6666-6666-666666666666")
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"zai-org/glm-5.3","messages":[{"role":"user","content":"hi"}]}`)
 
 	err := svc.ProxyMessages(ctx, body, rec, req)
 

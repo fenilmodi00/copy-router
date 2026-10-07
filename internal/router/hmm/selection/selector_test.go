@@ -99,12 +99,12 @@ func TestSelectorKeepsCrossProviderCandidatesAndAppliesBoundedSubscriptionPrefer
 			"high": {
 				Arms: []string{
 					"openai/gpt-5.6-sol",
-					"x-ai/grok-4.6",
+					"zai-org/glm-5.3",
 					"anthropic/claude-fable-5.1",
 				},
 				ArmScores: map[string]float64{
 					"openai/gpt-5.6-sol":         30,
-					"x-ai/grok-4.6":              29.8,
+					"zai-org/glm-5.3":            29.8,
 					"anthropic/claude-fable-5.1": 29.7,
 				},
 			},
@@ -116,25 +116,25 @@ func TestSelectorKeepsCrossProviderCandidatesAndAppliesBoundedSubscriptionPrefer
 		ClassProbabilities: map[string]float64{"high": 1},
 		CandidateRosterIDs: []string{
 			"openai/gpt-5.6-sol",
-			"x-ai/grok-4.6",
+			"zai-org/glm-5.3",
 			"anthropic/claude-fable-5.1",
 		},
-		SubscriptionStatePreferredModels: []string{"grok-4.6"},
+		SubscriptionStatePreferredModels: []string{"zai-org/glm-5.3"},
 	}
 
 	pick, err := selector(context.Background(), input)
 	require.NoError(t, err)
-	assert.Equal(t, "x-ai/grok-4.6", pick.Arm)
+	assert.Equal(t, "zai-org/glm-5.3", pick.Arm)
 	assert.Equal(t, input.CandidateRosterIDs, pick.Trace.CandidateRosterIDs)
-	assert.Equal(t, []string{"grok-4.6"}, pick.Trace.SubscriptionStatePreferredModels)
-	assert.InDelta(t, 0.35, pick.Trace.ScoreComponentsByGroup["high"]["x-ai/grok-4.6"].SubscriptionStateBonus, 1e-6)
+	assert.Equal(t, []string{"zai-org/glm-5.3"}, pick.Trace.SubscriptionStatePreferredModels)
+	assert.InDelta(t, 0.35, pick.Trace.ScoreComponentsByGroup["high"]["zai-org/glm-5.3"].SubscriptionStateBonus, 1e-6)
 
 	input.SubscriptionStatePreferredModels = nil
-	input.SubsidizedModelCostFactor = map[string]float64{"grok-4.6": 0.1}
+	input.SubsidizedModelCostFactor = map[string]float64{"zai-org/glm-5.3": 0.1}
 	pick, err = selector(context.Background(), input)
 	require.NoError(t, err)
-	assert.Equal(t, "x-ai/grok-4.6", pick.Arm)
-	assert.InDelta(t, 0.315, pick.Trace.ScoreComponentsByGroup["high"]["x-ai/grok-4.6"].SubscriptionCostBonus, 1e-6)
+	assert.Equal(t, "zai-org/glm-5.3", pick.Arm)
+	assert.InDelta(t, 0.315, pick.Trace.ScoreComponentsByGroup["high"]["zai-org/glm-5.3"].SubscriptionCostBonus, 1e-6)
 
 	cluster := roster.Clusters["high"]
 	cluster.ArmScores["openai/gpt-5.6-sol"] = 31

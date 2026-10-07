@@ -42,7 +42,7 @@ func openAIChatService(provider providers.Client, model string) *proxy.Service {
 	return proxy.NewService(
 		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: model, Reason: "test"}},
 		map[string]providers.Client{providers.ProviderOpenAI: provider},
-		nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil,
+		nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil,
 	)
 }
 
@@ -56,7 +56,7 @@ const chatToolTurnBody = `{"model":"auto","stream":true,"max_tokens":2048,
 // function tools produces — while still receiving chat/completions on the wire.
 func TestService_ProxyOpenAIChatCompletion_TranslatesOntoResponses(t *testing.T) {
 	provider := &fakeProvider{proxyResponse: responsesStreamUpstream}
-	svc := openAIChatService(provider, "gpt-5.6-luna")
+	svc := openAIChatService(provider, "zai-org/glm-5.3-flash")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatToolTurnBody))
@@ -65,7 +65,7 @@ func TestService_ProxyOpenAIChatCompletion_TranslatesOntoResponses(t *testing.T)
 	require.Len(t, provider.proxyBodies, 1)
 	assert.Equal(t, providers.EndpointResponses, provider.proxyEndpoints[0])
 	sent := provider.proxyBodies[0]
-	assert.Equal(t, "gpt-5.6-luna", gjson.GetBytes(sent, "model").String())
+	assert.Equal(t, "zai-org/glm-5.3-flash", gjson.GetBytes(sent, "model").String())
 	assert.False(t, gjson.GetBytes(sent, "messages").Exists(), "the upstream request must speak Responses")
 	assert.Equal(t, "read main.go", gjson.GetBytes(sent, "input.0.content.0.text").String())
 	assert.Equal(t, "read_file", gjson.GetBytes(sent, "tools.0.name").String(),
@@ -84,7 +84,7 @@ func TestService_ProxyOpenAIChatCompletion_TranslatesOntoResponses(t *testing.T)
 // A non-streaming chat client gets one chat.completion body, not SSE.
 func TestService_ProxyOpenAIChatCompletion_TranslatesOntoResponsesNonStreaming(t *testing.T) {
 	provider := &fakeProvider{proxyResponse: responsesStreamUpstream}
-	svc := openAIChatService(provider, "gpt-5.6-luna")
+	svc := openAIChatService(provider, "zai-org/glm-5.3-flash")
 
 	body := strings.Replace(chatToolTurnBody, `"stream":true`, `"stream":false`, 1)
 	rec := httptest.NewRecorder()
@@ -148,7 +148,7 @@ func TestService_ProxyOpenAIChatCompletion_ResponsesEndpointSelection(t *testing
 				_, _ = io.WriteString(w, "data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n")
 				_, _ = io.WriteString(w, "data: [DONE]\n\n")
 			}}
-			svc := openAIChatService(provider, "gpt-5.6-luna")
+			svc := openAIChatService(provider, "zai-org/glm-5.3-flash")
 
 			ctx := context.Background()
 			if tc.broadOff {
@@ -184,7 +184,7 @@ func TestService_ProxyOpenAIChatCompletion_FallsBackWhenEndpointLacksResponses(t
 			_, _ = io.WriteString(w, "data: [DONE]\n\n")
 		},
 	}
-	svc := openAIChatService(provider, "gpt-5.6-luna")
+	svc := openAIChatService(provider, "zai-org/glm-5.3-flash")
 
 	for _, want := range [][]providers.Endpoint{
 		{providers.EndpointResponses, providers.EndpointChatCompletions},
@@ -220,7 +220,7 @@ func TestService_ProxyOpenAIChatCompletion_UsesBYOKBaseForResponsesCapability(t 
 			_, _ = io.WriteString(w, "data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
 		},
 	}
-	svc := openAIChatService(provider, "gpt-5.6-luna")
+	svc := openAIChatService(provider, "zai-org/glm-5.3-flash")
 	ctx := context.WithValue(context.Background(), proxy.ExternalAPIKeysContextKey{}, []*auth.ExternalAPIKey{{
 		Provider:  providers.ProviderOpenAI,
 		Plaintext: []byte("synthetic-key"),
@@ -257,7 +257,7 @@ func TestService_ProxyOpenAIChatCompletion_NoResponsesFallbackAfterCommit(t *tes
 			_, _ = io.WriteString(w, "data: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"delta\":\"committed\"}\n\n")
 		},
 	}
-	svc := openAIChatService(provider, "gpt-5.6-luna")
+	svc := openAIChatService(provider, "zai-org/glm-5.3-flash")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatToolTurnBody))
@@ -278,7 +278,7 @@ func TestService_ProxyOpenAIChatCompletion_MalformedUpstreamFrameReported(t *tes
 		_, _ = io.WriteString(w, "data: {\"type\":\"response.outp\n\n")
 		_, _ = io.WriteString(w, "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n")
 	}}
-	svc := openAIChatService(provider, "gpt-5.6-luna")
+	svc := openAIChatService(provider, "zai-org/glm-5.3-flash")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatToolTurnBody))
@@ -314,7 +314,7 @@ func TestService_ProxyOpenAIChatCompletion_LogsToolCallIssues(t *testing.T) {
 			_, _ = io.WriteString(w, "data: "+frame+"\n\n")
 		}
 	}}
-	svc := openAIChatService(provider, "gpt-5.6-luna")
+	svc := openAIChatService(provider, "zai-org/glm-5.3-flash")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatToolTurnBody))
@@ -333,9 +333,9 @@ func TestService_ProxyOpenAIChatCompletion_NonOpenAIProviderKeepsChatCompletions
 		_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
 	}}
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: "gpt-5.6-luna", Reason: "test"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: "zai-org/glm-5.3-flash", Reason: "test"}},
 		map[string]providers.Client{providers.ProviderAIAND: provider},
-		nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil,
+		nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil,
 	)
 
 	body := `{"model":"auto","messages":[{"role":"user","content":"hi"}]}`

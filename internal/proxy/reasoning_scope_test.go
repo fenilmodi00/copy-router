@@ -5,13 +5,11 @@ import (
 	"net/http"
 	"testing"
 
-	"weave-os/router/internal/auth"
 	"weave-os/router/internal/dispatch"
 	"weave-os/router/internal/providers"
 	"weave-os/router/internal/providers/openaicompat"
 	"weave-os/router/internal/requestcontext"
 	"weave-os/router/internal/router"
-	"weave-os/router/internal/subscriptions"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,7 +34,7 @@ func TestReasoningReplayScope_DistinguishesUpstreams(t *testing.T) {
 		PrincipalID: "external-key:key-a",
 	}
 	ctx := requestcontext.WithCredentials(context.Background(), base)
-	decision := router.Decision{Provider: "openai_compat", Model: "grok-4-fast"}
+	decision := router.Decision{Provider: "openai_compat", Model: "moonshotai/kimi-k3"}
 	want := svc.reasoningReplayScope(ctx, decision)
 	require.NotEmpty(t, want)
 	assert.Equal(t, want, svc.reasoningReplayScope(ctx, decision), "same upstream keeps the scope stable across turns")
@@ -45,7 +43,7 @@ func TestReasoningReplayScope_DistinguishesUpstreams(t *testing.T) {
 		creds    requestcontext.Credentials
 		decision router.Decision
 	}{
-		"another model":    {*base, router.Decision{Provider: decision.Provider, Model: "gpt-5.6-luna"}},
+		"another model":    {*base, router.Decision{Provider: decision.Provider, Model: "zai-org/glm-5.3-flash"}},
 		"another provider": {*base, router.Decision{Provider: "openai", Model: decision.Model}},
 		"another principal": {
 			requestcontext.Credentials{APIKey: base.APIKey, Source: base.Source, BaseURL: base.BaseURL, PrincipalID: "external-key:key-b"},
@@ -70,7 +68,7 @@ func TestReasoningReplayScope_DistinguishesUpstreams(t *testing.T) {
 				Source:       base.Source,
 				BaseURL:      base.BaseURL,
 				PrincipalID:  base.PrincipalID,
-				ModelAliases: map[string]string{decision.Model: "grok-4-fast-eu"},
+				ModelAliases: map[string]string{decision.Model: "motif-technologies/motif-3"},
 			},
 			decision,
 		},
@@ -88,7 +86,7 @@ func TestReasoningReplayScope_DistinguishesUpstreams(t *testing.T) {
 // scope: keying on it would drop reasoning the upstream would have accepted.
 func TestReasoningReplayScope_SurvivesWorkloadIdentityTokenRefresh(t *testing.T) {
 	svc := reasoningScopeService(t, nil)
-	decision := router.Decision{Provider: "openai_compat", Model: "grok-4.6"}
+	decision := router.Decision{Provider: "openai_compat", Model: "deepseek-ai/deepseek-v4-pro"}
 	scopeFor := func(bearer string) string {
 		return svc.reasoningReplayScope(requestcontext.WithCredentials(context.Background(), &requestcontext.Credentials{
 			APIKey:      []byte(bearer),
@@ -106,7 +104,7 @@ func TestReasoningReplayScope_SurvivesWorkloadIdentityTokenRefresh(t *testing.T)
 // different Snowflake account.
 func TestReasoningReplayScope_NormalizesEndpoint(t *testing.T) {
 	svc := reasoningScopeService(t, nil)
-	decision := router.Decision{Provider: "openai_compat", Model: "grok-4.6"}
+	decision := router.Decision{Provider: "openai_compat", Model: "deepseek-ai/deepseek-v4-pro"}
 	scopeFor := func(baseURL string) string {
 		return svc.reasoningReplayScope(requestcontext.WithCredentials(context.Background(), &requestcontext.Credentials{
 			Source:      requestcontext.SourceBYOK,
@@ -125,7 +123,7 @@ func TestReasoningReplayScope_NormalizesEndpoint(t *testing.T) {
 // key, which no request-scoped value describes — two deployments of the same
 // provider and model must still not share a scope.
 func TestReasoningReplayScope_DeploymentKeyedTurnsAreDistinct(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderAIAND, Model: "grok-4.6"}
+	decision := router.Decision{Provider: providers.ProviderAIAND, Model: "deepseek-ai/deepseek-v4-pro"}
 	scopeFor := func(apiKey, baseURL string) string {
 		svc := reasoningScopeService(t, map[string]providers.Client{
 			providers.ProviderAIAND: openaicompat.NewClient(apiKey, baseURL),
@@ -151,33 +149,11 @@ func TestReasoningReplayScope_DoesNotLeakCredential(t *testing.T) {
 	svc := reasoningScopeService(t, nil)
 	creds := &requestcontext.Credentials{APIKey: []byte("sk-secret-value"), AccountID: []byte("acct-secret")}
 	scope := svc.reasoningReplayScope(requestcontext.WithCredentials(context.Background(), creds),
-		router.Decision{Provider: "openai", Model: "gpt-5.5"})
+		router.Decision{Provider: "openai", Model: "deepseek-ai/deepseek-v4-flash"})
 
 	assert.NotContains(t, scope, "sk-secret-value")
 	assert.NotContains(t, scope, "acct-secret")
 	assert.NotContains(t, openaicompat.NewClient("sk-secret-value", cortexBaseURL).DeploymentPrincipal(), "sk-secret-value")
-}
-
-// A managed Codex lease hands out a refreshed access token, so the lease's
-// ChatGPT account — not the token — is what the scope must key on.
-func TestReasoningReplayScope_SurvivesManagedSubscriptionTokenRefresh(t *testing.T) {
-	decision := router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-sol"}
-	scopeFor := func(accessToken, providerAccount string) string {
-		leaser := &scriptedSubscriptionLeaser{leases: []subscriptions.Lease{
-			{AccountID: "opaque-codex", ProviderAccount: providerAccount, AccessToken: accessToken},
-		}}
-		svc := newServiceWithProviders(t, nil).WithManagedSubscriptions(leaser)
-		ctx, lease, managed, err := svc.leaseManagedSubscription(
-			managedSubscriptionContext(auth.SubscriptionProviderCodex), providers.ProviderOpenAI, decision.Model,
-		)
-		require.NoError(t, err)
-		require.True(t, managed)
-		defer lease.Release()
-		return svc.reasoningReplayScope(ctx, decision)
-	}
-
-	assert.Equal(t, scopeFor("token-a", "chatgpt-1"), scopeFor("token-b", "chatgpt-1"))
-	assert.NotEqual(t, scopeFor("token-a", "chatgpt-1"), scopeFor("token-a", "chatgpt-2"))
 }
 
 // A Codex subscription refreshes its bearer mid-session; the ChatGPT account

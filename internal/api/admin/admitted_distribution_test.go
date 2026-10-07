@@ -32,9 +32,9 @@ func TestAdmittedRoutingDistributionUsesEachRequestsPolicy(t *testing.T) {
 	engine := gin.New()
 	engine.GET("/v1/router/routing-distribution", admin.AdmittedRoutingDistributionHandler(policyregistry.AdmittedRosterSource{}))
 	for _, profile := range []struct{ arm, model string }{
-		{"openai/gpt-5.6-luna", "gpt-5.6-luna"},
-		{"x-ai/grok-4.6", "grok-4.6"},
-		{"openai/gpt-5.6-luna", "gpt-5.6-luna"},
+		{"zai-org/glm-5.3", "zai-org/glm-5.3"},
+		{"deepseek-ai/deepseek-v4-pro", "deepseek-ai/deepseek-v4-pro"},
+		{"zai-org/glm-5.3", "zai-org/glm-5.3"},
 	} {
 		for _, strategy := range []router.Strategy{"", router.StrategyHMM, router.StrategyHMMEmbedding} {
 			request := httptest.NewRequest(http.MethodGet, "/v1/router/routing-distribution?grid=2&strategy="+string(strategy), nil)
@@ -71,9 +71,9 @@ func TestAdmittedRoutingDistributionRejectsNonHMMAndAppliesExclusions(t *testing
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.GET("/v1/router/routing-distribution", admin.AdmittedRoutingDistributionHandler(policyregistry.AdmittedRosterSource{}))
-	for _, query := range []string{"strategy=" + string(router.StrategyCluster), "strategy=" + string(router.StrategyRL), "strategy=" + string(router.StrategyHMMBeta), "strategy=unknown", "excluded_models=gpt-5.6-luna", "grid=102"} {
+	for _, query := range []string{"strategy=" + string(router.StrategyCluster), "strategy=" + string(router.StrategyRL), "strategy=" + string(router.StrategyHMMBeta), "strategy=unknown", "excluded_models=zai-org/glm-5.3", "grid=102"} {
 		request := httptest.NewRequest(http.MethodGet, "/v1/router/routing-distribution?"+query, nil)
-		request = request.WithContext(policyregistry.WithServingSnapshot(request.Context(), profileDistributionSnapshot("openai/gpt-5.6-luna")))
+		request = request.WithContext(policyregistry.WithServingSnapshot(request.Context(), profileDistributionSnapshot("zai-org/glm-5.3")))
 		recorder := httptest.NewRecorder()
 		engine.ServeHTTP(recorder, request)
 		assert.Equal(t, http.StatusBadRequest, recorder.Code, query)

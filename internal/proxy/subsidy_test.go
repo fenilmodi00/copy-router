@@ -69,42 +69,6 @@ func TestPresentSubscriptionTokens_DisabledReportsNone(t *testing.T) {
 	assert.True(t, RequestPresentsCoveringSubscription(context.Background(), h, routePathMessages))
 }
 
-// End-to-end: the key withUsageObserver records under must equal the key
-// subsidyFactors reads, or the discount never materializes. Drives the real
-// observer closure (as a provider would) with a resolved Codex credential and an
-// upstream rate-limit response, then asserts subsidyFactors returns the discount.
-func TestSubsidy_RecordReadKeyAgreement(t *testing.T) {
-	s := (&Service{}).WithSubscriptionAwareRouting(
-		usage.NewObserver([]byte("salt"), 10*time.Minute, time.Now), 0.05, 2.0)
-
-	const jwt = "eyJhbGciOi.codex.jwt"
-	headers := http.Header{}
-	headers.Set("Authorization", "Bearer "+jwt)
-	headers.Set("ChatGPT-Account-ID", "acct-1")
-
-	ctx := context.Background()
-	obsCtx := s.withUsageObserver(ctx, headers)
-
-	// Simulate the resolved Codex credential + an upstream response at 10% used,
-	// invoked the way a provider does after the upstream call.
-	cred := &Credentials{APIKey: []byte(jwt), AccountID: []byte("acct-1"), Source: credSourceCodexSubscription, OAuth: true}
-	callCtx := context.WithValue(obsCtx, CredentialsContextKey{}, cred)
-	resp := http.Header{}
-	resp.Set("x-codex-primary-used-percent", "10")
-	resp.Set("x-codex-primary-window-minutes", "300")
-	providers.ObserveUpstreamHeaders(callCtx, resp)
-
-	// subsidyFactors must read back the SAME key and discount covered GPT models.
-	factors := s.subsidyFactors(ctx, headers)
-	require.NotNil(t, factors, "headroom was observed; factors must be non-nil")
-	f, ok := factors["gpt-5.6-sol"]
-	require.True(t, ok, "covered GPT model must be subsidized")
-	assert.Less(t, f, 1.0, "10%% used → discounted below full price")
-	assert.GreaterOrEqual(t, f, 0.05, "never below epsilon")
-	assert.NotContains(t, factors, "gpt-5.4-nano",
-		"infrastructure OpenAI models must not receive the caller-subscription discount")
-}
-
 func TestClaudeOverageStopsSubscriptionRouting(t *testing.T) {
 	observer := usage.NewObserver([]byte("salt"), 10*time.Minute, time.Now)
 	service := (&Service{deploymentKeyedProviders: map[string]struct{}{providers.ProviderAnthropic: {}}}).
@@ -144,48 +108,6 @@ func TestClaudeOverageDispatchesOnDeploymentKey(t *testing.T) {
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Zero(t, upstream.subDispatches, "billable Claude OAuth must be suppressed before dispatch")
 	assert.Equal(t, 1, upstream.paidDispatches, "the turn must use the Weave deployment key")
-}
-
-func TestSubsidyFactors_ClaudeColdStartIsNeutral(t *testing.T) {
-	s := (&Service{}).WithSubscriptionAwareRouting(
-		usage.NewObserver([]byte("salt"), time.Minute, time.Now), 0.05, 2.0)
-
-	h := http.Header{}
-	h.Set("Authorization", "Bearer sk-ant-oat01-cold")
-	assert.Nil(t, s.subsidyFactors(context.Background(), h),
-		"unknown Claude billing state must not bias routing toward Anthropic")
-
-	h.Set("Authorization", "Bearer eyJhbGciOi.codex.jwt")
-	h.Set("ChatGPT-Account-ID", "acct-1")
-	factors := s.subsidyFactors(context.Background(), h)
-	require.NotNil(t, factors, "Codex retains its observed-account bootstrap")
-	assert.InDelta(t, 0.05, factors["gpt-5.6-sol"], 1e-9)
-}
-
-// Per-installation opt-out: when the org has disabled subscription-aware
-// routing, a present subscription must produce NO subsidy factors so the scorer
-// adds no Claude bonus and non-Claude models compete on merits. Mirrors the
-// cold-start case but with the disable flag stashed on ctx by the auth
-// middleware — the discount is otherwise non-nil there, so this asserts the
-// flag is what suppresses it.
-func TestSubsidyFactors_DisabledForInstallation(t *testing.T) {
-	observer := usage.NewObserver([]byte("salt"), time.Minute, time.Now)
-	s := (&Service{}).WithSubscriptionAwareRouting(observer, 0.05, 2.0)
-
-	h := http.Header{}
-	h.Set("Authorization", "Bearer sk-ant-oat01-cold")
-	observer.Record(observer.Key([]byte("sk-ant-oat01-cold")), usage.Snapshot{
-		Primary: usage.Window{UsedPercent: 0.10, WindowMinutes: 300},
-	})
-
-	// Sanity: without the flag the same request DOES subsidize (guards against a
-	// vacuous pass if the sub stopped being detected).
-	require.NotNil(t, s.subsidyFactors(context.Background(), h),
-		"baseline: a present sub subsidizes when routing is not disabled")
-
-	ctx := context.WithValue(context.Background(), InstallationSubscriptionRoutingDisabledContextKey{}, true)
-	assert.Nil(t, s.subsidyFactors(ctx, h),
-		"subscription routing disabled → no subsidy bonus, route on merits")
 }
 
 func TestPresentSubscriptionTokens_MaxProductScopeReportsNone(t *testing.T) {

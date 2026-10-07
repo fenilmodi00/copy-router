@@ -98,7 +98,7 @@ func newOverloadTestService(store *overloadStubPinStore) *Service {
 		nil,
 		store,
 		false,
-		"anthropic", "claude-haiku-4-5",
+		"anthropic", "zai-org/glm-5.3-flash",
 		nil,
 	)
 }

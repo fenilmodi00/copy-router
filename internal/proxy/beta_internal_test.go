@@ -183,7 +183,7 @@ func betaTestEnvelope(t *testing.T, text string, withSession bool) *translate.Re
 		metadata = `,"metadata":{"user_id":"user_account__session_4dbee464-ebf7-437f-9f20-db5a6f7fe3b4"}`
 	}
 	env, err := translate.ParseAnthropic([]byte(
-		`{"model":"claude-sonnet-5","messages":[{"role":"user","content":` +
+		`{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":` +
 			mustJSONQuote(t, text) + `}],"max_tokens":128` + metadata + `}`,
 	))
 	require.NoError(t, err)
@@ -541,7 +541,7 @@ func TestProxyEntrypointsInterceptBetaWithoutRoutingUpstream(t *testing.T) {
 				WithSessionStrategyStore(store)
 			ctx := context.WithValue(context.Background(), APIKeyIDContextKey{}, "beta-test-key")
 			ctx = context.WithValue(ctx, InstallationIDContextKey{}, uuid.NewString())
-			body := []byte(`{"model":"claude-sonnet-5","messages":[{"role":"user","content":"/beta"}],"max_tokens":128,"metadata":{"user_id":"user_account__session_4dbee464-ebf7-437f-9f20-db5a6f7fe3b4"}}`)
+			body := []byte(`{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":"/beta"}],"max_tokens":128,"metadata":{"user_id":"user_account__session_4dbee464-ebf7-437f-9f20-db5a6f7fe3b4"}}`)
 			request := httptest.NewRequest("POST", "/v1/messages", nil)
 			response := httptest.NewRecorder()
 
@@ -627,10 +627,10 @@ func TestProxyEntrypointsStripHistoricalBetaArtifactsBeforeRouting(t *testing.T)
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			decisionProvider := providers.ProviderAnthropic
-			decisionModel := "claude-haiku-4-5"
+			decisionModel := "zai-org/glm-5.3-flash"
 			if tt.openAI {
 				decisionProvider = providers.ProviderOpenAI
-				decisionModel = "gpt-5.5"
+				decisionModel = "deepseek-ai/deepseek-v4-flash"
 			}
 			routing := &betaTestRouter{decision: router.Decision{
 				Provider: decisionProvider,
@@ -644,10 +644,10 @@ func TestProxyEntrypointsStripHistoricalBetaArtifactsBeforeRouting(t *testing.T)
 					providers.ProviderOpenAI:    embedTestProvider{},
 				},
 				nil, false, nil, nil, false,
-				providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+				providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 			)
 			body, err := json.Marshal(map[string]any{
-				"model": "claude-opus-4-8",
+				"model": "zai-org/glm-5.3",
 				"messages": []any{
 					map[string]any{"role": "user", "content": "inspect this repository"},
 					map[string]any{"role": "assistant", "content": "I will inspect it."},
@@ -689,7 +689,7 @@ func TestHistoricalBetaArtifactsStripStaleThinkingSignatures(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			routing := &betaTestRouter{decision: router.Decision{
 				Provider: providers.ProviderAnthropic,
-				Model:    "claude-opus-4-7",
+				Model:    "deepseek-ai/deepseek-v4-pro",
 				Reason:   "test",
 			}}
 			provider := &betaCaptureProvider{}
@@ -697,10 +697,10 @@ func TestHistoricalBetaArtifactsStripStaleThinkingSignatures(t *testing.T) {
 				routing,
 				map[string]providers.Client{providers.ProviderAnthropic: provider},
 				nil, false, nil, nil, false,
-				providers.ProviderAnthropic, "claude-opus-4-7", nil,
+				providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-pro", nil,
 			)
 			body := []byte(`{
-				"model":"claude-opus-4-7",
+				"model":"deepseek-ai/deepseek-v4-pro",
 				"messages":[
 					{"role":"user","content":"inspect this repository"},
 					{"role":"assistant","content":[
@@ -737,10 +737,10 @@ func TestBetaPreferenceSurvivesFirstMessageRewriteWithinClientSession(t *testing
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			decisionProvider := providers.ProviderAnthropic
-			decisionModel := "claude-haiku-4-5"
+			decisionModel := "zai-org/glm-5.3-flash"
 			if tt.openAI {
 				decisionProvider = providers.ProviderOpenAI
-				decisionModel = "gpt-5.5"
+				decisionModel = "deepseek-ai/deepseek-v4-flash"
 			}
 			decision := router.Decision{Provider: decisionProvider, Model: decisionModel, Reason: "test"}
 			stableRouter := &betaTestRouter{decision: decision}
@@ -752,7 +752,7 @@ func TestBetaPreferenceSurvivesFirstMessageRewriteWithinClientSession(t *testing
 					providers.ProviderOpenAI:    embedTestProvider{},
 				},
 				nil, false, nil, nil, false,
-				providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+				providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 			).
 				WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyHMMBeta, Router: betaRouter}).
 				WithSessionStrategyStore(&betaTestPreferenceStore{})
@@ -770,7 +770,7 @@ func TestBetaPreferenceSurvivesFirstMessageRewriteWithinClientSession(t *testing
 			}
 			send := func(firstUserMessage string) {
 				body, err := json.Marshal(map[string]any{
-					"model":      "claude-sonnet-5",
+					"model":      "deepseek-ai/deepseek-v4.1-flash",
 					"messages":   []any{map[string]any{"role": "user", "content": firstUserMessage}},
 					"tools":      tools,
 					"max_tokens": 4096,

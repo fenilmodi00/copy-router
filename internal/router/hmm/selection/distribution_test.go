@@ -21,14 +21,14 @@ func TestRoutingDistributionUsesLivePreferenceScorer(t *testing.T) {
 		},
 		Clusters: map[string]rosterdata.Cluster{
 			"low": {
-				Arms: []string{"openai/gpt-5.6-luna", "x-ai/grok-4.6"},
+				Arms: []string{"deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3"},
 				ArmScores: map[string]float64{
-					"openai/gpt-5.6-luna": 30,
-					"x-ai/grok-4.6":       25,
+					"deepseek-ai/deepseek-v4-pro": 30,
+					"zai-org/glm-5.3":             25,
 				},
 				ArmIndices: map[string]rosterdata.ArmIndices{
-					"openai/gpt-5.6-luna": {WII: 90, WPI: 10},
-					"x-ai/grok-4.6":       {WII: 55, WPI: 0},
+					"deepseek-ai/deepseek-v4-pro": {WII: 90, WPI: 10},
+					"zai-org/glm-5.3":             {WII: 55, WPI: 0},
 				},
 			},
 		},
@@ -52,23 +52,23 @@ func TestRoutingDistributionHonorsExclusions(t *testing.T) {
 	roster := dynamicRoster()
 	// Replace test-only IDs with catalog-backed IDs so distribution can resolve them.
 	cluster := roster.Clusters["low"]
-	cluster.Arms = []string{"openai/gpt-5.6-luna", "x-ai/grok-4.6"}
-	cluster.ArmScores = map[string]float64{"openai/gpt-5.6-luna": 30, "x-ai/grok-4.6": 25}
+	cluster.Arms = []string{"deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3"}
+	cluster.ArmScores = map[string]float64{"deepseek-ai/deepseek-v4-pro": 30, "zai-org/glm-5.3": 25}
 	cluster.ArmIndices = map[string]rosterdata.ArmIndices{
-		"openai/gpt-5.6-luna": {WII: 90, WPI: 10},
-		"x-ai/grok-4.6":       {WII: 55, WPI: 0},
+		"deepseek-ai/deepseek-v4-pro": {WII: 90, WPI: 10},
+		"zai-org/glm-5.3":             {WII: 55, WPI: 0},
 	}
 	roster.Clusters["low"] = cluster
 
 	points, err := selection.RoutingDistribution(
 		roster,
 		2,
-		map[string]struct{}{"gpt-5.6-luna": {}},
+		map[string]struct{}{"deepseek-ai/deepseek-v4-pro": {}},
 		nil,
 	)
 	require.NoError(t, err)
 	for _, point := range points {
 		require.Len(t, point.Models, 1)
-		assert.NotEqual(t, "gpt-5.6-luna", point.Models[0].Model)
+		assert.NotEqual(t, "deepseek-ai/deepseek-v4-pro", point.Models[0].Model)
 	}
 }

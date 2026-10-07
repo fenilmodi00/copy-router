@@ -97,12 +97,12 @@ func newDemotionTestService(store sessionpin.Store, flagOn bool) *Service {
 		nil,
 		store,
 		false,
-		"anthropic", "claude-haiku-4-5",
+		"anthropic", "zai-org/glm-5.3-flash",
 		nil,
 	).WithCommittedStreamArmDemotion(flagOn)
 }
 
-const demotedArm = "claude-opus-4-7"
+const demotedArm = "deepseek-ai/deepseek-v4-pro"
 
 func TestMaybeDemoteArmAfterUnrescuedStall(t *testing.T) {
 	for _, tc := range []struct {
@@ -128,7 +128,7 @@ func TestMaybeDemoteArmAfterUnrescuedStall(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &demotionStubPinStore{}
-			svc := NewService(nil, nil, nil, false, nil, store, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+			svc := NewService(nil, nil, nil, false, nil, store, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 				WithRescuedFailureArmDemotion(tc.flagOn)
 			ctx := context.Background()
 			if tc.cancelled {
@@ -287,9 +287,9 @@ func TestMaybeDemoteArmAfterCommittedStreamFailure_ClusterAllowlistPinSkipped(t 
 		{name: "no lists configured", wantDemoted: true},
 		{name: "key lists pin every cluster to the failed model", keyLists: map[string][]string{"medium": {demotedArm}, "high": {demotedArm}, "maximum": {demotedArm}}, wantDemoted: false},
 		{name: "user lists pin every cluster to the failed model", userLists: map[string][]string{"high": {demotedArm}}, wantDemoted: false},
-		{name: "lists name an Anthropic sibling", keyLists: map[string][]string{"high": {demotedArm, "claude-sonnet-5"}}, wantDemoted: true},
-		{name: "lists name another vendor on a different cluster", keyLists: map[string][]string{"high": {demotedArm}, "low": {"gpt-5.6-luna"}}, wantDemoted: true},
-		{name: "intersection with the org list collapses to the failed model", keyLists: map[string][]string{"high": {demotedArm, "claude-sonnet-5"}}, userLists: map[string][]string{"high": {demotedArm}}, wantDemoted: false},
+		{name: "lists name an Anthropic sibling", keyLists: map[string][]string{"high": {demotedArm, "deepseek-ai/deepseek-v4.1-flash"}}, wantDemoted: true},
+		{name: "lists name another vendor on a different cluster", keyLists: map[string][]string{"high": {demotedArm}, "low": {"zai-org/glm-5.3-flash"}}, wantDemoted: true},
+		{name: "intersection with the org list collapses to the failed model", keyLists: map[string][]string{"high": {demotedArm, "deepseek-ai/deepseek-v4.1-flash"}}, userLists: map[string][]string{"high": {demotedArm}}, wantDemoted: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -500,7 +500,7 @@ func newRescuedDemotionTestService(store sessionpin.Store, flagOn bool) *Service
 		nil,
 		store,
 		false,
-		"anthropic", "claude-haiku-4-5",
+		"anthropic", "zai-org/glm-5.3-flash",
 		nil,
 	).WithRescuedFailureArmDemotion(flagOn)
 }
@@ -599,14 +599,14 @@ func TestUnrescuedResponseHeaderTimeoutExcludesPrimaryOnNextTurn(t *testing.T) {
 		primary,
 		installationID,
 		sessionKey,
-		sessionpin.DefaultRole,
-		sessionpin.DefaultRole,
+		demotionTurnRole,
+		demotionTurnRole,
 	)
 
 	assert.Equal(t, demotedPinModel, demoted)
 	assert.Equal(t, sessionpin.DemotionReasonResponseHeaderTimeout, demotionReason)
-	require.Contains(t, store.rows[sessionpin.DefaultRole].DemotedModels, demotedPinModel)
-	require.Contains(t, store.rows[hmmHistoryRole(sessionpin.DefaultRole)].DemotedModels, demotedPinModel)
+	require.Contains(t, store.rows[demotionTurnRole].DemotedModels, demotedPinModel)
+	require.Contains(t, store.rows[hmmHistoryRole(demotionTurnRole)].DemotedModels, demotedPinModel)
 
 	scorer := &authoritativeTestRouter{decision: router.Decision{
 		Provider: providers.ProviderAnthropic,
@@ -614,7 +614,7 @@ func TestUnrescuedResponseHeaderTimeoutExcludesPrimaryOnNextTurn(t *testing.T) {
 		Reason:   "response-header-timeout-next-turn",
 	}}
 	nextTurnService := NewService(nil, nil, nil, false, nil, &rolePinStore{byRole: store.rows}, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithPolicyStrategy(policy.StrategySpec{
 			Strategy: strategy,
 			Router:   scorer,
@@ -634,7 +634,7 @@ func TestUnrescuedResponseHeaderTimeoutExcludesPrimaryOnNextTurn(t *testing.T) {
 // and whose rescuer then died after commit strikes both arms, each under its
 // own reason, and neither hook fires when its own flag is off.
 func TestRescuedAndCommittedDemotionsAreIndependentlyFlagged(t *testing.T) {
-	const rescuer = "claude-sonnet-5"
+	const rescuer = "deepseek-ai/deepseek-v4.1-flash"
 	cases := []struct {
 		name         string
 		rescuedOn    bool
@@ -733,7 +733,7 @@ func TestMaybeDemoteArmAfterRescuedFailure_ClusterAllowlistPinSkipped(t *testing
 	}{
 		{name: "no lists configured", wantDemoted: true},
 		{name: "lists pin every cluster to the primary", keyLists: map[string][]string{"medium": {demotedArm}, "high": {demotedArm}, "maximum": {demotedArm}}, wantDemoted: false},
-		{name: "lists name an Anthropic sibling", keyLists: map[string][]string{"high": {demotedArm, "claude-sonnet-5"}}, wantDemoted: true},
+		{name: "lists name an Anthropic sibling", keyLists: map[string][]string{"high": {demotedArm, "deepseek-ai/deepseek-v4.1-flash"}}, wantDemoted: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -814,7 +814,7 @@ func TestMaybeDemoteArmAfterCommittedStreamFailure_LateFailureLeavesReplacementS
 	// Request B replaces it with a live hmm_beta pin on both rows.
 	betaPin := sessionpin.Pin{
 		SessionKey: key, Role: sessionpin.DefaultRole, InstallationID: installationID,
-		Provider: "anthropic", Model: "claude-sonnet-4-6", Strategy: router.StrategyHMMBeta,
+		Provider: "anthropic", Model: "deepseek-ai/deepseek-v4.1-flash", Strategy: router.StrategyHMMBeta,
 		TurnCount: 2, PinnedUntil: time.Now().Add(time.Hour),
 	}
 	require.NoError(t, store.Upsert(context.Background(), betaPin))

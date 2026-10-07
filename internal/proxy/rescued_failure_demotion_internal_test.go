@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	rescuedPrimaryModel = "claude-opus-5"
-	rescuerModel        = "gpt-5.6-luna"
+	rescuedPrimaryModel = "zai-org/glm-5.3"
+	rescuerModel        = "zai-org/glm-5.3-flash"
 )
 
 // failingClient answers every dispatch with the same error, so in-binding
@@ -40,7 +40,8 @@ func (c *failingClient) Passthrough(context.Context, providers.PreparedRequest, 
 	return providers.ErrNotImplemented
 }
 
-// servingClient streams one completed Responses turn on every dispatch.
+// servingClient streams one completed OpenAI chat-completions turn on every
+// dispatch (the AIAND target's wire shape).
 type servingClient struct {
 	err   error
 	calls int
@@ -53,10 +54,11 @@ func (c *servingClient) Proxy(_ context.Context, _ router.Decision, _ providers.
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	for _, frame := range []string{
-		`{"type":"response.output_text.delta","output_index":0,"delta":"served by sibling"}`,
-		`{"type":"response.completed","response":{"id":"resp_1","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"served by sibling"}]}],"usage":{"input_tokens":12,"output_tokens":3}}}`,
+		`data: {"id":"chatcmpl_1","object":"chat.completion.chunk","created":1,"model":"zai-org/glm-5.3-flash","choices":[{"index":0,"delta":{"role":"assistant","content":"served by sibling"},"finish_reason":null}]}`,
+		`data: {"id":"chatcmpl_1","object":"chat.completion.chunk","created":1,"model":"zai-org/glm-5.3-flash","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":3}}`,
+		`data: [DONE]`,
 	} {
-		_, _ = io.WriteString(w, "data: "+frame+"\n\n")
+		_, _ = io.WriteString(w, frame+"\n\n")
 	}
 	return nil
 }
@@ -74,7 +76,7 @@ func rescuableDecision(reason string, withSibling bool) router.Decision {
 	if withSibling {
 		d.Metadata = &router.RoutingMetadata{
 			CandidateModels:    []string{rescuedPrimaryModel, rescuerModel},
-			CandidateProviders: map[string]string{rescuerModel: providers.ProviderOpenAI},
+			CandidateProviders: map[string]string{rescuerModel: providers.ProviderAIAND},
 		}
 	}
 	return d
@@ -85,12 +87,12 @@ func newRescuedFailureTurnService(store sessionpin.Store, decision router.Decisi
 		staticRouter{decision: decision},
 		map[string]providers.Client{
 			providers.ProviderAnthropic: primary,
-			providers.ProviderOpenAI:    sibling,
+			providers.ProviderAIAND:     sibling,
 		},
-		nil, false, nil, store, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, store, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
 		providers.ProviderAnthropic: {},
-		providers.ProviderOpenAI:    {},
+		providers.ProviderAIAND:     {},
 	}).WithRetrySleep(func(context.Context, time.Duration) error { return nil }).WithRescuedFailureArmDemotion(flagOn)
 }
 
@@ -214,20 +216,20 @@ func TestProxyMessages_UnrescuedIdleFailureDemotesPrimary(t *testing.T) {
 }
 
 func TestProxyMessages_BaselineRetryKeepsStallDemotionOnPrimary(t *testing.T) {
-	const primaryModel = "gpt-6-astra"
+	const primaryModel = "deepseek-ai/deepseek-v4-pro"
 	store := &demotionStubPinStore{}
 	primary := &failingClient{err: providers.ErrUpstreamIdleTimeout}
 	baseline := &failingClient{err: providers.ErrUpstreamIdleTimeout}
 	svc := NewService(
 		staticRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: primaryModel, Reason: "test"}},
 		map[string]providers.Client{
-			providers.ProviderAnthropic: baseline,
-			providers.ProviderOpenAI:    primary,
+			providers.ProviderAIAND:  baseline,
+			providers.ProviderOpenAI: primary,
 		},
-		nil, false, nil, store, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, store, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
-		providers.ProviderAnthropic: {},
-		providers.ProviderOpenAI:    {},
+		providers.ProviderAIAND:  {},
+		providers.ProviderOpenAI: {},
 	}).WithRescuedFailureArmDemotion(true)
 
 	body := anthropicMessagesBody()

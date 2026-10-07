@@ -40,7 +40,7 @@ func TestResolveAndInjectCredentials_SuppressedSubClearedOnRouterKeyedPath(t *te
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer sk-ant-oat01-spent")
 
-	out := resolveAndInjectCredentials(ctx, providers.ProviderAnthropic, "claude-opus-4-8", headers)
+	out := resolveAndInjectCredentials(ctx, providers.ProviderAnthropic, "zai-org/glm-5.3", headers)
 
 	assert.Nil(t, CredentialsFromContext(out),
 		"a suppressed subscription must be cleared so the client uses its deployment key, not the spent token")
@@ -52,28 +52,12 @@ func TestResolveAndInjectCredentials_UnsuppressedSubStillForwarded(t *testing.T)
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer sk-ant-oat01-live")
 
-	out := resolveAndInjectCredentials(routerKeyedCtx(), providers.ProviderAnthropic, "claude-opus-4-8", headers)
+	out := resolveAndInjectCredentials(routerKeyedCtx(), providers.ProviderAnthropic, "zai-org/glm-5.3", headers)
 
 	got := CredentialsFromContext(out)
 	require.NotNil(t, got, "a live subscription must resolve on the router-key path")
 	assert.Equal(t, credSourceSubscription, got.Source)
 	assert.True(t, got.OAuth)
-}
-
-// The clear must be scoped to Anthropic: a suppressed-Claude request that also
-// carries a Codex subscription for an OpenAI turn must still resolve the Codex
-// credential (its OpenAI turns bill the caller's ChatGPT plan, unaffected).
-func TestResolveAndInjectCredentials_SuppressionDoesNotClearCodexOpenAITurn(t *testing.T) {
-	ctx := withSuppressedClaudeSubscription(routerKeyedCtx())
-	headers := http.Header{}
-	headers.Set("Authorization", "Bearer eyJhbGciOi.codex.jwt")
-	headers.Set("ChatGPT-Account-ID", "acct-1")
-
-	out := resolveAndInjectCredentials(ctx, providers.ProviderOpenAI, "gpt-5.6-sol", headers)
-
-	got := CredentialsFromContext(out)
-	require.NotNil(t, got, "a Codex subscription must still resolve for its OpenAI turn")
-	assert.Equal(t, credSourceCodexSubscription, got.Source)
 }
 
 // subscriptionDisabledCtx returns a router-keyed ctx with subscription routing
@@ -87,7 +71,7 @@ func TestResolveAndInjectCredentials_DisabledSuppressesClaudeSubscription(t *tes
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer sk-ant-oat01-live")
 
-	out := resolveAndInjectCredentials(subscriptionDisabledCtx(), providers.ProviderAnthropic, "claude-opus-4-8", headers)
+	out := resolveAndInjectCredentials(subscriptionDisabledCtx(), providers.ProviderAnthropic, "zai-org/glm-5.3", headers)
 
 	assert.Nil(t, CredentialsFromContext(out),
 		"toggle off must suppress the Claude subscription so the turn bills prepaid")
@@ -100,7 +84,7 @@ func TestResolveAndInjectCredentials_DisabledSuppressesCodexSubscription(t *test
 	headers.Set("Authorization", "Bearer eyJhbGciOi.codex.jwt")
 	headers.Set("ChatGPT-Account-ID", "acct-1")
 
-	out := resolveAndInjectCredentials(subscriptionDisabledCtx(), providers.ProviderOpenAI, "gpt-5.6-sol", headers)
+	out := resolveAndInjectCredentials(subscriptionDisabledCtx(), providers.ProviderOpenAI, "moonshotai/kimi-k3", headers)
 
 	assert.Nil(t, CredentialsFromContext(out),
 		"toggle off must suppress the Codex subscription so the turn bills prepaid")
@@ -128,7 +112,7 @@ func TestResolveAndInjectCredentials_DisabledCodexNotReResolvedFromContext(t *te
 	headers.Set("Authorization", "Bearer eyJhbGciOi.codex.jwt")
 	headers.Set("ChatGPT-Account-ID", "acct-1")
 
-	out := resolveAndInjectCredentials(ctx, providers.ProviderOpenAI, "gpt-5.6-sol", headers)
+	out := resolveAndInjectCredentials(ctx, providers.ProviderOpenAI, "moonshotai/kimi-k3", headers)
 
 	assert.Nil(t, CredentialsFromContext(out),
 		"a disabled Codex subscription carried on ctx must be cleared, not re-resolved")
@@ -141,7 +125,7 @@ func maxScopedRouterKeyedCtx() context.Context {
 func TestResolveAndInjectCredentials_MaxDoesNotInjectClaudeSubscription(t *testing.T) {
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer sk-ant-oat01-live")
-	out := resolveAndInjectCredentials(maxScopedRouterKeyedCtx(), providers.ProviderAnthropic, "claude-opus-4-8", headers)
+	out := resolveAndInjectCredentials(maxScopedRouterKeyedCtx(), providers.ProviderAnthropic, "zai-org/glm-5.3", headers)
 	assert.Nil(t, CredentialsFromContext(out))
 }
 
@@ -149,7 +133,7 @@ func TestResolveAndInjectCredentials_MaxDoesNotInjectCodexSubscription(t *testin
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer eyJhbGciOi.codex.jwt")
 	headers.Set("ChatGPT-Account-ID", "acct-1")
-	out := resolveAndInjectCredentials(maxScopedRouterKeyedCtx(), providers.ProviderOpenAI, "gpt-5.6-sol", headers)
+	out := resolveAndInjectCredentials(maxScopedRouterKeyedCtx(), providers.ProviderOpenAI, "moonshotai/kimi-k3", headers)
 	assert.Nil(t, CredentialsFromContext(out))
 }
 

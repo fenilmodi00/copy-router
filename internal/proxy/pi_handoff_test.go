@@ -24,8 +24,11 @@ import (
 	"weave-os/router/internal/translate"
 )
 
-const handoffTestBody = `{"model":"claude-sonnet-4-6","max_tokens":1024,"stream":false,"metadata":{"user_id":"pi:handoff-test"},"messages":[{"role":"user","content":"Implement the parser and verify its behavior."}]}`
+const handoffTestBody = `{"model":"deepseek-ai/deepseek-v4.1-flash","max_tokens":1024,"stream":false,"metadata":{"user_id":"pi:handoff-test"},"messages":[{"role":"user","content":"Implement the parser and verify its behavior."}]}`
 
+// handoffResponseProvider captures the dispatched body and answers the way an
+// AIand (OpenAI-compat) upstream does, so an Anthropic-format handoff turn
+// exercises the response translation instead of a cross-family passthrough.
 type handoffResponseProvider struct{ betaCaptureProvider }
 
 func (p *handoffResponseProvider) Proxy(ctx context.Context, decision router.Decision, req providers.PreparedRequest, w http.ResponseWriter, request *http.Request) error {
@@ -33,22 +36,22 @@ func (p *handoffResponseProvider) Proxy(ctx context.Context, decision router.Dec
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, err := io.WriteString(w, `{"type":"message","role":"assistant","content":[{"type":"text","text":"Review complete."}],"stop_reason":"end_turn","usage":{"input_tokens":2000,"output_tokens":10}}`)
+	_, err := io.WriteString(w, `{"id":"chatcmpl_handoff","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"Review complete."},"finish_reason":"stop"}],"usage":{"prompt_tokens":2000,"completion_tokens":10,"total_tokens":2010}}`)
 	return err
 }
 
 func handoffTestService() (*Service, *betaTestRouter, *betaCaptureProvider, context.Context) {
 	classifier := &betaTestRouter{decision: router.Decision{
-		Model: "claude-opus-4-7", Provider: providers.ProviderAnthropic,
+		Model: "deepseek-ai/deepseek-v4-pro", Provider: providers.ProviderAIAND,
 		Metadata: &router.RoutingMetadata{PolicyGroup: "high", AuthoritativePerTurnSelection: true},
 	}}
-	upstream := &betaCaptureProvider{}
-	svc := NewService(nil, map[string]providers.Client{providers.ProviderAnthropic: upstream}, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+	upstream := &handoffResponseProvider{}
+	svc := NewService(nil, map[string]providers.Client{providers.ProviderAIAND: upstream}, nil, false, nil, nil, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil).
 		WithPiHandoffSecret(strings.Repeat("test-secret-", 4)).
 		WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyHMM, Router: classifier, Capabilities: policy.Capabilities{AuthoritativePerTurnSelection: true}})
 	ctx := context.WithValue(context.Background(), APIKeyIDContextKey{}, "handoff-test-key")
 	ctx = context.WithValue(ctx, InstallationIDContextKey{}, uuid.NewString())
-	return svc, classifier, upstream, router.WithStrategy(ctx, router.StrategyHMM)
+	return svc, classifier, &upstream.betaCaptureProvider, router.WithStrategy(ctx, router.StrategyHMM)
 }
 
 func prepareTestHandoff(t *testing.T, svc *Service, ctx context.Context) preparedHandoff {
@@ -68,7 +71,7 @@ func TestPiHandoffPreparationDoesNotDispatchAndContinuationDoesNotReclassify(t *
 	require.Empty(t, upstream.body)
 	require.Equal(t, 1, classifier.calls)
 	require.Equal(t, "high", prepared.Complexity)
-	classifier.decision.Model = "claude-haiku-4-5"
+	classifier.decision.Model = "zai-org/glm-5.3-flash"
 	body, err := sjson.Set(handoffTestBody, "messages.0.content", "Compacted parser context; implement the remaining checks.")
 	require.NoError(t, err)
 	body, err = sjson.Set(body, piHandoffField, prepared.Token)
@@ -134,7 +137,7 @@ func TestPiHandoffRevalidatesSessionConfigurationAndEligibility(t *testing.T) {
 	}{
 		{"tools", func(r *router.Request) { r.ToolConfigurationSHA256 = "changed" }},
 		{"reasoning", func(r *router.Request) { r.ReasoningConfigurationSHA256 = "changed" }},
-		{"model", func(r *router.Request) { r.RequestedModel = "claude-haiku-4-5" }},
+		{"model", func(r *router.Request) { r.RequestedModel = "zai-org/glm-5.3-flash" }},
 		{"excluded", func(r *router.Request) { r.ExcludedModels = map[string]struct{}{prepared.Model: {}} }},
 		{"provider", func(r *router.Request) { r.EnabledProviders = map[string]struct{}{} }},
 	} {
@@ -153,7 +156,7 @@ func TestPiHandoffRevalidatesSessionConfigurationAndEligibility(t *testing.T) {
 
 func TestPiHandoffDisabledAndUtilityTurnsDoNotDispatch(t *testing.T) {
 	svc, classifier, upstream, ctx := handoffTestService()
-	for _, prompt := range []string{"/beta", "/force-model claude-opus-4-7", "/unforce-model"} {
+	for _, prompt := range []string{"/beta", "/force-model deepseek-ai/deepseek-v4-pro", "/unforce-model"} {
 		body, err := sjson.Set(handoffTestBody, "messages.0.content", prompt)
 		require.NoError(t, err)
 		recorder := httptest.NewRecorder()
@@ -172,9 +175,9 @@ func TestPiHandoffSummaryUsesPreviousModelWithoutReclassifyingOrWritingUsageToIt
 	store := newStubPinStore()
 	store.getFound = true
 	store.getPin = sessionpin.Pin{
-		Model: "claude-sonnet-4-6", Provider: providers.ProviderAnthropic,
+		Model: "deepseek-ai/deepseek-v4.1-flash", Provider: providers.ProviderAIAND,
 		Reason: "hmm_policy", PolicyGroup: "low", PinnedUntil: time.Now().Add(time.Hour),
-		LastServedModel: "claude-sonnet-4-6:high", LastTurnEndedAt: time.Now().Add(-time.Minute),
+		LastServedModel: "deepseek-ai/deepseek-v4.1-flash:high", LastTurnEndedAt: time.Now().Add(-time.Minute),
 	}
 	svc.pinStore = store
 	prepared := prepareTestHandoff(t, svc, ctx)
@@ -187,7 +190,7 @@ func TestPiHandoffSummaryUsesPreviousModelWithoutReclassifyingOrWritingUsageToIt
 	require.Equal(t, inference.PurposeClientCompaction, handoffFromContext(parsed).Route.Purpose)
 	require.Equal(t, policy.OverrideSourceSession, handoffFromContext(parsed).Route.Origin)
 	require.NoError(t, svc.ProxyMessages(ctx, []byte(body), httptest.NewRecorder(), httptest.NewRequest("POST", "/v1/messages", nil)))
-	require.Equal(t, "claude-sonnet-4-6", gjson.GetBytes(upstream.body, "model").String())
+	require.Equal(t, "deepseek-ai/deepseek-v4.1-flash", gjson.GetBytes(upstream.body, "model").String())
 	require.Equal(t, 1, classifier.calls)
 	require.Equal(t, pinWrites, len(store.upserts))
 	require.Zero(t, store.usageHits)
@@ -224,11 +227,11 @@ func TestPiHandoffRejectsConcurrentForceAndCrossSessionCommandsBeforeMutation(t 
 	require.NoError(t, err)
 	store := newStubPinStore()
 	store.getFound = true
-	store.getPin = sessionpin.Pin{Model: "claude-haiku-4-5", Provider: providers.ProviderAnthropic, Reason: translate.ReasonUserForceModel, PinnedUntil: time.Now().Add(time.Hour)}
+	store.getPin = sessionpin.Pin{Model: "zai-org/glm-5.3-flash", Provider: providers.ProviderAnthropic, Reason: translate.ReasonUserForceModel, PinnedUntil: time.Now().Add(time.Hour)}
 	svc.pinStore = store
 	err = svc.ProxyMessages(ctx, []byte(body), httptest.NewRecorder(), httptest.NewRequest("POST", "/v1/messages", nil))
 	require.ErrorIs(t, err, ErrHandoffInvalid)
-	for _, prompt := range []string{"/beta", "/force-model claude-opus-4-7", "/unforce-model"} {
+	for _, prompt := range []string{"/beta", "/force-model deepseek-ai/deepseek-v4-pro", "/unforce-model"} {
 		changed, err := sjson.Set(body, "messages.0.content", prompt)
 		require.NoError(t, err)
 		err = svc.ProxyMessages(ctx, []byte(changed), httptest.NewRecorder(), httptest.NewRequest("POST", "/v1/messages", nil))

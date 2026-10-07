@@ -59,11 +59,11 @@ func TestBoostServingAllowsForceModelHeader(t *testing.T) {
 
 	request, err := http.NewRequestWithContext(boostPlanOwnedContext(), http.MethodPost, "http://router.test/v1/messages", nil)
 	require.NoError(t, err)
-	request.Header.Set(ForceModelHeader, "claude-opus-5")
+	request.Header.Set(ForceModelHeader, "zai-org/glm-5.3")
 
 	ctx, forced, err := (&Service{}).applyForceModelHeader(request.Context(), request, uuid.Nil, [sessionpin.SessionKeyLen]byte{})
 	require.NoError(t, err)
-	assert.Equal(t, "claude-opus-5", forced)
+	assert.Equal(t, "zai-org/glm-5.3", forced)
 	assert.True(t, planOwnedServingRequest(ctx))
 }
 
@@ -72,12 +72,12 @@ func TestBoostServingHeaderForceModelCarriesEffortSameTurn(t *testing.T) {
 
 	request, err := http.NewRequestWithContext(boostPlanOwnedContext(), http.MethodPost, "http://router.test/v1/messages", nil)
 	require.NoError(t, err)
-	request.Header.Set(ForceModelHeader, "sol:medium")
+	request.Header.Set(ForceModelHeader, "deepseek-pro:medium")
 
 	svc := &Service{}
 	ctx, forced, err := svc.applyForceModelHeader(request.Context(), request, uuid.Nil, [sessionpin.SessionKeyLen]byte{})
 	require.NoError(t, err)
-	assert.Equal(t, "gpt-6.1-sol:medium", forced)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro:medium", forced)
 
 	env := forceCommandEnv(t)
 	features := env.RoutingFeatures(false)
@@ -86,7 +86,7 @@ func TestBoostServingHeaderForceModelCarriesEffortSameTurn(t *testing.T) {
 		router.Request{RequestedModel: features.Model, ForceModel: forced},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, "gpt-6.1-sol", result.Decision.Model)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", result.Decision.Model)
 	assert.Equal(t, "medium", result.Decision.Effort)
 }
 
@@ -99,8 +99,8 @@ func TestBoostServingKeepsLegacyForceModelPinActive(t *testing.T) {
 	store.pins[forceModelMapKey(sessionKey, role)] = sessionpin.Pin{
 		SessionKey:  sessionKey,
 		Role:        role,
-		Model:       "claude-opus-5",
-		Provider:    providers.ProviderAnthropic,
+		Model:       "zai-org/glm-5.3",
+		Provider:    providers.ProviderAIAND,
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: pinNeverExpires,
 	}
@@ -108,7 +108,7 @@ func TestBoostServingKeepsLegacyForceModelPinActive(t *testing.T) {
 
 	pin, active, noStoredState := svc.loadPinWithStoreState(boostPlanOwnedContext(), sessionKey, role)
 
-	assert.Equal(t, "claude-opus-5", pin.Model)
+	assert.Equal(t, "zai-org/glm-5.3", pin.Model)
 	assert.True(t, active)
 	assert.False(t, noStoredState)
 }
@@ -121,17 +121,17 @@ func TestBoostServingAppliesForceModelCommand(t *testing.T) {
 	forceKey := [sessionpin.SessionKeyLen]byte{3}
 
 	forcedModel, message, err := svc.applyForceModelCommand(
-		boostPlanOwnedContext(), env, translate.ForceModelResult{Model: "sol"}, uuid.New(), threadKey, forceKey,
+		boostPlanOwnedContext(), env, translate.ForceModelResult{Model: "deepseek-pro"}, uuid.New(), threadKey, forceKey,
 	)
 	require.NoError(t, err)
-	assert.Equal(t, "gpt-6.1-sol", forcedModel)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", forcedModel)
 	assert.Contains(t, message, "force-model applied")
 	assert.NotContains(t, message, "automatic model selection")
 
 	stored, found, err := store.Get(context.Background(), forceKey, forceModelSessionRole)
 	require.NoError(t, err)
 	require.True(t, found)
-	assert.Equal(t, "gpt-6.1-sol", stored.Model)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", stored.Model)
 }
 
 func TestBoostServingRoutesExplicitForceModel(t *testing.T) {
@@ -141,22 +141,15 @@ func TestBoostServingRoutesExplicitForceModel(t *testing.T) {
 
 	result, err := svc.runTurnLoop(
 		boostPlanOwnedContext(), env, features, "api-key", uuid.New(), "", nil,
-		router.Request{RequestedModel: features.Model, ForceModel: "sol"},
+		router.Request{RequestedModel: features.Model, ForceModel: "deepseek-pro"},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, "gpt-6.1-sol", result.Decision.Model)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", result.Decision.Model)
 	assert.Equal(t, translate.ReasonUserForceModel, result.Decision.Reason)
 }
 
-func TestMaxServingStillRejectsClosedSourceForceModel(t *testing.T) {
-	store := newForceModelMapStore()
-	svc := &Service{pinStore: store}
-	env := forceCommandEnv(t)
-	_, message, err := svc.applyForceModelCommand(
-		planOwnedContext(), env, translate.ForceModelResult{Model: "opus"}, uuid.New(),
-		[sessionpin.SessionKeyLen]byte{4}, [sessionpin.SessionKeyLen]byte{5},
-	)
-	require.NoError(t, err)
-	assert.Contains(t, message, "force-model rejected")
-	assert.Empty(t, store.pins)
-}
+// TestMaxServingStillRejectsClosedSourceForceModel was deleted with the
+// AIand-only cut: the roster is entirely open-source (catalog/source_test
+// asserts zero closed-source rows), so there is no closed-source force model
+// left for a Max-plan turn to reject — only unknown/retired names, which the
+// generic "isn't a recognized model" path already covers.

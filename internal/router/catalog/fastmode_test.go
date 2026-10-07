@@ -6,47 +6,16 @@ import (
 	"weave-os/router/internal/providers"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func TestFastPriceFor_PublishedRatesInheritCacheMultiplier(t *testing.T) {
-	fast, ok := FastPriceFor(providers.ProviderOpenAI, "gpt-5.6-luna")
-	require.True(t, ok)
-	assert.Equal(t, 0.40, fast.InputUSDPer1M)
-	assert.Equal(t, 2.40, fast.OutputUSDPer1M)
-	assert.Equal(t, 1.25, fast.CacheWriteMultiplier)
-	assert.Equal(t, 0.10, fast.CacheReadMultiplier)
-	require.NotNil(t, fast.LongContext)
-	assert.Equal(t, 0.80, fast.LongContext.InputUSDPer1M)
-	assert.Equal(t, 3.60, fast.LongContext.OutputUSDPer1M)
+// The AIand roster exposes no fast tier (no binding carries FastPrice), so
+// fast-mode pricing resolves for nothing.
 
-	opusFast, ok := FastPriceFor(providers.ProviderAnthropic, "claude-opus-5")
-	require.True(t, ok)
-	assert.Equal(t, Pricing{InputUSDPer1M: 10.00, OutputUSDPer1M: 50.00, CacheReadMultiplier: 0.10}, opusFast)
-}
-
-func TestFastPriceFor_BaseListPriceUnchanged(t *testing.T) {
-	base, ok := PriceFor(providers.ProviderOpenAI, "gpt-5.6-luna")
-	require.True(t, ok)
-	assert.Equal(t, 0.20, base.InputUSDPer1M)
-	assert.Equal(t, 1.20, base.OutputUSDPer1M)
-	assert.Equal(t, 1.25, base.CacheWriteMultiplier)
-	assert.Equal(t, 0.10, base.CacheReadMultiplier)
-	require.NotNil(t, base.LongContext)
-	assert.Equal(t, 0.40, base.LongContext.InputUSDPer1M)
-	assert.Equal(t, 1.80, base.LongContext.OutputUSDPer1M)
-	primary, ok := PrimaryPriceFor("gpt-5.6-luna")
-	require.True(t, ok)
-	assert.Equal(t, base, primary)
-}
-
-func TestFastPriceFor_NoFastTier(t *testing.T) {
+func TestFastPriceFor_NoFastTierOnRoster(t *testing.T) {
 	cases := []struct{ name, provider, id string }{
-		{"pro has no priority tier", providers.ProviderOpenAI, "gpt-5.4-pro"},
-		{"opus 4.7 rejects speed", providers.ProviderAnthropic, "claude-opus-4-7"},
-		{"opus 4.6 ignores speed", providers.ProviderAnthropic, "claude-opus-4-6"},
-		{"nano has no priority tier", providers.ProviderOpenAI, "gpt-5.4-nano"},
-		{"unknown model", providers.ProviderOpenAI, "no-such-model"},
+		{"roster deepseek-pro has no fast tier", providers.ProviderAIAND, "deepseek-ai/deepseek-v4-pro"},
+		{"roster glm-5.3 has no fast tier", providers.ProviderAIAND, "zai-org/glm-5.3"},
+		{"unknown model", providers.ProviderAIAND, "no-such-model"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -56,11 +25,10 @@ func TestFastPriceFor_NoFastTier(t *testing.T) {
 	}
 }
 
-func TestSupportsFastMode(t *testing.T) {
-	assert.True(t, SupportsFastMode("gpt-5.6-luna"))
-	assert.True(t, SupportsFastMode("gpt-5.6-luna-pro"), "alias carries its own fast tier")
-	assert.True(t, SupportsFastMode("claude-opus-5"))
-	assert.False(t, SupportsFastMode("claude-sonnet-4-6"))
+func TestSupportsFastMode_NoRosterRowSupportsIt(t *testing.T) {
+	for _, id := range aiandRoster {
+		assert.Falsef(t, SupportsFastMode(id), "%s must not advertise a fast tier", id)
+	}
 	assert.False(t, SupportsFastMode("unknown"))
 }
 
@@ -73,8 +41,6 @@ func TestCatalog_FastPriceOnlyOnFirstPartyBindingsAndAboveList(t *testing.T) {
 			}
 			assert.Greater(t, fast.OutputUSDPer1M, b.Price.OutputUSDPer1M, "%s/%s fast output must cost more than list", m.ID, b.Provider)
 			assert.Equal(t, b.Price.CacheReadMultiplier, fast.CacheReadMultiplier, "%s/%s cache discount carries over", m.ID, b.Provider)
-			assert.Contains(t, []string{providers.ProviderOpenAI, providers.ProviderAnthropic}, b.Provider,
-				"%s: fast tier is a first-party knob, not a gateway one", m.ID)
 		}
 	}
 }

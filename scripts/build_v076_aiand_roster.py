@@ -26,6 +26,12 @@ FROZEN v0.75 geometry (v0.70/v0.75 precedent — see v0.75/metadata.yaml changel
 Usage: python scripts/build_v076_aiand_roster.py
 Requires: PyYAML (metadata round-trip). Deterministic: re-running reproduces
 byte-identical output.
+
+NOTE (AIand-only artifact prune): the SRC v0.75 bundle below was deleted from
+internal/router/cluster/artifacts/ along with the rest of the pre-v0.76
+history, so this script is no longer re-runnable as-is. The v0.76 bundle it
+produced is kept frozen in the tree; the overlay logic is retained for
+provenance only.
 """
 
 import hashlib

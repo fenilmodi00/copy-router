@@ -15,8 +15,8 @@ import (
 
 func TestPlanResolverPreservesExistingSidecarBinding(t *testing.T) {
 	candidateResolver := policy.NewResolver(
-		modelSet("claude-haiku-4-5", "gpt-5.6-luna"),
-		providerSet(providers.ProviderAnthropic, providers.ProviderOpenAI),
+		modelSet("zai-org/glm-5.3-flash", "zai-org/glm-5.3"),
+		providerSet(providers.ProviderAIAND),
 		func(model catalog.Model) string { return "roster/" + model.ID },
 		policy.ProviderPolicy{},
 	)
@@ -46,32 +46,32 @@ func TestPlanResolverPreservesExistingSidecarBinding(t *testing.T) {
 
 func TestPlanResolverAppliesTypedOverridePrecedence(t *testing.T) {
 	planResolver := newPlanResolver(t,
-		modelSet("claude-haiku-4-5", "gpt-5.6-luna"),
-		providerSet(providers.ProviderAnthropic, providers.ProviderOpenAI),
+		modelSet("zai-org/glm-5.3-flash", "zai-org/glm-5.3"),
+		providerSet(providers.ProviderAIAND),
 	)
 	plan, err := planResolver.Resolve(policy.ResolutionRequest{
 		Purpose: policy.PurposeAnthropicMessages,
 		Overrides: []policy.TargetOverride{
-			{Source: policy.OverrideSourceInstallation, CatalogID: "gpt-5.6-luna"},
-			{Source: policy.OverrideSourceRequest, CatalogID: "claude-haiku-4-5"},
+			{Source: policy.OverrideSourceInstallation, CatalogID: "zai-org/glm-5.3"},
+			{Source: policy.OverrideSourceRequest, CatalogID: "zai-org/glm-5.3-flash"},
 		},
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "claude-haiku-4-5", plan.SelectedBinding().CatalogID)
+	assert.Equal(t, "zai-org/glm-5.3-flash", plan.SelectedBinding().CatalogID)
 	assert.Equal(t, policy.OverrideSourceRequest, plan.Provenance().OverrideSource)
 }
 
 func TestPlanResolverRejectsInvalidExplicitOverrideWithoutSubstitution(t *testing.T) {
 	planResolver := newPlanResolver(t,
-		modelSet("claude-haiku-4-5", "gpt-5.6-luna"),
-		providerSet(providers.ProviderAnthropic, providers.ProviderOpenAI),
+		modelSet("zai-org/glm-5.3-flash", "zai-org/glm-5.3"),
+		providerSet(providers.ProviderAIAND),
 	)
 	_, err := planResolver.Resolve(policy.ResolutionRequest{
 		Purpose: policy.PurposeAnthropicMessages,
 		Overrides: []policy.TargetOverride{
 			{Source: policy.OverrideSourceRequest, CatalogID: "not-a-catalog-model"},
-			{Source: policy.OverrideSourceInstallation, CatalogID: "gpt-5.6-luna"},
+			{Source: policy.OverrideSourceInstallation, CatalogID: "zai-org/glm-5.3"},
 		},
 	})
 
@@ -80,14 +80,14 @@ func TestPlanResolverRejectsInvalidExplicitOverrideWithoutSubstitution(t *testin
 
 func TestPlanResolverRejectsDisallowedAndDuplicateOverrideSources(t *testing.T) {
 	planResolver := newPlanResolver(t,
-		modelSet("claude-haiku-4-5"),
-		providerSet(providers.ProviderAnthropic),
+		modelSet("zai-org/glm-5.3-flash"),
+		providerSet(providers.ProviderAIAND),
 	)
 
 	_, err := planResolver.Resolve(policy.ResolutionRequest{
 		Purpose: policy.PurposeAnthropicMessages,
 		Overrides: []policy.TargetOverride{{
-			Source: policy.OverrideSourceClientAuthoritative, CatalogID: "claude-haiku-4-5",
+			Source: policy.OverrideSourceClientAuthoritative, CatalogID: "zai-org/glm-5.3-flash",
 		}},
 	})
 	assertResolutionErrorCode(t, err, policy.ResolutionErrorOverrideNotAllowed)
@@ -95,8 +95,8 @@ func TestPlanResolverRejectsDisallowedAndDuplicateOverrideSources(t *testing.T) 
 	_, err = planResolver.Resolve(policy.ResolutionRequest{
 		Purpose: policy.PurposeAnthropicMessages,
 		Overrides: []policy.TargetOverride{
-			{Source: policy.OverrideSourceRequest, CatalogID: "claude-haiku-4-5"},
-			{Source: policy.OverrideSourceRequest, CatalogID: "claude-haiku-4-5"},
+			{Source: policy.OverrideSourceRequest, CatalogID: "zai-org/glm-5.3-flash"},
+			{Source: policy.OverrideSourceRequest, CatalogID: "zai-org/glm-5.3-flash"},
 		},
 	})
 	assertResolutionErrorCode(t, err, policy.ResolutionErrorDuplicateOverride)
@@ -104,7 +104,7 @@ func TestPlanResolverRejectsDisallowedAndDuplicateOverrideSources(t *testing.T) 
 	_, err = planResolver.Resolve(policy.ResolutionRequest{
 		Purpose: policy.PurposeAnthropicMessages,
 		Overrides: []policy.TargetOverride{{
-			Source: policy.OverrideSourcePolicyDefault, CatalogID: "claude-haiku-4-5",
+			Source: policy.OverrideSourcePolicyDefault, CatalogID: "zai-org/glm-5.3-flash",
 		}},
 	})
 	assertResolutionErrorCode(t, err, policy.ResolutionErrorInvalidOverride)
@@ -112,13 +112,13 @@ func TestPlanResolverRejectsDisallowedAndDuplicateOverrideSources(t *testing.T) 
 
 func TestPlanResolverRequiresTypedForceModelOverride(t *testing.T) {
 	planResolver := newPlanResolver(t,
-		modelSet("claude-haiku-4-5"),
-		providerSet(providers.ProviderAnthropic),
+		modelSet("zai-org/glm-5.3-flash"),
+		providerSet(providers.ProviderAIAND),
 	)
 	_, err := planResolver.Resolve(policy.ResolutionRequest{
 		Purpose:       policy.PurposeAnthropicMessages,
-		RouterRequest: router.Request{ForceModel: "claude-haiku-4-5"},
-		Selection:     policy.CandidateSelection{RosterID: "claude-haiku-4-5"},
+		RouterRequest: router.Request{ForceModel: "zai-org/glm-5.3-flash"},
+		Selection:     policy.CandidateSelection{RosterID: "zai-org/glm-5.3-flash"},
 	})
 
 	assertResolutionErrorCode(t, err, policy.ResolutionErrorInvalidOverride)
@@ -126,7 +126,7 @@ func TestPlanResolverRequiresTypedForceModelOverride(t *testing.T) {
 
 func TestPlanResolverRestrictsFixedPolicyToReviewedModels(t *testing.T) {
 	planResolver := newPlanResolver(t,
-		modelSet(policy.HandoverSummaryDefaultModel, "gpt-5.6-luna"),
+		modelSet(policy.HandoverSummaryDefaultModel, "zai-org/glm-5.3"),
 		providerSet(providers.ProviderAIAND, providers.ProviderOpenAI),
 	)
 	plan, err := planResolver.Resolve(policy.ResolutionRequest{Purpose: policy.PurposeHandoverSummary})
@@ -136,7 +136,7 @@ func TestPlanResolverRestrictsFixedPolicyToReviewedModels(t *testing.T) {
 	_, err = planResolver.Resolve(policy.ResolutionRequest{
 		Purpose: policy.PurposeHandoverSummary,
 		Overrides: []policy.TargetOverride{{
-			Source: policy.OverrideSourceDeployment, CatalogID: "gpt-5.6-luna",
+			Source: policy.OverrideSourceDeployment, CatalogID: "zai-org/glm-5.3",
 		}},
 	})
 	assertResolutionErrorCode(t, err, policy.ResolutionErrorInvalidOverride)
@@ -144,23 +144,23 @@ func TestPlanResolverRestrictsFixedPolicyToReviewedModels(t *testing.T) {
 
 func TestPlanResolverDeclaresOnlyEligibleBindingFallbacks(t *testing.T) {
 	planResolver := newPlanResolver(t,
-		modelSet("claude-haiku-4-5"),
+		modelSet("zai-org/glm-5.3-flash"),
 		providerSet(providers.ProviderAnthropic, providers.ProviderAIAND),
 	)
 	plan, err := planResolver.Resolve(policy.ResolutionRequest{
 		Purpose: policy.PurposeAnthropicMessages,
 		Selection: policy.CandidateSelection{
-			RosterID: "claude-haiku-4-5",
+			RosterID: "zai-org/glm-5.3-flash",
 		},
 		RouterRequest: router.Request{CustomBindings: map[string][]string{
-			"claude-haiku-4-5": {providers.ProviderAIAND},
+			"zai-org/glm-5.3-flash": {providers.ProviderAnthropic},
 		}},
 	})
 	require.NoError(t, err)
 
 	alternatives := plan.AlternativeBindings()
 	require.Len(t, alternatives, 1)
-	assert.Equal(t, providers.ProviderAIAND, alternatives[0].Provider)
+	assert.Equal(t, providers.ProviderAnthropic, alternatives[0].Provider)
 	assert.Equal(t, plan.SelectedBinding().CatalogID, alternatives[0].CatalogID)
 }
 
@@ -169,12 +169,12 @@ func TestPlanResolverResolvesDeclaredModelFallbacks(t *testing.T) {
 	index := policyIndex(t, specs, policy.PurposeHandoverSummary)
 	specs[index].Fallback = policy.FallbackSpec{
 		Kind:         policy.FallbackKindPlanAlternatives,
-		Alternatives: []string{"gpt-5.6-luna"},
+		Alternatives: []string{"zai-org/glm-5.3"},
 	}
 	registry, err := policy.NewRegistry(specs)
 	require.NoError(t, err)
 	candidateResolver := policy.NewResolver(
-		modelSet(policy.HandoverSummaryDefaultModel, "gpt-5.6-luna"),
+		modelSet(policy.HandoverSummaryDefaultModel, "zai-org/glm-5.3"),
 		providerSet(providers.ProviderAIAND, providers.ProviderOpenAI),
 		func(model catalog.Model) string { return model.ID },
 		policy.ProviderPolicy{},
@@ -185,7 +185,7 @@ func TestPlanResolverResolvesDeclaredModelFallbacks(t *testing.T) {
 	plan, err := planResolver.Resolve(policy.ResolutionRequest{Purpose: policy.PurposeHandoverSummary})
 	require.NoError(t, err)
 	require.Len(t, plan.AlternativeBindings(), 1)
-	assert.Equal(t, "gpt-5.6-luna", plan.AlternativeBindings()[0].CatalogID)
+	assert.Equal(t, "zai-org/glm-5.3", plan.AlternativeBindings()[0].CatalogID)
 }
 
 func TestPlanResolverReportsMissingFixedTargetAsIneligible(t *testing.T) {
@@ -193,12 +193,12 @@ func TestPlanResolverReportsMissingFixedTargetAsIneligible(t *testing.T) {
 	index := policyIndex(t, specs, policy.PurposeHandoverSummary)
 	specs[index].Fallback = policy.FallbackSpec{
 		Kind:         policy.FallbackKindPlanAlternatives,
-		Alternatives: []string{"gpt-5.6-luna"},
+		Alternatives: []string{"zai-org/glm-5.3"},
 	}
 	registry, err := policy.NewRegistry(specs)
 	require.NoError(t, err)
 	candidateResolver := policy.NewResolver(
-		modelSet("gpt-5.6-luna"),
+		modelSet("zai-org/glm-5.3"),
 		providerSet(providers.ProviderOpenAI),
 		func(model catalog.Model) string { return model.ID },
 		policy.ProviderPolicy{},
@@ -212,13 +212,13 @@ func TestPlanResolverReportsMissingFixedTargetAsIneligible(t *testing.T) {
 
 func TestPlanResolverEnforcesBudgetEnvelopeAndSpendCap(t *testing.T) {
 	planResolver := newPlanResolver(t,
-		modelSet("claude-haiku-4-5"),
-		providerSet(providers.ProviderAnthropic),
+		modelSet("zai-org/glm-5.3-flash"),
+		providerSet(providers.ProviderAIAND),
 	)
 	_, err := planResolver.Resolve(policy.ResolutionRequest{
 		Purpose:       policy.PurposeAnthropicMessages,
 		RouterRequest: router.Request{EstimatedInputTokens: 1_000},
-		Selection:     policy.CandidateSelection{RosterID: "claude-haiku-4-5"},
+		Selection:     policy.CandidateSelection{RosterID: "zai-org/glm-5.3-flash"},
 		Budget: &policy.BudgetOverride{
 			Source:      policy.BudgetSourceRequest,
 			MaxSpendUSD: 0.0001,
@@ -232,8 +232,8 @@ func TestPlanResolverEnforcesBudgetEnvelopeAndSpendCap(t *testing.T) {
 	registry, registryErr := policy.NewRegistry(specs)
 	require.NoError(t, registryErr)
 	candidateResolver := policy.NewResolver(
-		modelSet("claude-haiku-4-5"),
-		providerSet(providers.ProviderAnthropic),
+		modelSet("zai-org/glm-5.3-flash"),
+		providerSet(providers.ProviderAIAND),
 		func(model catalog.Model) string { return model.ID },
 		policy.ProviderPolicy{},
 	)
@@ -241,7 +241,7 @@ func TestPlanResolverEnforcesBudgetEnvelopeAndSpendCap(t *testing.T) {
 	require.NoError(t, resolverErr)
 	_, err = boundedPlanResolver.Resolve(policy.ResolutionRequest{
 		Purpose:   policy.PurposeAnthropicMessages,
-		Selection: policy.CandidateSelection{RosterID: "claude-haiku-4-5"},
+		Selection: policy.CandidateSelection{RosterID: "zai-org/glm-5.3-flash"},
 		Budget: &policy.BudgetOverride{
 			Source:        policy.BudgetSourceRequest,
 			TimeoutMillis: 9_000,
@@ -252,14 +252,14 @@ func TestPlanResolverEnforcesBudgetEnvelopeAndSpendCap(t *testing.T) {
 
 func TestResolvedPlanReturnsImmutableCopies(t *testing.T) {
 	planResolver := newPlanResolver(t,
-		modelSet("claude-haiku-4-5"),
+		modelSet("zai-org/glm-5.3-flash"),
 		providerSet(providers.ProviderAnthropic, providers.ProviderAIAND),
 	)
 	plan, err := planResolver.Resolve(policy.ResolutionRequest{
 		Purpose:   policy.PurposeAnthropicMessages,
-		Selection: policy.CandidateSelection{RosterID: "claude-haiku-4-5"},
+		Selection: policy.CandidateSelection{RosterID: "zai-org/glm-5.3-flash"},
 		RouterRequest: router.Request{CustomBindings: map[string][]string{
-			"claude-haiku-4-5": {providers.ProviderAIAND},
+			"zai-org/glm-5.3-flash": {providers.ProviderAnthropic},
 		}},
 	})
 	require.NoError(t, err)
@@ -292,19 +292,19 @@ func TestRegistryValidatesDeploymentTargets(t *testing.T) {
 	config = validDeploymentPolicyConfig()
 	config.TargetOverrides[0].Target.CatalogID = "claude-opus-4-0"
 	err = policy.DefaultRegistry().ValidateDeployment(config)
-	assert.ErrorContains(t, err, "is not a routable catalog model")
+	assert.ErrorContains(t, err, "names an unknown catalog model")
 }
 
 func TestPlanResolverDoesNotFallBackToRosterForStaleArm(t *testing.T) {
 	planResolver := newPlanResolver(t,
-		modelSet("claude-haiku-4-5"),
-		providerSet(providers.ProviderAnthropic),
+		modelSet("zai-org/glm-5.3-flash"),
+		providerSet(providers.ProviderAIAND),
 	)
 	_, err := planResolver.Resolve(policy.ResolutionRequest{
 		Purpose: policy.PurposeAnthropicMessages,
 		Selection: policy.CandidateSelection{
 			ArmID:    "stale-arm",
-			RosterID: "claude-haiku-4-5",
+			RosterID: "zai-org/glm-5.3-flash",
 		},
 	})
 	assertResolutionErrorCode(t, err, policy.ResolutionErrorUnknownSelection)
@@ -315,12 +315,12 @@ func TestPlanResolverIncludesEveryAlternativeBinding(t *testing.T) {
 	index := policyIndex(t, specs, policy.PurposeHandoverSummary)
 	specs[index].Fallback = policy.FallbackSpec{
 		Kind:         policy.FallbackKindPlanAlternatives,
-		Alternatives: []string{"claude-sonnet-4-5"},
+		Alternatives: []string{"qwen/qwen3.8-27b"},
 	}
 	registry, err := policy.NewRegistry(specs)
 	require.NoError(t, err)
 	candidateResolver := policy.NewResolver(
-		modelSet(policy.HandoverSummaryDefaultModel, "claude-sonnet-4-5"),
+		modelSet(policy.HandoverSummaryDefaultModel, "qwen/qwen3.8-27b"),
 		providerSet(providers.ProviderAnthropic, providers.ProviderAIAND),
 		func(model catalog.Model) string { return model.ID },
 		policy.ProviderPolicy{},
@@ -331,14 +331,14 @@ func TestPlanResolverIncludesEveryAlternativeBinding(t *testing.T) {
 	plan, err := planResolver.Resolve(policy.ResolutionRequest{
 		Purpose: policy.PurposeHandoverSummary,
 		RouterRequest: router.Request{CustomBindings: map[string][]string{
-			"claude-sonnet-4-5": {providers.ProviderAIAND},
+			"qwen/qwen3.8-27b": {providers.ProviderAnthropic},
 		}},
 	})
 	require.NoError(t, err)
 	alternatives := plan.AlternativeBindings()
 	require.Len(t, alternatives, 2)
 	for _, alternative := range alternatives {
-		assert.Equal(t, "claude-sonnet-4-5", alternative.CatalogID)
+		assert.Equal(t, "qwen/qwen3.8-27b", alternative.CatalogID)
 	}
 	assert.NotEqual(t, alternatives[0].Provider, alternatives[1].Provider)
 }
@@ -369,8 +369,8 @@ func validDeploymentPolicyConfig() policy.DeploymentPolicyConfig {
 			Purpose: purpose,
 			Target: policy.TargetOverride{
 				Source:    policy.OverrideSourceDeployment,
-				CatalogID: "claude-haiku-4-5",
-				Provider:  providers.ProviderAnthropic,
+				CatalogID: "zai-org/glm-5.3-flash",
+				Provider:  providers.ProviderAIAND,
 			},
 		})
 	}

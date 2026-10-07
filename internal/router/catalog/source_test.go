@@ -26,11 +26,7 @@ func TestSourceValid(t *testing.T) {
 }
 
 func TestSourceFor(t *testing.T) {
-	source, known := SourceFor("claude-opus-4-7")
-	require.True(t, known)
-	assert.Equal(t, SourceClosedSource, source)
-
-	source, known = SourceFor("zai-org/glm-5.3")
+	source, known := SourceFor("zai-org/glm-5.3")
 	require.True(t, known)
 	assert.Equal(t, SourceOpenSource, source)
 
@@ -38,6 +34,10 @@ func TestSourceFor(t *testing.T) {
 	source, known = SourceFor("no-such-model")
 	assert.False(t, known)
 	assert.Equal(t, SourceUnknown, source)
+
+	// A retired claude id is no longer a catalog row either.
+	_, known = SourceFor("claude-opus-4-7")
+	assert.False(t, known)
 }
 
 func TestPermittedByAndCheckEligibility(t *testing.T) {
@@ -46,7 +46,8 @@ func TestPermittedByAndCheckEligibility(t *testing.T) {
 	assert.True(t, PermittedBy(max, "zai-org/glm-5.3"))
 	assert.NoError(t, CheckEligibility(max, "zai-org/glm-5.3"))
 
-	for _, id := range []string{"claude-opus-4-7", "gpt-5.5", "not-in-the-catalog"} {
+	// Retired and unknown IDs are refused: only roster rows are servable.
+	for _, id := range []string{"claude-opus-4-7", "not-in-the-catalog"} {
 		assert.Falsef(t, PermittedBy(max, id), "%q should be ineligible for Max", id)
 		assert.ErrorIsf(t, CheckEligibility(max, id), eligibility.ErrModelIneligible, "%q should be refused", id)
 	}
@@ -54,7 +55,7 @@ func TestPermittedByAndCheckEligibility(t *testing.T) {
 	// An unrestricted boundary keeps pre-product behavior, including for IDs
 	// the catalog does not know.
 	unrestricted := eligibility.Unrestricted()
-	assert.True(t, PermittedBy(unrestricted, "claude-opus-4-7"))
+	assert.True(t, PermittedBy(unrestricted, "zai-org/glm-5.3"))
 	assert.NoError(t, CheckEligibility(unrestricted, "not-in-the-catalog"))
 }
 
@@ -82,5 +83,6 @@ func TestIDsWithSourceIsSortedAndPartitionsTheCatalog(t *testing.T) {
 	}
 	assert.Equal(t, len(Models), total)
 	assert.NotEmpty(t, IDsWithSource(SourceOpenSource))
-	assert.NotEmpty(t, IDsWithSource(SourceClosedSource))
+	assert.Empty(t, IDsWithSource(SourceClosedSource), "the AIand roster is entirely open-source")
+	assert.Empty(t, IDsWithSource(SourceUnknown))
 }

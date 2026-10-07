@@ -14,11 +14,10 @@ import (
 )
 
 const (
-	modelOpus    = "claude-opus-4-7"   // $5.00 input / $25.00 output per 1M, cache mult 0.10
-	modelSonnet  = "claude-sonnet-4-5" // $3.00 input / $15.00 output, cache mult 0.10
-	modelHaiku   = "claude-haiku-4-5"  // $1.00 input / $5.00 output, cache mult 0.10
-	modelGPT5    = "gpt-5"             // $2.50 input / $10.00 output, cache mult 0.10 (cross-provider)
-	modelUnknown = "fictional-foo-1.0" // intentionally absent from the pricing table
+	modelOpus    = "deepseek-ai/deepseek-v4-pro" // $1.00 input / $2.50 output per 1M, cache mult 0.25, TierHigh
+	modelSonnet  = "qwen/qwen3.8-27b"            // $0.40 input / $3.00 output, cache mult 0.50, TierMid
+	modelHaiku   = "zai-org/glm-5.3-flash"       // $0.15 input / $0.50 output, cache mult 0.20, TierLow
+	modelUnknown = "fictional-foo-1.0"           // intentionally absent from the pricing table
 )
 
 // defaultCfg mirrors production defaults (threshold $0.001, horizon 3 turns).
@@ -33,7 +32,6 @@ var availableAll = map[string]struct{}{
 	modelOpus:   {},
 	modelSonnet: {},
 	modelHaiku:  {},
-	modelGPT5:   {},
 }
 
 // tierUpgradeCfg mirrors defaultCfg with the tier guard on.
@@ -91,28 +89,28 @@ func TestDecide_UsesNamedProviderBindings(t *testing.T) {
 	// back to the model's primary price (with PinPriceFallback set).
 	base := planner.Inputs{
 		Pin: sessionpin.Pin{
-			Provider:        providers.ProviderAnthropic,
+			Provider:        providers.ProviderAIAND,
 			Model:           modelHaiku,
 			LastTurnEndedAt: time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC),
 		},
 		Fresh: router.Decision{
-			Provider: providers.ProviderOpenAI,
-			Model:    "gpt-5.4-nano",
+			Provider: providers.ProviderAIAND,
+			Model:    modelSonnet,
 		},
 		EstimatedInputTokens: 1_000_000,
 		AvailableModels: map[string]struct{}{
-			modelHaiku:     {},
-			"gpt-5.4-nano": {},
+			modelHaiku:  {},
+			modelSonnet: {},
 		},
 	}
 
 	boundPin := planner.Decide(base, planner.EVConfig{ExpectedRemainingTurns: 3})
-	assert.InDelta(t, 0.24, boundPin.ExpectedSavingsUSD, 1e-9)
+	assert.InDelta(t, -0.51, boundPin.ExpectedSavingsUSD, 1e-9)
 	assert.False(t, boundPin.PinPriceFallback)
 	assert.False(t, boundPin.FreshPriceFallback)
 
 	fallbackPinInput := base
-	fallbackPinInput.Pin.Provider = providers.ProviderAIAND
+	fallbackPinInput.Pin.Provider = providers.ProviderAnthropic
 	fallbackPin := planner.Decide(fallbackPinInput, planner.EVConfig{ExpectedRemainingTurns: 3})
 	assert.True(t, fallbackPin.PinPriceFallback,
 		"a provider that does not bind the pin model falls back to its primary price")
@@ -128,7 +126,7 @@ func TestDecide_PrimaryPriceFallbackIsExplicit(t *testing.T) {
 			Model:           modelHaiku,
 			LastTurnEndedAt: time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC),
 		},
-		Fresh:                router.Decision{Provider: providers.ProviderAnthropic, Model: modelOpus},
+		Fresh:                router.Decision{Provider: providers.ProviderAIAND, Model: modelOpus},
 		EstimatedInputTokens: 50_000,
 		AvailableModels:      availableAll,
 	}
@@ -304,9 +302,9 @@ func TestDecide(t *testing.T) {
 			want: planner.Decision{Outcome: planner.OutcomeStay, Reason: planner.ReasonPricingMissing},
 		},
 		{
-			// opus -> haiku, 50k tokens, 3 turns; cache-read multiplier 0.1 applies.
-			//   savingsPerTurn=$0.020 evictionCost=$0.045
-			//   expectedSavings=$0.06 -> delta=$0.015 -> Switch.
+			// opus -> haiku, 50k tokens, 3 turns; cache-read multipliers 0.25/0.20.
+			//   savingsPerTurn=$0.011 evictionCost=$0.006
+			//   expectedSavings=$0.033 -> delta=$0.027 -> Switch.
 			name: "ev_positive: opus -> haiku on a large prompt",
 			in: planner.Inputs{
 				Pin:                  pinWithUsage(modelOpus),
@@ -317,12 +315,12 @@ func TestDecide(t *testing.T) {
 			cfg:                    defaultCfg,
 			want:                   planner.Decision{Outcome: planner.OutcomeSwitch, Reason: planner.ReasonEVPositive},
 			expectEVMath:           true,
-			wantExpectedSavingsUSD: 0.06,
-			wantEvictionCostUSD:    0.045,
+			wantExpectedSavingsUSD: 0.033,
+			wantEvictionCostUSD:    0.006,
 		},
 		{
 			// Symmetric flip: haiku pin, opus fresh.
-			//   expectedSavings=-$0.06 evictionCost=$0.225 -> delta=-$0.285 -> Stay.
+			//   expectedSavings=-$0.033 evictionCost=$0.0375 -> delta=-$0.0705 -> Stay.
 			name: "ev_negative: haiku -> opus is a huge net loss",
 			in: planner.Inputs{
 				Pin:                  pinWithUsage(modelHaiku),
@@ -333,58 +331,40 @@ func TestDecide(t *testing.T) {
 			cfg:                    defaultCfg,
 			want:                   planner.Decision{Outcome: planner.OutcomeStay, Reason: planner.ReasonEVNegative},
 			expectEVMath:           true,
-			wantExpectedSavingsUSD: -0.06,
-			wantEvictionCostUSD:    0.225,
+			wantExpectedSavingsUSD: -0.033,
+			wantEvictionCostUSD:    0.0375,
 		},
 		{
-			// opus -> haiku, tuned to land just below threshold (net $0.0009999
-			// at 3333 tokens vs $0.001 threshold, 0.01% below) -> Stay.
+			// opus -> haiku, tuned to land just below threshold (net $0.00099954
+			// at 1851 tokens vs $0.001 threshold, 0.05% below) -> Stay.
 			name: "ev_near_threshold: just below threshold stays stable",
 			in: planner.Inputs{
 				Pin:                  pinWithUsage(modelOpus),
 				Fresh:                router.Decision{Model: modelHaiku},
-				EstimatedInputTokens: 3333,
+				EstimatedInputTokens: 1851,
 				AvailableModels:      availableAll,
 			},
 			cfg:                    defaultCfg,
 			want:                   planner.Decision{Outcome: planner.OutcomeStay, Reason: planner.ReasonEVNegative},
 			expectEVMath:           true,
-			wantExpectedSavingsUSD: 0.0039996,
-			wantEvictionCostUSD:    0.0029997,
+			wantExpectedSavingsUSD: 0.001221660,
+			wantEvictionCostUSD:    0.000222120,
 		},
 		{
-			// Same math, two extra tokens (3335) nudges net to $0.0010005,
-			// 0.05% above threshold -> Switch.
+			// Same math, one extra token (1852) nudges net to $0.00100008,
+			// 0.008% above threshold -> Switch.
 			name: "ev_near_threshold: just above threshold flips to switch",
 			in: planner.Inputs{
 				Pin:                  pinWithUsage(modelOpus),
 				Fresh:                router.Decision{Model: modelHaiku},
-				EstimatedInputTokens: 3335,
+				EstimatedInputTokens: 1852,
 				AvailableModels:      availableAll,
 			},
 			cfg:                    defaultCfg,
 			want:                   planner.Decision{Outcome: planner.OutcomeSwitch, Reason: planner.ReasonEVPositive},
 			expectEVMath:           true,
-			wantExpectedSavingsUSD: 0.004002,
-			wantEvictionCostUSD:    0.0030015,
-		},
-		{
-			// Cross-provider: opus -> gpt-5, 50k prompt. gpt-5 is cheaper
-			// per-token in cache steady-state (expectedSavings=$0.0375), but
-			// evicting opus's warm cache to refill gpt-5's cold one costs more
-			// (evictionCost=$0.1125) -> Stay.
-			name: "ev_cross_provider: opus -> gpt-5 stays under per-model math",
-			in: planner.Inputs{
-				Pin:                  pinWithUsage(modelOpus),
-				Fresh:                router.Decision{Model: modelGPT5},
-				EstimatedInputTokens: 50_000,
-				AvailableModels:      availableAll,
-			},
-			cfg:                    defaultCfg,
-			want:                   planner.Decision{Outcome: planner.OutcomeStay, Reason: planner.ReasonEVNegative},
-			expectEVMath:           true,
-			wantExpectedSavingsUSD: 0.0375,
-			wantEvictionCostUSD:    0.1125,
+			wantExpectedSavingsUSD: 0.001222320,
+			wantEvictionCostUSD:    0.000222240,
 		},
 		{
 			// Mirror of ev_negative; pinned here so the next case can show
@@ -399,8 +379,8 @@ func TestDecide(t *testing.T) {
 			cfg:                    defaultCfg, // TierUpgradeEnabled = false
 			want:                   planner.Decision{Outcome: planner.OutcomeStay, Reason: planner.ReasonEVNegative},
 			expectEVMath:           true,
-			wantExpectedSavingsUSD: -0.06,
-			wantEvictionCostUSD:    0.225,
+			wantExpectedSavingsUSD: -0.033,
+			wantEvictionCostUSD:    0.0375,
 		},
 		{
 			// Same EV-loss as above; tier guard flips it since opus outranks haiku.
@@ -414,8 +394,8 @@ func TestDecide(t *testing.T) {
 			cfg:                    tierUpgradeCfg,
 			want:                   planner.Decision{Outcome: planner.OutcomeSwitch, Reason: planner.ReasonTierUpgrade},
 			expectEVMath:           true,
-			wantExpectedSavingsUSD: -0.06,
-			wantEvictionCostUSD:    0.225,
+			wantExpectedSavingsUSD: -0.033,
+			wantEvictionCostUSD:    0.0375,
 		},
 		{
 			// Sonnet (Mid) -> haiku (Low) is a downgrade; guard must
@@ -430,14 +410,14 @@ func TestDecide(t *testing.T) {
 			cfg:          tierUpgradeCfg,
 			want:         planner.Decision{Outcome: planner.OutcomeStay, Reason: planner.ReasonEVNegative},
 			expectEVMath: true,
-			// expectedSavings=$0.0006 evictionCost=$0.0009
-			wantExpectedSavingsUSD: 0.0006,
-			wantEvictionCostUSD:    0.0009,
+			// expectedSavings=$0.00051 evictionCost=$0.00012
+			wantExpectedSavingsUSD: 0.00051,
+			wantEvictionCostUSD:    0.00012,
 		},
 		{
 			// Cold pin: cache TTL lapsed, both sides price uncached, so this
 			// switches on raw input price rather than the cache-read delta.
-			// expectedSavings=$0.60 evictionCost=$0 (nothing warm to evict).
+			// expectedSavings=$0.1275 evictionCost=$0 (nothing warm to evict).
 			name: "cold_ev_positive: opus -> haiku prices uncached",
 			in: planner.Inputs{
 				Pin:                  pinWithUsage(modelOpus),
@@ -449,24 +429,7 @@ func TestDecide(t *testing.T) {
 			cfg:                    defaultCfg,
 			want:                   planner.Decision{Outcome: planner.OutcomeSwitch, Reason: planner.ReasonEVPositive},
 			expectEVMath:           true,
-			wantExpectedSavingsUSD: 0.60,
-			wantEvictionCostUSD:    0,
-		},
-		{
-			// Cold twin of ev_cross_provider (which STAYS): with no warm cache
-			// to preserve, raw $2.50 vs $5.00 input price wins and it switches.
-			name: "cold_cross_provider: opus -> gpt-5 switches once cache is cold",
-			in: planner.Inputs{
-				Pin:                  pinWithUsage(modelOpus),
-				Fresh:                router.Decision{Model: modelGPT5},
-				EstimatedInputTokens: 50_000,
-				AvailableModels:      availableAll,
-				PinCacheCold:         true,
-			},
-			cfg:                    defaultCfg,
-			want:                   planner.Decision{Outcome: planner.OutcomeSwitch, Reason: planner.ReasonEVPositive},
-			expectEVMath:           true,
-			wantExpectedSavingsUSD: 0.375,
+			wantExpectedSavingsUSD: 0.1275,
 			wantEvictionCostUSD:    0,
 		},
 		{
@@ -483,7 +446,7 @@ func TestDecide(t *testing.T) {
 			cfg:                    defaultCfg,
 			want:                   planner.Decision{Outcome: planner.OutcomeStay, Reason: planner.ReasonEVNegative},
 			expectEVMath:           true,
-			wantExpectedSavingsUSD: -0.60,
+			wantExpectedSavingsUSD: -0.1275,
 			wantEvictionCostUSD:    0,
 		},
 		{
@@ -500,7 +463,7 @@ func TestDecide(t *testing.T) {
 			cfg:                    tierUpgradeCfg,
 			want:                   planner.Decision{Outcome: planner.OutcomeSwitch, Reason: planner.ReasonTierUpgrade},
 			expectEVMath:           true,
-			wantExpectedSavingsUSD: -0.60,
+			wantExpectedSavingsUSD: -0.1275,
 			wantEvictionCostUSD:    0,
 		},
 	}

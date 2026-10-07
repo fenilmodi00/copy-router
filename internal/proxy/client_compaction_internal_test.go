@@ -26,7 +26,7 @@ func TestClientRecoveryIsLimitedToInitialAssistantTurns(t *testing.T) {
 				messages = append(messages, map[string]any{"role": "assistant", "content": "Useful progress."}, map[string]any{"role": "user", "content": "Continue."})
 			}
 			body, err := json.Marshal(map[string]any{
-				"model": budgetTestFable, "messages": messages,
+				"model": budgetTestModel, "messages": messages,
 				"tools": []any{map[string]any{"name": "Read", "input_schema": map[string]any{"type": "object"}}},
 			})
 			require.NoError(t, err)
@@ -35,7 +35,7 @@ func TestClientRecoveryIsLimitedToInitialAssistantTurns(t *testing.T) {
 			applied, err := applyClientCompactionRecovery(context.Background(), env, smallClientBudget(), turntype.MainLoop, conversationMessagesForRouting(env))
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, applied)
-			prepared, err := env.PrepareAnthropic(nil, translate.EmitOptions{TargetModel: budgetTestFable, Capabilities: router.Lookup(budgetTestFable)})
+			prepared, err := env.PrepareAnthropic(nil, translate.EmitOptions{TargetModel: budgetTestModel, Capabilities: router.Lookup(budgetTestModel)})
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, gjson.GetBytes(prepared.Body, "tool_choice.disable_parallel_tool_use").Bool())
 			assert.Equal(t, len(messages), env.RoutingFeatures(false).MessageCount)
@@ -44,7 +44,7 @@ func TestClientRecoveryIsLimitedToInitialAssistantTurns(t *testing.T) {
 }
 
 func TestClientRecoveryLeavesUnknownBudgetsAndUtilityTurnsUntouched(t *testing.T) {
-	body := []byte(fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":%q}],"tools":[{"name":"Read","input_schema":{"type":"object"}}]}`, budgetTestFable, clientCompactContinuationPrefix))
+	body := []byte(fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":%q}],"tools":[{"name":"Read","input_schema":{"type":"object"}}]}`, budgetTestModel, clientCompactContinuationPrefix))
 	for _, tt := range []struct {
 		name   string
 		budget router.ClientBudget
@@ -58,12 +58,12 @@ func TestClientRecoveryLeavesUnknownBudgetsAndUtilityTurnsUntouched(t *testing.T
 		t.Run(tt.name, func(t *testing.T) {
 			env, err := translate.ParseAnthropic(body)
 			require.NoError(t, err)
-			before, err := env.PrepareAnthropic(nil, translate.EmitOptions{TargetModel: budgetTestFable, Capabilities: router.Lookup(budgetTestFable)})
+			before, err := env.PrepareAnthropic(nil, translate.EmitOptions{TargetModel: budgetTestModel, Capabilities: router.Lookup(budgetTestModel)})
 			require.NoError(t, err)
 			applied, err := applyClientCompactionRecovery(context.Background(), env, tt.budget, tt.turn, conversationMessagesForRouting(env))
 			require.NoError(t, err)
 			assert.False(t, applied)
-			after, err := env.PrepareAnthropic(nil, translate.EmitOptions{TargetModel: budgetTestFable, Capabilities: router.Lookup(budgetTestFable)})
+			after, err := env.PrepareAnthropic(nil, translate.EmitOptions{TargetModel: budgetTestModel, Capabilities: router.Lookup(budgetTestModel)})
 			require.NoError(t, err)
 			assert.Equal(t, string(before.Body), string(after.Body))
 		})
@@ -72,7 +72,7 @@ func TestClientRecoveryLeavesUnknownBudgetsAndUtilityTurnsUntouched(t *testing.T
 
 func TestClientRecoverySeesContinuationAfterHandoverRewrite(t *testing.T) {
 	body, err := json.Marshal(map[string]any{
-		"model": budgetTestFable,
+		"model": budgetTestModel,
 		"messages": []map[string]any{{
 			"role": "assistant", "content": "Handover summary of prior work.",
 		}},
@@ -87,7 +87,7 @@ func TestClientRecoverySeesContinuationAfterHandoverRewrite(t *testing.T) {
 	applied, err := applyClientCompactionRecovery(context.Background(), env, smallClientBudget(), turntype.MainLoop, history)
 	require.NoError(t, err)
 	assert.True(t, applied)
-	prepared, err := env.PrepareAnthropic(nil, translate.EmitOptions{TargetModel: budgetTestFable, Capabilities: router.Lookup(budgetTestFable)})
+	prepared, err := env.PrepareAnthropic(nil, translate.EmitOptions{TargetModel: budgetTestModel, Capabilities: router.Lookup(budgetTestModel)})
 	require.NoError(t, err)
 	assert.True(t, gjson.GetBytes(prepared.Body, "tool_choice.disable_parallel_tool_use").Bool())
 }

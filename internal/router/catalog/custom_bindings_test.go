@@ -15,10 +15,10 @@ import (
 // by whatever name the deploy's config declares.
 const customProvider = "customer-gateway"
 
-// customModel has an Anthropic catalog binding, so with Anthropic absent a
+// customModel has an AIand catalog binding, so with AIand absent a
 // configuration-declared endpoint is the only way it reaches a customer's own
 // gateway.
-const customModel = "claude-opus-4-7"
+const customModel = "deepseek-ai/deepseek-v4-pro"
 
 func customFor(provider string) map[string][]string {
 	return map[string][]string{customModel: {provider}}
@@ -49,14 +49,14 @@ func TestResolveBindingWithCustom_DirectVendorWins(t *testing.T) {
 	binding, ok := catalog.ResolveBindingWithCustom(
 		customModel,
 		map[string]struct{}{
-			providers.ProviderAnthropic: {},
-			customProvider:              {},
+			providers.ProviderAIAND: {},
+			customProvider:          {},
 		},
 		customFor(customProvider),
 	)
 
 	require.True(t, ok)
-	assert.Equal(t, providers.ProviderAnthropic, binding.Provider)
+	assert.Equal(t, providers.ProviderAIAND, binding.Provider)
 }
 
 func TestResolveBindingWithCustom_IgnoresUnavailableProvider(t *testing.T) {
@@ -73,14 +73,14 @@ func TestEnumerateBindingsWithCustom_CustomRanksAfterCatalog(t *testing.T) {
 	got := catalog.EnumerateBindingsWithCustom(
 		customModel,
 		map[string]struct{}{
-			providers.ProviderAnthropic: {},
-			customProvider:              {},
+			providers.ProviderAIAND: {},
+			customProvider:          {},
 		},
 		customFor(customProvider),
 	)
 
 	require.Len(t, got, 2)
-	assert.Equal(t, providers.ProviderAnthropic, got[0].Provider)
+	assert.Equal(t, providers.ProviderAIAND, got[0].Provider)
 	assert.Equal(t, customProvider, got[1].Provider)
 	assert.Greater(t, got[1].Index, got[0].Index, "failover order must stay strictly increasing")
 }
@@ -89,14 +89,14 @@ func TestEnumerateBindingsWithCustom_CustomRanksAfterCatalog(t *testing.T) {
 // model the catalog already binds to that same provider; dispatch must not
 // retry the identical upstream as its own fallback.
 func TestEnumerateBindingsWithCustom_NoDuplicateProvider(t *testing.T) {
-	const claude = "claude-sonnet-4-5"
-	available := map[string]struct{}{providers.ProviderAnthropic: {}}
+	const model = "deepseek-ai/deepseek-v4-pro"
+	available := map[string]struct{}{providers.ProviderAIAND: {}}
 
 	got := catalog.EnumerateBindingsWithCustom(
-		claude,
+		model,
 		available,
-		map[string][]string{claude: {providers.ProviderAnthropic}},
+		map[string][]string{model: {providers.ProviderAIAND}},
 	)
 
-	assert.Equal(t, catalog.EnumerateBindings(claude, available), got)
+	assert.Equal(t, catalog.EnumerateBindings(model, available), got)
 }

@@ -25,13 +25,13 @@ func codexCtx(sessionID string) context.Context {
 func TestForceModelCommand_CodexAckNamesTheDollarForm(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
-		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic))
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil).
+		WithDeploymentKeyedProviders(keyed(providers.ProviderAIAND))
 
 	env := forceCommandEnv(t)
 	rec := httptest.NewRecorder()
 	require.NoError(t, svc.handleForceModelCommand(codexCtx("sess-1"), rec, env,
-		translate.ForceModelResult{Model: "opus"},
+		translate.ForceModelResult{Model: "glm"},
 		uuid.New(), DeriveSessionKey(env, "key-1"), DeriveSessionKey(env, "key-1"), 10))
 
 	body := rec.Body.String()
@@ -44,15 +44,15 @@ func TestForceModelCommand_CodexAckNamesTheDollarForm(t *testing.T) {
 func TestForceModelCommand_ClaudeCodeAckKeepsTheSlashForm(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
-		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic))
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil).
+		WithDeploymentKeyedProviders(keyed(providers.ProviderAIAND))
 
 	env := forceCommandEnv(t)
 	rec := httptest.NewRecorder()
 	ctx := context.WithValue(context.Background(), ClientIdentityContextKey{},
 		ClientIdentity{ClientApp: ClientAppClaudeCode})
 	require.NoError(t, svc.handleForceModelCommand(ctx, rec, env,
-		translate.ForceModelResult{Model: "opus"},
+		translate.ForceModelResult{Model: "glm"},
 		uuid.New(), DeriveSessionKey(env, "key-1"), DeriveSessionKey(env, "key-1"), 10))
 
 	assert.Contains(t, rec.Body.String(), "/unforce-model")
@@ -65,7 +65,7 @@ func TestForceModelCommand_ClaudeCodeAckKeepsTheSlashForm(t *testing.T) {
 func TestRouterSessionCommand_AnswersSyntheticallyFromRequestIdentity(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil)
 
 	env := forceCommandEnv(t)
 	rec := httptest.NewRecorder()

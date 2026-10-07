@@ -47,152 +47,42 @@ func (e *ForcedModelUnknownError) Error() string {
 func (e *ForcedModelUnknownError) Unwrap() error { return ErrForcedModelUnknown }
 
 var forceModelAliases = map[string]string{
-	// Opus family aliases follow 5.5; Opus 5's own-name aliases keep
-	// resolving so existing direct pins still serve.
-	"anthropic":   "claude-opus-5-5",
-	"claude":      "claude-opus-5-5",
-	"opus":        "claude-opus-5-5",
-	"claude-opus": "claude-opus-5-5",
-	"opus-5.5":    "claude-opus-5-5",
-	"opus-5-5":    "claude-opus-5-5",
-	"opus5.5":     "claude-opus-5-5",
-	"opus55":      "claude-opus-5-5",
-	"claude-5.5":  "claude-opus-5-5",
-	"claude-5-5":  "claude-opus-5-5",
-	"opus-5":      "claude-opus-5",
-	"opus-5.0":    "claude-opus-5",
-	"opus5":       "claude-opus-5",
-	"claude-5":    "claude-opus-5",
-	// Opus 4.8 is retired from routing but still servable as passthrough;
-	// keep its own-name aliases so direct pins resolve.
-	"opus-4-8":   "claude-opus-4-8",
-	"opus-4.8":   "claude-opus-4-8",
-	"claude-4-8": "claude-opus-4-8",
-	"claude-4.8": "claude-opus-4-8",
-	// Fable family aliases follow 5.1; Fable 5's own-name aliases keep
-	// resolving so existing direct pins still serve.
-	"fable":        "claude-fable-5-1",
-	"claude-fable": "claude-fable-5-1",
-	"fable-5.1":    "claude-fable-5-1",
-	"fable-5-1":    "claude-fable-5-1",
-	"fable5.1":     "claude-fable-5-1",
-	"fable51":      "claude-fable-5-1",
-	"fable-5":      "claude-fable-5",
-	"fable5":       "claude-fable-5",
-	// Sonnet family aliases follow 5.5; Sonnet 5's own-name aliases keep
-	// resolving so existing direct pins still serve.
-	"sonnet":        "claude-sonnet-5-5",
-	"claude-sonnet": "claude-sonnet-5-5",
-	"sonnet-5.5":    "claude-sonnet-5-5",
-	"sonnet-5-5":    "claude-sonnet-5-5",
-	"sonnet5.5":     "claude-sonnet-5-5",
-	"sonnet55":      "claude-sonnet-5-5",
-	"sonnet-5":      "claude-sonnet-5",
-	"sonnet-4-6":    "claude-sonnet-4-6",
-	"sonnet-4.6":    "claude-sonnet-4-6",
-	"haiku":         "claude-haiku-4-5",
-	"claude-haiku":  "claude-haiku-4-5",
-	"haiku-4-5":     "claude-haiku-4-5",
-	"haiku-4.5":     "claude-haiku-4-5",
-	// Generic GPT aliases follow the current flagship, not a pinned version;
-	// they pointed at gpt-5.5 until it was retired. Version-specific aliases
-	// (gpt-5-5*) deliberately still resolve to their exact model, which stays
-	// available as priced passthrough.
-	"gpt":        "gpt-6.1-sol",
-	"openai":     "gpt-6.1-sol",
-	"gpt-6":      "gpt-6-astra",
-	"gpt6":       "gpt-6-astra",
-	"gpt-6astra": "gpt-6-astra",
-	"astra":      "gpt-6-astra",
-	// Bare sol/luna follow the GPT-6 generation; gpt-5-6-* keeps the 5.6 rows.
-	"sol":         "gpt-6.1-sol",
-	"gpt-6-1-sol": "gpt-6.1-sol",
-	"gpt6sol":     "gpt-6-sol",
-	"gpt-6sol":    "gpt-6-sol",
-	"luna":        "gpt-6-luna",
-	"gpt6luna":    "gpt-6-luna",
-	"gpt-6luna":   "gpt-6-luna",
-	// The bare gpt-5.6 alias routes to Sol, matching OpenAI's own alias.
-	"gpt-5.6":       "gpt-5.6-sol",
-	"gpt-5-6":       "gpt-5.6-sol",
-	"gpt-5-6-sol":   "gpt-5.6-sol",
-	"terra":         "gpt-5.6-terra",
-	"gpt-5-6-terra": "gpt-5.6-terra",
-	"gpt-5-6-luna":  "gpt-5.6-luna",
-	"gpt-5-5":       "gpt-5.5",
-	"gpt-5-5-pro":   "gpt-5.5-pro",
-	"gpt-5-5-mini":  "gpt-5.5-mini",
-	"gpt-5-5-nano":  "gpt-5.5-nano",
-	// grok-4.5 is retired from routing (no AA Agentic Index score, never rostered).
-	// Family aliases follow flagship 4.7; own-name aliases keep older models as passthrough.
-	"grok":                  "grok-4.7",
-	"grok-4.5":              "grok-4.5",
-	"grok4.5":               "grok-4.5",
-	"xai":                   "grok-4.7",
-	"grok-4.6":              "grok-4.6",
-	"grok4.6":               "grok-4.6",
-	"grok-4.7":              "grok-4.7",
-	"grok4.7":               "grok-4.7",
-	"grok-max":              "grok-4.7",
-	"muse-spark-1.3":        "muse-spark-1.3",
-	"muse-spark-1-3":        "muse-spark-1.3",
-	"musespark-1.3":         "muse-spark-1.3",
-	"musespark":             "muse-spark-1.3",
-	"muse-spark":            "muse-spark-1.3",
-	"muse":                  "muse-spark-1.3",
-	"meta":                  "muse-spark-1.3",
-	"gpt-5-4":               "gpt-5.4",
-	"gpt-5-4-pro":           "gpt-5.4-pro",
-	"gpt-5-4-mini":          "gpt-5.4-mini",
-	"gpt-5-4-nano":          "gpt-5.4-nano",
-	"google":                "gemini-3-pro-preview",
-	"gemini":                "gemini-3-pro-preview",
-	"gemini-pro":            "gemini-3-pro-preview",
-	"gemini-flash":          "gemini-3-flash-preview",
-	"gemini-3-6-flash":      "gemini-3.6-flash",
-	"gemini-3-5-flash-lite": "gemini-3.5-flash-lite",
-	"gemini-3-7-flash":      "gemini-3.7-flash",
-	"gemini-3-8-flash":      "gemini-3.8-flash",
-	// V4 Flash is retired on Makora. Explicit version pins stay versioned;
-	// the bare deepseek-v4-flash pin targets the AIand roster twin.
-	"deepseek":            "deepseek/deepseek-v4.1-flash",
-	"deepseek-pro":        "deepseek/deepseek-v4-pro",
-	"deepseek-flash":      "deepseek/deepseek-v4.1-flash",
+	// The claude-*/gpt-* aliases were deleted with their catalog rows in the
+	// AIand-only cut. Bare claude-*/gpt-* model strings still fall through to
+	// the provider heuristic below, which reports known=false so the router
+	// rejects the pin rather than serving a model it no longer holds.
+	// deepseek family aliases target the AIand roster twins; the retired
+	// provider-prefixed deepseek/* rows are gone.
+	"deepseek":            "deepseek-ai/deepseek-v4.1-flash",
+	"deepseek-pro":        "deepseek-ai/deepseek-v4-pro",
+	"deepseek-flash":      "deepseek-ai/deepseek-v4.1-flash",
 	"deepseek-v4-flash":   "deepseek-ai/deepseek-v4-flash",
-	"deepseek-v4-1-flash": "deepseek/deepseek-v4.1-flash",
-	"deepseek-v4p1-flash": "deepseek/deepseek-v4.1-flash",
-	"qwen":                "qwen/qwen3-coder",
-	"qwen-coder":          "qwen/qwen3-coder",
-	// qwen3.7-plus is retired from routing but still servable as passthrough;
-	// keep its own-name alias so direct pins resolve.
-	"qwen3.7-plus": "qwen/qwen3.7-plus",
-	"qwen-max":     "qwen/qwen3.8-max",
-	"qwen3.8-max":  "qwen/qwen3.8-max",
-	"qwen3.8":      "qwen/qwen3.8-max",
-	// Dash-form spellings people type from memory; the catalog ID uses dots.
-	"qwen/qwen-3.8-max": "qwen/qwen3.8-max",
-	"qwen-3.8-max":      "qwen/qwen3.8-max",
-	"qwen-3.8":          "qwen/qwen3.8-max",
-	// Generic kimi alias stays on 2.7; k3 is ~3x the price, so it needs an
-	// explicit pin rather than silently repricing everyone on the family alias.
-	"kimi":      "moonshotai/kimi-k2.7",
+	"deepseek-v4-1-flash": "deepseek-ai/deepseek-v4.1-flash",
+	"deepseek-v4p1-flash": "deepseek-ai/deepseek-v4.1-flash",
+	// qwen aliases target the single AIand roster qwen row.
+	"qwen":              "qwen/qwen3.8-27b",
+	"qwen-coder":        "qwen/qwen3.8-27b",
+	"qwen3.7-plus":      "qwen/qwen3.8-27b",
+	"qwen-max":          "qwen/qwen3.8-27b",
+	"qwen3.8-max":       "qwen/qwen3.8-27b",
+	"qwen3.8":           "qwen/qwen3.8-27b",
+	"qwen/qwen-3.8-max": "qwen/qwen3.8-27b",
+	"qwen-3.8-max":      "qwen/qwen3.8-27b",
+	"qwen-3.8":          "qwen/qwen3.8-27b",
+	// kimi aliases follow k3, the only surviving kimi row.
+	"kimi":      "moonshotai/kimi-k3",
 	"kimi-k3":   "moonshotai/kimi-k3",
-	"kimi-k2.7": "moonshotai/kimi-k2.7",
-	"kimi-k2.6": "moonshotai/kimi-k2.6",
-	// Generic glm/zai aliases stay on 5.1 (Together/Fireworks/OpenRouter);
-	// 5.2 is Fireworks-only day-0, so it requires an explicit pin.
-	"glm":           "z-ai/glm-5.1",
-	"zai":           "z-ai/glm-5.1",
-	"z-ai":          "z-ai/glm-5.1",
-	"glm-5.3-flash": "z-ai/glm-5.3-flash",
-	"glm-5.3":       "z-ai/glm-5.3",
-	"glm-5.2":       "z-ai/glm-5.2",
-	"glm-5.1":       "z-ai/glm-5.1",
-	"glm-5":         "z-ai/glm-5",
-	"minimax":       "minimax/minimax-m3",
-	"minimax-m3":    "minimax/minimax-m3",
-	"minimax-m2.7":  "minimax/minimax-m2.7",
-	"mistral":       "mistralai/mistral-small-2603",
+	"kimi-k2.7": "moonshotai/kimi-k3",
+	"kimi-k2.6": "moonshotai/kimi-k3",
+	// glm/zai aliases target the AIand roster glm-5.3 rows.
+	"glm":           "zai-org/glm-5.3",
+	"zai":           "zai-org/glm-5.3",
+	"z-ai":          "zai-org/glm-5.3",
+	"glm-5.3-flash": "zai-org/glm-5.3-flash",
+	"glm-5.3":       "zai-org/glm-5.3",
+	"glm-5.2":       "zai-org/glm-5.3",
+	"glm-5.1":       "zai-org/glm-5.3",
+	"glm-5":         "zai-org/glm-5.3",
 }
 
 // resolveForceModel is the legacy two-return surface. New pin-and-effort

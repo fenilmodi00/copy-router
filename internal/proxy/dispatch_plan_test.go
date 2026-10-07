@@ -20,7 +20,7 @@ import (
 	"weave-os/router/internal/translate"
 )
 
-const plannedTestModel = "deepseek/deepseek-v4-pro"
+const plannedTestModel = "deepseek-ai/deepseek-v4-pro"
 
 func plannedInputs(rec *httptest.ResponseRecorder, buf *preludeBuffer, bindings []catalog.ProviderBinding, body []byte) failoverInputs {
 	r := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
@@ -111,22 +111,8 @@ func TestDispatchPlanned_WireModelMismatchNeverReachesProvider(t *testing.T) {
 	assert.Empty(t, rec.Body.String())
 }
 
-func TestDispatchPlanned_WireModelMayNameUpstreamID(t *testing.T) {
-	entry, ok := catalog.ByID(plannedTestModel)
-	require.True(t, ok)
-	binding := entry.Providers[0]
-	require.NotEmpty(t, binding.UpstreamID)
-	client := &fakeClient{name: binding.Provider, outcomes: []fakeOutcome{{writeBytes: []byte("ok")}}}
-	s := newServiceWithProviders(t, map[string]providers.Client{binding.Provider: client})
-
-	rec := httptest.NewRecorder()
-	buf := newPreludeBuffer(rec)
-	_, err := s.dispatchWithFallback(context.Background(), plannedInputs(rec, buf,
-		[]catalog.ProviderBinding{{Provider: binding.Provider}}, []byte(`{"model":"`+binding.UpstreamID+`"}`)))
-
-	require.NoError(t, err, "a primary binding without an explicit upstream id inherits the catalog's")
-	assert.Equal(t, 1, client.calls)
-}
+// The AIand roster binds every model to its native slash-form ID (no per-provider
+// UpstreamID rewrite), so the wire-model-names-upstream-ID case has no fixture.
 
 func TestDispatchPlanned_SameBindingRetryUsesInjectedSleep(t *testing.T) {
 	only := &fakeClient{name: providers.ProviderAIAND, outcomes: []fakeOutcome{
@@ -258,7 +244,7 @@ func TestDispatchPlanned_LeaseFailureIsTerminal(t *testing.T) {
 	rec := httptest.NewRecorder()
 	buf := newPreludeBuffer(rec)
 	in := plannedInputs(rec, buf, []catalog.ProviderBinding{{Provider: providers.ProviderAnthropic}, {Provider: providers.ProviderOpenAI}}, nil)
-	in.initialDecision.Model = "claude-opus-4-8"
+	in.initialDecision.Model = "zai-org/glm-5.3"
 	_, err := s.dispatchWithFallback(ctx, in)
 
 	require.ErrorIs(t, err, ErrSubscriptionPoolUnavailable)

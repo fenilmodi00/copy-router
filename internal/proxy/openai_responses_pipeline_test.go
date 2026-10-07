@@ -44,7 +44,7 @@ func openAIChatServiceWithDecision(provider providers.Client, decision router.De
 	return proxy.NewService(
 		&fakeRouter{decision: decision},
 		map[string]providers.Client{providers.ProviderOpenAI: provider},
-		nil, false, c, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil,
+		nil, false, c, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil,
 	)
 }
 
@@ -55,7 +55,7 @@ func TestService_ProxyOpenAIChatCompletion_ResponsesTurnCachesTranslatedBody(t *
 	provider := &fakeProvider{proxyResponse: responsesTextUpstream}
 	decision := router.Decision{
 		Provider: providers.ProviderOpenAI,
-		Model:    "gpt-5.6-luna",
+		Model:    "zai-org/glm-5.3-flash",
 		Reason:   "test",
 		Metadata: &router.RoutingMetadata{Embedding: embeddingFixture(11), ClusterIDs: []int{0, 1}},
 	}
@@ -88,7 +88,7 @@ func TestService_ProxyOpenAIChatCompletion_ResponsesStreamBypassesCache(t *testi
 	provider := &fakeProvider{proxyResponse: responsesTextUpstream}
 	decision := router.Decision{
 		Provider: providers.ProviderOpenAI,
-		Model:    "gpt-5.6-luna",
+		Model:    "zai-org/glm-5.3-flash",
 		Reason:   "test",
 		Metadata: &router.RoutingMetadata{Embedding: embeddingFixture(11), ClusterIDs: []int{0, 1}},
 	}
@@ -114,7 +114,7 @@ func TestService_ProxyOpenAIChatCompletion_ResponsesStreamBypassesCache(t *testi
 func TestService_ProxyOpenAIChatCompletion_ResponsesUsageDebitsBilling(t *testing.T) {
 	repo := &capturingBillingRepo{}
 	provider := &fakeProvider{proxyResponse: responsesTextUpstream}
-	svc := openAIChatService(provider, "gpt-5.6-luna").
+	svc := openAIChatService(provider, "zai-org/glm-5.3-flash").
 		WithBillingService(billing.NewService(repo))
 
 	ctx := proxyContextWithExternalID(t, "tenant-billing")
@@ -123,15 +123,15 @@ func TestService_ProxyOpenAIChatCompletion_ResponsesUsageDebitsBilling(t *testin
 		httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(chatCacheableTurnBody))))
 	require.Equal(t, providers.EndpointResponses, provider.proxyEndpoints[0])
 
-	price, ok := catalog.PriceFor(providers.ProviderOpenAI, "gpt-5.6-luna")
+	price, ok := catalog.PriceFor(providers.ProviderAIAND, "zai-org/glm-5.3-flash")
 	require.True(t, ok)
 	want := catalog.USDToMicros(
-		catalog.EffectiveInputCost(40, 0, 32, price, providers.ProviderOpenAI) +
+		catalog.EffectiveInputCost(40, 0, 32, price, providers.ProviderAIAND) +
 			catalog.EffectiveOutputCost(40, 6, price))
 
 	debits := repo.recordedDebits()
 	require.Len(t, debits, 1, "a served Responses turn must debit exactly once")
-	assert.Equal(t, "gpt-5.6-luna", debits[0].RouterModel)
+	assert.Equal(t, "zai-org/glm-5.3-flash", debits[0].RouterModel)
 	assert.Equal(t, want, debits[0].NotionalCostMicros,
 		"the debit must price the Responses usage block, cached prefix included")
 	assert.Positive(t, want)
@@ -145,7 +145,7 @@ func TestService_ProxyMessages_HandoverSwitchToOpenAIEmitsResponses(t *testing.T
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
 		Provider:        providers.ProviderAnthropic,
-		Model:           "claude-opus-4-7",
+		Model:           "deepseek-ai/deepseek-v4-pro",
 		Reason:          "cluster:v0.2",
 		PinnedUntil:     time.Now().Add(time.Hour),
 		LastInputTokens: 5000,
@@ -153,7 +153,7 @@ func TestService_ProxyMessages_HandoverSwitchToOpenAIEmitsResponses(t *testing.T
 	}
 	openAI := &fakeProvider{proxyResponse: responsesTextUpstream}
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderOpenAI, Model: "gpt-5.6-luna", Reason: "cluster:v0.2",
+		Provider: providers.ProviderOpenAI, Model: "zai-org/glm-5.3-flash", Reason: "cluster:v0.2",
 	}}
 	summarizer := &fakeSummarizer{summary: "HANDOVER SUMMARY MARKER"}
 	svc := proxy.NewService(
@@ -162,7 +162,7 @@ func TestService_ProxyMessages_HandoverSwitchToOpenAIEmitsResponses(t *testing.T
 			providers.ProviderAnthropic: &fakeProvider{},
 			providers.ProviderOpenAI:    openAI,
 		},
-		nil, false, nil, store, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, store, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithSummarizer(summarizer)
 
 	rec := httptest.NewRecorder()
@@ -184,7 +184,7 @@ func TestService_ProxyOpenAIChatCompletion_HandoverUsesResponsesEndpoint(t *test
 	store.hasPin = true
 	store.pin = sessionpin.Pin{
 		Provider:        providers.ProviderAnthropic,
-		Model:           "claude-opus-4-7",
+		Model:           "deepseek-ai/deepseek-v4-pro",
 		Reason:          "cluster:v0.2",
 		PinnedUntil:     time.Now().Add(time.Hour),
 		LastInputTokens: 5000,
@@ -192,7 +192,7 @@ func TestService_ProxyOpenAIChatCompletion_HandoverUsesResponsesEndpoint(t *test
 	}
 	openAI := &fakeProvider{proxyResponse: responsesTextUpstream}
 	fr := &fakeRouter{decision: router.Decision{
-		Provider: providers.ProviderOpenAI, Model: "gpt-5.6-luna", Reason: "cluster:v0.2",
+		Provider: providers.ProviderOpenAI, Model: "zai-org/glm-5.3-flash", Reason: "cluster:v0.2",
 	}}
 	summarizer := &fakeSummarizer{summary: "HANDOVER SUMMARY MARKER"}
 	svc := proxy.NewService(
@@ -201,7 +201,7 @@ func TestService_ProxyOpenAIChatCompletion_HandoverUsesResponsesEndpoint(t *test
 			providers.ProviderAnthropic: &fakeProvider{},
 			providers.ProviderOpenAI:    openAI,
 		},
-		nil, false, nil, store, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil,
+		nil, false, nil, store, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil,
 	).WithSummarizer(summarizer)
 	body := `{"model":"auto","stream":true,"max_tokens":256,"messages":[{"role":"user","content":"` + strings.Repeat("aaaa ", 8000) + `"}],"tools":[{"type":"function","function":{"name":"noop","parameters":{"type":"object"}}}],"reasoning_effort":"medium"}`
 	rec := httptest.NewRecorder()

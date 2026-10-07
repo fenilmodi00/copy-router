@@ -23,7 +23,7 @@ import (
 // ccTaskToolTurnBody is a Claude Code turn carrying the task-list tools plus
 // one of their system reminders, as it arrives on /v1/messages.
 const ccTaskToolTurnBody = `{
-	"model":"claude-opus-4-7",
+	"model":"deepseek-ai/deepseek-v4-pro",
 	"system":"You are Claude Code.",
 	"messages":[{"role":"user","content":[
 		{"type":"text","text":"fix the bug"},
@@ -87,9 +87,9 @@ func TestProxyMessages_CCTaskToolsCrossVendor_OrgOverrideReachesUpstream(t *test
 
 			provider := ccTaskToolProvider()
 			svc := proxy.NewService(
-				&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-luna", Reason: "test"}},
+				&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "zai-org/glm-5.3-flash", Reason: "test"}},
 				map[string]providers.Client{providers.ProviderOpenAI: provider},
-				nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+				nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 			)
 
 			ctx := context.Background()

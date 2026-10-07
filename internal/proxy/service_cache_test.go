@@ -50,7 +50,7 @@ func anthropicBody(prompt string, stream bool) []byte {
 		streamLit = "true"
 	}
 	return []byte(`{
-		"model":"claude-opus-4-7",
+		"model":"deepseek-ai/deepseek-v4-pro",
 		"max_tokens":256,
 		"stream":` + streamLit + `,
 		"tools":[{"name":"noop","description":"placeholder","input_schema":{"type":"object"}}],
@@ -62,7 +62,7 @@ func anthropicBody(prompt string, stream bool) []byte {
 func decisionWithEmbedding(emb []float32, clusterIDs []int) router.Decision {
 	return router.Decision{
 		Provider: "anthropic",
-		Model:    "claude-haiku-4-5",
+		Model:    "zai-org/glm-5.3-flash",
 		Reason:   "test",
 		Metadata: &router.RoutingMetadata{
 			Embedding:  emb,
@@ -91,7 +91,7 @@ func TestService_Cache_HitShortCircuitsProvider(t *testing.T) {
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0, 1, 2, 3})}
 	c := cache.New(cache.DefaultConfig())
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	ctx := proxyContextWithExternalID(t, "tenant-1")
 	body := anthropicBody("ping", false)
@@ -120,10 +120,10 @@ func TestService_Cache_SubscriptionStatePreferencesBypass(t *testing.T) {
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0, 1})}
 	c := cache.New(cache.DefaultConfig())
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	ctx := proxyContextWithExternalID(t, "tenant-conditional")
-	ctx = context.WithValue(ctx, proxy.SubscriptionStatePreferredModelsContextKey{}, []string{"claude-haiku-4-5"})
+	ctx = context.WithValue(ctx, proxy.SubscriptionStatePreferredModelsContextKey{}, []string{"zai-org/glm-5.3-flash"})
 	body := anthropicBody("conditional cache", false)
 
 	rec1 := httptest.NewRecorder()
@@ -145,7 +145,7 @@ func TestService_Cache_EmptySubscriptionStatePreferencesAllowCache(t *testing.T)
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0, 1})}
 	c := cache.New(cache.DefaultConfig())
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	ctx := proxyContextWithExternalID(t, "tenant-conditional-empty")
 	ctx = context.WithValue(ctx, proxy.SubscriptionStatePreferredModelsContextKey{}, []string{})
@@ -170,13 +170,19 @@ func TestService_Cache_PlanAwareRoutingBypasses(t *testing.T) {
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0, 1})}
 	c := cache.New(cache.DefaultConfig())
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	ctx := proxyContextWithExternalID(t, "tenant-plan-aware")
 	ctx = flags.WithOverrides(ctx, flags.Overrides{Bools: map[flags.Key]bool{flags.KeySubscriptionPlanAwareRouting: true}})
 	ctx = context.WithValue(ctx, proxy.ManagedSubscriptionPlanStatesContextKey{}, map[subscriptions.Provider]proxy.SubscriptionPlanState{
 		subscriptions.ProviderClaude: proxy.SubscriptionPlanStateExhausted,
 		subscriptions.ProviderCodex:  proxy.SubscriptionPlanStateActive,
+	})
+	// The roster has no Claude/Codex-covered rows, so plan-aware routing
+	// derives an empty exclusion set; supply the exclusion plan-aware routing
+	// would produce for a subscription-covered model to exercise the cache gate.
+	ctx = context.WithValue(ctx, proxy.SubscriptionPlanAwareExcludedModelsContextKey{}, map[string]struct{}{
+		"zai-org/glm-5.3-flash": {},
 	})
 	body := anthropicBody("plan-aware cache", false)
 
@@ -196,7 +202,7 @@ func TestService_Cache_StreamingBypasses(t *testing.T) {
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0})}
 	c := cache.New(cache.DefaultConfig())
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	ctx := proxyContextWithExternalID(t, "tenant-1")
 	body := anthropicBody("streaming please", true)
@@ -218,9 +224,9 @@ func TestService_Cache_HeuristicDecisionBypasses(t *testing.T) {
 		proxyResponse: func(w http.ResponseWriter) { _, _ = w.Write([]byte(`{"id":"x"}`)) },
 	}
 	// Decision with no Metadata — what the heuristic router produces.
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "claude-haiku-4-5", Reason: "heuristic"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "zai-org/glm-5.3-flash", Reason: "heuristic"}}
 	c := cache.New(cache.DefaultConfig())
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	ctx := proxyContextWithExternalID(t, "tenant-1")
 	body := anthropicBody("ask", false)
@@ -243,7 +249,7 @@ func TestService_Cache_MissingExternalIDBypasses(t *testing.T) {
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0})}
 	c := cache.New(cache.DefaultConfig())
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	body := anthropicBody("ask", false)
 
@@ -278,7 +284,7 @@ func TestService_Cache_HitOmitsFeedbackLink(t *testing.T) {
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0, 1, 2, 3})}
 	c := cache.New(cache.DefaultConfig())
 	signer := feedback.NewSigner("cache-secret", time.Hour)
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, c, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithFeedback(nil, signer, "https://router.example.com")
 
 	ctx := context.WithValue(proxyContextWithExternalID(t, "tenant-1"), proxy.InstallationIDContextKey{}, uuid.New().String())
@@ -302,7 +308,7 @@ func TestService_Cache_DisabledByNilCache(t *testing.T) {
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0})}
 	// nil cache equivalent to ROUTER_SEMANTIC_CACHE_ENABLED=false.
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: provider}, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	ctx := proxyContextWithExternalID(t, "tenant-1")
 	body := anthropicBody("ask", false)

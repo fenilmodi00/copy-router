@@ -6,18 +6,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"weave-os/router/internal/billing"
 	"weave-os/router/internal/providers"
-	"weave-os/router/internal/proxy/usage"
 	"weave-os/router/internal/router"
 	"weave-os/router/internal/router/catalog"
 	"weave-os/router/internal/router/eligibility"
-	"weave-os/router/internal/router/turntype"
 	"weave-os/router/internal/subscriptions/entitlement"
 	"weave-os/router/internal/translate"
 
@@ -28,19 +25,30 @@ func maxScopedContext() context.Context {
 	return entitlement.WithProductScope(context.Background(), entitlement.PlanMax)
 }
 
+// deniesCatalogContext stamps a plan the entitlement layer maps to its
+// deny-everything fallback. Every AIand roster row is open source, so Max
+// (open-source-only) excludes nothing the router can serve; this context is how
+// the ineligible-catalog-model paths stay reachable with a real roster fixture.
+func deniesCatalogContext() context.Context {
+	return entitlement.WithProductScope(context.Background(), entitlement.Plan("plan_without_boundary"))
+}
+
 func TestMaxRequestCarriesTheBoundaryAndHardExclusions(t *testing.T) {
 	svc := &Service{}
 
+	// Every roster row is open source, so Max excludes nothing it can serve.
 	req := svc.withPolicyRequestContext(maxScopedContext(), router.Request{})
-
 	assert.True(t, req.ProductEligibility.Restricts())
-	// Desugared into the HARD set, not AutomaticExcludedModels: a router may
-	// drop the soft set to keep a pool non-empty, which would serve exactly
-	// the models Max does not sell.
-	assert.Contains(t, req.ExcludedModels, "claude-opus-4-8")
-	assert.Contains(t, req.ExcludedModels, "muse-spark-1.3")
-	assert.NotContains(t, req.ExcludedModels, "deepseek/deepseek-v4-pro")
-	assert.NotContains(t, req.AutomaticExcludedModels, "claude-opus-4-8")
+	assert.Empty(t, req.ExcludedModels)
+
+	// A boundary permitting no source desugars the catalog into the HARD set,
+	// not AutomaticExcludedModels: a router may drop the soft set to keep a
+	// pool non-empty, which would serve exactly the models the plan does not
+	// sell.
+	denied := svc.withPolicyRequestContext(deniesCatalogContext(), router.Request{})
+	assert.Contains(t, denied.ExcludedModels, "zai-org/glm-5.3")
+	assert.Contains(t, denied.ExcludedModels, "deepseek-ai/deepseek-v4-pro")
+	assert.NotContains(t, denied.AutomaticExcludedModels, "zai-org/glm-5.3")
 }
 
 func TestUnsubscribedRequestKeepsUnrestrictedRouting(t *testing.T) {
@@ -52,57 +60,48 @@ func TestUnsubscribedRequestKeepsUnrestrictedRouting(t *testing.T) {
 	assert.Empty(t, req.ExcludedModels)
 }
 
-// A router that reaches a closed-source model anyway — from a pin, a fallback
-// table, or its deployed-set default — is refused rather than dispatched.
-func TestMaxRouteRefusesAClosedSourceDecision(t *testing.T) {
-	closedRouter := &registryRouter{decision: router.Decision{Model: "claude-opus-4-8", Provider: providers.ProviderAnthropic}}
+// A router that reaches a model outside the plan's boundary anyway — from a
+// pin, a fallback table, or its deployed-set default — is refused rather than
+// dispatched.
+func TestMaxRouteRefusesADecisionOutsideTheBoundary(t *testing.T) {
+	closedRouter := &registryRouter{decision: router.Decision{Model: "zai-org/glm-5.3", Provider: providers.ProviderAIAND}}
 	svc := &Service{router: closedRouter}
 
-	_, err := svc.Route(maxScopedContext(), router.Request{})
+	_, err := svc.Route(deniesCatalogContext(), router.Request{})
 
 	require.ErrorIs(t, err, eligibility.ErrModelIneligible)
-	assert.Contains(t, err.Error(), "claude-opus-4-8")
-}
-
-func TestMaxRouteRefusesAnUnknownSourceDecision(t *testing.T) {
-	unknownRouter := &registryRouter{decision: router.Decision{Model: "muse-spark-1.3", Provider: providers.ProviderAIAND}}
-	svc := &Service{router: unknownRouter}
-
-	_, err := svc.Route(maxScopedContext(), router.Request{})
-
-	require.ErrorIs(t, err, eligibility.ErrModelIneligible)
+	assert.Contains(t, err.Error(), "zai-org/glm-5.3")
 }
 
 func TestMaxRouteServesOpenSourceDecision(t *testing.T) {
-	ossRouter := &registryRouter{decision: router.Decision{Model: "deepseek/deepseek-v4-pro", Provider: providers.ProviderAIAND}}
+	ossRouter := &registryRouter{decision: router.Decision{Model: "deepseek-ai/deepseek-v4-pro", Provider: providers.ProviderAIAND}}
 	svc := &Service{router: ossRouter}
 
 	decision, err := svc.Route(maxScopedContext(), router.Request{})
 
 	require.NoError(t, err)
-	assert.Equal(t, "deepseek/deepseek-v4-pro", decision.Model)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", decision.Model)
 }
 
 // Funding is orthogonal to eligibility: prepaid capacity, a billing override,
 // and a covered included allowance all leave the boundary exactly as it was.
-// Max sells an open-source-only boundary, so no book paying for the turn can
-// buy a closed-source model.
+// No book paying for the turn can buy a model the plan's boundary refuses.
 func TestFundingCannotWidenMaxEligibility(t *testing.T) {
-	closedRouter := &registryRouter{decision: router.Decision{Model: "claude-opus-4-8", Provider: providers.ProviderAnthropic}}
+	closedRouter := &registryRouter{decision: router.Decision{Model: "zai-org/glm-5.3", Provider: providers.ProviderAIAND}}
 	svc := &Service{router: closedRouter}
 
 	for name, ctx := range map[string]context.Context{
 		// Included allowance paying for the turn.
-		"included coverage": entitlement.WithCoverage(maxScopedContext(), entitlement.Coverage{Plan: entitlement.PlanMax}),
+		"included coverage": entitlement.WithCoverage(deniesCatalogContext(), entitlement.Coverage{Plan: entitlement.PlanMax}),
 		// Allowance spent, so the turn falls through to the prepaid and
 		// organization books that fund it; the stamped scope still holds.
-		"allowance spent, other funds paying": maxScopedContext(),
+		"allowance spent, other funds paying": deniesCatalogContext(),
 		// The org-wide billing override, the broadest funding escape hatch.
-		"billing override": context.WithValue(maxScopedContext(), billing.HasOverrideContextKey, true),
+		"billing override": context.WithValue(deniesCatalogContext(), billing.HasOverrideContextKey, true),
 	} {
 		t.Run(name, func(t *testing.T) {
 			req := svc.withPolicyRequestContext(ctx, router.Request{})
-			assert.Contains(t, req.ExcludedModels, "claude-opus-4-8")
+			assert.Contains(t, req.ExcludedModels, "zai-org/glm-5.3")
 
 			_, err := svc.Route(ctx, router.Request{})
 			require.ErrorIs(t, err, eligibility.ErrModelIneligible)
@@ -115,17 +114,17 @@ func TestFundingCannotWidenMaxEligibility(t *testing.T) {
 // provider through dispatchWithFallback, which is where the boundary is
 // terminal.
 func TestDispatchRefusesAnIneligibleDecisionTheTurnLoopMinted(t *testing.T) {
-	anthropic := &fakeClient{name: providers.ProviderAnthropic, outcomes: []fakeOutcome{{writeBytes: []byte("served")}}}
-	svc := newServiceWithProviders(t, map[string]providers.Client{providers.ProviderAnthropic: anthropic})
+	aiand := &fakeClient{name: providers.ProviderAIAND, outcomes: []fakeOutcome{{writeBytes: []byte("served")}}}
+	svc := newServiceWithProviders(t, map[string]providers.Client{providers.ProviderAIAND: aiand})
 
 	rec := httptest.NewRecorder()
-	in := plannedInputs(rec, newPreludeBuffer(rec), []catalog.ProviderBinding{{Provider: providers.ProviderAnthropic}}, nil)
-	in.initialDecision = router.Decision{Model: "claude-opus-4-8", Provider: providers.ProviderAnthropic}
+	in := plannedInputs(rec, newPreludeBuffer(rec), []catalog.ProviderBinding{{Provider: providers.ProviderAIAND}}, nil)
+	in.initialDecision = router.Decision{Model: "zai-org/glm-5.3", Provider: providers.ProviderAIAND}
 
-	_, err := svc.dispatchWithFallback(maxScopedContext(), in)
+	_, err := svc.dispatchWithFallback(deniesCatalogContext(), in)
 
 	require.ErrorIs(t, err, eligibility.ErrModelIneligible)
-	assert.Zero(t, anthropic.calls)
+	assert.Zero(t, aiand.calls)
 }
 
 func TestDispatchServesAnEligibleDecision(t *testing.T) {
@@ -141,26 +140,6 @@ func TestDispatchServesAnEligibleDecision(t *testing.T) {
 	assert.Equal(t, 1, aiand.calls)
 }
 
-// The subscription pass-through lane serves the requested model verbatim
-// without routing, so an ineligible model disengages it and the turn falls
-// through to routed dispatch instead.
-func TestUsageBypassDisengagesForAnIneligibleModel(t *testing.T) {
-	const token = "sk-ant-oat01-test-subscription-token"
-	threshold := 0.80
-	obs := usage.NewObserver([]byte("salt"), 10*time.Minute, time.Now)
-	obs.Record(obs.Key([]byte(token)), usage.Snapshot{Primary: usage.Window{UsedPercent: 0.20, WindowMinutes: 300}})
-	svc := &Service{usageObserver: obs}
-	ctx := context.WithValue(maxScopedContext(), AnthropicSubscriptionContextKey{}, token)
-	ctx = context.WithValue(ctx, InstallationUsageBypassContextKey{}, UsageBypassConfig{Enabled: true, Threshold: &threshold})
-
-	_, engaged := svc.usageBypassDecision(ctx, http.Header{}, router.Request{
-		RequestedModel:     "claude-sonnet-4-6",
-		ProductEligibility: eligibility.MaxOpenSourceOnly,
-	}, nil, turntype.MainLoop)
-
-	assert.False(t, engaged)
-}
-
 // Agent-shadow evaluation forces a preplanned canonical model and skips the
 // scorer entirely, so it is gated on the boundary directly.
 func TestAgentShadowEvaluationRefusesAnIneligibleModel(t *testing.T) {
@@ -168,9 +147,9 @@ func TestAgentShadowEvaluationRefusesAnIneligibleModel(t *testing.T) {
 	env := bypassAnthropicEnvelope(t)
 
 	_, err := svc.runAgentShadowEvaluationRoute(
-		maxScopedContext(), env, translate.RoutingFeatures{Model: "claude-opus-4-8"}, uuid.Nil,
-		router.Request{ProductEligibility: eligibility.MaxOpenSourceOnly},
-		AgentShadowEvaluation{Model: "claude-opus-4-8", RolloutID: "rollout-1", StateID: "state-1"},
+		deniesCatalogContext(), env, translate.RoutingFeatures{Model: "zai-org/glm-5.3"}, uuid.Nil,
+		router.Request{ProductEligibility: eligibility.New("shadow_product")},
+		AgentShadowEvaluation{Model: "zai-org/glm-5.3", RolloutID: "rollout-1", StateID: "state-1"},
 	)
 
 	require.ErrorIs(t, err, eligibility.ErrModelIneligible)
@@ -190,13 +169,14 @@ func TestIneligibleModelIsAClassifiedClientError(t *testing.T) {
 // The operator escape hatch replaces the exclusion set wholesale; the
 // product boundary still survives it.
 func TestExcludedModelsOverrideCannotWidenTheBoundary(t *testing.T) {
-	svc := &Service{excludedModelsOverride: map[string]struct{}{"gpt-5.5": {}}}
+	svc := &Service{excludedModelsOverride: map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}}
 
-	excluded := svc.excludedModelsForRequest(maxScopedContext())
+	excluded := svc.excludedModelsForRequest(deniesCatalogContext())
 
-	assert.Contains(t, excluded, "claude-opus-4-8")
-	assert.Contains(t, excluded, "muse-spark-1.3")
-	assert.Contains(t, excluded, "gpt-5.5")
-	assert.NotContains(t, excluded, "deepseek/deepseek-v4-pro")
-	assert.NotContains(t, svc.excludedModelsOverride, "claude-opus-4-8")
+	assert.Contains(t, excluded, "deepseek-ai/deepseek-v4-flash")
+	assert.Contains(t, excluded, "zai-org/glm-5.3", "the product boundary still lands beside the override")
+	assert.NotContains(t, svc.excludedModelsOverride, "zai-org/glm-5.3")
+
+	// Max permits every roster row, so the override is the only entry there.
+	assert.Equal(t, map[string]struct{}{"deepseek-ai/deepseek-v4-flash": {}}, svc.excludedModelsForRequest(maxScopedContext()))
 }

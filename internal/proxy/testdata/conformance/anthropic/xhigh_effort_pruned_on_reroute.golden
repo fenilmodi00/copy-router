@@ -5,7 +5,7 @@
       "message": {
         "content": [],
         "id": "<id>",
-        "model": "claude-opus-4-8",
+        "model": "zai-org/glm-5.3",
         "role": "assistant",
         "type": "message",
         "usage": {

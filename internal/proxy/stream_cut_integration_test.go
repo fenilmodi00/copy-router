@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const streamCutTurnBody = `{"model":"claude-opus-4-8","stream":true,"messages":[{"role":"user","content":"hi"}]}`
+const streamCutTurnBody = `{"model":"zai-org/glm-5.3","stream":true,"messages":[{"role":"user","content":"hi"}]}`
 
 func captureCompletionLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
@@ -53,7 +53,7 @@ func TestProxyMessages_CommittedStreamCutLogsDiagnostics(t *testing.T) {
 		},
 	}
 	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-opus-4-8", Reason: "test"},
+		router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3", Reason: "test"},
 		map[string]providers.Client{providers.ProviderAnthropic: provider},
 	)
 
@@ -97,7 +97,7 @@ func TestProxyMessages_ThinkingOnlyIdleCutReportsNoFinalBlocks(t *testing.T) {
 		},
 	}
 	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-opus-4-8", Reason: "test"},
+		router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3", Reason: "test"},
 		map[string]providers.Client{providers.ProviderAnthropic: provider},
 	)
 
@@ -138,7 +138,7 @@ func TestProxyMessages_ClientCancelClassifiedSeparately(t *testing.T) {
 		},
 	}
 	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-opus-4-8", Reason: "test"},
+		router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3", Reason: "test"},
 		map[string]providers.Client{providers.ProviderAnthropic: provider},
 	)
 
@@ -164,7 +164,7 @@ func TestProxyMessages_CleanStreamLogsNoStreamCutFields(t *testing.T) {
 		_, _ = io.WriteString(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
 	}}
 	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-opus-4-8", Reason: "test"},
+		router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3", Reason: "test"},
 		map[string]providers.Client{providers.ProviderAnthropic: provider},
 	)
 
@@ -189,7 +189,7 @@ func TestProxyMessages_TranslatedPathStreamCutLogsDiagnostics(t *testing.T) {
 		},
 	}
 	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-luna", Reason: "test"},
+		router.Decision{Provider: providers.ProviderOpenAI, Model: "zai-org/glm-5.3-flash", Reason: "test"},
 		map[string]providers.Client{providers.ProviderOpenAI: provider},
 	)
 

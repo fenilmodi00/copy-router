@@ -113,13 +113,13 @@ func TestMultiversion_DefaultDeployedModels_ReadsDefaultVersionOnly(t *testing.T
 
 // DefaultRoutingDistribution must delegate to the default Scorer and match its output.
 func TestMultiversion_DefaultRoutingDistribution_DelegatesToDefaultScorer(t *testing.T) {
-	bundle, err := LoadBundle("v0.67")
+	bundle, err := LoadBundle("v0.80")
 	require.NoError(t, err)
 	require.True(t, bundle.IsV2, "test needs a v2 bundle; v1 bundles error out of RoutingDistribution")
 	s, err := NewScorer(bundle, DefaultConfig(), &fakeEmbedder{dim: bundle.Centroids.Dim}, allProviders())
 	require.NoError(t, err)
 
-	multi, err := NewMultiversion("v0.67", map[string]*Scorer{"v0.67": s})
+	multi, err := NewMultiversion("v0.80", map[string]*Scorer{"v0.80": s})
 	require.NoError(t, err)
 
 	const grid = 11

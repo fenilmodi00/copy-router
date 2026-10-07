@@ -20,7 +20,7 @@
       }
     ],
     "id": "<id>",
-    "model": "gpt-5.5",
+    "model": "deepseek-ai/deepseek-v4-flash",
     "role": "assistant",
     "stop_reason": "tool_use",
     "stop_sequence": null,

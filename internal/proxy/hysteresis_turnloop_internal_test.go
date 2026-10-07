@@ -23,7 +23,7 @@ import (
 // the pin's served identity or a low-gap escalation silently re-prefixes the
 // session.
 func TestTurnLoopHoldsPinnedEffortOnLowGapEscalation(t *testing.T) {
-	const pinnedModel = "claude-opus-4-7"
+	const pinnedModel = "deepseek-ai/deepseek-v4-pro"
 	strategy := router.Strategy("hmm-effort-hysteresis-test")
 
 	tests := []struct {
@@ -72,7 +72,7 @@ func TestTurnLoopHoldsPinnedEffortOnLowGapEscalation(t *testing.T) {
 				store,
 				false,
 				providers.ProviderAnthropic,
-				"claude-haiku-4-5",
+				"zai-org/glm-5.3-flash",
 				nil,
 			).WithPolicyStrategy(policy.StrategySpec{
 				Strategy:     strategy,
@@ -80,7 +80,7 @@ func TestTurnLoopHoldsPinnedEffortOnLowGapEscalation(t *testing.T) {
 				Capabilities: policy.Capabilities{SchemaVersion: policy.SchemaVersionV1},
 			})
 			env, err := translate.ParseAnthropic(
-				[]byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"continue"}]}`),
+				[]byte(`{"model":"zai-org/glm-5.3","messages":[{"role":"user","content":"continue"}]}`),
 			)
 			require.NoError(t, err)
 			features := env.RoutingFeatures(false)

@@ -13,19 +13,13 @@ func TestLatestInFamily(t *testing.T) {
 		eligible []string
 		want     string
 	}{
-		{"major beats minor", "claude-sonnet-4-6", []string{"claude-sonnet-4-6", "claude-sonnet-5", "claude-opus-5"}, "claude-sonnet-5"},
-		{"dated Anthropic alias", "claude-sonnet-4-5-20250929", []string{"claude-sonnet-4-6", "claude-sonnet-5"}, "claude-sonnet-5"},
-		{"dated OpenAI alias", "gpt-4.1-mini-2025-04-14", []string{"gpt-5.5-mini"}, "gpt-5.5-mini"},
-		{"dated alias cannot bypass eligibility", "claude-sonnet-4-5-20250929", []string{"claude-sonnet-4-5-20250929"}, ""},
-		{"Opus versions", "claude-opus-4-6", []string{"claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5"}, "claude-opus-5"},
-		{"GLM keeps variant", "zai-org/glm-5.3", []string{"zai-org/glm-5.3", "zai-org/glm-5.3-flash"}, "zai-org/glm-5.3"},
 		{"DeepSeek minor", "deepseek-ai/deepseek-v4-flash", []string{"deepseek-ai/deepseek-v4-flash", "deepseek-ai/deepseek-v4.1-flash"}, "deepseek-ai/deepseek-v4.1-flash"},
-		{"OpenAI keeps size", "gpt-5.4-mini", []string{"gpt-5.5-mini", "gpt-5.6-luna", "gpt-6-astra"}, "gpt-5.5-mini"},
-		{"newest unavailable", "claude-sonnet-4-5", []string{"claude-sonnet-4-5", "claude-sonnet-4-6"}, "claude-sonnet-4-6"},
-		{"no downgrade", "claude-sonnet-5", []string{"claude-sonnet-4-6"}, ""},
+		{"GLM keeps variant", "zai-org/glm-5.3", []string{"zai-org/glm-5.3", "zai-org/glm-5.3-flash"}, "zai-org/glm-5.3"},
+		{"GLM flash variant is its own family", "zai-org/glm-5.3-flash", []string{"zai-org/glm-5.3", "zai-org/glm-5.3-flash"}, "zai-org/glm-5.3-flash"},
+		{"newest unavailable", "deepseek-ai/deepseek-v4-flash", []string{"deepseek-ai/deepseek-v4-flash"}, "deepseek-ai/deepseek-v4-flash"},
+		{"no downgrade", "deepseek-ai/deepseek-v4.1-flash", []string{"deepseek-ai/deepseek-v4-flash"}, ""},
 		{"unknown ID", "unknown-1", []string{"unknown-1"}, ""},
-		{"unversioned catalog ID", "gpt-4o", []string{"gpt-4o", "gpt-5.5"}, "gpt-4o"},
-		{"dated unversioned alias", "gpt-4o-2024-08-06", []string{"gpt-4o", "gpt-5.5"}, "gpt-4o"},
+		{"unversioned catalog ID", "qwen/qwen3.8-27b", []string{"qwen/qwen3.8-27b"}, "qwen/qwen3.8-27b"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

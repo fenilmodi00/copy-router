@@ -14,7 +14,7 @@ import (
 // a true no-op on the current roster (it only changes how a future model is
 // onboarded: one appended column instead of a retrain).
 func TestFeaturesMatchQualityMeans(t *testing.T) {
-	const version = "v0.65"
+	const version = "v0.80"
 	dir := bundleDirForVersion(version)
 
 	rawCentroids, err := embeddedArtifacts.ReadFile(path.Join(dir, "centroids.bin"))

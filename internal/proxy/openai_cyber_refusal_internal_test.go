@@ -13,7 +13,7 @@ const cyberRefusalFrame = "event: error\n" +
 	`data: {"type":"error","message":"This content was flagged for possible cybersecurity risk. If this seems wrong, try rephrasing your request."}` + "\n\n"
 
 const responsesCreatedFrame = "event: response.created\n" +
-	`data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_1","status":"in_progress","model":"gpt-5.6-sol"}}` + "\n\n"
+	`data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_1","status":"in_progress","model":"moonshotai/kimi-k3"}}` + "\n\n"
 
 const responsesOutputFrame = "event: response.output_text.delta\n" +
 	`data: {"type":"response.output_text.delta","sequence_number":1,"delta":"hello"}` + "\n\n"

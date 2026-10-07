@@ -172,10 +172,10 @@ func TestRescued429_StoreWithoutCooldownsDemotesForSession(t *testing.T) {
 // moment longer.
 func TestActiveDemotionCooldowns_ExpiryBoundary(t *testing.T) {
 	until := rateLimitTestNow.Add(45 * time.Second)
-	cooldowns := map[string]time.Time{"claude-opus-5": until, "glm-5": rateLimitTestNow.Add(-time.Second)}
+	cooldowns := map[string]time.Time{"zai-org/glm-5.3": until, "glm-5": rateLimitTestNow.Add(-time.Second)}
 
-	assert.Equal(t, map[string]time.Time{"claude-opus-5": until}, activeDemotionCooldowns(cooldowns, rateLimitTestNow))
-	assert.Equal(t, map[string]time.Time{"claude-opus-5": until}, activeDemotionCooldowns(cooldowns, until.Add(-time.Millisecond)))
+	assert.Equal(t, map[string]time.Time{"zai-org/glm-5.3": until}, activeDemotionCooldowns(cooldowns, rateLimitTestNow))
+	assert.Equal(t, map[string]time.Time{"zai-org/glm-5.3": until}, activeDemotionCooldowns(cooldowns, until.Add(-time.Millisecond)))
 	assert.Nil(t, activeDemotionCooldowns(cooldowns, until), "eligible again the instant the cooldown expires")
 	assert.Nil(t, activeDemotionCooldowns(nil, rateLimitTestNow))
 }
@@ -196,16 +196,21 @@ func TestMergeDemotionCooldowns_KeepsLaterExpiry(t *testing.T) {
 func TestReadmittableCooldowns_DropsPermanentAndImageUnsafeArms(t *testing.T) {
 	until := rateLimitTestNow.Add(30 * time.Second)
 	cooling := map[string]time.Time{
-		"claude-opus-5":             until,
-		"glm-5":                     until,
-		"qwen/qwen3-235b-a22b-2507": until,
+		"zai-org/glm-5.3":                 until, // text-only (ImageUnsupported)
+		"zai-org/glm-5.3-flash":           until, // accepts images
+		"deepseek-ai/deepseek-v4.1-flash": until, // accepts images
 	}
 
-	assert.Equal(t, map[string]time.Time{"claude-opus-5": until, "qwen/qwen3-235b-a22b-2507": until},
-		readmittableCooldowns(cooling, []string{"glm-5"}, false))
-	assert.Equal(t, map[string]time.Time{"claude-opus-5": until},
-		readmittableCooldowns(cooling, []string{"glm-5"}, true))
-	assert.Nil(t, readmittableCooldowns(map[string]time.Time{"glm-5": until}, []string{"glm-5"}, false))
+	assert.Equal(t, map[string]time.Time{
+		"zai-org/glm-5.3":                 until,
+		"zai-org/glm-5.3-flash":           until,
+		"deepseek-ai/deepseek-v4.1-flash": until,
+	}, readmittableCooldowns(cooling, []string{"deepseek-ai/deepseek-v4-pro"}, false))
+	assert.Equal(t, map[string]time.Time{
+		"zai-org/glm-5.3-flash":           until,
+		"deepseek-ai/deepseek-v4.1-flash": until,
+	}, readmittableCooldowns(cooling, []string{"deepseek-ai/deepseek-v4-pro"}, true))
+	assert.Nil(t, readmittableCooldowns(map[string]time.Time{"zai-org/glm-5.3-flash": until}, []string{"zai-org/glm-5.3-flash"}, false))
 }
 
 // Exhausted pool: every candidate but the failed arm is cooling down, so the
@@ -215,25 +220,25 @@ func TestReadmittableCooldowns_DropsPermanentAndImageUnsafeArms(t *testing.T) {
 func TestRescueDecisions_ExhaustedPoolReadmitsCoolingArms(t *testing.T) {
 	s := siblingService(providers.ProviderAnthropic, providers.ProviderAIAND)
 	md := &router.RoutingMetadata{
-		CandidateModels: []string{"claude-opus-5", "claude-sonnet-5", "deepseek/deepseek-v4-pro", "claude-haiku-4-5"},
+		CandidateModels: []string{"zai-org/glm-5.3", "deepseek-ai/deepseek-v4.1-flash", "deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3-flash"},
 		CandidateProviders: map[string]string{
-			"claude-sonnet-5":          providers.ProviderAnthropic,
-			"deepseek/deepseek-v4-pro": providers.ProviderAIAND,
-			"claude-haiku-4-5":         providers.ProviderAnthropic,
+			"deepseek-ai/deepseek-v4.1-flash": providers.ProviderAnthropic,
+			"deepseek-ai/deepseek-v4-pro":     providers.ProviderAIAND,
+			"zai-org/glm-5.3-flash":           providers.ProviderAnthropic,
 		},
 	}
 	cooling := map[string]time.Time{
-		"claude-sonnet-5":          rateLimitTestNow.Add(40 * time.Second),
-		"deepseek/deepseek-v4-pro": rateLimitTestNow.Add(5 * time.Second),
+		"deepseek-ai/deepseek-v4.1-flash": rateLimitTestNow.Add(40 * time.Second),
+		"deepseek-ai/deepseek-v4-pro":     rateLimitTestNow.Add(5 * time.Second),
 	}
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, SessionDemotedModelsContextKey{}, []string{"claude-sonnet-5", "deepseek/deepseek-v4-pro", "claude-haiku-4-5"})
+	ctx = context.WithValue(ctx, SessionDemotedModelsContextKey{}, []string{"deepseek-ai/deepseek-v4.1-flash", "deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3-flash"})
 	ctx = context.WithValue(ctx, SessionCooldownModelsContextKey{}, cooling)
 	ctx, turn := withRateLimitTurn(ctx)
 
 	got := s.siblingFailoverDecisions(ctx, overloadedDecision(md), 1_000, 0, 0)
 
-	assert.Equal(t, []string{"deepseek/deepseek-v4-pro", "claude-sonnet-5"}, siblingModels(got),
+	assert.Equal(t, []string{"deepseek-ai/deepseek-v4-pro", "deepseek-ai/deepseek-v4.1-flash"}, siblingModels(got),
 		"soonest-to-recover first; the permanently demoted haiku and the failed opus stay out")
 	assert.NotContains(t, turn.completionLogFields(), true, "nothing dispatched yet")
 
@@ -241,7 +246,7 @@ func TestRescueDecisions_ExhaustedPoolReadmitsCoolingArms(t *testing.T) {
 	fields := turn.completionLogFields()
 	assert.Contains(t, fields, "rescue_pool_exhausted")
 	assert.Contains(t, fields, true)
-	assert.Contains(t, fields, []string{"deepseek/deepseek-v4-pro"})
+	assert.Contains(t, fields, []string{"deepseek-ai/deepseek-v4-pro"})
 }
 
 // A cooling arm ranks behind every eligible candidate: the walk reaches it
@@ -250,20 +255,20 @@ func TestRescueDecisions_ExhaustedPoolReadmitsCoolingArms(t *testing.T) {
 func TestRescueDecisions_CoolingArmRanksBehindEligibleCandidates(t *testing.T) {
 	s := siblingService(providers.ProviderAnthropic, providers.ProviderAIAND)
 	md := &router.RoutingMetadata{
-		CandidateModels: []string{"claude-opus-5", "deepseek/deepseek-v4-pro", "claude-sonnet-5"},
+		CandidateModels: []string{"zai-org/glm-5.3", "deepseek-ai/deepseek-v4-pro", "deepseek-ai/deepseek-v4.1-flash"},
 		CandidateProviders: map[string]string{
-			"claude-sonnet-5":          providers.ProviderAnthropic,
-			"deepseek/deepseek-v4-pro": providers.ProviderAIAND,
+			"deepseek-ai/deepseek-v4.1-flash": providers.ProviderAnthropic,
+			"deepseek-ai/deepseek-v4-pro":     providers.ProviderAIAND,
 		},
 	}
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, SessionDemotedModelsContextKey{}, []string{"deepseek/deepseek-v4-pro"})
-	ctx = context.WithValue(ctx, SessionCooldownModelsContextKey{}, map[string]time.Time{"deepseek/deepseek-v4-pro": rateLimitTestNow.Add(time.Minute)})
+	ctx = context.WithValue(ctx, SessionDemotedModelsContextKey{}, []string{"deepseek-ai/deepseek-v4-pro"})
+	ctx = context.WithValue(ctx, SessionCooldownModelsContextKey{}, map[string]time.Time{"deepseek-ai/deepseek-v4-pro": rateLimitTestNow.Add(time.Minute)})
 	ctx, turn := withRateLimitTurn(ctx)
 
 	got := s.siblingFailoverDecisions(ctx, overloadedDecision(md), 1_000, 0, 0)
 
-	assert.Equal(t, []string{"claude-sonnet-5", "deepseek/deepseek-v4-pro"}, siblingModels(got))
+	assert.Equal(t, []string{"deepseek-ai/deepseek-v4.1-flash", "deepseek-ai/deepseek-v4-pro"}, siblingModels(got))
 	s.noteRescueReadmission(ctx, overloadedDecision(md), got[0])
 	assert.Contains(t, turn.completionLogFields(), false)
 	assert.NotContains(t, turn.completionLogFields(), true)
@@ -274,10 +279,10 @@ func TestRescueDecisions_CoolingArmRanksBehindEligibleCandidates(t *testing.T) {
 func TestRescueDecisions_ExhaustedPoolWithoutCooldownsStaysEmpty(t *testing.T) {
 	s := siblingService(providers.ProviderAnthropic)
 	md := &router.RoutingMetadata{
-		CandidateModels:    []string{"claude-opus-5", "claude-sonnet-5"},
-		CandidateProviders: map[string]string{"claude-sonnet-5": providers.ProviderAnthropic},
+		CandidateModels:    []string{"zai-org/glm-5.3", "deepseek-ai/deepseek-v4.1-flash"},
+		CandidateProviders: map[string]string{"deepseek-ai/deepseek-v4.1-flash": providers.ProviderAnthropic},
 	}
-	ctx := context.WithValue(context.Background(), SessionDemotedModelsContextKey{}, []string{"claude-sonnet-5"})
+	ctx := context.WithValue(context.Background(), SessionDemotedModelsContextKey{}, []string{"deepseek-ai/deepseek-v4.1-flash"})
 
 	assert.Empty(t, s.siblingFailoverDecisions(ctx, overloadedDecision(md), 1_000, 0, 0))
 }
@@ -286,112 +291,112 @@ func TestRescueDecisions_ExhaustedPoolWithoutCooldownsStaysEmpty(t *testing.T) {
 // cooling arm is usually absent from the scored list: it is still readmitted,
 // resolved through its catalog binding.
 func TestRescueDecisions_ReadmitsCoolingArmAbsentFromScoredCandidates(t *testing.T) {
-	s := siblingService(providers.ProviderAnthropic)
+	s := siblingService(providers.ProviderAIAND)
 	md := &router.RoutingMetadata{
-		CandidateModels:    []string{"claude-sonnet-5", "claude-haiku-4-5"},
-		CandidateProviders: map[string]string{"claude-haiku-4-5": providers.ProviderAnthropic},
+		CandidateModels:    []string{"deepseek-ai/deepseek-v4.1-flash", "zai-org/glm-5.3-flash"},
+		CandidateProviders: map[string]string{"zai-org/glm-5.3-flash": providers.ProviderAIAND},
 	}
 	failed := overloadedDecision(md)
-	failed.Model = "claude-sonnet-5"
-	ctx := context.WithValue(context.Background(), SessionDemotedModelsContextKey{}, []string{"claude-opus-5"})
-	ctx = context.WithValue(ctx, SessionCooldownModelsContextKey{}, map[string]time.Time{"claude-opus-5": rateLimitTestNow.Add(30 * time.Second)})
+	failed.Model = "deepseek-ai/deepseek-v4.1-flash"
+	ctx := context.WithValue(context.Background(), SessionDemotedModelsContextKey{}, []string{"zai-org/glm-5.3"})
+	ctx = context.WithValue(ctx, SessionCooldownModelsContextKey{}, map[string]time.Time{"zai-org/glm-5.3": rateLimitTestNow.Add(30 * time.Second)})
 
 	got := s.siblingFailoverDecisions(ctx, failed, 1_000, 0, 0)
 
-	assert.Equal(t, []string{"claude-haiku-4-5", "claude-opus-5"}, siblingModels(got))
-	assert.Equal(t, providers.ProviderAnthropic, got[1].Provider)
+	assert.Equal(t, []string{"zai-org/glm-5.3-flash", "zai-org/glm-5.3"}, siblingModels(got))
+	assert.Equal(t, providers.ProviderAIAND, got[1].Provider)
 }
 
 func TestSiblingFailover_ScorerReadmitsOnlyEligibleCoolingPeersAtOrAboveSelectedTier(t *testing.T) {
-	s := siblingService(providers.ProviderAnthropic, providers.ProviderOpenAI)
+	s := siblingService(providers.ProviderAIAND)
 	failed := router.Decision{
-		Provider: providers.ProviderAnthropic,
-		Model:    "claude-sonnet-5",
+		Provider: providers.ProviderAIAND,
+		Model:    "deepseek-ai/deepseek-v4.1-flash",
 		Metadata: &router.RoutingMetadata{
 			ClusterRouterVersion: "v-test",
-			CandidateModels:      []string{"claude-sonnet-5", "gpt-5"},
-			ScorerRescuePool:     []string{"claude-sonnet-5", "gpt-5", "claude-opus-5", "claude-haiku-4-5"},
-			CandidateProviders:   map[string]string{"gpt-5": providers.ProviderOpenAI},
+			CandidateModels:      []string{"deepseek-ai/deepseek-v4.1-flash", "moonshotai/kimi-k3"},
+			ScorerRescuePool:     []string{"deepseek-ai/deepseek-v4.1-flash", "moonshotai/kimi-k3", "zai-org/glm-5.3", "zai-org/glm-5.3-flash"},
+			CandidateProviders:   map[string]string{"moonshotai/kimi-k3": providers.ProviderAIAND},
 		},
 	}
-	ctx := context.WithValue(context.Background(), SessionDemotedModelsContextKey{}, []string{"claude-opus-5", "claude-haiku-4-5", "gpt-4.1-mini"})
+	ctx := context.WithValue(context.Background(), SessionDemotedModelsContextKey{}, []string{"zai-org/glm-5.3", "zai-org/glm-5.3-flash", "deepseek-ai/deepseek-v4-flash"})
 	ctx = context.WithValue(ctx, SessionCooldownModelsContextKey{}, map[string]time.Time{
-		"claude-opus-5":    rateLimitTestNow.Add(30 * time.Second),
-		"claude-haiku-4-5": rateLimitTestNow.Add(10 * time.Second),
-		"gpt-4.1-mini":     rateLimitTestNow.Add(5 * time.Second),
+		"zai-org/glm-5.3":               rateLimitTestNow.Add(30 * time.Second),
+		"zai-org/glm-5.3-flash":         rateLimitTestNow.Add(10 * time.Second),
+		"deepseek-ai/deepseek-v4-flash": rateLimitTestNow.Add(5 * time.Second),
 	})
 
 	got := s.siblingFailoverDecisions(ctx, failed, 1_000, 0, 0)
 
-	assert.Equal(t, []string{"gpt-5", "claude-opus-5"}, siblingModels(got))
-	assert.Equal(t, providers.ProviderAnthropic, got[1].Provider)
+	assert.Equal(t, []string{"moonshotai/kimi-k3", "zai-org/glm-5.3"}, siblingModels(got))
+	assert.Equal(t, providers.ProviderAIAND, got[1].Provider)
 }
 
 func TestSiblingFailover_SidecarReadmitsCoolingRosterArmLast(t *testing.T) {
-	s := siblingService(providers.ProviderAnthropic, providers.ProviderOpenAI)
+	s := siblingService(providers.ProviderAIAND)
 	failed := router.Decision{
-		Provider: providers.ProviderAnthropic,
-		Model:    "claude-haiku-4-5",
+		Provider: providers.ProviderAIAND,
+		Model:    "deepseek-ai/deepseek-v4.1-flash",
 		Metadata: &router.RoutingMetadata{
 			RosterFailover:     true,
-			RescueModels:       []string{"claude-haiku-4-5", "gpt-4.1-mini"},
-			SidecarRescuePool:  []string{"claude-opus-5"},
-			CandidateProviders: map[string]string{"gpt-4.1-mini": providers.ProviderOpenAI},
+			RescueModels:       []string{"deepseek-ai/deepseek-v4.1-flash", "deepseek-ai/deepseek-v4-flash"},
+			SidecarRescuePool:  []string{"zai-org/glm-5.3"},
+			CandidateProviders: map[string]string{"deepseek-ai/deepseek-v4-flash": providers.ProviderAIAND},
 		},
 	}
-	ctx := context.WithValue(context.Background(), SessionDemotedModelsContextKey{}, []string{"claude-opus-5", "gpt-5"})
+	ctx := context.WithValue(context.Background(), SessionDemotedModelsContextKey{}, []string{"zai-org/glm-5.3", "moonshotai/kimi-k3"})
 	ctx = context.WithValue(ctx, SessionCooldownModelsContextKey{}, map[string]time.Time{
-		"claude-opus-5": rateLimitTestNow.Add(30 * time.Second),
-		"gpt-5":         rateLimitTestNow.Add(10 * time.Second),
+		"zai-org/glm-5.3":    rateLimitTestNow.Add(30 * time.Second),
+		"moonshotai/kimi-k3": rateLimitTestNow.Add(10 * time.Second),
 	})
 
 	got := s.siblingFailoverDecisions(ctx, failed, 1_000, 0, 0)
 
-	assert.Equal(t, []string{"gpt-4.1-mini", "claude-opus-5"}, siblingModels(got))
-	assert.Equal(t, providers.ProviderAnthropic, got[1].Provider)
+	assert.Equal(t, []string{"deepseek-ai/deepseek-v4-flash", "zai-org/glm-5.3"}, siblingModels(got))
+	assert.Equal(t, providers.ProviderAIAND, got[1].Provider)
 }
 
 // Lifting the cooldowns lifts only the cooldowns: a deployment-wide
 // automatic exclusion still keeps its model out of the readmission walk.
 func TestRescueDecisions_ReadmissionKeepsGlobalAutomaticExclusions(t *testing.T) {
-	s := siblingService(providers.ProviderAnthropic).
-		WithGlobalAutomaticExclusions(&stubGlobalExclusionStore{byModel: map[string]string{"claude-haiku-4-5": "disabled"}})
+	s := siblingService(providers.ProviderAIAND).
+		WithGlobalAutomaticExclusions(&stubGlobalExclusionStore{byModel: map[string]string{"zai-org/glm-5.3-flash": "disabled"}})
 	md := &router.RoutingMetadata{
-		CandidateModels: []string{"claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"},
+		CandidateModels: []string{"zai-org/glm-5.3", "moonshotai/kimi-k3", "zai-org/glm-5.3-flash"},
 		CandidateProviders: map[string]string{
-			"claude-sonnet-5":  providers.ProviderAnthropic,
-			"claude-haiku-4-5": providers.ProviderAnthropic,
+			"moonshotai/kimi-k3":    providers.ProviderAIAND,
+			"zai-org/glm-5.3-flash": providers.ProviderAIAND,
 		},
 	}
-	ctx := context.WithValue(context.Background(), SessionDemotedModelsContextKey{}, []string{"claude-sonnet-5"})
-	ctx = context.WithValue(ctx, SessionCooldownModelsContextKey{}, map[string]time.Time{"claude-sonnet-5": rateLimitTestNow.Add(30 * time.Second)})
+	ctx := context.WithValue(context.Background(), SessionDemotedModelsContextKey{}, []string{"moonshotai/kimi-k3"})
+	ctx = context.WithValue(ctx, SessionCooldownModelsContextKey{}, map[string]time.Time{"moonshotai/kimi-k3": rateLimitTestNow.Add(30 * time.Second)})
 
 	got := s.siblingFailoverDecisions(ctx, overloadedDecision(md), 1_000, 0, 0)
 
-	assert.Equal(t, []string{"claude-sonnet-5"}, siblingModels(got))
+	assert.Equal(t, []string{"moonshotai/kimi-k3"}, siblingModels(got))
 }
 
 // A cooling arm the deployment has disabled stays out: readmission lifts the
 // cooldown, never the deployment-wide exclusion on the same model.
 func TestRescueDecisions_ReadmissionKeepsGlobalExclusionOnCoolingArm(t *testing.T) {
-	s := siblingService(providers.ProviderAnthropic).
-		WithGlobalAutomaticExclusions(&stubGlobalExclusionStore{byModel: map[string]string{"claude-sonnet-5": "disabled"}})
+	s := siblingService(providers.ProviderAIAND).
+		WithGlobalAutomaticExclusions(&stubGlobalExclusionStore{byModel: map[string]string{"deepseek-ai/deepseek-v4-pro": "disabled"}})
 	md := &router.RoutingMetadata{
-		CandidateModels: []string{"claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"},
+		CandidateModels: []string{"zai-org/glm-5.3", "deepseek-ai/deepseek-v4-pro", "moonshotai/kimi-k3"},
 		CandidateProviders: map[string]string{
-			"claude-sonnet-5":  providers.ProviderAnthropic,
-			"claude-haiku-4-5": providers.ProviderAnthropic,
+			"deepseek-ai/deepseek-v4-pro": providers.ProviderAIAND,
+			"moonshotai/kimi-k3":          providers.ProviderAIAND,
 		},
 	}
-	ctx := context.WithValue(context.Background(), SessionDemotedModelsContextKey{}, []string{"claude-sonnet-5", "claude-haiku-4-5"})
+	ctx := context.WithValue(context.Background(), SessionDemotedModelsContextKey{}, []string{"deepseek-ai/deepseek-v4-pro", "moonshotai/kimi-k3"})
 	ctx = context.WithValue(ctx, SessionCooldownModelsContextKey{}, map[string]time.Time{
-		"claude-sonnet-5":  rateLimitTestNow.Add(10 * time.Second),
-		"claude-haiku-4-5": rateLimitTestNow.Add(30 * time.Second),
+		"deepseek-ai/deepseek-v4-pro": rateLimitTestNow.Add(10 * time.Second),
+		"moonshotai/kimi-k3":          rateLimitTestNow.Add(30 * time.Second),
 	})
 
 	got := s.siblingFailoverDecisions(ctx, overloadedDecision(md), 1_000, 0, 0)
 
-	assert.Equal(t, []string{"claude-haiku-4-5"}, siblingModels(got))
+	assert.Equal(t, []string{"moonshotai/kimi-k3"}, siblingModels(got))
 }
 
 // The turn's throttle policy is the dispatch default schedule with the
@@ -430,7 +435,7 @@ func cooldownTurnLoopService(store sessionpin.Store, transient bool) (*Service, 
 		Reason:   "cluster:v0.2",
 	}}
 	svc := NewService(scorer, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithTransientRateLimit(transient, 45)
 	svc.now = func() time.Time { return rateLimitTestNow }
 	return svc, scorer
@@ -441,7 +446,7 @@ func cooldownTurnLoopService(store sessionpin.Store, transient bool) (*Service, 
 func TestTurnLoopExcludesCoolingArmBeforeExpiry(t *testing.T) {
 	until := rateLimitTestNow.Add(30 * time.Second)
 	store := &rolePinStore{byRole: map[string]sessionpin.Pin{
-		sessionpin.DefaultRole: coolingPin(demotedPinModel, map[string]time.Time{demotedPinModel: until}),
+		demotionTurnRole: coolingPin(demotedPinModel, map[string]time.Time{demotedPinModel: until}),
 	}}
 	svc, scorer := cooldownTurnLoopService(store, true)
 
@@ -459,7 +464,7 @@ func TestTurnLoopExcludesCoolingArmBeforeExpiry(t *testing.T) {
 // nothing is excluded.
 func TestTurnLoopReadmitsArmAfterCooldownExpiry(t *testing.T) {
 	store := &rolePinStore{byRole: map[string]sessionpin.Pin{
-		sessionpin.DefaultRole: coolingPin(demotedPinModel, map[string]time.Time{demotedPinModel: rateLimitTestNow.Add(-time.Second)}),
+		demotionTurnRole: coolingPin(demotedPinModel, map[string]time.Time{demotedPinModel: rateLimitTestNow.Add(-time.Second)}),
 	}}
 	svc, scorer := cooldownTurnLoopService(store, true)
 
@@ -478,8 +483,8 @@ func TestTurnLoopReadmitsArmAfterCooldownExpiry(t *testing.T) {
 func TestTurnLoopHonoursCooldownRecordedOnHMMHistory(t *testing.T) {
 	until := rateLimitTestNow.Add(30 * time.Second)
 	store := &rolePinStore{byRole: map[string]sessionpin.Pin{
-		sessionpin.DefaultRole:                 demotedPin(demotedPinModel),
-		hmmHistoryRole(sessionpin.DefaultRole): coolingPin(demotedPinModel, map[string]time.Time{demotedPinModel: until}),
+		demotionTurnRole:                 demotedPin(demotedPinModel),
+		hmmHistoryRole(demotionTurnRole): coolingPin(demotedPinModel, map[string]time.Time{demotedPinModel: until}),
 	}}
 	svc, scorer := cooldownTurnLoopService(store, true)
 
@@ -496,7 +501,7 @@ func TestTurnLoopHonoursCooldownRecordedOnHMMHistory(t *testing.T) {
 func TestTurnLoopPermanentStrikeOutranksLeftoverCooldown(t *testing.T) {
 	until := rateLimitTestNow.Add(30 * time.Second)
 	store := &rolePinStore{byRole: map[string]sessionpin.Pin{
-		sessionpin.DefaultRole: coolingPin(demotedPinModel, map[string]time.Time{demotedPinModel: until}, demotedPinModel),
+		demotionTurnRole: coolingPin(demotedPinModel, map[string]time.Time{demotedPinModel: until}, demotedPinModel),
 	}}
 	svc, scorer := cooldownTurnLoopService(store, true)
 
@@ -513,7 +518,7 @@ func TestTurnLoopPermanentStrikeOutranksLeftoverCooldown(t *testing.T) {
 // the session-lifetime strikes, as before.
 func TestTurnLoopIgnoresCooldownsWhenFlagOff(t *testing.T) {
 	store := &rolePinStore{byRole: map[string]sessionpin.Pin{
-		sessionpin.DefaultRole: coolingPin(demotedPinModel, map[string]time.Time{demotedPinModel: rateLimitTestNow.Add(time.Hour)}),
+		demotionTurnRole: coolingPin(demotedPinModel, map[string]time.Time{demotedPinModel: rateLimitTestNow.Add(time.Hour)}),
 	}}
 	svc, scorer := cooldownTurnLoopService(store, false)
 

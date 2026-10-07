@@ -19,7 +19,7 @@ type codexTitleRouter struct {
 
 func (r *codexTitleRouter) Route(context.Context, router.Request) (router.Decision, error) {
 	r.routeCalls++
-	return router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-sol", Reason: "scored"}, nil
+	return router.Decision{Provider: providers.ProviderOpenAI, Model: "moonshotai/kimi-k3", Reason: "scored"}, nil
 }
 
 type codexTitleProvider struct {
@@ -44,10 +44,10 @@ func TestCodexResponsesTitleGenerationHardPinsWithoutScoring(t *testing.T) {
 		routerSpy,
 		map[string]providers.Client{providers.ProviderOpenAI: provider},
 		nil, false, nil, nil, false,
-		providers.ProviderOpenAI, "gpt-5.6-luna", nil,
+		providers.ProviderOpenAI, "zai-org/glm-5.3-flash", nil,
 	)
 	body := []byte(`{
-		"model":"gpt-5.6-sol",
+		"model":"moonshotai/kimi-k3",
 		"stream":true,
 		"tools":[{"type":"function","name":"shell","parameters":{"type":"object"}}],
 		"text":{"format":{"type":"json_schema","schema":{
@@ -75,10 +75,10 @@ func TestCodexResponsesTitlePromptHardPinsWithoutScoring(t *testing.T) {
 		routerSpy,
 		map[string]providers.Client{providers.ProviderOpenAI: provider},
 		nil, false, nil, nil, false,
-		providers.ProviderOpenAI, "gpt-5.6-luna", nil,
+		providers.ProviderOpenAI, "zai-org/glm-5.3-flash", nil,
 	)
 	body := []byte(`{
-		"model":"gpt-5.6-sol",
+		"model":"moonshotai/kimi-k3",
 		"parallel_tool_calls":true,
 		"store":false,
 		"stream":true,
@@ -106,10 +106,10 @@ func TestCodexResponsesTitlePromptAfterHarnessContextHardPins(t *testing.T) {
 		routerSpy,
 		map[string]providers.Client{providers.ProviderOpenAI: provider},
 		nil, false, nil, nil, false,
-		providers.ProviderOpenAI, "gpt-5.6-luna", nil,
+		providers.ProviderOpenAI, "zai-org/glm-5.3-flash", nil,
 	)
 	body := []byte(`{
-		"model":"gpt-5.6-sol",
+		"model":"moonshotai/kimi-k3",
 		"stream":true,
 		"tools":[{"type":"function","name":"shell","parameters":{"type":"object"}}],
 		"text":{"verbosity":"low"},
@@ -137,10 +137,10 @@ func TestCodexResponsesTitlePromptWithAssistantHistoryUsesScorer(t *testing.T) {
 		routerSpy,
 		map[string]providers.Client{providers.ProviderOpenAI: provider},
 		nil, false, nil, nil, false,
-		providers.ProviderOpenAI, "gpt-5.6-luna", nil,
+		providers.ProviderOpenAI, "zai-org/glm-5.3-flash", nil,
 	)
 	body := []byte(`{
-		"model":"gpt-5.6-sol",
+		"model":"moonshotai/kimi-k3",
 		"stream":true,
 		"tools":[{"type":"function","name":"shell","parameters":{"type":"object"}}],
 		"input":[
@@ -165,10 +165,10 @@ func TestResponsesTitlePromptWithoutCodexIdentityUsesScorer(t *testing.T) {
 		routerSpy,
 		map[string]providers.Client{providers.ProviderOpenAI: provider},
 		nil, false, nil, nil, false,
-		providers.ProviderOpenAI, "gpt-5.6-luna", nil,
+		providers.ProviderOpenAI, "zai-org/glm-5.3-flash", nil,
 	)
 	body := []byte(`{
-		"model":"gpt-5.6-sol",
+		"model":"moonshotai/kimi-k3",
 		"stream":true,
 		"text":{"verbosity":"low"},
 		"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"Respond directly to the user's prompt. You are generating a short conversation title."}]}]

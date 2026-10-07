@@ -11,7 +11,7 @@ import (
 	"weave-os/router/internal/router/hmm/rosterdata"
 )
 
-const alternateRosterArm = "openai/gpt-6-sol"
+const alternateRosterArm = "deepseek-ai/deepseek-v4-pro"
 
 func publishRosterArm(t *testing.T, store *servingMemoryStore, base policyregistry.PolicyObject, arm string) policyregistry.PolicyObject {
 	t.Helper()

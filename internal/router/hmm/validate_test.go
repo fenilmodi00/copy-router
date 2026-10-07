@@ -18,21 +18,19 @@ func TestValidateRosterIDs_UnknownVendorReported(t *testing.T) {
 	assert.Equal(t, policy.ExclusionUnknownCatalogModel, diags[0].Reason)
 }
 
-func TestValidateRosterIDs_AliasMappedArmIsValid(t *testing.T) {
-	// "x-ai/grok-4.5" only maps back to the bare catalog ID "grok-4.5"
-	// through rosterAliases; it must not be reported as unknown.
-	assert.Empty(t, hmm.ValidateRosterIDs([]string{"x-ai/grok-4.5"}))
+func TestValidateRosterIDs_SlashFormArmIsValid(t *testing.T) {
+	assert.Empty(t, hmm.ValidateRosterIDs([]string{"deepseek-ai/deepseek-v4-pro"}))
 }
 
 func TestValidateRosterIDs_EffortSuffixedArmIsValid(t *testing.T) {
-	assert.Empty(t, hmm.ValidateRosterIDs([]string{"openai/gpt-5.6-sol:high"}))
+	assert.Empty(t, hmm.ValidateRosterIDs([]string{"zai-org/glm-5.3:high"}))
 }
 
 func TestValidateRosterIDs_MixedRosterReportsOnlyBadArms(t *testing.T) {
 	diags := hmm.ValidateRosterIDs([]string{
-		"openai/gpt-5.6-sol",
+		"deepseek-ai/deepseek-v4-pro",
 		"newvendor/model-x",
-		"anthropic/claude-opus-4.8",
+		"zai-org/glm-5.3",
 	})
 
 	require.Len(t, diags, 1)

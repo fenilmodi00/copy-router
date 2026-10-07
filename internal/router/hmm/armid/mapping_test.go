@@ -9,10 +9,10 @@ import (
 	"weave-os/router/internal/router/catalog"
 )
 
-func TestGPT61SolRosterIdentity(t *testing.T) {
-	model, ok := catalog.ByID("gpt-6.1-sol")
+func TestSlashFormRosterIdentity(t *testing.T) {
+	model, ok := catalog.ByID("deepseek-ai/deepseek-v4-pro")
 	require.True(t, ok)
-	assert.Equal(t, "openai/gpt-6.1-sol", ForModel(model))
-	assert.Equal(t, "gpt-6.1-sol", CatalogIDForRoster("openai/gpt-6.1-sol"))
-	assert.Empty(t, ValidateRosterIDs([]string{"openai/gpt-6.1-sol"}))
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", ForModel(model))
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", CatalogIDForRoster("deepseek-ai/deepseek-v4-pro"))
+	assert.Empty(t, ValidateRosterIDs([]string{"deepseek-ai/deepseek-v4-pro"}))
 }

@@ -34,12 +34,12 @@ func overflowingProvider(body string) *fakeProvider {
 func TestProxyMessages_UpstreamOverflowIsLeftForNativeRendering(t *testing.T) {
 	upstream := overflowingProvider(`{"error":{"message":"Your input exceeds the context window of this model.","code":"context_length_exceeded"}}`)
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5", Reason: "cluster"}},
-		map[string]providers.Client{providers.ProviderAnthropic: upstream},
-		nil, false, nil, newFakePinStore(), false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: "zai-org/glm-5.3-flash", Reason: "cluster"}},
+		map[string]providers.Client{providers.ProviderAIAND: upstream},
+		nil, false, nil, newFakePinStore(), false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil,
 	)
 	rec := httptest.NewRecorder()
-	body := []byte(`{"model":"claude-haiku-4-5","max_tokens":64,"messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"zai-org/glm-5.3-flash","max_tokens":64,"messages":[{"role":"user","content":"hi"}]}`)
 	err := svc.ProxyMessages(authedCtx(overflowInstallationID), body, rec, httptest.NewRequest(http.MethodPost, "/v1/messages", nil))
 
 	require.Error(t, err)
@@ -55,17 +55,21 @@ func TestProxyMessages_UpstreamOverflowIsLeftForNativeRendering(t *testing.T) {
 // dispatch and leave the verdict to the provider's exact token count; a real
 // overflow then returns as the native prompt-too-long error tested above.
 func TestProxyMessages_ForcedModelDispatchesPastByteEstimate(t *testing.T) {
-	const forced = "claude-sonnet-4-5"
-	upstream := &fakeProvider{}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-opus-5", Reason: "cluster"}}
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: upstream},
-		nil, false, nil, newFakePinStore(), false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
-		WithAvailableModels(map[string]struct{}{forced: {}, "claude-opus-5": {}})
+	const forced = "qwen/qwen3.8-27b"
+	upstream := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
+	}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3", Reason: "cluster"}}
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAIAND: upstream},
+		nil, false, nil, newFakePinStore(), false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil).
+		WithAvailableModels(map[string]struct{}{forced: {}, "zai-org/glm-5.3": {}})
 
-	// 150k non-ASCII runes, each ASCII-escaped to a 6-byte JSON escape: ~900KB
-	// on the wire, which the ÷4 estimate reads as ~225k tokens against the
-	// forced model's 200k window.
-	content := strconv.QuoteToASCII(strings.Repeat("中", 150_000))
+	// 200k non-ASCII runes, each ASCII-escaped to a 6-byte JSON escape: ~1.2MB
+	// on the wire, which the ÷4 estimate reads as ~300k tokens against the
+	// forced model's 262k window.
+	content := strconv.QuoteToASCII(strings.Repeat("中", 200_000))
 	body := []byte(`{"model":"` + forced + `","max_tokens":1024,"messages":[{"role":"user","content":` + content + `}]}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 	httpReq.Header.Set(proxy.ForceModelHeader, forced)
@@ -81,14 +85,14 @@ func proxyResponsesOverflow(t *testing.T, stream bool) *httptest.ResponseRecorde
 	t.Helper()
 	upstream := overflowingProvider(`{"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long: 1050000 tokens > 1000000 maximum"}}`)
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5", Reason: "cluster"}},
-		map[string]providers.Client{providers.ProviderAnthropic: upstream},
-		nil, false, nil, newFakePinStore(), false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: "zai-org/glm-5.3-flash", Reason: "cluster"}},
+		map[string]providers.Client{providers.ProviderAIAND: upstream},
+		nil, false, nil, newFakePinStore(), false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil,
 	)
 	rec := httptest.NewRecorder()
-	body := `{"model":"claude-haiku-4-5","input":"hi","stream":false}`
+	body := `{"model":"zai-org/glm-5.3-flash","input":"hi","stream":false}`
 	if stream {
-		body = `{"model":"claude-haiku-4-5","input":"hi","stream":true}`
+		body = `{"model":"zai-org/glm-5.3-flash","input":"hi","stream":true}`
 	}
 	err := svc.ProxyOpenAIResponses(authedCtx(overflowInstallationID), []byte(body), rec, httptest.NewRequest(http.MethodPost, "/v1/responses", nil))
 	require.Error(t, err)
@@ -154,14 +158,14 @@ func TestCrossFormatResponsesOverflowClassifiesAsContextWindowExceeded(t *testin
 	}{
 		"messages": {
 			path: "/v1/messages",
-			body: `{"model":"gpt-5-mini","max_tokens":1024,"stream":%t,"messages":[{"role":"user","content":"hi"}]}`,
+			body: `{"model":"deepseek-ai/deepseek-v4-flash","max_tokens":1024,"stream":%t,"messages":[{"role":"user","content":"hi"}]}`,
 			proxy: func(s *proxy.Service) func(context.Context, []byte, http.ResponseWriter, *http.Request) error {
 				return s.ProxyMessages
 			},
 		},
 		"chat_completions": {
 			path: "/v1/chat/completions",
-			body: `{"model":"gpt-5-mini","max_tokens":1024,"stream":%t,"messages":[{"role":"user","content":"hi"}]}`,
+			body: `{"model":"deepseek-ai/deepseek-v4-flash","max_tokens":1024,"stream":%t,"messages":[{"role":"user","content":"hi"}]}`,
 			proxy: func(s *proxy.Service) func(context.Context, []byte, http.ResponseWriter, *http.Request) error {
 				return s.ProxyOpenAIChatCompletion
 			},
@@ -171,10 +175,13 @@ func TestCrossFormatResponsesOverflowClassifiesAsContextWindowExceeded(t *testin
 		for _, stream := range []bool{true, false} {
 			t.Run(fmt.Sprintf("%s/stream=%t", name, stream), func(t *testing.T) {
 				upstream := &responsesOverflowClient{}
+				// The subject is the OpenAI Responses SSE shape (a 200 stream
+				// carrying the overflow), which only the OpenAI-shaped provider
+				// speaks; the AIand roster serves chat completions.
 				svc := proxy.NewService(
-					&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5-mini", Reason: "cluster"}},
+					&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "deepseek-ai/deepseek-v4-flash", Reason: "cluster"}},
 					map[string]providers.Client{providers.ProviderOpenAI: upstream},
-					nil, false, nil, newFakePinStore(), false, providers.ProviderOpenAI, "gpt-5-mini", nil,
+					nil, false, nil, newFakePinStore(), false, providers.ProviderOpenAI, "deepseek-ai/deepseek-v4-flash", nil,
 				)
 				rec := httptest.NewRecorder()
 				body := []byte(fmt.Sprintf(ingress.body, stream))
@@ -229,15 +236,15 @@ func TestHMMTotalOverflowReachesUpstreamOnEveryIngress(t *testing.T) {
 		models                               []string
 		send                                 func(*proxy.Service, context.Context, []byte, http.ResponseWriter, *http.Request) error
 	}{
-		{"messages", providers.ProviderAnthropic, "/v1/messages",
-			`{"model":"claude-opus-4-8","max_tokens":1024,"messages":[{"role":"user","content":"` + prompt + `"}]}`,
-			"claude-opus-4-8", []string{"claude-opus-4-8", "claude-haiku-4-5"}, (*proxy.Service).ProxyMessages},
-		{"chat", providers.ProviderAnthropic, "/v1/chat/completions",
-			`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"` + prompt + `"}]}`,
-			"claude-opus-4-8", []string{"claude-opus-4-8", "claude-haiku-4-5"}, (*proxy.Service).ProxyOpenAIChatCompletion},
-		{"responses", providers.ProviderAnthropic, "/v1/responses",
-			`{"model":"claude-opus-4-8","input":"` + prompt + `"}`,
-			"claude-opus-4-8", []string{"claude-opus-4-8", "claude-haiku-4-5"}, (*proxy.Service).ProxyOpenAIResponses},
+		{"messages", providers.ProviderAIAND, "/v1/messages",
+			`{"model":"zai-org/glm-5.3","max_tokens":1024,"messages":[{"role":"user","content":"` + prompt + `"}]}`,
+			"zai-org/glm-5.3", []string{"zai-org/glm-5.3", "qwen/qwen3.8-27b"}, (*proxy.Service).ProxyMessages},
+		{"chat", providers.ProviderAIAND, "/v1/chat/completions",
+			`{"model":"zai-org/glm-5.3","messages":[{"role":"user","content":"` + prompt + `"}]}`,
+			"zai-org/glm-5.3", []string{"zai-org/glm-5.3", "qwen/qwen3.8-27b"}, (*proxy.Service).ProxyOpenAIChatCompletion},
+		{"responses", providers.ProviderAIAND, "/v1/responses",
+			`{"model":"zai-org/glm-5.3","input":"` + prompt + `"}`,
+			"zai-org/glm-5.3", []string{"zai-org/glm-5.3", "qwen/qwen3.8-27b"}, (*proxy.Service).ProxyOpenAIResponses},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			upstream := overflowingProvider(`{"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long: 1100000 tokens > 1000000 maximum"}}`)
@@ -259,10 +266,10 @@ func TestHMMTotalOverflowReachesUpstreamOnEveryIngress(t *testing.T) {
 // its model selection to widen.
 func TestHMMPolicyEmptiedPoolStaysNoRoutableModels(t *testing.T) {
 	upstream := &fakeProvider{}
-	svc := hmmOverflowService(providers.ProviderAnthropic, upstream, "claude-opus-4-8", "claude-haiku-4-5")
+	svc := hmmOverflowService(providers.ProviderAIAND, upstream, "zai-org/glm-5.3", "zai-org/glm-5.3-flash")
 	ctx := context.WithValue(router.WithStrategy(authedCtx(overflowInstallationID), router.StrategyHMM),
-		proxy.InstallationExcludedModelsContextKey{}, []string{"claude-opus-4-8", "claude-haiku-4-5"})
-	body := []byte(`{"model":"claude-opus-4-8","max_tokens":1024,"messages":[{"role":"user","content":"hi"}]}`)
+		proxy.InstallationExcludedModelsContextKey{}, []string{"zai-org/glm-5.3", "zai-org/glm-5.3-flash"})
+	body := []byte(`{"model":"zai-org/glm-5.3","max_tokens":1024,"messages":[{"role":"user","content":"hi"}]}`)
 
 	err := svc.ProxyMessages(ctx, body, httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/messages", nil))
 

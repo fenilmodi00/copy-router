@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	outputLimitFirstModel  = "claude-sonnet-5"
-	outputLimitSecondModel = "claude-opus-5"
+	outputLimitFirstModel  = "deepseek-ai/deepseek-v4.1-flash"
+	outputLimitSecondModel = "zai-org/glm-5.3"
 )
 
 func TestMaxedOutServedModel_RequiresMatchingTerminalEvidence(t *testing.T) {
@@ -57,9 +57,9 @@ func TestMaxedOutServedModel_RequiresMatchingTerminalEvidence(t *testing.T) {
 }
 
 func TestNormalizeHMMStayPin_HighOutputIsNotExhaustion(t *testing.T) {
-	svc := NewService(nil, map[string]providers.Client{providers.ProviderAnthropic: nil}, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, outputLimitFirstModel, nil)
-	pin := sessionpin.Pin{Provider: providers.ProviderAnthropic, LastServedModel: outputLimitFirstModel,
+	svc := NewService(nil, map[string]providers.Client{providers.ProviderAIAND: nil}, nil, false, nil, nil, false,
+		providers.ProviderAIAND, outputLimitFirstModel, nil)
+	pin := sessionpin.Pin{Provider: providers.ProviderAIAND, LastServedModel: outputLimitFirstModel,
 		LastOutputTokens: 32000, LastTurnEndedAt: time.Now().Add(-time.Second), PinnedUntil: time.Now().Add(time.Hour)}
 	got, ok := svc.normalizeHMMStayPin(router.Request{}, pin)
 	require.True(t, ok)

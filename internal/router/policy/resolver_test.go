@@ -16,21 +16,24 @@ func catalogRosterID(model catalog.Model) string { return model.ID }
 
 func TestManagedResolverOffersEveryBindingOfAnEnabledProvider(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("deepseek-ai/deepseek-v4-pro", "xiaomi/mimo-v2.5-pro"),
-		set(providers.ProviderAIAND),
+		set("deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3"),
+		set(providers.ProviderAIAND, providers.ProviderAnthropic),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 
-	resolved := resolver.Resolve(router.Request{})
+	resolved := resolver.Resolve(router.Request{
+		EnabledProviders: set(providers.ProviderAnthropic),
+		CustomBindings:   map[string][]string{"deepseek-ai/deepseek-v4-pro": {providers.ProviderAnthropic}},
+	})
 
 	require.Len(t, resolved.Candidates, 1)
 	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", resolved.Candidates[0].CatalogID)
-	assert.Equal(t, providers.ProviderAIAND, resolved.Candidates[0].Provider)
+	assert.Equal(t, providers.ProviderAnthropic, resolved.Candidates[0].Provider)
 	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", resolved.Candidates[0].UpstreamID)
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: "xiaomi/mimo-v2.5-pro",
-		RosterID:  "xiaomi/mimo-v2.5-pro",
+		CatalogID: "zai-org/glm-5.3",
+		RosterID:  "zai-org/glm-5.3",
 		Reason:    policy.ExclusionNoProvider,
 	})
 }
@@ -57,8 +60,8 @@ func TestResolverReportsPolicyDeniedProvider(t *testing.T) {
 
 func TestResolverDefaultsUpstreamIDToCatalogID(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8"),
-		set(providers.ProviderAnthropic),
+		set("deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
@@ -66,30 +69,30 @@ func TestResolverDefaultsUpstreamIDToCatalogID(t *testing.T) {
 	resolved := resolver.Resolve(router.Request{})
 
 	require.Len(t, resolved.Candidates, 1)
-	assert.Equal(t, "claude-opus-4-8", resolved.Candidates[0].UpstreamID)
-	assert.Equal(t, "claude-opus-4-8", resolved.Candidates[0].ModelRevision)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", resolved.Candidates[0].UpstreamID)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", resolved.Candidates[0].ModelRevision)
 	assert.Equal(t, resolved.Candidates[0].RosterID, resolved.Candidates[0].ArmID)
 }
 
 func TestArmResolverEnumeratesEachAllowedProviderBinding(t *testing.T) {
 	resolver := policy.NewArmResolver(
-		set("claude-opus-4-8"),
-		set(providers.ProviderAnthropic, providers.ProviderAIAND),
+		set("deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAIAND, providers.ProviderAnthropic),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 	// No surviving catalog row carries two providers, so the second binding is
 	// installation-declared.
 	resolved := resolver.Resolve(router.Request{CustomBindings: map[string][]string{
-		"claude-opus-4-8": {providers.ProviderAIAND},
+		"deepseek-ai/deepseek-v4-pro": {providers.ProviderAnthropic},
 	}})
 
 	require.Len(t, resolved.Candidates, 2)
-	assert.Equal(t, "claude-opus-4-8", resolved.Candidates[0].RosterID)
-	assert.Equal(t, "claude-opus-4-8", resolved.Candidates[1].RosterID)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", resolved.Candidates[0].RosterID)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", resolved.Candidates[1].RosterID)
 	assert.NotEqual(t, resolved.Candidates[0].ArmID, resolved.Candidates[1].ArmID)
 	assert.Empty(t, resolved.ByRosterID)
-	assert.Equal(t, []string{"claude-opus-4-8"}, resolved.CandidateModels())
+	assert.Equal(t, []string{"deepseek-ai/deepseek-v4-pro"}, resolved.CandidateModels())
 	assert.Equal(t, map[string]string{
 		resolved.Candidates[0].ArmID: resolved.Candidates[0].Provider,
 		resolved.Candidates[1].ArmID: resolved.Candidates[1].Provider,
@@ -116,10 +119,10 @@ func TestArmResolverEnumeratesEachAllowedProviderBinding(t *testing.T) {
 
 func TestArmResolverRejectsRosterOnlySelectionForThreeBindings(t *testing.T) {
 	resolver := policy.NewArmResolver(
-		set("claude-opus-4-8"),
+		set("deepseek-ai/deepseek-v4-pro"),
 		set(
-			providers.ProviderAnthropic,
 			providers.ProviderAIAND,
+			providers.ProviderAnthropic,
 			providers.ProviderOpenAI,
 		),
 		func(catalog.Model) string { return "shared/arm" },
@@ -127,7 +130,7 @@ func TestArmResolverRejectsRosterOnlySelectionForThreeBindings(t *testing.T) {
 	)
 
 	resolved := resolver.Resolve(router.Request{CustomBindings: map[string][]string{
-		"claude-opus-4-8": {providers.ProviderAIAND, providers.ProviderOpenAI},
+		"deepseek-ai/deepseek-v4-pro": {providers.ProviderAnthropic, providers.ProviderOpenAI},
 	}})
 
 	require.Len(t, resolved.Candidates, 3)
@@ -138,47 +141,48 @@ func TestArmResolverRejectsRosterOnlySelectionForThreeBindings(t *testing.T) {
 
 func TestResolverAppliesHardFiltersAndPreferenceRanks(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "gpt-5.5"),
-		set(providers.ProviderAnthropic, providers.ProviderOpenAI),
+		set("deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3"),
+		set(providers.ProviderAIAND, providers.ProviderAnthropic),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 
 	resolved := resolver.Resolve(router.Request{
 		EnabledProviders: set(providers.ProviderAnthropic),
-		PreferredModels:  []string{"gpt-5.5", "claude-opus-4-8"},
+		PreferredModels:  []string{"zai-org/glm-5.3", "deepseek-ai/deepseek-v4-pro"},
+		CustomBindings:   map[string][]string{"deepseek-ai/deepseek-v4-pro": {providers.ProviderAnthropic}},
 	})
 
 	require.Len(t, resolved.Candidates, 1)
-	assert.Equal(t, "claude-opus-4-8", resolved.Candidates[0].CatalogID)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", resolved.Candidates[0].CatalogID)
 	require.NotNil(t, resolved.Candidates[0].PreferenceRank)
 	assert.Equal(t, 1, *resolved.Candidates[0].PreferenceRank)
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: "gpt-5.5",
-		RosterID:  "gpt-5.5",
+		CatalogID: "zai-org/glm-5.3",
+		RosterID:  "zai-org/glm-5.3",
 		Reason:    policy.ExclusionNoProvider,
 	})
 }
 
 func TestResolverBuildsMappingOnlyFromFinalSoftFilteredPool(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "deepseek-ai/deepseek-v4-pro"),
-		set(providers.ProviderAnthropic, providers.ProviderAIAND),
+		set("qwen/qwen3.8-27b", "deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 
 	resolved := resolver.Resolve(router.Request{HasImages: true})
 
-	assert.Equal(t, []string{"claude-opus-4-8"}, resolved.CandidateModels())
+	assert.Equal(t, []string{"qwen/qwen3.8-27b"}, resolved.CandidateModels())
 	_, leaked := resolved.ByRosterID["deepseek-ai/deepseek-v4-pro"]
 	assert.False(t, leaked)
 }
 
 func TestResolverRejectsAmbiguousRosterMappings(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "gpt-5.5"),
-		set(providers.ProviderAnthropic, providers.ProviderOpenAI),
+		set("deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3"),
+		set(providers.ProviderAIAND),
 		func(catalog.Model) string { return "shared/arm" },
 		policy.ManagedProviderPolicy(),
 	)
@@ -192,76 +196,76 @@ func TestResolverRejectsAmbiguousRosterMappings(t *testing.T) {
 
 func TestResolverRejectsCandidatesThatCannotFitEstimatedInput(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8"),
-		set(providers.ProviderAnthropic),
+		set("deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 
-	resolved := resolver.Resolve(router.Request{EstimatedInputTokens: catalog.ContextWindowFor("claude-opus-4-8") + 1})
+	resolved := resolver.Resolve(router.Request{EstimatedInputTokens: catalog.ContextWindowFor("deepseek-ai/deepseek-v4-pro") + 1})
 
 	assert.Empty(t, resolved.Candidates)
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: "claude-opus-4-8",
-		RosterID:  "claude-opus-4-8",
+		CatalogID: "deepseek-ai/deepseek-v4-pro",
+		RosterID:  "deepseek-ai/deepseek-v4-pro",
 		Reason:    policy.ExclusionContextWindow,
 	})
 }
 
 func TestResolverAllowsExactContextFit(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8"),
-		set(providers.ProviderAnthropic),
+		set("deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 
-	resolved := resolver.Resolve(router.Request{EstimatedInputTokens: catalog.ContextWindowFor("claude-opus-4-8")})
+	resolved := resolver.Resolve(router.Request{EstimatedInputTokens: catalog.ContextWindowFor("deepseek-ai/deepseek-v4-pro")})
 
-	assert.Equal(t, []string{"claude-opus-4-8"}, resolved.CandidateModels())
+	assert.Equal(t, []string{"deepseek-ai/deepseek-v4-pro"}, resolved.CandidateModels())
 	assert.Empty(t, resolved.Diagnostics)
 }
 
 func TestResolverIncludesExpectedOutputInContextBudget(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8"),
-		set(providers.ProviderAnthropic),
+		set("deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 	expectedOutputTokens := 2_000
 
 	resolved := resolver.Resolve(router.Request{
-		EstimatedInputTokens: catalog.ContextWindowFor("claude-opus-4-8") - 1_000,
+		EstimatedInputTokens: catalog.ContextWindowFor("deepseek-ai/deepseek-v4-pro") - 1_000,
 		RoutingKnobs:         &router.Overrides{ExpectedOutputTokens: &expectedOutputTokens},
 	})
 
 	assert.Empty(t, resolved.Candidates)
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: "claude-opus-4-8",
-		RosterID:  "claude-opus-4-8",
+		CatalogID: "deepseek-ai/deepseek-v4-pro",
+		RosterID:  "deepseek-ai/deepseek-v4-pro",
 		Reason:    policy.ExclusionContextWindow,
 	})
 }
 
 func TestResolverKeepsOverflowAdmittedModels(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "claude-sonnet-4-6"),
-		set(providers.ProviderAnthropic),
+		set("deepseek-ai/deepseek-v4-pro", "moonshotai/kimi-k3"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 
 	resolved := resolver.Resolve(router.Request{
-		EstimatedInputTokens:   catalog.ContextWindowFor("claude-opus-4-8") + 1,
-		OverflowAdmittedModels: set("claude-opus-4-8"),
+		EstimatedInputTokens:   catalog.ContextWindowFor("deepseek-ai/deepseek-v4-pro") + 1,
+		OverflowAdmittedModels: set("deepseek-ai/deepseek-v4-pro"),
 	})
 
-	assert.Equal(t, []string{"claude-opus-4-8"}, resolved.CandidateModels(),
+	assert.Equal(t, []string{"deepseek-ai/deepseek-v4-pro"}, resolved.CandidateModels(),
 		"the provider's exact count decides for a model the proxy admitted on total overflow")
 	assert.Equal(t, []policy.Diagnostic{{
-		CatalogID: "claude-sonnet-4-6",
-		RosterID:  "claude-sonnet-4-6",
+		CatalogID: "moonshotai/kimi-k3",
+		RosterID:  "moonshotai/kimi-k3",
 		Reason:    policy.ExclusionContextWindow,
 	}}, resolved.Diagnostics)
 }
@@ -312,8 +316,8 @@ func TestResolverDoesNotCallUnmappedOverflowCandidateAContextExclusion(t *testin
 
 func TestResolverIncludesLiveCandidateEconomics(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8"),
-		set(providers.ProviderAnthropic),
+		set("deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
@@ -323,39 +327,22 @@ func TestResolverIncludesLiveCandidateEconomics(t *testing.T) {
 		EstimatedInputTokens: 1_000,
 		RoutingKnobs:         &router.Overrides{ExpectedOutputTokens: &expectedOutputTokens},
 		SubsidizedModelCostFactor: map[string]float64{
-			"claude-opus-4-8": 0.25,
+			"deepseek-ai/deepseek-v4-pro": 0.25,
 		},
 	})
 
 	require.Len(t, resolved.Candidates, 1)
 	candidate := resolved.Candidates[0]
-	assert.Equal(t, 0.1, candidate.CacheReadMultiplier)
+	assert.Equal(t, 0.25, candidate.CacheReadMultiplier)
 	assert.Equal(t, 0.25, candidate.MarginalCostFactor)
-	assert.Equal(t, 1.25, candidate.EffectiveInputUSDPer1M)
-	assert.Equal(t, 6.25, candidate.EffectiveOutputUSDPer1M)
+	assert.Equal(t, 0.25, candidate.EffectiveInputUSDPer1M)
+	assert.Equal(t, 0.625, candidate.EffectiveOutputUSDPer1M)
 	assert.InDelta(t, candidate.EstimatedCostUSD*0.25, candidate.EffectiveEstimatedCostUSD, 1e-12)
 }
 
-func TestResolverUsesLongContextPricing(t *testing.T) {
-	resolver := policy.NewResolver(
-		set("gpt-5.6-luna"),
-		set(providers.ProviderOpenAI),
-		catalogRosterID,
-		policy.ManagedProviderPolicy(),
-	)
-	expectedOutputTokens := 1_000
-
-	resolved := resolver.Resolve(router.Request{
-		EstimatedInputTokens: 300_000,
-		RoutingKnobs:         &router.Overrides{ExpectedOutputTokens: &expectedOutputTokens},
-	})
-
-	require.Len(t, resolved.Candidates, 1)
-	candidate := resolved.Candidates[0]
-	assert.Equal(t, 0.40, candidate.InputUSDPer1M)
-	assert.Equal(t, 1.80, candidate.OutputUSDPer1M)
-	assert.InDelta(t, 0.1218, candidate.EstimatedCostUSD, 1e-12)
-}
+// NOTE: no surviving catalog row carries a long-context pricing tier, so the
+// long-context resolution path is unreachable through real catalog data and its
+// fixture is gone.
 
 func set(values ...string) map[string]struct{} {
 	result := make(map[string]struct{}, len(values))
@@ -369,8 +356,8 @@ func set(values ...string) map[string]struct{} {
 // diagnostics still distinguish not-allowlisted from admin-excluded models.
 func TestResolverReportsNotAllowlistedSeparatelyFromRequestedExclusion(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "claude-haiku-4-5"),
-		set(providers.ProviderAnthropic),
+		set("deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3-flash"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
@@ -378,18 +365,18 @@ func TestResolverReportsNotAllowlistedSeparatelyFromRequestedExclusion(t *testin
 	resolved := resolver.Resolve(router.Request{
 		// Both are excluded on the wire; only one is an explicit exclusion.
 		ExcludedModels: map[string]struct{}{
-			"claude-opus-4-8":  {},
-			"claude-haiku-4-5": {},
+			"deepseek-ai/deepseek-v4-pro": {},
+			"zai-org/glm-5.3-flash":       {},
 		},
-		AllowedModels: map[string]struct{}{"claude-haiku-4-5": {}},
+		AllowedModels: map[string]struct{}{"zai-org/glm-5.3-flash": {}},
 	})
 
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: "claude-opus-4-8",
+		CatalogID: "deepseek-ai/deepseek-v4-pro",
 		Reason:    policy.ExclusionNotAllowlisted,
 	}, "a model absent from the allowlist must be reported as not-allowlisted")
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: "claude-haiku-4-5",
+		CatalogID: "zai-org/glm-5.3-flash",
 		Reason:    policy.ExclusionRequested,
 	}, "an allowlisted model excluded explicitly stays a requested exclusion")
 }
@@ -397,38 +384,38 @@ func TestResolverReportsNotAllowlistedSeparatelyFromRequestedExclusion(t *testin
 // Without an allowlist configured, exclusion diagnostics must be unchanged.
 func TestResolverKeepsRequestedExclusionWhenNoAllowlist(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8"),
-		set(providers.ProviderAnthropic),
+		set("deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 
 	resolved := resolver.Resolve(router.Request{
-		ExcludedModels: map[string]struct{}{"claude-opus-4-8": {}},
+		ExcludedModels: map[string]struct{}{"deepseek-ai/deepseek-v4-pro": {}},
 	})
 
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: "claude-opus-4-8",
+		CatalogID: "deepseek-ai/deepseek-v4-pro",
 		Reason:    policy.ExclusionRequested,
 	})
 }
 
 func TestResolverDropsAutomaticallyDisabledModels(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "claude-haiku-4-5"),
-		set(providers.ProviderAnthropic),
+		set("deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3-flash"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 
 	resolved := resolver.Resolve(router.Request{
-		AutomaticExcludedModels: map[string]struct{}{"claude-opus-4-8": {}},
+		AutomaticExcludedModels: map[string]struct{}{"deepseek-ai/deepseek-v4-pro": {}},
 	})
 
-	assert.Equal(t, []string{"claude-haiku-4-5"}, resolved.CandidateModels())
+	assert.Equal(t, []string{"zai-org/glm-5.3-flash"}, resolved.CandidateModels())
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: "claude-opus-4-8",
-		RosterID:  "claude-opus-4-8",
+		CatalogID: "deepseek-ai/deepseek-v4-pro",
+		RosterID:  "deepseek-ai/deepseek-v4-pro",
 		Reason:    policy.ExclusionAutomaticDisabled,
 	})
 }
@@ -437,17 +424,17 @@ func TestResolverDropsAutomaticallyDisabledModels(t *testing.T) {
 // failing the turn, because the models remain reachable through a user pin.
 func TestResolverKeepsPoolWhenAutomaticDisablesWouldEmptyIt(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8"),
-		set(providers.ProviderAnthropic),
+		set("deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 
 	resolved := resolver.Resolve(router.Request{
-		AutomaticExcludedModels: map[string]struct{}{"claude-opus-4-8": {}},
+		AutomaticExcludedModels: map[string]struct{}{"deepseek-ai/deepseek-v4-pro": {}},
 	})
 
-	assert.Equal(t, []string{"claude-opus-4-8"}, resolved.CandidateModels())
+	assert.Equal(t, []string{"deepseek-ai/deepseek-v4-pro"}, resolved.CandidateModels())
 }
 
 // A session demotion (AutomaticExcludedModels) is bounded by the
@@ -456,48 +443,48 @@ func TestResolverKeepsPoolWhenAutomaticDisablesWouldEmptyIt(t *testing.T) {
 // else the demoted model is kept rather than the pool widened.
 func TestResolverSessionDemotionStaysInsideAllowlist(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-4-8", "claude-sonnet-5", "gpt-5.6-luna"),
-		set(providers.ProviderAnthropic, providers.ProviderOpenAI),
+		set("deepseek-ai/deepseek-v4-pro", "qwen/qwen3.8-27b", "zai-org/glm-5.3"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 
-	t.Run("allowlist admits an Anthropic sibling", func(t *testing.T) {
+	t.Run("allowlist admits a sibling", func(t *testing.T) {
 		resolved := resolver.Resolve(router.Request{
-			AllowedModels:           set("claude-opus-4-8", "claude-sonnet-5"),
-			AutomaticExcludedModels: set("claude-opus-4-8"),
+			AllowedModels:           set("deepseek-ai/deepseek-v4-pro", "qwen/qwen3.8-27b"),
+			AutomaticExcludedModels: set("deepseek-ai/deepseek-v4-pro"),
 		})
 
-		assert.Equal(t, []string{"claude-sonnet-5"}, resolved.CandidateModels())
+		assert.Equal(t, []string{"qwen/qwen3.8-27b"}, resolved.CandidateModels())
 	})
 
 	t.Run("allowlist admits only the demoted model", func(t *testing.T) {
 		resolved := resolver.Resolve(router.Request{
-			AllowedModels:           set("claude-opus-4-8"),
-			AutomaticExcludedModels: set("claude-opus-4-8"),
+			AllowedModels:           set("deepseek-ai/deepseek-v4-pro"),
+			AutomaticExcludedModels: set("deepseek-ai/deepseek-v4-pro"),
 		})
 
-		assert.Equal(t, []string{"claude-opus-4-8"}, resolved.CandidateModels(),
-			"the demotion must not admit a cross-vendor model the allowlist excludes")
-		assert.NotContains(t, resolved.CandidateModels(), "gpt-5.6-luna")
+		assert.Equal(t, []string{"deepseek-ai/deepseek-v4-pro"}, resolved.CandidateModels(),
+			"the demotion must not admit a model the allowlist excludes")
+		assert.NotContains(t, resolved.CandidateModels(), "zai-org/glm-5.3")
 	})
 }
 
 func TestResolverDirectlyEnforcesAllowlistForStrategySpecificCandidates(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("gpt-5.6-luna-pro"),
-		set(providers.ProviderOpenAI),
+		set("moonshotai/kimi-k3"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
 
 	resolved := resolver.Resolve(router.Request{
-		AllowedModels: map[string]struct{}{"claude-haiku-4-5": {}},
+		AllowedModels: map[string]struct{}{"zai-org/glm-5.3-flash": {}},
 	})
 
 	assert.Empty(t, resolved.Candidates)
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: "gpt-5.6-luna-pro",
+		CatalogID: "moonshotai/kimi-k3",
 		Reason:    policy.ExclusionNotAllowlisted,
 	})
 }
@@ -506,10 +493,10 @@ func TestResolverDirectlyEnforcesAllowlistForStrategySpecificCandidates(t *testi
 func TestBindingForSelectionResolvesEffortQualifiedArmID(t *testing.T) {
 	resolved := policy.ResolvedCandidates{
 		ByArmID: map[string]policy.Binding{
-			"anthropic/claude-opus-5": {ArmID: "anthropic/claude-opus-5", CatalogID: "claude-opus-5", Provider: providers.ProviderAnthropic},
+			"deepseek-ai/deepseek-v4-pro": {ArmID: "deepseek-ai/deepseek-v4-pro", CatalogID: "deepseek-ai/deepseek-v4-pro", Provider: providers.ProviderAIAND},
 		},
 		ByRosterID: map[string]policy.Binding{
-			"anthropic/claude-opus-5": {ArmID: "anthropic/claude-opus-5", CatalogID: "claude-opus-5", Provider: providers.ProviderAnthropic},
+			"deepseek-ai/deepseek-v4-pro": {ArmID: "deepseek-ai/deepseek-v4-pro", CatalogID: "deepseek-ai/deepseek-v4-pro", Provider: providers.ProviderAIAND},
 		},
 	}
 
@@ -520,16 +507,16 @@ func TestBindingForSelectionResolvesEffortQualifiedArmID(t *testing.T) {
 		wantFound  bool
 		wantEffort string
 	}{
-		{name: "effort-qualified arm id", armID: "anthropic/claude-opus-5:xhigh", wantFound: true, wantEffort: "xhigh"},
-		{name: "effort-qualified roster id", rosterID: "anthropic/claude-opus-5:xhigh", wantFound: true, wantEffort: "xhigh"},
-		{name: "bare arm id", armID: "anthropic/claude-opus-5", wantFound: true, wantEffort: ""},
+		{name: "effort-qualified arm id", armID: "deepseek-ai/deepseek-v4-pro:xhigh", wantFound: true, wantEffort: "xhigh"},
+		{name: "effort-qualified roster id", rosterID: "deepseek-ai/deepseek-v4-pro:xhigh", wantFound: true, wantEffort: "xhigh"},
+		{name: "bare arm id", armID: "deepseek-ai/deepseek-v4-pro", wantFound: true, wantEffort: ""},
 		{name: "unknown arm id", armID: "unknown/model", wantFound: false, wantEffort: ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			binding, ok := resolved.BindingForSelection(tc.armID, tc.rosterID)
 			assert.Equal(t, tc.wantFound, ok)
 			if tc.wantFound {
-				assert.Equal(t, "claude-opus-5", binding.CatalogID)
+				assert.Equal(t, "deepseek-ai/deepseek-v4-pro", binding.CatalogID)
 				assert.Equal(t, tc.wantEffort, binding.Effort)
 			}
 		})
@@ -541,14 +528,14 @@ func TestBindingForSelectionResolvesEffortQualifiedArmID(t *testing.T) {
 func TestBindingForSelectionDoesNotResolveNonEffortColonSuffix(t *testing.T) {
 	resolved := policy.ResolvedCandidates{
 		ByArmID: map[string]policy.Binding{
-			"anthropic/claude-opus-5": {CatalogID: "claude-opus-5", Provider: providers.ProviderAnthropic},
+			"deepseek-ai/deepseek-v4-pro": {CatalogID: "deepseek-ai/deepseek-v4-pro", Provider: providers.ProviderAIAND},
 		},
 		ByRosterID: map[string]policy.Binding{
-			"anthropic/claude-opus-5": {CatalogID: "claude-opus-5", Provider: providers.ProviderAnthropic},
+			"deepseek-ai/deepseek-v4-pro": {CatalogID: "deepseek-ai/deepseek-v4-pro", Provider: providers.ProviderAIAND},
 		},
 	}
 
-	_, ok := resolved.BindingForSelection("anthropic/claude-opus-5:custom", "anthropic/claude-opus-5:custom")
+	_, ok := resolved.BindingForSelection("deepseek-ai/deepseek-v4-pro:custom", "deepseek-ai/deepseek-v4-pro:custom")
 	assert.False(t, ok, "a non-effort colon suffix must not be stripped to reach the base-keyed binding")
 }
 
@@ -557,7 +544,7 @@ func TestResolverRoutesOnlyGatewayAliasedModelsWhenGatewayConfigured(t *testing.
 	// set; the AIand-only build ships no dedicated gateway provider, so a vendor
 	// name stands in.
 	resolver := policy.NewResolver(
-		set("claude-opus-5", "claude-sonnet-5", "gpt-5.5"),
+		set("deepseek-ai/deepseek-v4-pro", "qwen/qwen3.8-27b", "zai-org/glm-5.3"),
 		set(providers.ProviderAnthropic, providers.ProviderOpenAI, providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
@@ -566,20 +553,20 @@ func TestResolverRoutesOnlyGatewayAliasedModelsWhenGatewayConfigured(t *testing.
 	resolved := resolver.Resolve(router.Request{
 		EnabledProviders: set(providers.ProviderAIAND),
 		GatewayProviders: set(providers.ProviderAIAND),
-		CustomBindings:   map[string][]string{"claude-opus-5": {providers.ProviderAIAND}},
+		CustomBindings:   map[string][]string{"deepseek-ai/deepseek-v4-pro": {providers.ProviderAIAND}},
 	})
 
 	require.Len(t, resolved.Candidates, 1)
-	assert.Equal(t, "claude-opus-5", resolved.Candidates[0].CatalogID)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", resolved.Candidates[0].CatalogID)
 	assert.Equal(t, providers.ProviderAIAND, resolved.Candidates[0].Provider)
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: "claude-sonnet-5",
-		RosterID:  "claude-sonnet-5",
+		CatalogID: "qwen/qwen3.8-27b",
+		RosterID:  "qwen/qwen3.8-27b",
 		Reason:    policy.ExclusionGatewayNotServed,
 	})
 	assert.Contains(t, resolved.Diagnostics, policy.Diagnostic{
-		CatalogID: "gpt-5.5",
-		RosterID:  "gpt-5.5",
+		CatalogID: "zai-org/glm-5.3",
+		RosterID:  "zai-org/glm-5.3",
 		Reason:    policy.ExclusionGatewayNotServed,
 	})
 }
@@ -588,7 +575,7 @@ func TestResolverIgnoresProviderExclusionsForGatewayRouting(t *testing.T) {
 	// The org that broke prod excluded every vendor to force its gateway; with
 	// gateway routing those exclusions must not touch the gateway's own models.
 	resolver := policy.NewResolver(
-		set("claude-opus-5"),
+		set("deepseek-ai/deepseek-v4-pro"),
 		set(providers.ProviderAnthropic, providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
@@ -597,7 +584,7 @@ func TestResolverIgnoresProviderExclusionsForGatewayRouting(t *testing.T) {
 	resolved := resolver.Resolve(router.Request{
 		EnabledProviders: set(providers.ProviderAIAND),
 		GatewayProviders: set(providers.ProviderAIAND),
-		CustomBindings:   map[string][]string{"claude-opus-5": {providers.ProviderAIAND}},
+		CustomBindings:   map[string][]string{"deepseek-ai/deepseek-v4-pro": {providers.ProviderAIAND}},
 	})
 
 	require.Len(t, resolved.Candidates, 1)
@@ -606,7 +593,7 @@ func TestResolverIgnoresProviderExclusionsForGatewayRouting(t *testing.T) {
 
 func TestResolverYieldsNoCandidatesWhenGatewayKeysHaveNoAliases(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-5", "gpt-5.5"),
+		set("deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3"),
 		set(providers.ProviderAnthropic, providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
@@ -625,7 +612,7 @@ func TestResolverYieldsNoCandidatesWhenGatewayKeysHaveNoAliases(t *testing.T) {
 
 func TestResolverEnumeratesEveryAliasingGatewayForAModel(t *testing.T) {
 	resolver := policy.NewArmResolver(
-		set("claude-opus-5"),
+		set("deepseek-ai/deepseek-v4-pro"),
 		set(providers.ProviderAIAND, providers.ProviderOpenAI),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
@@ -635,7 +622,7 @@ func TestResolverEnumeratesEveryAliasingGatewayForAModel(t *testing.T) {
 		EnabledProviders: set(providers.ProviderAIAND, providers.ProviderOpenAI),
 		GatewayProviders: set(providers.ProviderAIAND, providers.ProviderOpenAI),
 		CustomBindings: map[string][]string{
-			"claude-opus-5": {providers.ProviderAIAND, providers.ProviderOpenAI},
+			"deepseek-ai/deepseek-v4-pro": {providers.ProviderAIAND, providers.ProviderOpenAI},
 		},
 	})
 
@@ -646,8 +633,8 @@ func TestResolverEnumeratesEveryAliasingGatewayForAModel(t *testing.T) {
 
 func TestResolverKeepsVendorRoutingWhenNoGatewayConfigured(t *testing.T) {
 	resolver := policy.NewResolver(
-		set("claude-opus-5"),
-		set(providers.ProviderAnthropic),
+		set("deepseek-ai/deepseek-v4-pro"),
+		set(providers.ProviderAIAND),
 		catalogRosterID,
 		policy.ManagedProviderPolicy(),
 	)
@@ -655,5 +642,5 @@ func TestResolverKeepsVendorRoutingWhenNoGatewayConfigured(t *testing.T) {
 	resolved := resolver.Resolve(router.Request{})
 
 	require.Len(t, resolved.Candidates, 1)
-	assert.Equal(t, providers.ProviderAnthropic, resolved.Candidates[0].Provider)
+	assert.Equal(t, providers.ProviderAIAND, resolved.Candidates[0].Provider)
 }

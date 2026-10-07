@@ -528,18 +528,19 @@ func TestFastestModel_RealLatestBundle_LowTierPrefersFastFlash(t *testing.T) {
 // Prod 2026-08-26: gateway-only keys 503'd because hard-pin walked only
 // catalog bindings, which such a key can never reach.
 func TestFastestModelForRequest_GatewayExclusive(t *testing.T) {
-	const aliased = "claude-haiku-4-5"
-	const unaliased = "claude-sonnet-5"
+	const aliased = "deepseek-ai/deepseek-v4-pro"
+	const unaliased = "deepseek-ai/deepseek-v4-flash"
+	const offRoster = "qwen/qwen3.8-27b"
 	meta := &ArtifactMetadata{
 		CostPer1KInputUSD: map[string]float64{aliased: 0.80, unaliased: 3.00},
 		TokPerS: map[string]map[string]float64{
-			providers.ProviderAnthropic: {aliased: 120.0, unaliased: 60.0},
+			providers.ProviderAIAND: {aliased: 120.0, unaliased: 60.0},
 		},
 	}
 	registry := &ModelRegistry{
 		DeployedModels: []DeployedEntry{
-			{Model: aliased, Provider: providers.ProviderAnthropic},
-			{Model: unaliased, Provider: providers.ProviderAnthropic},
+			{Model: aliased, Provider: providers.ProviderAIAND},
+			{Model: unaliased, Provider: providers.ProviderAIAND},
 		},
 	}
 	available := map[string]struct{}{providers.ProviderAIAND: {}}
@@ -562,10 +563,10 @@ func TestFastestModelForRequest_GatewayExclusive(t *testing.T) {
 		assert.False(t, ok, "gateway-exclusive routing must not fall back to vendor bindings")
 	})
 
-	// Prod 2026-08-26: an Azure key aliasing only gpt-5.6-* 400'd because none
-	// of those models are on the bundle's roster, though the gateway serves them.
+	// Prod 2026-08-26: a gateway key aliasing only off-roster models 400'd
+	// because none of them are on the bundle's roster, though the gateway
+	// serves them.
 	t.Run("aliased catalog model off the bundle roster is routable", func(t *testing.T) {
-		const offRoster = "gpt-5.6-luna"
 		p, m, ok := FastestModelForRequest(meta, registry, available, nil, nil, RequestBindings{
 			Custom:   map[string][]string{offRoster: {providers.ProviderAIAND}},
 			Gateways: gateways,
@@ -585,8 +586,8 @@ func TestFastestModelForRequest_GatewayExclusive(t *testing.T) {
 
 	t.Run("non-gateway requests keep the bundle roster", func(t *testing.T) {
 		_, m, ok := FastestModelForRequest(meta, registry,
-			map[string]struct{}{providers.ProviderAnthropic: {}}, nil, nil, RequestBindings{
-				Custom: map[string][]string{"gpt-5.6-luna": {providers.ProviderOpenAI}},
+			map[string]struct{}{providers.ProviderAIAND: {}}, nil, nil, RequestBindings{
+				Custom: map[string][]string{offRoster: {providers.ProviderAIAND}},
 			})
 		require.True(t, ok)
 		assert.Equal(t, aliased, m, "custom bindings must not widen the roster for direct-vendor keys")

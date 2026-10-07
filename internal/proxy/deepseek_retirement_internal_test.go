@@ -13,20 +13,20 @@ func TestDeepSeekFamilyAliasesUseV4_1Flash(t *testing.T) {
 		t.Run(alias, func(t *testing.T) {
 			model, _, known := resolveForceModel(alias)
 			require.True(t, known)
-			require.Equal(t, "deepseek/deepseek-v4.1-flash", model)
+			require.Equal(t, "deepseek-ai/deepseek-v4.1-flash", model)
 		})
 	}
 }
 
 func TestDeepSeekExplicitV4PinsKeepTheirIdentity(t *testing.T) {
-	// The bare alias targets the AIand roster twin; the slash form stays a
-	// literal catalog pin on its OpenRouter/Wafer row.
+	// The bare alias targets the AIand roster twin; the retired provider-
+	// prefixed deepseek/* row is gone, so its slash form is no longer known
+	// and the force command rejects it instead of pinning a dead model.
 	model, provider, known := resolveForceModel("deepseek-v4-flash")
 	require.True(t, known)
 	require.Equal(t, "deepseek-ai/deepseek-v4-flash", model)
 	require.Equal(t, providers.ProviderAIAND, provider)
 
-	model, _, known = resolveForceModel("deepseek/deepseek-v4-flash")
-	require.True(t, known)
-	require.Equal(t, "deepseek/deepseek-v4-flash", model)
+	_, _, known = resolveForceModel("deepseek/deepseek-v4-flash")
+	require.False(t, known)
 }

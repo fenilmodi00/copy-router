@@ -3,10 +3,7 @@ package admin
 import (
 	"testing"
 
-	"weave-os/router/internal/router/catalog"
-
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type fakeRoutableModels struct {
@@ -47,7 +44,7 @@ func TestAllowlistLosesRoutability_PartialOverlapPasses(t *testing.T) {
 // A wholly non-routable allowlist would 400 every routed request.
 func TestAllowlistLosesRoutability_DisjointAllowlistFails(t *testing.T) {
 	assert.True(t, allowlistLosesRoutability(
-		[]string{"claude-opus-4-8"}, known("claude-opus-4-8", "claude-opus-4-7"), routable("claude-opus-4-7")))
+		[]string{"deepseek-ai/deepseek-v4-pro"}, known("deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3"), routable("zai-org/glm-5.3")))
 	assert.True(t, allowlistLosesRoutability(
 		[]string{"x", "y"}, known("x", "y", "a"), routable("a", "b")))
 }
@@ -64,22 +61,7 @@ func TestAllowlistLosesRoutability_UnknownUniverseFailsOpen(t *testing.T) {
 	assert.False(t, allowlistLosesRoutability([]string{"anything"}, known("anything"), routable()))
 }
 
-// Catalog membership is wider than the routable set; otherwise this guard is dead.
-func TestFullCatalogExceedsRoutableUniverse(t *testing.T) {
-	catalogIDs := fullCatalogDTO()
-	require.NotEmpty(t, catalogIDs)
-
-	// Every provider bound: still narrower than the catalog, because
-	// passthrough-only rows carry no tier and are never scored.
-	all := make(map[string]struct{})
-	for _, m := range catalog.Models {
-		for _, b := range m.Providers {
-			all[b.Provider] = struct{}{}
-		}
-	}
-	targets := catalog.RoutingTargetSet(all)
-
-	require.NotEmpty(t, targets)
-	assert.Less(t, len(targets), len(catalogIDs),
-		"expected catalog rows that no deployment can route; guard would be dead code otherwise")
-}
+// NOTE: the former TestFullCatalogExceedsRoutableUniverse asserted catalog
+// rows wider than the routable set. The AIand-only catalog is exactly the
+// routable roster, so that premise no longer holds and the guard cannot fire
+// from catalog data here.

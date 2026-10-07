@@ -22,14 +22,14 @@ func routedResolver(t *testing.T) *policy.PlanResolver {
 }
 
 func TestResolveRouted_AuthorizesBindingWalkInOrder(t *testing.T) {
-	const model = "gpt-5.6-luna-pro"
+	const model = "moonshotai/kimi-k3"
 	entry, ok := catalog.ByID(model)
 	require.True(t, ok)
 	require.NotEmpty(t, entry.Providers)
 	primary := entry.Providers[0]
 	// No surviving catalog row carries a second provider, so the failover
 	// binding is caller-declared and has no catalog index.
-	secondary := catalog.ProviderBinding{Provider: providers.ProviderAIAND}
+	secondary := catalog.ProviderBinding{Provider: providers.ProviderAnthropic}
 
 	plan, err := routedResolver(t).ResolveRouted(policy.RoutedResolutionRequest{
 		Purpose: policy.PurposeAnthropicMessages,
@@ -49,7 +49,7 @@ func TestResolveRouted_AuthorizesBindingWalkInOrder(t *testing.T) {
 	selected := plan.SelectedBinding()
 	assert.Equal(t, model, selected.CatalogID)
 	assert.Equal(t, primary.Provider, selected.Provider)
-	assert.Equal(t, primary.UpstreamID, selected.UpstreamID, "provider-only binding inherits the catalog upstream id")
+	assert.Equal(t, model, selected.UpstreamID, "provider-only binding inherits the catalog upstream id")
 	assert.Equal(t, 0, selected.BindingIndex)
 	assert.Equal(t, "arm-1", selected.ArmID)
 	alternatives := plan.AlternativeBindings()
@@ -64,8 +64,8 @@ func TestResolveRouted_AuthorizesBindingWalkInOrder(t *testing.T) {
 func TestResolveRouted_RecordsCallerOrigin(t *testing.T) {
 	plan, err := routedResolver(t).ResolveRouted(policy.RoutedResolutionRequest{
 		Purpose:  policy.PurposeAnthropicMessages,
-		Decision: router.Decision{Model: "claude-haiku-4-5", Provider: providers.ProviderAnthropic},
-		Bindings: []catalog.ProviderBinding{{Provider: providers.ProviderAnthropic}},
+		Decision: router.Decision{Model: "zai-org/glm-5.3-flash", Provider: providers.ProviderAIAND},
+		Bindings: []catalog.ProviderBinding{{Provider: providers.ProviderAIAND}},
 		Origin:   policy.OverrideSourceRequest,
 	})
 	require.NoError(t, err)
@@ -76,8 +76,8 @@ func TestResolveRouted_RecordsCallerOrigin(t *testing.T) {
 func TestResolveRouted_AppliesRequestBudgetOverride(t *testing.T) {
 	plan, err := routedResolver(t).ResolveRouted(policy.RoutedResolutionRequest{
 		Purpose:  policy.PurposeAnthropicMessages,
-		Decision: router.Decision{Model: "claude-haiku-4-5", Provider: providers.ProviderAnthropic},
-		Bindings: []catalog.ProviderBinding{{Provider: providers.ProviderAnthropic}},
+		Decision: router.Decision{Model: "zai-org/glm-5.3-flash", Provider: providers.ProviderAIAND},
+		Bindings: []catalog.ProviderBinding{{Provider: providers.ProviderAIAND}},
 		Budget:   &policy.BudgetOverride{Source: policy.BudgetSourceRequest, MaxAttempts: 2, TimeoutMillis: 1500},
 	})
 	require.NoError(t, err)
@@ -90,8 +90,8 @@ func TestResolveRouted_FailsClosed(t *testing.T) {
 	resolver := routedResolver(t)
 	valid := policy.RoutedResolutionRequest{
 		Purpose:  policy.PurposeAnthropicMessages,
-		Decision: router.Decision{Model: "claude-haiku-4-5", Provider: providers.ProviderAnthropic},
-		Bindings: []catalog.ProviderBinding{{Provider: providers.ProviderAnthropic}},
+		Decision: router.Decision{Model: "zai-org/glm-5.3-flash", Provider: providers.ProviderAIAND},
+		Bindings: []catalog.ProviderBinding{{Provider: providers.ProviderAIAND}},
 	}
 	cases := map[string]struct {
 		mutate func(*policy.RoutedResolutionRequest)
@@ -126,25 +126,25 @@ func TestResolveRouted_FailsClosed(t *testing.T) {
 // overrides the policy declares are accepted.
 func TestResolveRouted_AuthorizesHardPinnedUtilityTurns(t *testing.T) {
 	resolver := routedResolver(t)
-	anthropic := []catalog.ProviderBinding{{Provider: providers.ProviderAnthropic}}
+	anthropic := []catalog.ProviderBinding{{Provider: providers.ProviderAIAND}}
 
 	for _, purpose := range []policy.Purpose{policy.PurposeTitleGeneration, policy.PurposeClassifier, policy.PurposeProbe, policy.PurposeSubAgentDispatch} {
 		plan, err := resolver.ResolveRouted(policy.RoutedResolutionRequest{
 			Purpose:  purpose,
-			Decision: router.Decision{Model: "claude-haiku-4-5", Provider: providers.ProviderAnthropic},
+			Decision: router.Decision{Model: "zai-org/glm-5.3-flash", Provider: providers.ProviderAIAND},
 			Bindings: anthropic,
 			Origin:   policy.OverrideSourceDeployment,
 		})
 		require.NoError(t, err, purpose)
 		assert.Equal(t, purpose, plan.Purpose())
 		assert.Equal(t, policy.OverrideSourceDeployment, plan.Provenance().OverrideSource)
-		assert.Equal(t, "claude-haiku-4-5", plan.SelectedBinding().CatalogID)
+		assert.Equal(t, "zai-org/glm-5.3-flash", plan.SelectedBinding().CatalogID)
 	}
 
 	compaction, err := resolver.ResolveRouted(policy.RoutedResolutionRequest{
 		Purpose:  policy.PurposeClientCompaction,
-		Decision: router.Decision{Model: "gpt-5.6-sol", Provider: providers.ProviderOpenAI},
-		Bindings: []catalog.ProviderBinding{{Provider: providers.ProviderOpenAI}},
+		Decision: router.Decision{Model: "motif-technologies/motif-3", Provider: providers.ProviderAIAND},
+		Bindings: []catalog.ProviderBinding{{Provider: providers.ProviderAIAND}},
 		Origin:   policy.OverrideSourceSession,
 	})
 	require.NoError(t, err, "a compaction turn kept on the session's own model")
@@ -156,18 +156,18 @@ func TestResolveRouted_AuthorizesHardPinnedUtilityTurns(t *testing.T) {
 	}{
 		"hard pin without origin": {policy.RoutedResolutionRequest{
 			Purpose:  policy.PurposeTitleGeneration,
-			Decision: router.Decision{Model: "claude-haiku-4-5", Provider: providers.ProviderAnthropic},
+			Decision: router.Decision{Model: "zai-org/glm-5.3-flash", Provider: providers.ProviderAIAND},
 			Bindings: anthropic,
 		}, policy.ResolutionErrorMissingSelection},
 		"utility turn claiming a session pin": {policy.RoutedResolutionRequest{
 			Purpose:  policy.PurposeTitleGeneration,
-			Decision: router.Decision{Model: "claude-haiku-4-5", Provider: providers.ProviderAnthropic},
+			Decision: router.Decision{Model: "zai-org/glm-5.3-flash", Provider: providers.ProviderAIAND},
 			Bindings: anthropic,
 			Origin:   policy.OverrideSourceSession,
 		}, policy.ResolutionErrorOverrideNotAllowed},
 		"summary operation is not routed": {policy.RoutedResolutionRequest{
 			Purpose:  policy.PurposePrecompactionSummary,
-			Decision: router.Decision{Model: "claude-sonnet-4-6", Provider: providers.ProviderAnthropic},
+			Decision: router.Decision{Model: "deepseek-ai/deepseek-v4.1-flash", Provider: providers.ProviderAIAND},
 			Bindings: anthropic,
 			Origin:   policy.OverrideSourceDeployment,
 		}, policy.ResolutionErrorUnsupportedPurpose},

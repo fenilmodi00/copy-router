@@ -67,9 +67,9 @@ func TestTranslationPlan_ImageConstraintShadowsBeforeEnforcement(t *testing.T) {
 	enforce := compatibilityService(TranslationCompatibilityEnforce).planTranslation(req)
 
 	assert.Empty(t, shadow.ExcludedModels, "shadow mode must preserve the pre-change candidate set")
-	_, shadowReported := shadow.ExcludedModels["z-ai/glm-5"]
+	_, shadowReported := shadow.ExcludedModels["zai-org/glm-5.3"]
 	assert.False(t, shadowReported)
-	_, enforced := enforce.ExcludedModels["z-ai/glm-5"]
+	_, enforced := enforce.ExcludedModels["zai-org/glm-5.3"]
 	assert.True(t, enforced, "known text-only models are hard excluded in enforce mode")
 }
 

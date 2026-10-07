@@ -296,7 +296,7 @@ type Service struct {
 	sseKeepalive time.Duration
 	// cyberRefusalFallbackModel is the model to re-pin to on a cyber refusal
 	// when the session pin carries no runner-up (PairedModel). Set from
-	// ROUTER_CYBER_REFUSAL_FALLBACK_MODEL; defaults to claude-sonnet-5.
+	// ROUTER_CYBER_REFUSAL_FALLBACK_MODEL; defaults to zai-org/glm-5.3.
 	cyberRefusalFallbackModel string
 	// effortEscalation enables the escalate-on-failure reasoning-effort policy:
 	// gpt-5.x serves low effort by default and high after an observed
@@ -1769,7 +1769,7 @@ func NewService(r router.Router, providerMap map[string]providers.Client, emitte
 		openAIResponsesBroad:           true,
 		nativeAnthropicResponseSignals: true,
 		nativeOpenAIResponseSignals:    true,
-		cyberRefusalFallbackModel:      "claude-sonnet-5",
+		cyberRefusalFallbackModel:      "zai-org/glm-5.3",
 	}
 }
 
@@ -3492,7 +3492,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	externalID, _ := ctx.Value(ExternalIDContextKey{}).(string)
 	installationID := installationIDFromContext(ctx)
 	clientID := ClientIdentityFrom(ctx)
-	clientBudget := resolveClientBudget(clientID, r.Header, env.Model(), modelVariant1M)
+	clientBudget := resolveClientBudget(modelVariant1M, r.Header)
 	ctx = requestcontext.WithClientBudget(ctx, clientBudget)
 	agentShadowEval, agentShadowMode := AgentShadowEvalFromContext(ctx)
 	bypassEval := hasEvalOverrideHeader(r) || agentShadowMode
@@ -3811,63 +3811,6 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 		}
 	}
 
-	// On a retryable 429 the bypass falls through to re-routing; rate-limit
-	// headers prime the observer so the retry discounts Anthropic.
-	if routeRes.UsageBypass && routeRes.Decision.Provider == providers.ProviderAnthropic {
-		err := s.bypassToAnthropic(ctx, env, feats, routeRes.modelSwitched(), requestStart, requestID, externalID, routeRes.TurnType, routeRes.Decision.Reason, r, w)
-		if !errors.Is(err, errBypassRetryable) {
-			if !agentShadowMode {
-				s.firePolicyShadowForServingDecision(ctx, routeRes.Decision, req)
-			}
-			return err
-		}
-
-		// Subscription-only mode: the subscription just failed (e.g. 429
-		// weekly-limit). Paid failover is disabled, so refuse rather than
-		// reroute onto a paid model against an already-negative balance. A
-		// linked-first turn's credits are intact: release the mark so the
-		// reroute below runs as an ordinary credit-funded turn.
-		if billing.SubscriptionOnlyFromContext(ctx) {
-			released, ok := releaseThrottledLinkedFirst(ctx)
-			if !ok {
-				log.Info("Subscription-only bypass hit retryable error; refusing instead of paid reroute",
-					"request_id", requestID, "external_id", externalID)
-				return ErrCreditsExhaustedSubscriptionUnavailable
-			}
-			ctx = released
-		}
-
-		// Bypass hit a pre-commit retryable error (e.g. Anthropic 429 weekly-limit
-		// or transport error). Refresh the subsidy cost factor so the scorer
-		// discounts Anthropic correctly on reroute.
-		req.SubsidizedModelCostFactor = s.subsidyFactors(ctx, r.Header)
-
-		// bypassToAnthropic returns before session pin/HMM history are loaded,
-		// but modelSwitched() below needs them. Load the same switch history
-		// the turn loop would have produced. A classifier has no pin to load and
-		// must keep a zero session key so the reroute cannot anchor one.
-		if s.pinStore != nil && !isUnpinnedScoredTurn(routeRes.TurnType) {
-			sessionKey := deriveSessionKeyForRequest(ctx, env, apiKeyID)
-			role := roleForTier(catalog.TierFor(feats.Model))
-			pin, _ := s.loadPin(ctx, sessionKey, role)
-			hmmHistory := s.loadHMMHistory(ctx, sessionKey, role)
-			forceHistory := s.loadForceModelHistory(ctx, sessionKey, role)
-			routeRes.SessionKey = sessionKey
-			routeRes.PriorServedModel, routeRes.SessionEverSwitched = switchHistoryFromPins(pin, hmmHistory, forceHistory)
-		}
-
-		routeRes.UsageBypass = false
-		rerouteCtx, rerouteSpan := startRoutingSpan(ctx, req)
-		decision, rerouteErr := s.routeFor(rerouteCtx, req)
-		finishRoutingSpan(rerouteSpan, decision, rerouteErr)
-		if rerouteErr != nil {
-			log.Error("Reroute after usage-bypass failure failed", "err", rerouteErr)
-			return rerouteErr
-		}
-		routeRes.Decision = decision
-		routeRes.Fresh = decision
-	}
-
 	routeRes.SuggestionMode = r.Header.Get("x-weave-suggestion-mode") == "true"
 	decision := routeRes.Decision
 	if !agentShadowMode {
@@ -4112,7 +4055,7 @@ func (s *Service) ProxyMessages(ctx context.Context, body []byte, w http.Respons
 	// to the single Anthropic binding (shouldFailover is already false with an
 	// OAuth credential in context; this is belt-and-suspenders) so failover
 	// can't reroute onto a paid provider.
-	if billing.SubscriptionOnlyFromContext(ctx) && !routeRes.UsageBypass {
+	if billing.SubscriptionOnlyFromContext(ctx) {
 		switch {
 		case !servedOnSubscription(ctx) && !managedSubscriptionCanServe(ctx, decision.Provider, decision.Model):
 			released, ok := releaseUnservableLinkedFirst(ctx, decision)
@@ -6355,7 +6298,7 @@ func (s *Service) emitBilling(ctx context.Context, requestID, externalID, reques
 		CacheRead:          cacheRead,
 		Pricing:            actPricing,
 		HasOverride:        hasOverride,
-		SubscriptionServed: routeRes.UsageBypass || servedOnSubscription(ctx),
+		SubscriptionServed: servedOnSubscription(ctx),
 		ByokServed:         servedOnBYOK(ctx),
 		APIKeyID:           apiKeyID,
 		RouterUserID:       auth.UserIDFrom(ctx),

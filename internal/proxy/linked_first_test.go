@@ -31,12 +31,12 @@ func codexResponsesStream(w http.ResponseWriter) {
 // already seen the caller's ChatGPT plan bind its 5h window, with a deployment
 // OpenAI key available to serve the turn instead.
 func spentCodexService(p *fakeProvider) *proxy.Service {
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-sol", Reason: "test"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "moonshotai/kimi-k3", Reason: "test"}}
 	obs := usage.NewObserver([]byte("salt"), 10*time.Minute, time.Now)
 	obs.Record(obs.Key([]byte(codexSubToken)), usage.Snapshot{
 		Primary: usage.Window{UsedPercent: 1.0, WindowMinutes: 300},
 	})
-	return proxy.NewService(fr, map[string]providers.Client{providers.ProviderOpenAI: p}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil).
+	return proxy.NewService(fr, map[string]providers.Client{providers.ProviderOpenAI: p}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil).
 		WithSubscriptionAwareRouting(obs, 0.05, 2.0).
 		WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderOpenAI: {}})
 }
@@ -51,7 +51,7 @@ func TestLinkedFirst_OpenAI_SpentCodexPlan_ContinuesOnWeaveKey(t *testing.T) {
 	p := &fakeProvider{proxyResponse: codexResponsesStream}
 	svc := spentCodexService(p)
 
-	body := `{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"hi"}],"max_tokens":100,"stream":true}`
+	body := `{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hi"}],"max_tokens":100,"stream":true}`
 	rec, req := codexSubRequest(t, body)
 
 	ctx := billing.WithSubscriptionOnly(context.Background(), billing.SubscriptionOnlyLinkedFirst)
@@ -72,7 +72,7 @@ func TestSubscriptionOnly_OpenAI_SpentCodexPlan_DepletedStillRefuses402(t *testi
 	p := &fakeProvider{proxyResponse: codexResponsesStream}
 	svc := spentCodexService(p)
 
-	body := `{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"hi"}],"max_tokens":100,"stream":true}`
+	body := `{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"hi"}],"max_tokens":100,"stream":true}`
 	rec, req := codexSubRequest(t, body)
 
 	ctx := billing.WithSubscriptionOnly(context.Background(), billing.SubscriptionOnlyCreditsDepleted)
@@ -93,9 +93,9 @@ func TestLinkedFirst_OpenAI_PaidRoute_ContinuesOnCredits(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"id":"x","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`)
 	}}
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAIAND: p}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
+	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAIAND: p}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil)
 
-	body := `{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"Refactor the auth middleware and add tests."}],"max_tokens":4096,"tools":[{"type":"function","function":{"name":"edit_file","parameters":{"type":"object"}}}]}`
+	body := `{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"Refactor the auth middleware and add tests."}],"max_tokens":4096,"tools":[{"type":"function","function":{"name":"edit_file","parameters":{"type":"object"}}}]}`
 	rec, req := codexSubRequest(t, body)
 
 	ctx := billing.WithSubscriptionOnly(context.Background(), billing.SubscriptionOnlyLinkedFirst)
@@ -129,53 +129,6 @@ func TestLinkedFirst_Anthropic_SpentClaudePlan_ContinuesOnWeaveKey(t *testing.T)
 	}
 	assert.NotContains(t, rec.Body.String(), "credits are depleted",
 		"a credit-funded turn must not claim the organization's credits are gone")
-}
-
-// TestLinkedFirst_Anthropic_BypassThrottled_ReroutesOnCredits: the bypass 429
-// is usually the first exhaustion signal — the observer still reads "slack" —
-// so it cannot be caught pre-routing. A linked-first turn whose bypass attempt
-// is throttled reroutes on organization credits instead of the 402 a depleted
-// turn gets (compare TestSubscriptionOnly_BypassRetryable_Refuses402).
-func TestLinkedFirst_Anthropic_BypassThrottled_ReroutesOnCredits(t *testing.T) {
-	// Headers go through Set so they canonicalize the way a real response's
-	// do; the reset must still be ahead, or the observer treats the window as
-	// refilled and the reroute would retry the plan instead of the fallback key.
-	throttled := http.Header{}
-	throttled.Set("anthropic-ratelimit-unified-weekly-limit", "100000")
-	throttled.Set("anthropic-ratelimit-unified-weekly-remaining", "0")
-	throttled.Set("anthropic-ratelimit-unified-weekly-reset", time.Now().Add(24*time.Hour).UTC().Format(time.RFC3339))
-	bypassResp := &providers.UpstreamErrorResponse{
-		Status:  http.StatusTooManyRequests,
-		Headers: throttled,
-		Body:    []byte(`{"type":"error","error":{"type":"rate_limit_error","message":"weekly limit exceeded"}}`),
-	}
-	p := &fakeProvider{proxyErr: bypassResp, proxyResponse: bypassStreamResponse}
-	wrappedP := &swapErrProvider{first: bypassResp, second: nil, inner: p}
-	// The real adapter reports the 429's headers before returning, which is
-	// what lets the reroute see the plan as spent and pick the fallback key.
-	observing := &headerObservingProvider{headers: bypassResp.Headers, inner: wrappedP}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: bypassScorerPickMdl, Reason: "cluster:v0.2"}}
-	obs := usage.NewObserver([]byte("salt"), 10*time.Minute, time.Now)
-	// Under threshold so the bypass engages for the first attempt.
-	obs.Record(obs.Key([]byte(bypassSubToken)), usage.Snapshot{
-		Primary: usage.Window{UsedPercent: 0.20, WindowMinutes: 300},
-	})
-	svc := proxy.NewService(fr, map[string]providers.Client{providers.ProviderAnthropic: observing}, nil, false, nil, nil, false, providers.ProviderAnthropic, bypassScorerPickMdl, nil).
-		WithSubscriptionAwareRouting(obs, 0.05, 2.0).
-		WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}})
-
-	rec, req, body := bypassRequest(t)
-	ctx := billing.WithSubscriptionOnly(bypassCtx(0.80), billing.SubscriptionOnlyLinkedFirst)
-	require.NoError(t, svc.ProxyMessages(ctx, body, rec, req))
-
-	assert.Equal(t, 1, fr.routeCalls, "the throttled bypass must reroute through the scorer")
-	require.Equal(t, 2, wrappedP.calls, "the bypass attempt, then one rerouted dispatch")
-	require.Len(t, p.proxyCreds, 2)
-	if p.proxyCreds[1] != nil {
-		assert.False(t, p.proxyCreds[1].OAuth, "the reroute must serve on the fallback key, not the plan that just 429'd")
-	}
-	assert.NotEqual(t, http.StatusTooManyRequests, rec.Code, "the plan's 429 must not reach the client")
-	assert.NotContains(t, rec.Body.String(), "credits are depleted")
 }
 
 // TestLinkedFirst_Anthropic_SpentClaudePlan_NoFallbackKey_Refuses402: with the

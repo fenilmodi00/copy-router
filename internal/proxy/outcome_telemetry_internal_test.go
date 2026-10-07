@@ -29,11 +29,11 @@ func TestServedGroupTelemetryKeepsFreshRecommendationSeparate(t *testing.T) {
 }
 
 func TestLatestToolOutcomeCoverageDistinguishesEmptyAndUnsupported(t *testing.T) {
-	anthropic, err := translate.ParseAnthropic([]byte(`{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hello"}]}`))
+	anthropic, err := translate.ParseAnthropic([]byte(`{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":"hello"}]}`))
 	require.NoError(t, err)
 	require.JSONEq(t, `{}`, string(latestToolCallCountsJSON(anthropic)))
 
-	openai, err := translate.ParseOpenAI([]byte(`{"model":"gpt-6-sol","messages":[{"role":"user","content":"hello"}]}`))
+	openai, err := translate.ParseOpenAI([]byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hello"}]}`))
 	require.NoError(t, err)
 	require.Nil(t, latestToolCallCountsJSON(openai), "missing tool-error semantics must not appear as zero errors")
 }

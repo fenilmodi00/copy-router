@@ -123,17 +123,17 @@ func TestRunTurnLoop_ForceModelSessionPinAppliesAcrossChildThreads(t *testing.T)
 	const (
 		apiKeyID      = "api-key"
 		clientSession = "client-session"
-		forcedModel   = "claude-opus-5"
+		forcedModel   = "zai-org/glm-5.3"
 	)
 	installationID := uuid.New()
 	ctx := context.WithValue(context.Background(), ClientIdentityContextKey{}, ClientIdentity{SessionID: clientSession})
 	parent, err := translate.ParseAnthropic([]byte(`{
-		"model":"claude-opus-4-8",
+		"model":"zai-org/glm-5.3",
 		"messages":[{"role":"user","content":"parent task"}]
 	}`))
 	require.NoError(t, err)
 	child, err := translate.ParseAnthropic([]byte(`{
-		"model":"claude-opus-4-8",
+		"model":"zai-org/glm-5.3",
 		"messages":[{"role":"user","content":"different child task"}]
 	}`))
 	require.NoError(t, err)
@@ -159,9 +159,9 @@ func TestRunTurnLoop_ForceModelSessionPinAppliesAcrossChildThreads(t *testing.T)
 		LastTurnEndedAt:   endedAt,
 		LastOutputLimitAt: endedAt,
 	}
-	freshRouter := &tierProbeRouter{available: map[string]struct{}{"claude-haiku-4-5": {}}}
+	freshRouter := &tierProbeRouter{available: map[string]struct{}{"zai-org/glm-5.3-flash": {}}}
 	svc := NewService(freshRouter, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 	features := child.RoutingFeatures(false)
 
 	ctx = router.WithStrategy(ctx, router.StrategyHMMBeta)
@@ -192,7 +192,7 @@ func TestRunTurnLoop_DroppedSessionForcePreservesThreadPin(t *testing.T) {
 	installationID := uuid.New()
 	ctx := context.WithValue(context.Background(), ClientIdentityContextKey{}, ClientIdentity{SessionID: "client-session"})
 	env, err := translate.ParseAnthropic([]byte(`{
-		"model":"claude-opus-4-8",
+		"model":"zai-org/glm-5.3",
 		"messages":[{"role":"user","content":"task"}]
 	}`))
 	require.NoError(t, err)
@@ -206,7 +206,7 @@ func TestRunTurnLoop_DroppedSessionForcePreservesThreadPin(t *testing.T) {
 		Role:           forceModelSessionRole,
 		InstallationID: installationID,
 		Provider:       providers.ProviderAnthropic,
-		Model:          "claude-opus-5",
+		Model:          "zai-org/glm-5.3",
 		Reason:         translate.ReasonUserForceModel,
 		PinnedUntil:    pinNeverExpires,
 	}
@@ -215,14 +215,14 @@ func TestRunTurnLoop_DroppedSessionForcePreservesThreadPin(t *testing.T) {
 		Role:           role,
 		InstallationID: installationID,
 		Provider:       providers.ProviderOpenAI,
-		Model:          "gpt-5.5",
+		Model:          "deepseek-ai/deepseek-v4-flash",
 		Reason:         "cluster:existing",
 		Strategy:       router.StrategyCluster,
 		PinnedUntil:    time.Now().Add(time.Hour),
 	}
-	freshRouter := &tierProbeRouter{available: map[string]struct{}{"claude-haiku-4-5": {}}}
+	freshRouter := &tierProbeRouter{available: map[string]struct{}{"zai-org/glm-5.3-flash": {}}}
 	svc := NewService(freshRouter, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 	ctx = router.WithStrategy(ctx, router.StrategyCluster)
 
 	result, err := svc.runTurnLoop(ctx, env, features, apiKeyID, installationID, "", nil, router.Request{
@@ -232,7 +232,7 @@ func TestRunTurnLoop_DroppedSessionForcePreservesThreadPin(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "gpt-5.5", result.Decision.Model)
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", result.Decision.Model)
 	assert.True(t, result.StickyHit)
 	assert.True(t, result.ForcedPinDropped)
 	assert.Equal(t, "provider_not_enabled", result.ForcedPinDropReason)
@@ -244,7 +244,7 @@ func TestRunTurnLoop_ClearTombstoneBlocksLegacyForce(t *testing.T) {
 	ctx := context.WithValue(context.Background(), ClientIdentityContextKey{}, ClientIdentity{SessionID: "client-session"})
 	ctx = router.WithStrategy(ctx, router.StrategyCluster)
 	env, err := translate.ParseAnthropic([]byte(`{
-		"model":"claude-opus-4-8",
+		"model":"zai-org/glm-5.3",
 		"messages":[{"role":"user","content":"task after unforce"}]
 	}`))
 	require.NoError(t, err)
@@ -263,23 +263,23 @@ func TestRunTurnLoop_ClearTombstoneBlocksLegacyForce(t *testing.T) {
 	store.pins[forceModelMapKey(threadKey, forceModelHistoryRole(role))] = sessionpin.Pin{
 		SessionKey:      threadKey,
 		Role:            forceModelHistoryRole(role),
-		LastServedModel: "claude-opus-5",
+		LastServedModel: "zai-org/glm-5.3",
 		LastTurnEndedAt: time.Now(),
 		PinnedUntil:     pinNeverExpires,
 	}
 	freshRouter := &tierProbeRouter{
-		available: map[string]struct{}{"claude-haiku-4-5": {}},
+		available: map[string]struct{}{"zai-org/glm-5.3-flash": {}},
 	}
 	svc := NewService(freshRouter, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	result, err := svc.runTurnLoop(ctx, env, features, apiKeyID, installationID, "", nil, router.Request{
 		RequestedModel: features.Model,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "claude-haiku-4-5", result.Decision.Model)
+	assert.Equal(t, "zai-org/glm-5.3-flash", result.Decision.Model)
 	assert.NotEqual(t, translate.ReasonUserForceModel, result.Decision.Reason)
-	assert.Equal(t, "claude-opus-5", result.PriorServedModel)
+	assert.Equal(t, "zai-org/glm-5.3", result.PriorServedModel)
 	assert.NotEmpty(t, freshRouter.captured)
 }
 
@@ -288,7 +288,7 @@ func TestRunTurnLoop_SessionForceOverridesAuxiliaryHardPin(t *testing.T) {
 	installationID := uuid.New()
 	ctx := context.WithValue(context.Background(), ClientIdentityContextKey{}, ClientIdentity{SessionID: "client-session"})
 	env, err := translate.ParseAnthropic([]byte(`{
-		"model":"claude-opus-4-8",
+		"model":"zai-org/glm-5.3",
 		"system":"Your task is to create a detailed summary of the conversation so far.",
 		"messages":[{"role":"user","content":"summarize"}]
 	}`))
@@ -301,36 +301,36 @@ func TestRunTurnLoop_SessionForceOverridesAuxiliaryHardPin(t *testing.T) {
 		Role:           forceModelSessionRole,
 		InstallationID: installationID,
 		Provider:       providers.ProviderAnthropic,
-		Model:          "claude-opus-5",
+		Model:          "zai-org/glm-5.3",
 		Reason:         translate.ReasonUserForceModel,
 		PinnedUntil:    pinNeverExpires,
 	}
-	freshRouter := &tierProbeRouter{available: map[string]struct{}{"claude-haiku-4-5": {}}}
+	freshRouter := &tierProbeRouter{available: map[string]struct{}{"zai-org/glm-5.3-flash": {}}}
 	svc := NewService(freshRouter, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 	features := env.RoutingFeatures(false)
 
 	result, err := svc.runTurnLoop(ctx, env, features, apiKeyID, installationID, "", nil, router.Request{
 		RequestedModel: features.Model,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "claude-opus-5", result.Decision.Model)
+	assert.Equal(t, "zai-org/glm-5.3", result.Decision.Model)
 	assert.Equal(t, translate.ReasonUserForceModel, result.Decision.Reason)
 	assert.False(t, result.HardPinned)
 	assert.Equal(t, threadKey, result.SessionKey)
 	assert.Empty(t, freshRouter.captured)
 }
 
-func TestApplyForceModelCommand_FableThenAstraWritesAndClearsSessionControl(t *testing.T) {
+func TestApplyForceModelCommand_GlmThenKimiWritesAndClearsSessionControl(t *testing.T) {
 	const (
-		apiKeyID     = "api-key"
-		fableModelID = "claude-fable-5-1"
-		astraModelID = "gpt-6-astra"
+		apiKeyID    = "api-key"
+		glmModelID  = "zai-org/glm-5.3"
+		kimiModelID = "moonshotai/kimi-k3"
 	)
 	installationID := uuid.New()
 	ctx := context.WithValue(context.Background(), ClientIdentityContextKey{}, ClientIdentity{SessionID: "client-session"})
 	env, err := translate.ParseAnthropic([]byte(`{
-		"model":"claude-opus-4-8",
+		"model":"zai-org/glm-5.3",
 		"messages":[{"role":"user","content":"task"}]
 	}`))
 	require.NoError(t, err)
@@ -338,16 +338,16 @@ func TestApplyForceModelCommand_FableThenAstraWritesAndClearsSessionControl(t *t
 	forceKey := deriveForceModelSessionKeyForRequest(ctx, env, apiKeyID, threadKey)
 	store := newForceModelMapStore()
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil)
 
-	forcedModel, _, err := svc.applyForceModelCommand(ctx, env, translate.ForceModelResult{Model: "fable"}, installationID, threadKey, forceKey)
+	forcedModel, _, err := svc.applyForceModelCommand(ctx, env, translate.ForceModelResult{Model: "glm"}, installationID, threadKey, forceKey)
 	require.NoError(t, err)
-	assert.Equal(t, fableModelID, forcedModel)
+	assert.Equal(t, glmModelID, forcedModel)
 	pin, found, err := store.Get(ctx, forceKey, forceModelSessionRole)
 	require.NoError(t, err)
 	require.True(t, found)
-	assert.Equal(t, fableModelID, pin.Model)
-	assert.Equal(t, providers.ProviderAnthropic, pin.Provider)
+	assert.Equal(t, glmModelID, pin.Model)
+	assert.Equal(t, providers.ProviderAIAND, pin.Provider)
 	assert.Equal(t, translate.ReasonUserForceModel, pin.Reason)
 	assert.Equal(t, pinNeverExpires, pin.PinnedUntil)
 	for _, role := range forceModelClearRoles() {
@@ -356,14 +356,14 @@ func TestApplyForceModelCommand_FableThenAstraWritesAndClearsSessionControl(t *t
 		assert.False(t, threadForceFound, "new force state must have only one authoritative row")
 	}
 
-	nextModel, _, err := svc.applyForceModelCommand(ctx, env, translate.ForceModelResult{Model: "astra"}, installationID, threadKey, forceKey)
+	nextModel, _, err := svc.applyForceModelCommand(ctx, env, translate.ForceModelResult{Model: "kimi"}, installationID, threadKey, forceKey)
 	require.NoError(t, err)
-	assert.Equal(t, astraModelID, nextModel)
+	assert.Equal(t, kimiModelID, nextModel)
 	switched, found, err := store.Get(ctx, forceKey, forceModelSessionRole)
 	require.NoError(t, err)
 	require.True(t, found)
-	assert.Equal(t, fableModelID, switched.LastServedModel)
-	assert.Equal(t, providers.ProviderOpenAI, switched.Provider)
+	assert.Equal(t, glmModelID, switched.LastServedModel)
+	assert.Equal(t, providers.ProviderAIAND, switched.Provider)
 
 	_, _, err = svc.applyForceModelCommand(ctx, env, translate.ForceModelResult{Clear: true}, installationID, threadKey, forceKey)
 	require.NoError(t, err)
@@ -372,7 +372,7 @@ func TestApplyForceModelCommand_FableThenAstraWritesAndClearsSessionControl(t *t
 	require.True(t, found)
 	assert.Equal(t, pinNeverExpires, cleared.PinnedUntil, "the clear tombstone prevents legacy child pins from reviving")
 	assert.Empty(t, cleared.Model)
-	assert.Equal(t, astraModelID, cleared.LastServedModel)
+	assert.Equal(t, kimiModelID, cleared.LastServedModel)
 	assert.True(t, cleared.HasEverSwitched)
 	assert.Equal(t, userUnforcedReason, cleared.Reason)
 }
@@ -380,15 +380,15 @@ func TestApplyForceModelCommand_FableThenAstraWritesAndClearsSessionControl(t *t
 func TestRecordTurnUsage_ForcedDecisionWritesThreadHistoryOnly(t *testing.T) {
 	store := newForceModelMapStore()
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 	threadKey := [sessionpin.SessionKeyLen]byte{1}
 	controlKey := [sessionpin.SessionKeyLen]byte{2}
-	role := roleForTier(catalog.TierFor("claude-opus-5"))
+	role := roleForTier(catalog.TierFor("zai-org/glm-5.3"))
 	store.pins[forceModelMapKey(controlKey, forceModelSessionRole)] = sessionpin.Pin{
 		SessionKey: controlKey,
 		Role:       forceModelSessionRole,
 		Provider:   providers.ProviderAnthropic,
-		Model:      "claude-opus-5",
+		Model:      "zai-org/glm-5.3",
 		Reason:     translate.ReasonUserForceModel,
 	}
 	store.pins[forceModelMapKey(threadKey, forceModelHistoryRole(role))] = sessionpin.Pin{
@@ -401,10 +401,10 @@ func TestRecordTurnUsage_ForcedDecisionWritesThreadHistoryOnly(t *testing.T) {
 		PinRole:    role,
 		Decision: router.Decision{
 			Provider: providers.ProviderAnthropic,
-			Model:    "claude-opus-5",
+			Model:    "zai-org/glm-5.3",
 			Reason:   translate.ReasonUserForceModel,
 		},
-	}, providers.ProviderAnthropic, "claude-opus-5", 100, 10, 0, 0, false)
+	}, providers.ProviderAnthropic, "zai-org/glm-5.3", 100, 10, 0, 0, false)
 
 	store.mu.Lock()
 	defer store.mu.Unlock()

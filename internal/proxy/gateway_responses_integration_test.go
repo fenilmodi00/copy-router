@@ -38,8 +38,8 @@ func writeOpenAIChatSSE(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusOK)
 	flusher, _ := w.(http.Flusher)
 	chunks := []string{
-		`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-mini","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}` + "\n\n",
-		`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-mini","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1}}` + "\n\n",
+		`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"motif-technologies/motif-3","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}` + "\n\n",
+		`data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"motif-technologies/motif-3","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1}}` + "\n\n",
 		"data: [DONE]\n\n",
 	}
 	for _, c := range chunks {
@@ -50,17 +50,17 @@ func writeOpenAIChatSSE(w http.ResponseWriter) {
 	}
 }
 
-const anthropicToollessTurn = `{"model":"gpt-5.4-mini","stream":true,"max_tokens":1024,` +
+const anthropicToollessTurn = `{"model":"motif-technologies/motif-3","stream":true,"max_tokens":1024,` +
 	`"messages":[{"role":"user","content":"summarize this repo"}]}`
 
 func directOpenAIService(t *testing.T, baseURL string, broad bool) *proxy.Service {
 	t.Helper()
 	return proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.4-mini"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "motif-technologies/motif-3"}},
 		map[string]providers.Client{
 			providers.ProviderOpenAI: openai.NewClient("test-key", baseURL),
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderOpenAI: {}}).
 		WithOpenAIResponsesBroad(broad)
 }
@@ -106,36 +106,9 @@ func TestProxyMessages_DirectOpenAIToollessTurnFollowsRollout(t *testing.T) {
 	}
 }
 
-// Stop sequences have no Responses equivalent, so the turn stays on
-// chat/completions instead of silently dropping them.
-func TestProxyMessages_DirectOpenAIStopSequencesStayOnChat(t *testing.T) {
-	var (
-		mu    sync.Mutex
-		paths []string
-	)
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		paths = append(paths, r.URL.Path)
-		mu.Unlock()
-		writeOpenAIChatSSE(w)
-	}))
-	defer upstream.Close()
-
-	body := `{"model":"gpt-4.1","stream":true,"max_tokens":1024,"stop_sequences":["\n\nHuman:"],` +
-		`"messages":[{"role":"user","content":"finish the sentence"}]}`
-	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4.1"}},
-		map[string]providers.Client{
-			providers.ProviderOpenAI: openai.NewClient("test-key", upstream.URL),
-		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
-	).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderOpenAI: {}})
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	require.NoError(t, svc.ProxyMessages(context.Background(), []byte(body), rec, req))
-
-	mu.Lock()
-	defer mu.Unlock()
-	assert.Equal(t, []string{"/v1/chat/completions"}, paths)
-}
+// TestProxyMessages_DirectOpenAIStopSequencesStayOnChat was deleted with the
+// AIand-only cut: the chat projection is only chosen when the target lacks
+// CapReasoning (RequiresChatCompletionsParams short-circuits otherwise), and
+// every roster model is an always-on reasoning model. With no non-reasoning
+// model left, stop_sequences can no longer keep an OpenAI-bound turn off the
+// Responses endpoint.

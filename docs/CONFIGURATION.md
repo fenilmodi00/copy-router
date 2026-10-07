@@ -24,21 +24,16 @@ This page is the exhaustive reference; the [README](../README.md) has the
 
 ## Provider API keys
 
-The router registers each upstream provider only when its API key is present
-in the environment. Anthropic is special: when `ANTHROPIC_API_KEY` is unset,
-the router still registers the provider but forwards Anthropic auth headers
-(`Authorization` / `x-api-key`) to `api.anthropic.com` directly. This lets
-Claude Code keep using the user's logged-in plan.
+AIand is the only registered upstream: the router builds exactly one provider
+client, from `AIAND_API_KEY`, and every route lands on its curated roster.
+Rows below whose upstream is no longer registered are historical — they are
+not read at boot.
 
 | Variable              | Default                                                   | Effect |
 | --------------------- | --------------------------------------------------------- | ------ |
 | `OPENROUTER_API_KEY`  | *(none)*                                                  | **Recommended baseline.** Enables OpenRouter and the full OSS-model pool the cluster scorer is trained against. |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1`                            | Override for OpenRouter or any OpenAI-compatible endpoint (vLLM, Together, Fireworks, self-hosted). |
 | `ROUTER_MODEL_ID_MAP` | *(none)* | Comma-separated `catalog=upstream` pairs rewritten on the OpenRouter client's request body only. Catalog IDs, logs, `x-router-model`, and billing stay unchanged. Empty/unset is a no-op; invalid pairs fail boot. |
-| `ANTHROPIC_API_KEY`   | *(none — passthrough)*                                    | Router's own Anthropic key. When unset, client `Authorization` headers pass through. |
-| `OPENAI_API_KEY`      | *(none)*                                                  | Enables the OpenAI provider (Chat Completions API). |
-| `OPENAI_BASE_URL`     | `https://api.openai.com`                                  | Override for OpenAI (e.g. Azure OpenAI). |
-| `ROUTER_CODEX_BASE_URL` | `https://chatgpt.com/backend-api/codex`                  | Local-testing override for the ChatGPT subscription Responses backend; leave unset in production. |
 | `MINIMAX_API_KEY`     | *(none)*                                                   | Enables the native MiniMax provider through its OpenAI-compatible API. |
 | `MINIMAX_REGION`      | `global`                                                   | Set to `cn` (or `china`) to use the mainland-China endpoint. |
 | `MINIMAX_BASE_URL`    | regional default                                           | Override the MiniMax endpoint; defaults to `https://api.minimax.io/v1` globally or `https://api.minimaxi.com/v1` for mainland China. |
@@ -64,7 +59,8 @@ the same translation path as direct Anthropic. There is no default endpoint: an
 unconfigured gateway does *not* fall back to `api.anthropic.com`. The provider
 is always registered so BYOK installations can point at their own gateway
 without deployment-level credentials; the env vars above are only for a
-deployment that has a gateway of its own.
+deployment that has a gateway of its own. *(Historical: with the AIand-only
+cut no gateway provider is registered, so these variables are inert.)*
 
 **Native web search on a gateway.** An Anthropic-spec gateway relays to a
 backend that implements function tools only, so Claude Code's WebSearch turn
@@ -180,13 +176,13 @@ curl -sS -b jar -X PUT https://<router>/admin/v1/provider-keys/<key id>/model-al
 
 ### AIand-only deployment
 
-The router can serve as an AIand-only product: every automatic route lands
-on the curated 8-model AIand roster (glm-5.3, glm-5.3-flash, kimi-k3,
-deepseek-v4-pro, v4-flash, v4.1-flash, qwen3.8-27b, motif-3). Enforcement
-lives in the cluster bundle's model registry (`artifacts/latest`, currently
-`v0.80`), not in catalog or env: the cluster bundle's model registry bounds
-the candidate pool. A vendor BYOK header cannot widen it either — the
-registry gates the pool before provider eligibility is consulted.
+The router is AIand-only: boot registers exactly one provider client (AIAND),
+so every automatic route lands on the curated 8-model AIand roster (glm-5.3,
+glm-5.3-flash, kimi-k3, deepseek-v4-pro, v4-flash, v4.1-flash, qwen3.8-27b,
+motif-3). Enforcement is layered: registration admits only AIAND, and the
+cluster bundle's model registry (`artifacts/latest`, currently `v0.80`) bounds
+the candidate pool. A vendor BYOK header cannot widen it either — the registry
+gates the pool before provider eligibility is consulted.
 
 Recommended settings:
 

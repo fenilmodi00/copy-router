@@ -20,7 +20,7 @@ const repeatedOpenCodeAnswer = "Authentication uses one signed session cookie wi
 func TestService_ProxyOpenAIResponses_BreaksRepeatedOpenCodeAnswers(t *testing.T) {
 	provider := &fakeProvider{}
 	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderAIAND, Model: "grok-4.6", Reason: "test"},
+		router.Decision{Provider: providers.ProviderAIAND, Model: "deepseek-ai/deepseek-v4-pro", Reason: "test"},
 		map[string]providers.Client{providers.ProviderAIAND: provider},
 	).WithTextRepetitionBreak(true)
 

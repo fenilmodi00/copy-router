@@ -75,27 +75,6 @@ func TestExtractClientCredentials_OpenAI(t *testing.T) {
 	assert.Equal(t, "client", creds.Source)
 }
 
-func TestExtractClientCredentials_Google(t *testing.T) {
-	headers := http.Header{"Authorization": []string{"Bearer goog-client-key"}}
-	creds := proxy.ExtractClientCredentials("google", headers)
-	require.NotNil(t, creds)
-	assert.Equal(t, []byte("goog-client-key"), creds.APIKey)
-}
-
-// Makora/Together were missing from the old literal Bearer-branch list, so a
-// client-supplied key was dropped; keying off the translation family fixes it.
-func TestExtractClientCredentials_OpenAICompatBearer(t *testing.T) {
-	for _, provider := range []string{"makora", "together"} {
-		t.Run(provider, func(t *testing.T) {
-			headers := http.Header{"Authorization": []string{"Bearer sk-oss-client"}}
-			creds := proxy.ExtractClientCredentials(provider, headers)
-			require.NotNil(t, creds, "%s client bearer must resolve", provider)
-			assert.Equal(t, []byte("sk-oss-client"), creds.APIKey)
-			assert.Equal(t, "client", creds.Source)
-		})
-	}
-}
-
 func TestExtractClientCredentials_MissingHeader(t *testing.T) {
 	creds := proxy.ExtractClientCredentials("anthropic", http.Header{})
 	assert.Nil(t, creds,
@@ -114,22 +93,6 @@ func TestExtractClientCredentials_RejectsRouterBearerForGoogle(t *testing.T) {
 	creds := proxy.ExtractClientCredentials("google", headers)
 	assert.Nil(t, creds,
 		"router-issued bearer tokens (rk_...) must never be forwarded as upstream Google credentials")
-}
-
-func TestExtractClientCredentials_OpenRouter(t *testing.T) {
-	headers := http.Header{"Authorization": []string{"Bearer sk-or-v1-byok-openrouter-key"}}
-	creds := proxy.ExtractClientCredentials("openrouter", headers)
-	require.NotNil(t, creds)
-	assert.Equal(t, []byte("sk-or-v1-byok-openrouter-key"), creds.APIKey)
-	assert.Equal(t, "client", creds.Source)
-}
-
-func TestExtractClientCredentials_Fireworks(t *testing.T) {
-	headers := http.Header{"Authorization": []string{"Bearer fw_byok-fireworks-key"}}
-	creds := proxy.ExtractClientCredentials("fireworks", headers)
-	require.NotNil(t, creds)
-	assert.Equal(t, []byte("fw_byok-fireworks-key"), creds.APIKey)
-	assert.Equal(t, "client", creds.Source)
 }
 
 func TestExtractClientCredentials_RejectsRouterBearerForOpenRouter(t *testing.T) {
@@ -300,22 +263,22 @@ func TestEffectiveUpstreamModel(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("unchanged without credentials", func(t *testing.T) {
-		assert.Equal(t, "claude-fable-5", proxy.EffectiveUpstreamModel(ctx, "claude-fable-5"))
+		assert.Equal(t, "zai-org/glm-5.3", proxy.EffectiveUpstreamModel(ctx, "zai-org/glm-5.3"))
 	})
 
 	t.Run("unchanged for a model the key does not alias", func(t *testing.T) {
 		withCreds := context.WithValue(ctx, proxy.CredentialsContextKey{}, &proxy.Credentials{
-			ModelAliases: map[string]string{"gpt-5.5": "gw-gpt"},
+			ModelAliases: map[string]string{"deepseek-ai/deepseek-v4-flash": "gw-gpt"},
 		})
-		assert.Equal(t, "claude-fable-5", proxy.EffectiveUpstreamModel(withCreds, "claude-fable-5"),
+		assert.Equal(t, "zai-org/glm-5.3", proxy.EffectiveUpstreamModel(withCreds, "zai-org/glm-5.3"),
 			"an unaliased model must keep its catalog id rather than fall back to some other key's alias")
 	})
 
 	t.Run("rewrites an aliased model", func(t *testing.T) {
 		withCreds := context.WithValue(ctx, proxy.CredentialsContextKey{}, &proxy.Credentials{
-			ModelAliases: map[string]string{"claude-fable-5": "gw-fable"},
+			ModelAliases: map[string]string{"zai-org/glm-5.3": "gw-fable"},
 		})
-		assert.Equal(t, "gw-fable", proxy.EffectiveUpstreamModel(withCreds, "claude-fable-5"))
+		assert.Equal(t, "gw-fable", proxy.EffectiveUpstreamModel(withCreds, "zai-org/glm-5.3"))
 	})
 }
 
@@ -323,46 +286,46 @@ func TestBuildCredentialsMap_CarriesModelAliases(t *testing.T) {
 	m := proxy.BuildCredentialsMap([]*auth.ExternalAPIKey{{
 		Provider:     "anthropic_gateway",
 		Plaintext:    []byte("token"),
-		ModelAliases: map[string]string{"claude-fable-5": "gw-fable"},
+		ModelAliases: map[string]string{"zai-org/glm-5.3": "gw-fable"},
 	}})
 	require.NotNil(t, m["anthropic_gateway"])
-	assert.Equal(t, map[string]string{"claude-fable-5": "gw-fable"}, m["anthropic_gateway"].ModelAliases,
+	assert.Equal(t, map[string]string{"zai-org/glm-5.3": "gw-fable"}, m["anthropic_gateway"].ModelAliases,
 		"aliases must ride on the credential, or the endpoint receives catalog names it doesn't publish")
 }
 
 func TestApplyModelAlias(t *testing.T) {
-	body := []byte(`{"model":"claude-opus-4-7","messages":[]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[]}`)
 
 	t.Run("leaves the body untouched without an alias", func(t *testing.T) {
-		got := proxy.ApplyModelAlias(context.Background(), body, "claude-fable-5")
+		got := proxy.ApplyModelAlias(context.Background(), body, "zai-org/glm-5.3")
 		assert.Equal(t, string(body), string(got),
 			"the envelope owns the body's model on every non-aliased request; rewriting it here would silently override that")
 	})
 
 	t.Run("rewrites the model when the key aliases it", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), proxy.CredentialsContextKey{}, &proxy.Credentials{
-			ModelAliases: map[string]string{"claude-fable-5": "gw-fable"},
+			ModelAliases: map[string]string{"zai-org/glm-5.3": "gw-fable"},
 		})
-		got := proxy.ApplyModelAlias(ctx, body, "claude-fable-5")
+		got := proxy.ApplyModelAlias(ctx, body, "zai-org/glm-5.3")
 		assert.Equal(t, `{"model":"gw-fable","messages":[]}`, string(got))
 	})
 
 	t.Run("an alias equal to the catalog id still overwrites an adapter's rewrite", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), proxy.CredentialsContextKey{}, &proxy.Credentials{
-			ModelAliases: map[string]string{"claude-fable-5": "claude-fable-5"},
+			ModelAliases: map[string]string{"zai-org/glm-5.3": "zai-org/glm-5.3"},
 		})
 		rewritten := []byte(`{"model":"vendor/claude-fable-5-0125","messages":[]}`)
-		got := proxy.ApplyModelAlias(ctx, rewritten, "claude-fable-5")
-		assert.Equal(t, `{"model":"claude-fable-5","messages":[]}`, string(got),
+		got := proxy.ApplyModelAlias(ctx, rewritten, "zai-org/glm-5.3")
+		assert.Equal(t, `{"model":"zai-org/glm-5.3","messages":[]}`, string(got),
 			"a key that explicitly maps a model to the catalog id is opting out of the global binding's upstream id")
 	})
 
 	t.Run("leaves a body with no model field alone", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), proxy.CredentialsContextKey{}, &proxy.Credentials{
-			ModelAliases: map[string]string{"claude-fable-5": "gw-fable"},
+			ModelAliases: map[string]string{"zai-org/glm-5.3": "gw-fable"},
 		})
 		noModel := []byte(`{"messages":[]}`)
-		got := proxy.ApplyModelAlias(ctx, noModel, "claude-fable-5")
+		got := proxy.ApplyModelAlias(ctx, noModel, "zai-org/glm-5.3")
 		assert.Equal(t, string(noModel), string(got),
 			"surfaces that carry the model outside the body (e.g. in the URL) must not gain a stray field")
 	})

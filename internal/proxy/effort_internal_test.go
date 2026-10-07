@@ -13,7 +13,7 @@ import (
 
 func TestResolveEffort_SourcesAndClamping(t *testing.T) {
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).WithEffortEscalation(true)
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil).WithEffortEscalation(true)
 
 	for _, tc := range []struct {
 		name         string
@@ -27,45 +27,31 @@ func TestResolveEffort_SourcesAndClamping(t *testing.T) {
 		wantMismatch bool
 	}{
 		{
-			name:         "no arm or knob falls to the per-model default",
-			model:        "gpt-5.6-luna",
-			wantSelected: "low",
-			wantSent:     "low",
-			wantSource:   effortSourceModelPolicy,
-		},
-		{
-			name:  "no arm, no knob, no per-model default",
-			model: "claude-opus-5",
+			// No roster model carries a forced per-model effort, so a bare
+			// turn keeps adaptive effort: nothing selected, nothing sent.
+			name:  "no arm or knob leaves adaptive effort untouched",
+			model: "zai-org/glm-5.3-flash",
 		},
 		{
 			name:         "arm level the target accepts",
-			model:        "claude-opus-5",
-			armEffort:    "xhigh",
-			wantSelected: "xhigh",
-			wantSent:     "xhigh",
+			model:        "zai-org/glm-5.3",
+			armEffort:    "medium",
+			wantSelected: "medium",
+			wantSent:     "medium",
 			wantSource:   effortSourceArm,
 		},
 		{
-			name:         "arm level above the target's menu is sent clamped",
-			model:        "gpt-5.5",
-			armEffort:    "xhigh",
-			wantSelected: "xhigh",
+			name:         "top-of-menu arm is served unclamped",
+			model:        "deepseek-ai/deepseek-v4-flash",
+			armEffort:    "high",
+			wantSelected: "high",
 			wantSent:     "high",
-			wantSource:   effortSourceArm,
-			wantMismatch: true,
-		},
-		{
-			name:         "gpt-5.6 serves xhigh unclamped",
-			model:        "gpt-5.6-luna",
-			armEffort:    "xhigh",
-			wantSelected: "xhigh",
-			wantSent:     "xhigh",
 			wantSource:   effortSourceArm,
 		},
 		{
 			name:         "user knob outranks the arm",
-			model:        "claude-opus-5",
-			armEffort:    "xhigh",
+			model:        "zai-org/glm-5.3",
+			armEffort:    "high",
 			knob:         "low",
 			wantSelected: "low",
 			wantSent:     "low",
@@ -73,41 +59,15 @@ func TestResolveEffort_SourcesAndClamping(t *testing.T) {
 			wantMismatch: true,
 		},
 		{
-			name:         "escalation raises an arm below it",
-			model:        "gpt-5.6-luna",
-			armEffort:    "low",
+			// No roster model has a per-model escalation default, so a failed
+			// turn cannot raise the arm's level.
+			name:         "escalation never downgrades a richer arm",
+			model:        "qwen/qwen3.8-27b",
+			armEffort:    "high",
 			escalate:     true,
 			wantSelected: "high",
 			wantSent:     "high",
-			wantSource:   effortSourceEscalation,
-			wantMismatch: true,
-		},
-		{
-			name:         "escalation never downgrades a richer arm",
-			model:        "gpt-5.6-luna",
-			armEffort:    "xhigh",
-			escalate:     true,
-			wantSelected: "xhigh",
-			wantSent:     "xhigh",
 			wantSource:   effortSourceArm,
-		},
-		{
-			name:         "grok escalation never downgrades a richer arm",
-			model:        "grok-4.6",
-			armEffort:    "xhigh",
-			escalate:     true,
-			wantSelected: "xhigh",
-			wantSent:     "xhigh",
-			wantSource:   effortSourceArm,
-		},
-		{
-			name:         "max on an xhigh-ceiling menu serves xhigh",
-			model:        "gpt-5.6-luna",
-			armEffort:    "max",
-			wantSelected: "max",
-			wantSent:     "xhigh",
-			wantSource:   effortSourceArm,
-			wantMismatch: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -128,33 +88,38 @@ func TestResolveEffort_SourcesAndClamping(t *testing.T) {
 	}
 }
 
-// The arm's pre-cap level goes on ForceEffort so the per-model cap still
-// applies downstream; the wire level is what the emit paths resolve.
+// The arm's level goes on ForceEffort so the per-model cap still applies
+// downstream, while an escalation/model-policy level is a wire level only.
 func TestEffortResolution_Apply(t *testing.T) {
-	caps := router.Lookup("gpt-5.5")
+	caps := router.Lookup("deepseek-ai/deepseek-v4-flash")
+
 	opts := translate.EmitOptions{Capabilities: caps}
+	effortResolutionFor(caps, "high", "high", effortSourceArm).apply(&opts)
+	assert.Equal(t, "high", opts.ForceEffort)
+	assert.Equal(t, "high", opts.ForceReasoningEffort)
 
-	effortResolutionFor(caps, "xhigh", "xhigh", effortSourceArm).apply(&opts)
-	assert.Equal(t, "xhigh", opts.ForceEffort)
-	assert.Equal(t, "max", opts.ForceReasoningEffort)
+	escalated := translate.EmitOptions{Capabilities: caps}
+	effortResolutionFor(caps, "low", "high", effortSourceEscalation).apply(&escalated)
+	assert.Empty(t, escalated.ForceEffort, "a wire level is not an arm cap input")
+	assert.Equal(t, "high", escalated.ForceReasoningEffort)
 
-	effortResolution{}.apply(&opts)
-	assert.Empty(t, opts.ForceEffort)
-	assert.Empty(t, opts.ForceReasoningEffort)
+	effortResolution{}.apply(&escalated)
+	assert.Empty(t, escalated.ForceEffort)
+	assert.Empty(t, escalated.ForceReasoningEffort)
 }
 
 // A rescue candidate never served the failed model's level, so keeping it
 // would report an identity the sibling never served.
 func TestRescueDecisionFor_DropsEffort(t *testing.T) {
 	failed := router.Decision{
-		Provider: providers.ProviderOpenAI,
-		Model:    "gpt-5.6-luna",
-		Effort:   "xhigh",
-		Metadata: &router.RoutingMetadata{SelectedArmID: "gpt-5.6-luna:xhigh"},
+		Provider: providers.ProviderAIAND,
+		Model:    "zai-org/glm-5.3-flash",
+		Effort:   "high",
+		Metadata: &router.RoutingMetadata{SelectedArmID: "zai-org/glm-5.3-flash:high"},
 	}
 
-	out := rescueDecisionFor(failed, "gpt-5.6-sol", providers.ProviderOpenAI, ReasonSiblingFailover)
+	out := rescueDecisionFor(failed, "moonshotai/kimi-k3", providers.ProviderAIAND, ReasonSiblingFailover)
 
 	assert.Empty(t, out.Effort)
-	assert.Equal(t, "gpt-5.6-sol", out.ServedIdentity())
+	assert.Equal(t, "moonshotai/kimi-k3", out.ServedIdentity())
 }

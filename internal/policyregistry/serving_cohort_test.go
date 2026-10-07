@@ -43,7 +43,7 @@ func TestCohortCustomersShareCodeWithIsolatedConcurrentRosters(t *testing.T) {
 		{Target: set.Target, ProfileKey: profileKeyOne, Selection: view.Profiles[profileKeyOne]},
 		{Target: set.Target, ProfileKey: profileKeyTwo, Selection: view.Profiles[profileKeyTwo]},
 	}
-	expectedArms := []string{"openai/gpt-5.6-sol", alternateRosterArm}
+	expectedArms := []string{"moonshotai/kimi-k3", alternateRosterArm}
 	// First wave is cold; second is warm. Both customers use the same candidate and revision.
 	for range 2 {
 		var requests errgroup.Group
@@ -175,7 +175,7 @@ func TestCohortTargetsAndAuthenticatedWorkerScopesStayIsolated(t *testing.T) {
 		ref policyregistry.ObjectRef
 		arm string
 	}{
-		{stable, stableRef, "openai/gpt-5.6-sol"}, {internal, internalRef, alternateRosterArm},
+		{stable, stableRef, "moonshotai/kimi-k3"}, {internal, internalRef, alternateRosterArm},
 	} {
 		set := check.set
 		binding := policyregistry.SessionReleaseBinding{Target: set.Target, ProfileKey: profileKeyOne, Selection: set.View(check.ref).Profiles[profileKeyOne]}

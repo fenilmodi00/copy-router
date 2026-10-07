@@ -17,7 +17,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const countTokensBody = `{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hello world"}]}`
+const countTokensBody = `{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":"hello world"}]}`
 
 func countTokensService(provider *fakeProvider) *proxy.Service {
 	return makeProxyService(router.Decision{}, map[string]providers.Client{providers.ProviderAnthropic: provider}).

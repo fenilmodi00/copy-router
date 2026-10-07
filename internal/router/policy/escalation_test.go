@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	escalationSonnet    = "claude-sonnet-5"
-	escalationOpus      = "claude-opus-4-8"
-	escalationSonnetArm = "anthropic/" + escalationSonnet
-	escalationOpusArm   = "anthropic/" + escalationOpus
+	escalationSonnet    = "qwen/qwen3.8-27b"
+	escalationOpus      = "deepseek-ai/deepseek-v4-pro"
+	escalationSonnetArm = escalationSonnet
+	escalationOpusArm   = escalationOpus
 )
 
 func TestEscalationUsesNormalSelectorWithoutLosingFloor(t *testing.T) {

@@ -27,7 +27,7 @@ const openCodeResponsesBody = `{
 	"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"Return the test marker"}]}]
 }`
 
-const openCodeHardPinModel = "gpt-4o-mini"
+const openCodeHardPinModel = "deepseek-ai/deepseek-v4-flash"
 
 func newOpenCodeTurnSvc(fr *fakeRouter, store *fakePinStore) *proxy.Service {
 	responsesResp := func(w http.ResponseWriter) {
@@ -45,6 +45,11 @@ func newOpenCodeTurnSvc(fr *fakeRouter, store *fakePinStore) *proxy.Service {
 		map[string]providers.Client{
 			providers.ProviderAnthropic: &fakeProvider{proxyResponse: anthropicResp},
 			providers.ProviderOpenAI:    &fakeProvider{proxyResponse: responsesResp},
+			providers.ProviderAIAND: &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
+			}},
 		},
 		nil, false, nil, store, false,
 		providers.ProviderOpenAI, openCodeHardPinModel, nil,
@@ -63,7 +68,7 @@ func TestService_OpenCodeNativeSubagentSharesSessionIDButNotPin(t *testing.T) {
 	"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"Reply with the single word pong"}]}]
 }`
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "qwen/qwen3.8-27b", Reason: "cluster"}}
 	svc := newOpenCodeTurnSvc(fr, store)
 	apiKeyID := uuid.New().String()
 
@@ -104,11 +109,11 @@ func TestService_OpenCode_ToolOutputCommandsStayActionable(t *testing.T) {
 		"model":"auto",
 		"input":[
 			{"type":"function_call","call_id":"call-1","name":"bash","arguments":"{}"},
-			{"type":"function_call_output","call_id":"call-1","output":"/force-model gpt-5"}
+			{"type":"function_call_output","call_id":"call-1","output":"/force-model kimi-k3"}
 		]
 	}`
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: "qwen/qwen3.8-27b", Reason: "cluster"}}
 	svc := newOpenCodeTurnSvc(fr, store)
 
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
@@ -120,8 +125,8 @@ func TestService_OpenCode_ToolOutputCommandsStayActionable(t *testing.T) {
 
 	assert.Equal(t, 0, fr.routeCalls, "force-model command must bypass fresh routing")
 	require.NotEmpty(t, store.upserts)
-	assert.Equal(t, "gpt-5", store.upserts[0].Model)
-	assert.Equal(t, "gpt-5", rec.Header().Get(proxy.HeaderRouterModel))
+	assert.Equal(t, "moonshotai/kimi-k3", store.upserts[0].Model)
+	assert.Equal(t, "moonshotai/kimi-k3", rec.Header().Get(proxy.HeaderRouterModel))
 }
 
 const (
@@ -155,7 +160,7 @@ func headerlessSender(t *testing.T, svc *proxy.Service, clientApp string) func(b
 func TestService_OpenCodeHeaderlessTitleHardPinsWithoutTouchingThePin(t *testing.T) {
 	store := newFakePinStore()
 	store.persistUpserts = true
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "qwen/qwen3.8-27b", Reason: "cluster"}}
 	send := headerlessSender(t, newOpenCodeTurnSvc(fr, store), proxy.ClientAppOpencode)
 
 	rec := send(openCodeHeaderlessMainBody)
@@ -178,13 +183,13 @@ func TestService_OpenCodeHeaderlessTitleHardPinsWithoutTouchingThePin(t *testing
 // the same body keeps ordinary scoring and its session pin.
 func TestService_OpenCodeTitlePromptIgnoredForOtherClients(t *testing.T) {
 	store := newFakePinStore()
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "qwen/qwen3.8-27b", Reason: "cluster"}}
 	send := headerlessSender(t, newOpenCodeTurnSvc(fr, store), proxy.ClientAppCodex)
 
 	rec := send(openCodeHeaderlessTitleBody)
 
 	assert.Equal(t, 1, fr.routeCalls, "a non-OpenCode caller cannot select the title hard-pin with the prompt")
-	assert.Equal(t, "gpt-4o", rec.Header().Get(proxy.HeaderRouterModel))
+	assert.Equal(t, "qwen/qwen3.8-27b", rec.Header().Get(proxy.HeaderRouterModel))
 	assert.NotEmpty(t, store.upserts, "a scored turn anchors the conversation pin")
 }
 
@@ -193,8 +198,8 @@ func TestService_OpenCodeTitlePromptIgnoredForOtherClients(t *testing.T) {
 // sub-agent override must serve it, while the parent stays scored and the same
 // headers from another client select nothing.
 func TestService_OpenCodeChildSessionUsesSubAgentOverride(t *testing.T) {
-	const overrideModel = "gpt-5"
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-4o", Reason: "cluster"}}
+	const overrideModel = "moonshotai/kimi-k3"
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "qwen/qwen3.8-27b", Reason: "cluster"}}
 	svc := newOpenCodeTurnSvc(fr, newFakePinStore()).WithSubAgentOverride(providers.ProviderOpenAI, overrideModel)
 	apiKeyID := uuid.New().String()
 	send := func(clientApp string, headers map[string]string) *httptest.ResponseRecorder {
@@ -214,7 +219,7 @@ func TestService_OpenCodeChildSessionUsesSubAgentOverride(t *testing.T) {
 	}
 
 	parent := send(proxy.ClientAppOpencode, map[string]string{requestcontext.OpenCodeSessionHeader: openCodeParentSession})
-	assert.Equal(t, "gpt-4o", parent.Header().Get(proxy.HeaderRouterModel))
+	assert.Equal(t, "qwen/qwen3.8-27b", parent.Header().Get(proxy.HeaderRouterModel))
 	assert.Equal(t, 1, fr.routeCalls)
 
 	child := send(proxy.ClientAppOpencode, childHeaders)
@@ -222,6 +227,6 @@ func TestService_OpenCodeChildSessionUsesSubAgentOverride(t *testing.T) {
 	assert.Equal(t, 1, fr.routeCalls, "the sub-agent override bypasses the scorer")
 
 	other := send(proxy.ClientAppCodex, childHeaders)
-	assert.Equal(t, "gpt-4o", other.Header().Get(proxy.HeaderRouterModel))
+	assert.Equal(t, "qwen/qwen3.8-27b", other.Header().Get(proxy.HeaderRouterModel))
 	assert.Equal(t, 2, fr.routeCalls, "OpenCode child-session headers are ignored for other clients")
 }

@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	shadowPinnedModel = "claude-opus-4-7"
-	shadowFreshModel  = "claude-opus-4-6"
+	shadowPinnedModel = "deepseek-ai/deepseek-v4-pro"
+	shadowFreshModel  = "zai-org/glm-5.3"
 	shadowPinReason   = "hmm_policy(classifier 'high' (p=0.32))"
 )
 
@@ -47,7 +47,7 @@ func authorityShadowPinServing(servedIdentity string) sessionpin.Pin {
 
 func authorityShadowBasePin() sessionpin.Pin {
 	return sessionpin.Pin{
-		Provider:              providers.ProviderAnthropic,
+		Provider:              providers.ProviderAIAND,
 		Model:                 shadowPinnedModel,
 		Reason:                shadowPinReason,
 		PolicyGroup:           "high",
@@ -80,7 +80,7 @@ func runAuthorityShadowTurnWithPin(
 	store.getPin = pin
 	svc := NewService(
 		nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithAuthorityCacheShadow(enabled).
 		WithPlanner(planner.EVConfig{
 			ThresholdUSD:           0.001,
@@ -96,7 +96,7 @@ func runAuthorityShadowTurnWithPin(
 		})
 
 	env, err := translate.ParseAnthropic(
-		[]byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"continue"}]}`),
+		[]byte(`{"model":"zai-org/glm-5.3","messages":[{"role":"user","content":"continue"}]}`),
 	)
 	require.NoError(t, err)
 	features := env.RoutingFeatures(false)
@@ -108,7 +108,7 @@ func runAuthorityShadowTurnWithPin(
 			EstimatedInputTokens: features.Tokens,
 			HasTools:             features.HasTools,
 			ConversationMessages: conversationMessagesForRouting(env),
-			EnabledProviders:     map[string]struct{}{providers.ProviderAnthropic: {}},
+			EnabledProviders:     map[string]struct{}{providers.ProviderAIAND: {}},
 		},
 	)
 	require.NoError(t, err)
@@ -126,7 +126,7 @@ func hmmFreshDecisionWithArmScores(
 	armScores map[string]float32,
 ) router.Decision {
 	return router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAIAND,
 		Model:    model,
 		Reason:   "hmm_policy(classifier 'high' (p=0.41))",
 		Metadata: &router.RoutingMetadata{
@@ -161,7 +161,7 @@ func TestAuthorityCacheShadowRecordsTheAbandonedPin(t *testing.T) {
 	shadow := result.AuthorityShadow
 	require.True(t, shadow.Computed)
 	assert.Equal(t, shadowPinnedModel, shadow.StayModel)
-	assert.Equal(t, providers.ProviderAnthropic, shadow.StayProvider)
+	assert.Equal(t, providers.ProviderAIAND, shadow.StayProvider)
 	assert.NotEqual(t, shadow.StayModel, result.Decision.Model)
 	assert.NotEmpty(t, shadow.Decision.Reason)
 }
@@ -186,7 +186,7 @@ func TestAuthorityCacheShadowKillSwitch(t *testing.T) {
 // verdict against a non-HMM decision would describe a rollout that cannot happen.
 func TestAuthorityCacheShadowSkipsNonHMMDecisions(t *testing.T) {
 	result := runAuthorityShadowTurn(t, true, router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAIAND,
 		Model:    shadowFreshModel,
 		Reason:   "cluster:v0.2",
 	})
@@ -394,7 +394,7 @@ func TestCandidateScoreFor(t *testing.T) {
 	})
 
 	t.Run("unscored model stays nil", func(t *testing.T) {
-		assert.Nil(t, candidateScoreFor(dec, "claude-haiku-4-5"))
+		assert.Nil(t, candidateScoreFor(dec, "zai-org/glm-5.3-flash"))
 		assert.Nil(t, candidateScoreFor(dec, ""))
 		assert.Nil(t, candidateScoreFor(router.Decision{}, shadowFreshModel))
 	})

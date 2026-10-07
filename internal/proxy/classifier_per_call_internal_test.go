@@ -97,11 +97,11 @@ func TestClassifierResponsesToolLoopSwitchesDispatchedModel(t *testing.T) {
 	defer classifierServer.Close()
 	classifier, err := policyclient.NewAtomicClassifier(classifierServer.URL, strings.Repeat("k", 32), config.Release, config.ReleaseSHA256, classifierServer.Client())
 	require.NoError(t, err)
-	const smallModel catalog.ModelID = "gpt-5.6-luna"
-	const largeModel catalog.ModelID = "gpt-5.6-sol"
+	const smallModel catalog.ModelID = "zai-org/glm-5.3-flash"
+	const largeModel catalog.ModelID = "moonshotai/kimi-k3"
 	upstream := &classifierResponseProvider{}
 	baseline := &betaTestRouter{}
-	svc := NewService(baseline, map[string]providers.Client{providers.ProviderOpenAI: upstream}, nil, false, nil, nil, false, providers.ProviderOpenAI, smallModel.String(), nil)
+	svc := NewService(baseline, map[string]providers.Client{providers.ProviderAIAND: upstream}, nil, false, nil, nil, false, providers.ProviderAIAND, smallModel.String(), nil)
 	require.NoError(t, svc.WithClassifierSessions(config, store, classifier))
 	roster := &rosterdata.Roster{SchemaVersion: rosterdata.SchemaVersionPolicyV1, SHA256: config.SelectionPolicySHA256,
 		ClassOrder: []string{string(escalation.Low), string(escalation.Medium), string(escalation.High), string(escalation.Maximum)}, Clusters: map[string]rosterdata.Cluster{}}
@@ -115,7 +115,7 @@ func TestClassifierResponsesToolLoopSwitchesDispatchedModel(t *testing.T) {
 		arm := armid.ForModel(model)
 		roster.Clusters[class] = rosterdata.Cluster{Arms: []string{arm}, ArmScores: map[string]float64{arm: 1}}
 	}
-	resolver := policy.NewResolver(map[string]struct{}{smallModel.String(): {}, largeModel.String(): {}}, map[string]struct{}{providers.ProviderOpenAI: {}}, armid.ForModel, policy.ManagedProviderPolicy())
+	resolver := policy.NewResolver(map[string]struct{}{smallModel.String(): {}, largeModel.String(): {}}, map[string]struct{}{providers.ProviderAIAND: {}}, armid.ForModel, policy.ManagedProviderPolicy())
 	capabilities := policy.Capabilities{SchemaVersion: policy.SchemaVersionV4, AuthoritativePerTurnSelection: true}
 	routing := policy.NewSidecarRouter(policy.SidecarRouterConfig{Strategy: router.StrategyLLMClassifier, Unavailable: router.ErrClassifierUnavailable,
 		ClassifierArtifactID: config.Release, ClassifierArtifactSHA256: config.ReleaseSHA256, SelectionPolicyReleaseID: config.Release, SelectionPolicySHA256: config.SelectionPolicySHA256},

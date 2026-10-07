@@ -137,10 +137,10 @@ func TestRoutingDistributionHandler_UsesHMMRosterForHMMStrategy(t *testing.T) {
 		},
 		Clusters: map[string]rosterdata.Cluster{
 			"low": {
-				Arms:      []string{"openai/gpt-5.6-luna"},
-				ArmScores: map[string]float64{"openai/gpt-5.6-luna": 20},
+				Arms:      []string{"zai-org/glm-5.3"},
+				ArmScores: map[string]float64{"zai-org/glm-5.3": 20},
 				ArmIndices: map[string]rosterdata.ArmIndices{
-					"openai/gpt-5.6-luna": {WII: 50, WPI: 0},
+					"zai-org/glm-5.3": {WII: 50, WPI: 0},
 				},
 			},
 		},

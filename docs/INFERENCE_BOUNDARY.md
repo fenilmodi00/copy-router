@@ -15,7 +15,6 @@ Router PRs [#884](https://github.com/weave-os/router/pull/884) and [#792](https:
 | Anthropic Messages | `anthropic_messages` | main inference | `proxy.Service.ProxyMessages` | Phase 8 |
 | OpenAI Chat Completions | `openai_chat_completions` | main inference | `proxy.Service.ProxyOpenAIChatCompletion` | Phase 8 |
 | OpenAI Responses | `openai_responses` | main inference | OpenAI conversion and dispatch branches in `proxy.Service` | Phase 8 |
-| Gemini Generate Content | `gemini_generate_content` | main inference | `proxy.Service.ProxyGeminiGenerateContent` | Phase 8 |
 | Switch handover summary | `handover_summary` | auxiliary inference | `proxy.ProviderSummarizer` | Phase 6 |
 | Proactive compaction summary | `precompaction_summary` | auxiliary inference | not invoked (router compaction removed); its reviewed catalog set gates the Claude Code compaction-turn pin | Phase 7 |
 | Post-trim compaction handover | `compaction_handover_summary` | auxiliary inference | `proxy.Service.runCompactionHandover` | Phase 7 |
@@ -39,11 +38,9 @@ These are the complete production `providers.Client.Proxy`/`Passthrough` call si
 
 | File / symbol | Operation |
 | --- | --- |
-| `internal/proxy/usage_bypass.go` — `Service.bypassToAnthropic` | subscription-token main inference |
-| `internal/proxy/gemini.go` — `Service.ProxyGeminiGenerateContent` | Gemini main inference |
 | `internal/proxy/service.go` — `Service.PassthroughToNamedProvider` | metadata/passthrough |
 | `internal/proxy/service.go` — `Service.anthropicNativeAttempt` | Anthropic main inference |
-| `internal/proxy/service.go` — two calls in `Service.ProxyMessages` | OpenAI-compatible and Gemini translations |
+| `internal/proxy/service.go` — two calls in `Service.ProxyMessages` | OpenAI-compatible and Gemini-format translations |
 | `internal/proxy/service.go` — three calls in `Service.ProxyOpenAIChatCompletion` | OpenAI, Anthropic, and Gemini dispatch branches |
 
 `proxy.Service`, `NewService`, and the two provider-filter helpers in `internal/proxy/translation_plan.go` are the only non-composition-root owners of `map[string]providers.Client`. Phase 5 moves that ownership to `internal/dispatch`.

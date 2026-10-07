@@ -36,7 +36,7 @@ func nativeResponsesStream(terminal string) func(http.ResponseWriter) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
 		stream := "event: response.created\n" +
-			`data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_1","status":"in_progress","model":"gpt-5.6-sol"}}` + "\n\n" +
+			`data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_1","status":"in_progress","model":"moonshotai/kimi-k3"}}` + "\n\n" +
 			"event: response.output_item.added\n" +
 			`data: {"type":"response.output_item.added","sequence_number":1,"output_index":0,"item":{"id":"rs_1","type":"reasoning","summary":[]}}` + "\n\n" +
 			terminal
@@ -60,19 +60,19 @@ func TestService_ProxyOpenAIResponses_NativeTurnRecordsTerminalFinishReason(t *t
 		{
 			name: "tool call turn",
 			terminal: "event: response.completed\n" +
-				`data: {"type":"response.completed","sequence_number":2,"response":{"id":"resp_1","status":"completed","model":"gpt-5.6-sol","output":[{"id":"fc_1","type":"function_call","call_id":"call_1","name":"shell","arguments":"{}","status":"completed"}],"usage":{"input_tokens":120,"output_tokens":34}}}` + "\n\n",
+				`data: {"type":"response.completed","sequence_number":2,"response":{"id":"resp_1","status":"completed","model":"moonshotai/kimi-k3","output":[{"id":"fc_1","type":"function_call","call_id":"call_1","name":"shell","arguments":"{}","status":"completed"}],"usage":{"input_tokens":120,"output_tokens":34}}}` + "\n\n",
 			want: "tool_calls",
 		},
 		{
 			name: "completed answer",
 			terminal: "event: response.completed\n" +
-				`data: {"type":"response.completed","sequence_number":2,"response":{"id":"resp_1","status":"completed","model":"gpt-5.6-sol","output":[{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}],"usage":{"input_tokens":120,"output_tokens":8}}}` + "\n\n",
+				`data: {"type":"response.completed","sequence_number":2,"response":{"id":"resp_1","status":"completed","model":"moonshotai/kimi-k3","output":[{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}],"usage":{"input_tokens":120,"output_tokens":8}}}` + "\n\n",
 			want: "stop",
 		},
 		{
 			name: "output cap reached",
 			terminal: "event: response.incomplete\n" +
-				`data: {"type":"response.incomplete","sequence_number":2,"response":{"id":"resp_1","status":"incomplete","model":"gpt-5.6-sol","incomplete_details":{"reason":"max_output_tokens"},"output":[{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"output_text","text":"partial"}]}],"usage":{"input_tokens":120,"output_tokens":64000}}}` + "\n\n",
+				`data: {"type":"response.incomplete","sequence_number":2,"response":{"id":"resp_1","status":"incomplete","model":"moonshotai/kimi-k3","incomplete_details":{"reason":"max_output_tokens"},"output":[{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"output_text","text":"partial"}]}],"usage":{"input_tokens":120,"output_tokens":64000}}}` + "\n\n",
 			want: "length",
 		},
 	} {
@@ -82,13 +82,13 @@ func TestService_ProxyOpenAIResponses_NativeTurnRecordsTerminalFinishReason(t *t
 			telemetry := newCaptureTelemetry()
 			svc := proxy.NewService(
 				&fakeRouter{decision: router.Decision{
-					Provider: providers.ProviderOpenAI, Model: "gpt-5.6-sol", Reason: "test",
+					Provider: providers.ProviderOpenAI, Model: "moonshotai/kimi-k3", Reason: "test",
 				}},
 				map[string]providers.Client{providers.ProviderOpenAI: provider},
-				nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", telemetry,
+				nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", telemetry,
 			)
 
-			body := []byte(`{"model":"gpt-5.6-sol","stream":true,"input":[{"type":"reasoning","id":"rs_0","encrypted_content":"opaque"},{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]}`)
+			body := []byte(`{"model":"moonshotai/kimi-k3","stream":true,"input":[{"type":"reasoning","id":"rs_0","encrypted_content":"opaque"},{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]}`)
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 			require.NoError(t, svc.ProxyOpenAIResponses(codexNativeResponsesCtx(), body, rec, req))
@@ -109,18 +109,18 @@ func TestService_ProxyOpenAIResponses_NativeTurnRecordsTerminalFinishReason(t *t
 // not a finish reason; recording one would report a clean completion.
 func TestService_ProxyOpenAIResponses_NativeFailedTerminalRecordsNoFinishReason(t *testing.T) {
 	terminal := "event: response.failed\n" +
-		`data: {"type":"response.failed","sequence_number":2,"response":{"id":"resp_1","status":"failed","model":"gpt-5.6-sol","error":{"code":"server_error","message":"boom"}}}` + "\n\n"
+		`data: {"type":"response.failed","sequence_number":2,"response":{"id":"resp_1","status":"failed","model":"moonshotai/kimi-k3","error":{"code":"server_error","message":"boom"}}}` + "\n\n"
 	provider := &fakeProvider{proxyResponse: nativeResponsesStream(terminal)}
 	telemetry := newCaptureTelemetry()
 	svc := proxy.NewService(
 		&fakeRouter{decision: router.Decision{
-			Provider: providers.ProviderOpenAI, Model: "gpt-5.6-sol", Reason: "test",
+			Provider: providers.ProviderOpenAI, Model: "moonshotai/kimi-k3", Reason: "test",
 		}},
 		map[string]providers.Client{providers.ProviderOpenAI: provider},
-		nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", telemetry,
+		nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", telemetry,
 	)
 
-	body := []byte(`{"model":"gpt-5.6-sol","stream":true,"input":[{"type":"reasoning","id":"rs_0","encrypted_content":"opaque"},{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","stream":true,"input":[{"type":"reasoning","id":"rs_0","encrypted_content":"opaque"},{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 	require.NoError(t, svc.ProxyOpenAIResponses(codexNativeResponsesCtx(), body, rec, req))

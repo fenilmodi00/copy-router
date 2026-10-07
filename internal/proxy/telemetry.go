@@ -372,8 +372,6 @@ func applyBlindExperimentTelemetry(ctx context.Context, params *InsertTelemetryP
 		switch {
 		case routed == nil || routed.Decision.Model == "":
 			params.CohortBypassReason = auth.CohortBypassNotDispatched
-		case routed.UsageBypass:
-			params.CohortBypassReason = auth.CohortBypassUsageBypass
 		case isUserForcedReason(routed.Decision.Reason):
 			params.CohortBypassReason = auth.CohortBypassForceModel
 		case routed.HardPinned:

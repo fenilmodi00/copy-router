@@ -30,14 +30,14 @@ func TestConformance_OpenAIChat(t *testing.T) {
 		{
 			name:            "openai_chat/basic_text",
 			provider:        providers.ProviderAIAND,
-			model:           "deepseek/deepseek-v4-pro",
+			model:           "deepseek-ai/deepseek-v4-pro",
 			newClient:       aiandClient,
-			inbound:         `{"model":"deepseek/deepseek-v4-pro","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`,
+			inbound:         `{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`,
 			stream:          true,
 			upstreamFixture: "openai_chat/basic_text.upstream.sse",
 			wantUpstream: func(t *testing.T, path string, body []byte, _ http.Header) {
 				assert.True(t, strings.HasSuffix(path, "/chat/completions"), "path=%s", path)
-				assert.Equal(t, "deepseek/deepseek-v4-pro", gjson.GetBytes(body, "model").String())
+				assert.Equal(t, "deepseek-ai/deepseek-v4-pro", gjson.GetBytes(body, "model").String())
 				assert.True(t, gjson.GetBytes(body, "stream").Bool(), "inbound stream must propagate upstream")
 				assert.Equal(t, "user", gjson.GetBytes(body, "messages.0.role").String())
 			},
@@ -45,9 +45,9 @@ func TestConformance_OpenAIChat(t *testing.T) {
 		{
 			name:            "openai_chat/basic_text_nonstream",
 			provider:        providers.ProviderAIAND,
-			model:           "deepseek/deepseek-v4-pro",
+			model:           "deepseek-ai/deepseek-v4-pro",
 			newClient:       aiandClient,
-			inbound:         `{"model":"deepseek/deepseek-v4-pro","stream":false,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`,
+			inbound:         `{"model":"deepseek-ai/deepseek-v4-pro","stream":false,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`,
 			stream:          false,
 			upstreamFixture: "openai_chat/basic_text.upstream.json",
 			wantUpstream: func(t *testing.T, _ string, body []byte, _ http.Header) {
@@ -57,9 +57,9 @@ func TestConformance_OpenAIChat(t *testing.T) {
 		{
 			name:            "openai_chat/toolcall",
 			provider:        providers.ProviderAIAND,
-			model:           "deepseek/deepseek-v4-pro",
+			model:           "deepseek-ai/deepseek-v4-pro",
 			newClient:       aiandClient,
-			inbound:         `{"model":"deepseek/deepseek-v4-pro","stream":true,"max_tokens":1024,"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Weather in NYC?"}]}`,
+			inbound:         `{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Weather in NYC?"}]}`,
 			stream:          true,
 			upstreamFixture: "openai_chat/toolcall.upstream.sse",
 			wantUpstream: func(t *testing.T, _ string, body []byte, _ http.Header) {
@@ -71,18 +71,18 @@ func TestConformance_OpenAIChat(t *testing.T) {
 			// block must demote stop_reason to end_turn, not strand the agent.
 			name:            "openai_chat/degenerate_toolcall_demotes",
 			provider:        providers.ProviderAIAND,
-			model:           "deepseek/deepseek-v4-pro",
+			model:           "deepseek-ai/deepseek-v4-pro",
 			newClient:       aiandClient,
-			inbound:         `{"model":"deepseek/deepseek-v4-pro","stream":true,"max_tokens":1024,"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Run the tool."}]}`,
+			inbound:         `{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"tools":` + weatherTool + `,"messages":[{"role":"user","content":"Run the tool."}]}`,
 			stream:          true,
 			upstreamFixture: "openai_chat/degenerate_toolcall.upstream.sse",
 		},
 		{
 			name:            "openai_chat/system_prompt",
 			provider:        providers.ProviderAIAND,
-			model:           "deepseek/deepseek-v4-pro",
+			model:           "deepseek-ai/deepseek-v4-pro",
 			newClient:       aiandClient,
-			inbound:         `{"model":"deepseek/deepseek-v4-pro","stream":true,"max_tokens":1024,"system":"You are a helpful assistant.","messages":[{"role":"user","content":"Say hi."}]}`,
+			inbound:         `{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"system":"You are a helpful assistant.","messages":[{"role":"user","content":"Say hi."}]}`,
 			stream:          true,
 			upstreamFixture: "openai_chat/basic_text.upstream.sse",
 			wantUpstream: func(t *testing.T, _ string, body []byte, _ http.Header) {
@@ -95,9 +95,9 @@ func TestConformance_OpenAIChat(t *testing.T) {
 			// so the tool_use block stays dispatchable.
 			name:            "openai_chat/invalid_toolcall_args",
 			provider:        providers.ProviderAIAND,
-			model:           "deepseek/deepseek-v4-pro",
+			model:           "deepseek-ai/deepseek-v4-pro",
 			newClient:       aiandClient,
-			inbound:         `{"model":"deepseek/deepseek-v4-pro","stream":true,"max_tokens":1024,"tools":` + readTool + `,"messages":[{"role":"user","content":"Read a.go"}]}`,
+			inbound:         `{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"tools":` + readTool + `,"messages":[{"role":"user","content":"Read a.go"}]}`,
 			stream:          true,
 			upstreamFixture: "openai_chat/invalid_toolcall_args.upstream.sse",
 		},
@@ -106,9 +106,9 @@ func TestConformance_OpenAIChat(t *testing.T) {
 			// hallucinated param dropped, "5"-for-integer coerced.
 			name:            "openai_chat/toolcall_repaired_args",
 			provider:        providers.ProviderAIAND,
-			model:           "deepseek/deepseek-v4-pro",
+			model:           "deepseek-ai/deepseek-v4-pro",
 			newClient:       aiandClient,
-			inbound:         `{"model":"deepseek/deepseek-v4-pro","stream":true,"max_tokens":1024,"tools":` + readTool + `,"messages":[{"role":"user","content":"Read a.go"}]}`,
+			inbound:         `{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"tools":` + readTool + `,"messages":[{"role":"user","content":"Read a.go"}]}`,
 			stream:          true,
 			upstreamFixture: "openai_chat/toolcall_repaired_args.upstream.sse",
 		},

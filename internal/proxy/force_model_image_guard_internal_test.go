@@ -18,23 +18,23 @@ import (
 
 // An agent returning a screenshot nests the image inside a tool_result rather
 // than putting it at the top level of the message content.
-const toolResultImageBody = `{"model":"claude-sonnet-4-6","messages":[
+const toolResultImageBody = `{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[
 	{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"/tmp/shot.png"}}]},
 	{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":[
 		{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AAA"}}]}]}]}`
 
-const textOnlyForcedModel = "qwen/qwen3-coder-next"
+const textOnlyForcedModel = "deepseek-ai/deepseek-v4-flash"
 
 // Regression: a user-forced pin skipped every automatic capability gate, so an
 // image-bearing turn dispatched to a text-only model and the upstream rejected
 // the request outright ("... is not a multimodal model").
 func TestRunTurnLoop_ForcedTextOnlyModel_DropsPinForImageTurn(t *testing.T) {
 	require.False(t, catalog.AcceptsImages(textOnlyForcedModel), "test premise: forced model is text-only")
-	require.True(t, catalog.AcceptsImages("claude-sonnet-4-6"), "test premise: replacement accepts images")
+	require.True(t, catalog.AcceptsImages("deepseek-ai/deepseek-v4.1-flash"), "test premise: replacement accepts images")
 
 	fr := &tierProbeRouter{available: map[string]struct{}{
-		textOnlyForcedModel: {},
-		"claude-sonnet-4-6": {},
+		textOnlyForcedModel:               {},
+		"deepseek-ai/deepseek-v4.1-flash": {},
 	}}
 	store := &forcedPinStore{pin: sessionpin.Pin{
 		Provider:    providers.ProviderAIAND,
@@ -43,7 +43,7 @@ func TestRunTurnLoop_ForcedTextOnlyModel_DropsPinForImageTurn(t *testing.T) {
 		PinnedUntil: time.Now().Add(time.Hour),
 	}}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil).
 		WithAvailableModels(fr.available).
 		WithPlannerEnabled(false)
 
@@ -74,8 +74,8 @@ func TestRunTurnLoop_ForcedTextOnlyModel_DropsPinForImageTurn(t *testing.T) {
 // image, so the guard can't be mistaken for "forced pins stopped working".
 func TestRunTurnLoop_ForcedTextOnlyModel_HonoredWithoutImages(t *testing.T) {
 	fr := &tierProbeRouter{available: map[string]struct{}{
-		textOnlyForcedModel: {},
-		"claude-sonnet-4-6": {},
+		textOnlyForcedModel:               {},
+		"deepseek-ai/deepseek-v4.1-flash": {},
 	}}
 	store := &forcedPinStore{pin: sessionpin.Pin{
 		Provider:    providers.ProviderAIAND,
@@ -84,11 +84,11 @@ func TestRunTurnLoop_ForcedTextOnlyModel_HonoredWithoutImages(t *testing.T) {
 		PinnedUntil: time.Now().Add(time.Hour),
 	}}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil).
 		WithAvailableModels(fr.available).
 		WithPlannerEnabled(false)
 
-	env, err := translate.ParseAnthropic([]byte(`{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"plain text turn"}]}`))
+	env, err := translate.ParseAnthropic([]byte(`{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":"plain text turn"}]}`))
 	require.NoError(t, err)
 	feats := env.RoutingFeatures(false)
 	require.False(t, feats.HasImages)
@@ -114,7 +114,7 @@ func TestForcedPinEligible_RejectsTextOnlyModelOnImageTurn(t *testing.T) {
 	assert.True(t, forcedPinEligible(pin, router.Request{HasImages: false}),
 		"same pin stays eligible without images")
 	assert.True(t, forcedPinEligible(
-		sessionpin.Pin{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-6"},
+		sessionpin.Pin{Provider: providers.ProviderAIAND, Model: "deepseek-ai/deepseek-v4.1-flash"},
 		router.Request{HasImages: true}),
 		"an image-capable forced pin stays eligible on an image turn")
 }

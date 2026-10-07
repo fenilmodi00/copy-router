@@ -259,7 +259,8 @@ func TestOpenAISameFormat_ExplicitMaxTokensClampsToKimiK3Ceiling(t *testing.T) {
 		Capabilities: router.Lookup("moonshotai/kimi-k3"),
 	}
 	out := parseAndEmit(t, body, "openai", opts)
-	assert.Equal(t, float64(32000), out["max_tokens"])
+	assert.Equal(t, float64(32000), out["max_completion_tokens"])
+	assert.NotContains(t, out, "max_tokens")
 }
 
 // Regression: qwen/qwen3.8-max was absent from modelMaxOutputTokens, so
@@ -330,7 +331,8 @@ func TestOpenAISameFormat_ExplicitMaxTokensNotClampedTo8192ForAIandRoster(t *tes
 			Capabilities: router.Lookup(model),
 		}
 		out := parseAndEmit(t, body, "openai", opts)
-		assert.Equal(t, float64(64000), out["max_tokens"], model)
+		assert.Equal(t, float64(64000), out["max_completion_tokens"], model)
+		assert.NotContains(t, out, "max_tokens")
 	}
 }
 

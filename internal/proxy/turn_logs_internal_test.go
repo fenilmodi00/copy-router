@@ -225,7 +225,7 @@ func TestRecordCallLog_OffEmitsNothing(t *testing.T) {
 
 	buf := otel.NewBuffer(em)
 	ctx := buf.WithContext(context.Background())
-	base := otel.NewAttrBuilder(1).String("decision.model", "claude-opus-4-8").Build()
+	base := otel.NewAttrBuilder(1).String("decision.model", "zai-org/glm-5.3").Build()
 	s.recordCallLog(ctx, base, 42, false, []byte("req"), []byte("resp"), false)
 	otel.Flush(ctx)
 
@@ -243,7 +243,7 @@ func TestRecordCallLog_InstallationOffEmitsContentFreePermanentError(t *testing.
 		String("external_id", "org-1").
 		String("client.session_id", "sess-1").
 		String("router_user_id", "11111111-1111-1111-1111-111111111111").
-		String("decision.model", "claude-opus-5-5").
+		String("decision.model", "deepseek-ai/deepseek-v4-pro").
 		String("decision.provider", "snowflake").
 		Int64("upstream.status_code", 400).
 		String("routing.candidate_scores", "sensitive-score").
@@ -265,7 +265,7 @@ func TestRecordCallLog_InstallationOffEmitsContentFreePermanentError(t *testing.
 		"external_id":          {Value: &commonv1.AnyValue_StringValue{StringValue: "org-1"}},
 		"client.session_id":    {Value: &commonv1.AnyValue_StringValue{StringValue: "sess-1"}},
 		"router_user_id":       {Value: &commonv1.AnyValue_StringValue{StringValue: "11111111-1111-1111-1111-111111111111"}},
-		"decision.model":       {Value: &commonv1.AnyValue_StringValue{StringValue: "claude-opus-5-5"}},
+		"decision.model":       {Value: &commonv1.AnyValue_StringValue{StringValue: "deepseek-ai/deepseek-v4-pro"}},
 		"decision.provider":    {Value: &commonv1.AnyValue_StringValue{StringValue: "snowflake"}},
 		"upstream.status_code": {Value: &commonv1.AnyValue_IntValue{IntValue: 400}},
 	}, attrsByKey(record.Attributes))
@@ -291,14 +291,14 @@ func TestRecordCallLog_FullCapturesBodies(t *testing.T) {
 
 	buf := otel.NewBuffer(em)
 	ctx := buf.WithContext(context.Background())
-	base := otel.NewAttrBuilder(1).String("decision.model", "claude-opus-4-8").Build()
+	base := otel.NewAttrBuilder(1).String("decision.model", "zai-org/glm-5.3").Build()
 	s.recordCallLog(ctx, base, 42, false, []byte(`{"req":1}`), []byte(`{"resp":2}`), false)
 	otel.Flush(ctx)
 
 	require.NoError(t, em.Shutdown(context.Background()))
 	require.Equal(t, 1, coll.count(t))
 	a := coll.attrs(t)
-	assert.Equal(t, "claude-opus-4-8", a["decision.model"]) // base metadata carried over
+	assert.Equal(t, "zai-org/glm-5.3", a["decision.model"]) // base metadata carried over
 	assert.Equal(t, int64(42), coll.intAttr(t, "latency.route_ms"))
 	assert.Equal(t, `{"req":1}`, a["io.request_body"])
 	assert.Equal(t, `{"resp":2}`, a["io.response_body"])
@@ -389,21 +389,21 @@ func TestApplyRoutingStateAttrs_EmitsExactThreadAndTransition(t *testing.T) {
 	res := turnLoopResult{
 		SessionKey:       key,
 		PinRole:          "default_high",
-		PriorServedModel: "claude-haiku-4-5",
+		PriorServedModel: "zai-org/glm-5.3-flash",
 	}
 	b := otel.NewAttrBuilder(4)
-	applyRoutingStateAttrs(b, res, "claude-opus-4-7", key)
+	applyRoutingStateAttrs(b, res, "deepseek-ai/deepseek-v4-pro", key)
 	attrs := attrsByKey(b.Build())
 
 	assert.Equal(t, "0102030405060708090a0b0c0d0e0f10", attrs["routing.session_key"].GetStringValue())
 	assert.Equal(t, "default_high", attrs["routing.pin_role"].GetStringValue())
-	assert.Equal(t, "claude-haiku-4-5", attrs["routing.prior_served_model"].GetStringValue())
+	assert.Equal(t, "zai-org/glm-5.3-flash", attrs["routing.prior_served_model"].GetStringValue())
 	assert.True(t, attrs["routing.model_changed"].GetBoolValue())
 }
 
 func TestApplyRoutingStateAttrs_FirstSelectionIsNotAChange(t *testing.T) {
 	b := otel.NewAttrBuilder(4)
-	applyRoutingStateAttrs(b, turnLoopResult{PinRole: sessionpin.DefaultRole}, "claude-haiku-4-5", [sessionpin.SessionKeyLen]byte{})
+	applyRoutingStateAttrs(b, turnLoopResult{PinRole: sessionpin.DefaultRole}, "zai-org/glm-5.3-flash", [sessionpin.SessionKeyLen]byte{})
 	attrs := attrsByKey(b.Build())
 
 	assert.Empty(t, attrs["routing.session_key"].GetStringValue())
@@ -414,7 +414,7 @@ func TestApplyRoutingStateAttrs_FirstSelectionIsNotAChange(t *testing.T) {
 func TestApplyRoutingStateAttrs_UsesRequestKeyWhenRoutingKeyIsEmpty(t *testing.T) {
 	key := [sessionpin.SessionKeyLen]byte{1, 2, 3}
 	b := otel.NewAttrBuilder(4)
-	applyRoutingStateAttrs(b, turnLoopResult{}, "claude-haiku-4-5", key)
+	applyRoutingStateAttrs(b, turnLoopResult{}, "zai-org/glm-5.3-flash", key)
 	attrs := attrsByKey(b.Build())
 
 	assert.Equal(t, "01020300000000000000000000000000", attrs["routing.session_key"].GetStringValue())
@@ -435,9 +435,9 @@ func TestApplyPlannerAttrs_OmitsDetailsWhenSkipped(t *testing.T) {
 
 func TestApplyPlannerAttrs_EmitsDetailsWhenEvaluated(t *testing.T) {
 	res := turnLoopResult{
-		Decision:     router.Decision{Model: "claude-haiku-4-5"},
-		Fresh:        router.Decision{Model: "claude-opus-4-7"},
-		PinModel:     "claude-haiku-4-5",
+		Decision:     router.Decision{Model: "zai-org/glm-5.3-flash"},
+		Fresh:        router.Decision{Model: "deepseek-ai/deepseek-v4-pro"},
+		PinModel:     "zai-org/glm-5.3-flash",
 		PinProvider:  providers.ProviderAnthropic,
 		PrefixBroken: true,
 		PlannerDecision: planner.Decision{

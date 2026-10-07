@@ -22,18 +22,18 @@ import (
 func TestForceModelCommand_PersistsEffortOnPin(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil)
 
 	env := forceCommandEnv(t)
 	rec := httptest.NewRecorder()
 	require.NoError(t, svc.handleForceModelCommand(context.Background(), rec, env,
-		translate.ForceModelResult{Model: "opus:xhigh"},
+		translate.ForceModelResult{Model: "glm:xhigh"},
 		uuid.New(), DeriveSessionKey(env, "key-1"), DeriveSessionKey(env, "key-1"), 10))
 
 	require.Len(t, store.upserts, 1)
-	assert.Equal(t, "claude-opus-5-5", store.upserts[0].Model)
+	assert.Equal(t, "zai-org/glm-5.3", store.upserts[0].Model)
 	assert.Equal(t, "xhigh", store.upserts[0].Effort)
-	assert.Contains(t, rec.Body.String(), "claude-opus-5-5:xhigh")
+	assert.Contains(t, rec.Body.String(), "zai-org/glm-5.3:xhigh")
 }
 
 // The tool-result form of the command dispatches on the same turn through
@@ -41,30 +41,30 @@ func TestForceModelCommand_PersistsEffortOnPin(t *testing.T) {
 func TestApplyForceModelCommand_ReturnsEffortQualifiedSpec(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil)
 
 	env := forceCommandEnv(t)
 	spec, _, err := svc.applyForceModelCommand(context.Background(), env,
-		translate.ForceModelResult{Model: "opus:xhigh", FromToolResult: true},
+		translate.ForceModelResult{Model: "glm:xhigh", FromToolResult: true},
 		uuid.New(), DeriveSessionKey(env, "key-1"), DeriveSessionKey(env, "key-1"))
 	require.NoError(t, err)
-	assert.Equal(t, "claude-opus-5-5:xhigh", spec)
+	assert.Equal(t, "zai-org/glm-5.3:xhigh", spec)
 
 	model, _, known, effort := resolveForceModelWithEffort(spec)
 	require.True(t, known)
-	assert.Equal(t, "claude-opus-5-5", model)
+	assert.Equal(t, "zai-org/glm-5.3", model)
 	assert.Equal(t, "xhigh", effort)
 }
 
 func TestForceModelHeader_PersistsEffortOnPin(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil)
 
 	env := forceCommandEnv(t)
 	req, err := http.NewRequest(http.MethodPost, "/v1/messages", nil)
 	require.NoError(t, err)
-	req.Header.Set(ForceModelHeader, "opus:high")
+	req.Header.Set(ForceModelHeader, "glm:high")
 
 	_, _, forceErr := svc.applyForceModelHeader(
 		context.Background(), req, uuid.New(), DeriveSessionKey(env, "key-1"))
@@ -78,18 +78,18 @@ func TestForceModelHeader_PersistsEffortOnPin(t *testing.T) {
 // onto the decision so dispatch emits it.
 func TestRunTurnLoop_ForcedPinRehydratesEffort(t *testing.T) {
 	store := &forcedPinStore{pin: sessionpin.Pin{
-		Provider:    providers.ProviderAnthropic,
-		Model:       "claude-opus-4-8",
+		Provider:    providers.ProviderAIAND,
+		Model:       "zai-org/glm-5.3",
 		Effort:      "xhigh",
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: time.Now().Add(time.Hour),
 	}}
-	fr := &tierProbeRouter{available: map[string]struct{}{"claude-haiku-4-5": {}}}
+	fr := &tierProbeRouter{available: map[string]struct{}{"zai-org/glm-5.3-flash": {}}}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil)
 
 	env, err := translate.ParseAnthropic([]byte(`{
-		"model":"claude-opus-4-8",
+		"model":"zai-org/glm-5.3-flash",
 		"system":"Your task is to create a detailed summary of the conversation so far.",
 		"messages":[{"role":"user","content":"summarize"}]
 	}`))
@@ -101,7 +101,7 @@ func TestRunTurnLoop_ForcedPinRehydratesEffort(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "claude-opus-4-8", res.Decision.Model)
+	assert.Equal(t, "zai-org/glm-5.3", res.Decision.Model)
 	assert.Equal(t, "xhigh", res.Decision.Effort)
 	assert.Equal(t, "xhigh",
 		svc.resolveEffort(context.Background(), res.Decision,
@@ -112,12 +112,12 @@ func TestRunTurnLoop_ForcedPinRehydratesEffort(t *testing.T) {
 // forced pin for the current turn.
 func TestRunTurnLoop_RequestForceModelCarriesEffort(t *testing.T) {
 	store := &forcedPinStore{}
-	fr := &tierProbeRouter{available: map[string]struct{}{"claude-haiku-4-5": {}}}
+	fr := &tierProbeRouter{available: map[string]struct{}{"zai-org/glm-5.3-flash": {}}}
 	svc := NewService(fr, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil)
 
 	env, err := translate.ParseAnthropic([]byte(`{
-		"model":"claude-opus-4-8",
+		"model":"zai-org/glm-5.3-flash",
 		"system":"Your task is to create a detailed summary of the conversation so far.",
 		"messages":[{"role":"user","content":"summarize"}]
 	}`))
@@ -126,11 +126,11 @@ func TestRunTurnLoop_RequestForceModelCarriesEffort(t *testing.T) {
 
 	res, err := svc.runTurnLoop(context.Background(), env, feats, "key-1", uuid.New(), "", nil, router.Request{
 		RequestedModel: feats.Model,
-		ForceModel:     "opus:medium",
+		ForceModel:     "glm:medium",
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "claude-opus-5-5", res.Decision.Model)
+	assert.Equal(t, "zai-org/glm-5.3", res.Decision.Model)
 	assert.Equal(t, "medium", res.Decision.Effort)
 }
 
@@ -139,11 +139,11 @@ func TestRunTurnLoop_RequestForceModelCarriesEffort(t *testing.T) {
 func TestRefreshPin_CarriesEffortForward(t *testing.T) {
 	store := &recordingPinStore{}
 	svc := NewService(nil, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil)
 
 	existing := sessionpin.Pin{
-		Provider: providers.ProviderAnthropic,
-		Model:    "claude-opus-4-8",
+		Provider: providers.ProviderAIAND,
+		Model:    "zai-org/glm-5.3",
 		Effort:   "xhigh",
 		Reason:   translate.ReasonUserForceModel,
 	}
@@ -156,7 +156,7 @@ func TestRefreshPin_CarriesEffortForward(t *testing.T) {
 
 	svc.refreshPin(context.Background(), uuid.New(), [sessionpin.SessionKeyLen]byte{},
 		existing, "default", router.Decision{
-			Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5",
+			Provider: providers.ProviderAIAND, Model: "zai-org/glm-5.3-flash",
 		})
 	require.Len(t, store.upserts, 2)
 	assert.Empty(t, store.upserts[1].Effort,
@@ -165,13 +165,13 @@ func TestRefreshPin_CarriesEffortForward(t *testing.T) {
 
 func TestOrderBandPair_AnchoredHalfKeepsEffort(t *testing.T) {
 	large, small := orderBandPair(sessionpin.Pin{
-		Provider:       providers.ProviderAnthropic,
-		Model:          "claude-opus-4-7",
+		Provider:       providers.ProviderAIAND,
+		Model:          "zai-org/glm-5.3",
 		Effort:         "high",
-		PairedProvider: providers.ProviderAnthropic,
-		PairedModel:    "claude-haiku-4-5",
+		PairedProvider: providers.ProviderAIAND,
+		PairedModel:    "zai-org/glm-5.3-flash",
 	})
-	assert.Equal(t, "claude-opus-4-7", large.Model)
+	assert.Equal(t, "zai-org/glm-5.3", large.Model)
 	assert.Equal(t, "high", large.Effort)
 	assert.Empty(t, small.Effort)
 }
@@ -179,8 +179,8 @@ func TestOrderBandPair_AnchoredHalfKeepsEffort(t *testing.T) {
 // An explicit per-request knob still outranks whatever the pin carries.
 func TestResolveEffort_KnobWinsOverDecision(t *testing.T) {
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
-	decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-opus-4-8", Effort: "xhigh"}
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil)
+	decision := router.Decision{Provider: providers.ProviderAIAND, Model: "zai-org/glm-5.3", Effort: "xhigh"}
 	caps := router.Lookup(decision.Model)
 
 	ctx := router.WithRoutingKnobs(context.Background(), &router.Overrides{ForceEffort: "low"})

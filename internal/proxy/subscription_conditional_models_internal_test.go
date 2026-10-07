@@ -148,9 +148,9 @@ func TestWithSubscriptionStatePreferences_UsesCoveringSubscriptionOnly(t *testin
 }
 
 func TestPreferredModelsForRequest_SeparatesInstallationAndSubscriptionPreferences(t *testing.T) {
-	ctx := context.WithValue(context.Background(), InstallationPreferredModelsContextKey{}, []string{"grok-4.1-fast", "gpt-5.6-sol"})
-	ctx = context.WithValue(ctx, SubscriptionStatePreferredModelsContextKey{}, []string{"gpt-5.6-sol", "claude-sonnet-5"})
+	ctx := context.WithValue(context.Background(), InstallationPreferredModelsContextKey{}, []string{"grok-4.1-fast", "moonshotai/kimi-k3"})
+	ctx = context.WithValue(ctx, SubscriptionStatePreferredModelsContextKey{}, []string{"moonshotai/kimi-k3", "deepseek-ai/deepseek-v4.1-flash"})
 
-	assert.Equal(t, []string{"grok-4.1-fast", "gpt-5.6-sol"}, (&Service{}).preferredModelsForRequest(ctx))
-	assert.Equal(t, []string{"gpt-5.6-sol", "claude-sonnet-5"}, subscriptionStatePreferredModelsFromContext(ctx))
+	assert.Equal(t, []string{"grok-4.1-fast", "moonshotai/kimi-k3"}, (&Service{}).preferredModelsForRequest(ctx))
+	assert.Equal(t, []string{"moonshotai/kimi-k3", "deepseek-ai/deepseek-v4.1-flash"}, subscriptionStatePreferredModelsFromContext(ctx))
 }

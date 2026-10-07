@@ -25,9 +25,9 @@ func TestConformance_Anthropic(t *testing.T) {
 		{
 			name:            "anthropic/passthrough_text",
 			provider:        providers.ProviderAnthropic,
-			model:           "claude-opus-4-8",
+			model:           "zai-org/glm-5.3",
 			newClient:       anthropicClient,
-			inbound:         `{"model":"claude-opus-4-8","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`,
+			inbound:         `{"model":"zai-org/glm-5.3","stream":true,"max_tokens":1024,"messages":[{"role":"user","content":"Say hi."}]}`,
 			stream:          true,
 			upstreamFixture: "anthropic/basic_text.upstream.sse",
 			wantUpstream: func(t *testing.T, path string, _ []byte, _ http.Header) {
@@ -40,9 +40,9 @@ func TestConformance_Anthropic(t *testing.T) {
 			// on a same-format Anthropic bounce.
 			name:            "anthropic/system_role_hoisted",
 			provider:        providers.ProviderAnthropic,
-			model:           "claude-opus-4-8",
+			model:           "zai-org/glm-5.3",
 			newClient:       anthropicClient,
-			inbound:         `{"model":"claude-opus-4-8","stream":true,"max_tokens":1024,"messages":[{"role":"system","content":"Be terse."},{"role":"user","content":"hi"}]}`,
+			inbound:         `{"model":"zai-org/glm-5.3","stream":true,"max_tokens":1024,"messages":[{"role":"system","content":"Be terse."},{"role":"user","content":"hi"}]}`,
 			stream:          true,
 			upstreamFixture: "anthropic/basic_text.upstream.sse",
 			wantUpstream: func(t *testing.T, _ string, body []byte, _ http.Header) {
@@ -51,21 +51,25 @@ func TestConformance_Anthropic(t *testing.T) {
 			},
 		},
 		{
-			// Guards the 2026-06-09 re-route 400: a session running with
-			// output_config.effort="xhigh" (valid for the requested opus-4-7+)
-			// re-routed onto claude-sonnet-4-6 must have the effort clamped to
-			// "max" — sonnet's menu has no xhigh and the resulting 400 is
-			// non-retryable, killing the session.
-			name:            "anthropic/xhigh_effort_clamped_on_reroute",
+			// Guards the re-route 400 class: a session running with
+			// output_config.effort="xhigh" (only ever valid for an
+			// xhigh-capable source) re-routed onto a roster row must not
+			// forward the unusable level. Every roster model's menu tops out
+			// at "high" and none is adaptive, so the emit path prunes the
+			// client-supplied output_config rather than 400 the turn.
+			name:            "anthropic/xhigh_effort_pruned_on_reroute",
 			provider:        providers.ProviderAnthropic,
-			model:           "claude-sonnet-4-6",
+			model:           "deepseek-ai/deepseek-v4.1-flash",
 			newClient:       anthropicClient,
-			inbound:         `{"model":"claude-opus-4-7","stream":true,"max_tokens":1024,"thinking":{"type":"adaptive"},"output_config":{"effort":"xhigh"},"messages":[{"role":"user","content":"hi"}]}`,
+			inbound:         `{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"max_tokens":1024,"thinking":{"type":"adaptive"},"output_config":{"effort":"xhigh"},"messages":[{"role":"user","content":"hi"}]}`,
 			stream:          true,
 			upstreamFixture: "anthropic/basic_text.upstream.sse",
 			wantUpstream: func(t *testing.T, _ string, body []byte, _ http.Header) {
-				assert.Equal(t, "claude-sonnet-4-6", gjson.GetBytes(body, "model").String())
-				assert.Equal(t, "max", gjson.GetBytes(body, "output_config.effort").String(), "xhigh must clamp to max for models without CapXhighEffort")
+				assert.Equal(t, "deepseek-ai/deepseek-v4.1-flash", gjson.GetBytes(body, "model").String())
+				assert.NotContains(t, string(body), "xhigh",
+					"a roster target's menu is low/medium/high; the unusable xhigh level must never reach it")
+				assert.Empty(t, gjson.GetBytes(body, "output_config.effort").String(),
+					"the non-adaptive roster target prunes the client's output_config entirely")
 			},
 		},
 	}

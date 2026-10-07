@@ -9,15 +9,12 @@ import (
 	"time"
 
 	"weave-os/router/internal/billing"
-	"weave-os/router/internal/proxy/usage"
-	"weave-os/router/internal/router"
-	"weave-os/router/internal/router/turntype"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-const accessOtherModel = "claude-opus-5"
+const accessOtherModel = "zai-org/glm-5.3"
 
 func modelAccessError() error {
 	return upstreamErr(http.StatusNotFound, `{"type":"error","error":{"type":"not_found_error","message":"model: `+parityAnthropicModel+`"}}`)
@@ -73,29 +70,6 @@ func TestSubscriptionModelAccessPreservesFailedAttemptAttribution(t *testing.T) 
 	assert.True(t, servedOnSubscription(resolveAndInjectCredentials(in.resolved(in.subCtx()), in.provider, in.model, nil)))
 }
 
-func TestSubscriptionModelAccessDoesNotSpendWithoutPermission(t *testing.T) {
-	in := parityAnthropicIngress()
-	for _, subscriptionOnly := range []bool{false, true} {
-		t.Run(boolLit(subscriptionOnly), func(t *testing.T) {
-			upstream := &parityUpstream{subErr: modelAccessError(), okBody: in.upstreamOK(false)}
-			svc := in.parityService(upstream)
-			ctx := in.subCtx()
-			if subscriptionOnly {
-				ctx = billing.WithSubscriptionOnly(ctx, billing.SubscriptionOnlyCreditsDepleted)
-			} else {
-				svc.WithDeploymentKeyedProviders(map[string]struct{}{})
-			}
-			rec, req, body := in.request(t, false)
-			require.Error(t, in.call(svc, ctx, body, rec, req))
-			assert.Equal(t, http.StatusNotFound, rec.Code)
-			assert.Zero(t, upstream.paidDispatches)
-			excluded := svc.excludeUnavailableSubscriptionModels(ctx, nil, map[string]struct{}{in.provider: {}}, nil)
-			assert.Contains(t, excluded, in.model)
-			assert.NotContains(t, excluded, accessOtherModel)
-		})
-	}
-}
-
 func TestSubscriptionModelAccessScopeAndExpiry(t *testing.T) {
 	in := parityAnthropicIngress()
 	svc := in.deploymentKeyedService()
@@ -132,16 +106,4 @@ func TestSubscriptionModelAccessOnlyLearnsModelRejection(t *testing.T) {
 	svc := in.deploymentKeyedService()
 	svc.recordSubscriptionModelRejection(in.resolved(in.byokCtx(context.Background())), in.provider, in.model, modelAccessError())
 	assert.True(t, servedOnSubscription(svc.resolveCredentials(in.subCtx(), in.provider, in.model, nil)))
-}
-
-func TestSubscriptionModelAccessRemovesDiscountAndBypass(t *testing.T) {
-	in := parityAnthropicIngress()
-	svc := in.deploymentKeyedService().WithSubscriptionAwareRouting(usage.NewObserver([]byte("salt"), time.Hour, time.Now), 0.01, 1)
-	svc.usageObserver.Record(svc.usageObserver.Key([]byte(parityAnthropicToken)), usage.Snapshot{Primary: usage.Window{WindowMinutes: 300}})
-	svc.recordSubscriptionModelRejection(in.resolved(in.subCtx()), in.provider, in.model, modelAccessError())
-	factors := svc.subsidyFactors(in.subCtx(), nil)
-	assert.NotContains(t, factors, in.model)
-	assert.Equal(t, 0.01, factors[accessOtherModel])
-	_, ok := svc.classifierPassthroughEngaged(in.subCtx(), nil, router.Request{RequestedModel: in.model}, turntype.Classifier)
-	assert.False(t, ok)
 }

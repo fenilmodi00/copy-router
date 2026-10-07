@@ -14,8 +14,8 @@
 //
 // Usage:
 //
-//	go run -tags no_onnx ./cmd/routing-report --target v0.68
-//	go run -tags no_onnx ./cmd/routing-report --target v0.68 --baseline v0.67
+//	go run -tags no_onnx ./cmd/routing-report --target v0.80
+//	go run -tags no_onnx ./cmd/routing-report --target v0.80 --baseline v0.79
 package main
 
 import (
@@ -114,7 +114,7 @@ func main() {
 	}
 	var (
 		artifactsDir = flag.String("artifacts-dir", "internal/router/cluster/artifacts", "path to the artifacts tree")
-		target       = flag.String("target", "", "target artifact version (e.g. v0.68); default = current `latest`")
+		target       = flag.String("target", "", "target artifact version (e.g. v0.80); default = current `latest`")
 		baseline     = flag.String("baseline", "", "baseline artifact version to diff against; default = current `latest`")
 		corpusPath   = flag.String("corpus", "internal/router/cluster/testdata/register_probes.jsonl", "labeled probe corpus")
 		embPath      = flag.String("emb", "internal/router/cluster/testdata/register_probes.emb", "precomputed probe embeddings")

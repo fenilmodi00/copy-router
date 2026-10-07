@@ -21,7 +21,6 @@ import (
 	"weave-os/router/internal/postgres/dbbudget"
 	"weave-os/router/internal/postgres/poolconfig"
 	"weave-os/router/internal/providers"
-	"weave-os/router/internal/router/catalog"
 	"weave-os/router/internal/router/sessionpin"
 )
 
@@ -107,7 +106,7 @@ func check(dsn string) (checkErr error) {
 		Role:           sessionpin.DefaultRole,
 		InstallationID: uuid.MustParse(installation.ID),
 		Provider:       string(providers.ProviderAnthropic),
-		Model:          string(catalog.ModelIDClaudeSonnet46),
+		Model:          "claude-sonnet-4-6",
 		PinnedUntil:    time.Now().Add(time.Hour),
 	}
 	type pinWriteResult struct {

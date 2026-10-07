@@ -161,6 +161,11 @@ var google3Base = NewSpecWithReasoning(ReasoningCapabilities{Levels: []string{"l
 
 var openAICompatBase = NewSpec()
 
+// AIand roster: always-reasoning open-weights models behind the OpenAI-compat
+// surface. Effort menu is the conservative low/medium/high — no roster model
+// documents an xhigh/max tier on AIand, so the router must not pin one.
+var aiandReasoning = NewSpecWithReasoning(ReasoningCapabilities{Levels: []string{"low", "medium", "high"}, AlwaysOn: true}, CapReasoning)
+
 var registry = map[string]ModelSpec{
 	// claude-fable-5 has adaptive thinking always on (disabled is rejected);
 	// 1M context is native, so CapExtendedContext's beta header is a no-op.
@@ -270,6 +275,18 @@ var registry = map[string]ModelSpec{
 	"qwen/qwen3-coder-next":            openAICompatBase,
 	"qwen/qwen3-next-80b-a3b-instruct": openAICompatBase,
 	"qwen/qwen3.8-max":                 openAICompatBase,
+
+	// AIand roster: always-reasoning open-weights models on the OpenAI-compat
+	// surface. Effort menu is the conservative low/medium/high — AIand does not
+	// document an xhigh/max tier for them, so the router must not pin one.
+	"zai-org/glm-5.3":                 aiandReasoning,
+	"zai-org/glm-5.3-flash":           aiandReasoning,
+	"moonshotai/kimi-k3":              aiandReasoning,
+	"deepseek-ai/deepseek-v4-flash":   aiandReasoning,
+	"deepseek-ai/deepseek-v4.1-flash": aiandReasoning,
+	"deepseek-ai/deepseek-v4-pro":     aiandReasoning,
+	"qwen/qwen3.8-27b":                aiandReasoning,
+	"motif-technologies/motif-3":      aiandReasoning,
 }
 
 // ValidateCatalogReasoningCapabilities validates every declared model at

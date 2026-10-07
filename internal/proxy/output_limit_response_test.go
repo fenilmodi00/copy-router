@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	capAnthropicModel = "claude-sonnet-5"
+	capAnthropicModel = "deepseek-ai/deepseek-v4.1-flash"
 	capChatModel      = "deepseek/deepseek-v4-flash"
-	capResponsesModel = "gpt-5.6-luna"
+	capResponsesModel = "zai-org/glm-5.3-flash"
 )
 
 func TestProxyOutputLimitAcrossResponsePaths(t *testing.T) {
@@ -128,7 +128,7 @@ func capWireResponse(wire string, stream, capped bool) string {
 func TestTurnLoop_HighOutputKeepsActiveAndExpiredPins(t *testing.T) {
 	for _, expired := range []bool{false, true} {
 		t.Run(fmt.Sprintf("expired=%t", expired), func(t *testing.T) {
-			const freshModel = "claude-haiku-4-5"
+			const freshModel = "zai-org/glm-5.3-flash"
 			store := newFakePinStore()
 			store.hasPin = true
 			until := time.Now().Add(time.Hour)

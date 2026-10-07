@@ -19,12 +19,12 @@ import (
 func TestEscalationCommitFailurePreservesEligibilityAndTurnEvidence(t *testing.T) {
 	store := newEscalationTestStore()
 	observer := &escalationTestObserver{}
-	role := roleForTier(catalog.TierFor("claude-opus-4-8"))
+	role := roleForTier(catalog.TierFor("zai-org/glm-5.3"))
 	pins := &rolePinStore{byRole: map[string]sessionpin.Pin{
 		role: {Provider: providers.ProviderAIAND, Model: "deepseek-ai/deepseek-v4-pro", Strategy: router.StrategyHMMEmbedding, PinnedUntil: time.Now().Add(time.Hour)},
 	}}
 	clients := map[string]providers.Client{providers.ProviderAnthropic: &stripFailureProvider{}, providers.ProviderAIAND: &stripFailureProvider{}}
-	svc := NewService(nil, clients, nil, false, nil, pins, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+	svc := NewService(nil, clients, nil, false, nil, pins, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithEscalation(store, observer).
 		WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyHMMEmbedding, Router: escalationDispatchRouter{}, Capabilities: policy.Capabilities{SchemaVersion: policy.SchemaVersionV1}})
 	svc.scopedSearchRequirement = true
@@ -54,7 +54,7 @@ func TestEscalationCommitFailurePreservesEligibilityAndTurnEvidence(t *testing.T
 		}
 		require.Zero(t, res.EscalationOrdinal)
 		require.Equal(t, providers.ProviderAnthropic, res.Decision.Provider, "native search eligibility must still exclude the AIAND pin during fallback")
-		require.Equal(t, "claude-haiku-4-5", res.Decision.Model)
+		require.Equal(t, "zai-org/glm-5.3-flash", res.Decision.Model)
 		require.False(t, res.StickyHit)
 		require.True(t, res.PrefixTrimmed, "fallback must retain the current turn's compaction evidence")
 		require.True(t, res.PrefixBroken)

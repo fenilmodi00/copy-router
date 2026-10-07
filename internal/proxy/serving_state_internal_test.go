@@ -30,7 +30,7 @@ func TestEscalationActivationPreservesLegacyIdentityAndIsolatesManagedState(t *t
 }
 
 func TestManagedCredentialRotationPreservesStateWithoutCrossInstallationLeakage(t *testing.T) {
-	env, err := translate.ParseOpenAI([]byte(`{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"task"}]}`))
+	env, err := translate.ParseOpenAI([]byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"task"}]}`))
 	require.NoError(t, err)
 	base := context.WithValue(context.Background(), ClientIdentityContextKey{}, ClientIdentity{SessionID: "conversation"})
 	assertion := policyregistry.ServingAssertion{
@@ -58,7 +58,7 @@ func TestManagedCredentialRotationPreservesStateWithoutCrossInstallationLeakage(
 }
 
 func TestManagedRebindIsolatesLearnedStateAndPreservesForceIntent(t *testing.T) {
-	env, err := translate.ParseOpenAI([]byte(`{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"task"}]}`))
+	env, err := translate.ParseOpenAI([]byte(`{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"task"}]}`))
 	require.NoError(t, err)
 	base := context.WithValue(context.Background(), ClientIdentityContextKey{}, ClientIdentity{SessionID: "conversation"})
 	old := requestcontext.WithServingIdentity(base, requestcontext.ServingIdentity{StateNamespace: "release-a-generation-1"})

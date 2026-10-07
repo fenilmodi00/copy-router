@@ -18,7 +18,7 @@ import (
 // toolUseHistoryBody is a Claude Code style history: two resolved Bash calls
 // (one errored), one resolved Read, and the user's follow-up. The next
 // assistant turn is what the fake upstream streams back.
-const toolUseHistoryBody = `{"model":"claude-opus-4-7","stream":true,"messages":[` +
+const toolUseHistoryBody = `{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"messages":[` +
 	`{"role":"user","content":"run the tests"},` +
 	`{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"go test ./..."}}]},` +
 	`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","is_error":true,"content":"FAIL"}]},` +
@@ -70,7 +70,7 @@ func TestProxyMessages_NativeToolUseStopPersistsLastToolDetail(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-opus-4-7"}
+			decision := router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4-pro"}
 			provider := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
 				w.Header().Set("Content-Type", "text/event-stream")
 				w.WriteHeader(http.StatusOK)
@@ -83,7 +83,7 @@ func TestProxyMessages_NativeToolUseStopPersistsLastToolDetail(t *testing.T) {
 				&fakeRouter{decision: decision},
 				map[string]providers.Client{providers.ProviderAnthropic: provider},
 				nil, false, nil, nil, false,
-				providers.ProviderAnthropic, "claude-opus-4-7", telem,
+				providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-pro", telem,
 			)
 
 			ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, installID)
@@ -123,10 +123,10 @@ func TestProxyMessages_TranslatedToolUseStopPersistsLastToolDetail(t *testing.T)
 	}}
 	telem := newCaptureTelemetry()
 	svc := proxy.NewService(
-		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-luna"}},
+		&fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "zai-org/glm-5.3-flash"}},
 		map[string]providers.Client{providers.ProviderOpenAI: provider},
 		nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-opus-4-7", telem,
+		providers.ProviderAnthropic, "deepseek-ai/deepseek-v4-pro", telem,
 	)
 
 	ctx := context.WithValue(context.Background(), proxy.InstallationIDContextKey{}, installID)

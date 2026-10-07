@@ -9,7 +9,6 @@ import (
 
 	"weave-os/router/internal/requestcontext"
 	"weave-os/router/internal/router"
-	"weave-os/router/internal/router/catalog"
 	"weave-os/router/internal/translate/toolcheck"
 
 	"github.com/tidwall/gjson"
@@ -1419,7 +1418,7 @@ func resolvePassthroughOverrides(body []byte) (EmitOverrides, bool) {
 }
 
 var modelMaxOutputTokens = map[string]int{
-	catalog.ModelIDClaudeHaiku45.String(): 64000,
+	"claude-haiku-4-5": 64000,
 	"gpt-4.1":                             32768, "gpt-4.1-mini": 32768, "gpt-4.1-nano": 32768,
 	"gpt-4o": 16384, "gpt-4o-mini": 16384,
 	"gpt-4-turbo": 4096, "gpt-4": 8192,

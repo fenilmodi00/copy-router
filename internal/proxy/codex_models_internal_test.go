@@ -9,11 +9,11 @@ import (
 )
 
 func TestAddCodexAutomaticModel_PreservesNativeCatalog(t *testing.T) {
-	const upstream = `{"models":[{"slug":"gpt-6-sol","display_name":"GPT-6-Sol","visibility":"list","priority":2,"supported_reasoning_levels":[{"effort":"max"}],"context_window":272000},{"slug":"gpt-6-astra","display_name":"GPT-6-Astra","visibility":"list","priority":1}],"etag":"catalog-v2"}`
+	const upstream = `{"models":[{"slug":"deepseek-ai/deepseek-v4-pro","display_name":"GPT-6-Sol","visibility":"list","priority":2,"supported_reasoning_levels":[{"effort":"max"}],"context_window":272000},{"slug":"deepseek-ai/deepseek-v4-pro","display_name":"GPT-6-Astra","visibility":"list","priority":1}],"etag":"catalog-v2"}`
 	merged, err := addCodexAutomaticModel([]byte(upstream))
 	require.NoError(t, err)
 	assert.Equal(t, "catalog-v2", gjson.GetBytes(merged, "etag").String())
-	assert.Equal(t, "gpt-6-astra", gjson.GetBytes(merged, "models.1.slug").String())
+	assert.Equal(t, "deepseek-ai/deepseek-v4-pro", gjson.GetBytes(merged, "models.1.slug").String())
 	assert.Equal(t, CodexAutomaticModel, gjson.GetBytes(merged, "models.2.slug").String())
 	assert.Equal(t, "Weave Router", gjson.GetBytes(merged, "models.2.display_name").String())
 	assert.Equal(t, "Automatically chooses the best model", gjson.GetBytes(merged, "models.2.description").String())
@@ -23,7 +23,7 @@ func TestAddCodexAutomaticModel_PreservesNativeCatalog(t *testing.T) {
 }
 
 func TestAddCodexAutomaticModel_UsesAvailableMetadataWithoutSol(t *testing.T) {
-	merged, err := addCodexAutomaticModel([]byte(`{"models":[{"slug":"gpt-6-astra","visibility":"list","context_window":272000}]}`))
+	merged, err := addCodexAutomaticModel([]byte(`{"models":[{"slug":"deepseek-ai/deepseek-v4-pro","visibility":"list","context_window":272000}]}`))
 	require.NoError(t, err)
 	assert.Equal(t, CodexAutomaticModel, gjson.GetBytes(merged, "models.1.slug").String())
 	assert.Equal(t, int64(272000), gjson.GetBytes(merged, "models.1.context_window").Int())

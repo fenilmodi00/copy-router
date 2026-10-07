@@ -101,7 +101,7 @@ func TestService_PreviewAnthropicRouteBuildsServingCandidateContextWithoutDispat
 	svc := proxy.NewService(&fakeRouter{}, map[string]providers.Client{
 		providers.ProviderAnthropic: anthropicProvider,
 		providers.ProviderOpenAI:    openAIProvider,
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyHMM, Router: previewer}).
 		WithDeploymentKeyedProviders(map[string]struct{}{
 			providers.ProviderAnthropic: {},
@@ -111,9 +111,9 @@ func TestService_PreviewAnthropicRouteBuildsServingCandidateContextWithoutDispat
 	ctx := router.WithStrategy(context.Background(), router.StrategyHMM)
 	ctx = context.WithValue(ctx, proxy.ExternalIDContextKey{}, "org-1")
 	ctx = context.WithValue(ctx, proxy.InstallationIDContextKey{}, "1791da5d-d0db-494c-8574-859a4cb20d97")
-	ctx = context.WithValue(ctx, proxy.InstallationExcludedModelsContextKey{}, []string{"gpt-5.5-mini"})
-	ctx = context.WithValue(ctx, proxy.InstallationPreferredModelsContextKey{}, []string{"claude-opus-4-8"})
-	body := []byte(`{"model":"claude-opus-4-8[1m]","messages":[{"role":"user","content":"inspect this repository"}],"max_tokens":4096,"tools":[{"name":"Read","description":"read a file","input_schema":{"type":"object"}}]}`)
+	ctx = context.WithValue(ctx, proxy.InstallationExcludedModelsContextKey{}, []string{"deepseek-ai/deepseek-v4-flash"})
+	ctx = context.WithValue(ctx, proxy.InstallationPreferredModelsContextKey{}, []string{"zai-org/glm-5.3"})
+	body := []byte(`{"model":"zai-org/glm-5.3","messages":[{"role":"user","content":"inspect this repository"}],"max_tokens":4096,"tools":[{"name":"Read","description":"read a file","input_schema":{"type":"object"}}]}`)
 
 	result, err := svc.PreviewAnthropicRoute(ctx, body, http.Header{})
 
@@ -122,65 +122,40 @@ func TestService_PreviewAnthropicRouteBuildsServingCandidateContextWithoutDispat
 	assert.Equal(t, 1, previewer.previewCalls)
 	assert.Zero(t, previewer.routeCalls)
 	require.NotNil(t, previewer.previewReq)
-	assert.Equal(t, "claude-opus-4-8", previewer.previewReq.RequestedModel)
+	assert.Equal(t, "zai-org/glm-5.3", previewer.previewReq.RequestedModel)
 	assert.Equal(t, "org-1", previewer.previewReq.OrganizationID)
 	assert.Equal(t, "1791da5d-d0db-494c-8574-859a4cb20d97", previewer.previewReq.InstallationID)
 	assert.True(t, previewer.previewReq.HasTools)
 	assert.Equal(t, []string{"Read"}, previewer.previewReq.AvailableTools)
 	assert.Contains(t, previewer.previewReq.EnabledProviders, providers.ProviderAnthropic)
 	assert.Contains(t, previewer.previewReq.EnabledProviders, providers.ProviderOpenAI)
-	assert.Contains(t, previewer.previewReq.ExcludedModels, "gpt-5.5-mini")
-	assert.NotContains(t, previewer.previewReq.ExcludedModels, "gpt-5.4-nano",
+	assert.Contains(t, previewer.previewReq.ExcludedModels, "deepseek-ai/deepseek-v4-flash")
+	assert.NotContains(t, previewer.previewReq.ExcludedModels, "motif-technologies/motif-3",
 		"a normal non-Codex preview must retain infrastructure OpenAI candidates")
-	assert.Equal(t, []string{"claude-opus-4-8"}, previewer.previewReq.PreferredModels)
+	assert.Equal(t, []string{"zai-org/glm-5.3"}, previewer.previewReq.PreferredModels)
 	assert.False(t, previewer.previewReq.TrainingAllowed)
 	assert.Empty(t, anthropicProvider.proxyBodies)
 	assert.Empty(t, openAIProvider.proxyBodies)
-}
-
-func TestService_PreviewAnthropicRouteExcludesInfrastructureModelsForOAuthOnlyCodex(t *testing.T) {
-	previewer := &fakePreviewRouter{previewResult: policy.PreviewResult{
-		SchemaVersion: policy.SchemaVersionV1,
-	}}
-	svc := proxy.NewService(&fakeRouter{}, map[string]providers.Client{
-		providers.ProviderOpenAI: &fakeProvider{},
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
-		WithByokOnly(true).
-		WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyHMM, Router: previewer})
-
-	ctx := router.WithStrategy(context.Background(), router.StrategyHMM)
-	ctx = context.WithValue(ctx, proxy.OpenAISubscriptionContextKey{}, "eyJhbGciOiJSUzI1NiJ9.codex.sig")
-	ctx = context.WithValue(ctx, proxy.OpenAIAccountIDContextKey{}, "acct-123")
-	body := []byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"preview this turn"}],"max_tokens":1024}`)
-
-	_, err := svc.PreviewAnthropicRoute(ctx, body, http.Header{})
-
-	require.NoError(t, err)
-	require.NotNil(t, previewer.previewReq)
-	assert.Contains(t, previewer.previewReq.EnabledProviders, providers.ProviderOpenAI)
-	assert.Contains(t, previewer.previewReq.ExcludedModels, "gpt-5.4-nano",
-		"route and HMM previews must not advertise models that Codex OAuth cannot serve")
-	assert.NotContains(t, previewer.previewReq.ExcludedModels, "gpt-5.6-sol")
 }
 
 func TestService_AgentShadowEvaluationForcesEphemerallyWithoutServingRouter(t *testing.T) {
 	telemetry := newCaptureTelemetry()
 	pins := newFakePinStore()
 	pins.hasPin = true
-	pins.pin = sessionpin.Pin{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}
+	pins.pin = sessionpin.Pin{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"}
 	provider := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"id":"msg_eval","type":"message","role":"assistant","model":"claude-opus-4-8","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":3}}`)
+		_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":3}}`)
 	}}
 	servingRouter := &fakeRouter{err: errors.New("serving router must not run")}
 	svc := proxy.NewService(servingRouter, map[string]providers.Client{
-		providers.ProviderAnthropic: provider,
-	}, nil, false, nil, pins, false, providers.ProviderAnthropic, "claude-haiku-4-5", telemetry).
-		WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}}).
-		WithAvailableModels(map[string]struct{}{"claude-opus-4-8": {}})
+		providers.ProviderAIAND: provider,
+	}, nil, false, nil, pins, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", telemetry).
+		WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAIAND: {}}).
+		WithAvailableModels(map[string]struct{}{"zai-org/glm-5.3": {}})
 
 	ctx := context.WithValue(context.Background(), proxy.AgentShadowEvalContextKey{}, proxy.AgentShadowEvaluation{
-		Model: "CLAUDE-OPUS-4-8", RolloutID: "pilot-1", StateID: "state-1",
+		Model: "zai-org/glm-5.3", RolloutID: "pilot-1", StateID: "state-1",
 	})
 	ctx = context.WithValue(ctx, proxy.InstallationIDContextKey{}, "1791da5d-d0db-494c-8574-859a4cb20d97")
 	messages := make([]map[string]any, 0, 17)
@@ -201,7 +176,7 @@ func TestService_AgentShadowEvaluationForcesEphemerallyWithoutServingRouter(t *t
 	}
 	messages = append(messages, map[string]any{"role": "user", "content": "make the next edit"})
 	body, err := json.Marshal(map[string]any{
-		"model": "claude-haiku-4-5", "messages": messages, "max_tokens": 512,
+		"model": "zai-org/glm-5.3-flash", "messages": messages, "max_tokens": 512,
 		"thinking": map[string]any{"type": "adaptive"},
 	})
 	require.NoError(t, err)
@@ -211,14 +186,14 @@ func TestService_AgentShadowEvaluationForcesEphemerallyWithoutServingRouter(t *t
 	require.NoError(t, svc.ProxyMessages(ctx, body, rec, req))
 	assert.Zero(t, servingRouter.routeCalls)
 	require.Len(t, provider.proxyBodies, 1)
-	assert.Contains(t, string(provider.proxyBodies[0]), `"model":"claude-opus-4-8"`)
+	assert.Contains(t, string(provider.proxyBodies[0]), `"model":"zai-org/glm-5.3"`)
 	assert.Contains(t, string(provider.proxyBodies[0]), "old-result-0")
 	assert.NotContains(t, string(provider.proxyBodies[0]), "stale-signature")
-	assert.Equal(t, "claude-opus-4-8", rec.Header().Get(proxy.HeaderRouterModel))
-	// claude-opus-4-8 is CapExtendedContext, so the served context window header
-	// reports the effective 1M window clients should budget against.
-	assert.Equal(t, "1000000", rec.Header().Get(proxy.HeaderRouterContextWindow))
-	assert.Equal(t, providers.ProviderAnthropic, rec.Header().Get(proxy.HeaderRouterProvider))
+	assert.Equal(t, "zai-org/glm-5.3", rec.Header().Get(proxy.HeaderRouterModel))
+	// zai-org/glm-5.3 is a 1M-window roster row, so the served context window
+	// header reports the effective catalog window clients should budget against.
+	assert.Equal(t, "1048576", rec.Header().Get(proxy.HeaderRouterContextWindow))
+	assert.Equal(t, providers.ProviderAIAND, rec.Header().Get(proxy.HeaderRouterProvider))
 	assert.Equal(t, proxy.ReasonAgentShadowEval, rec.Header().Get(proxy.HeaderRouterDecision))
 	assert.Never(t, func() bool {
 		telemetry.mu.Lock()
@@ -235,61 +210,57 @@ func TestService_AgentShadowEvaluationForcesEphemerallyWithoutServingRouter(t *t
 }
 
 func TestService_AgentShadowEvaluationNeverSubstitutesRequestedBaseline(t *testing.T) {
-	openAIProvider := &fakeProvider{proxyErr: &providers.UpstreamStatusError{Status: http.StatusServiceUnavailable}}
-	anthropicProvider := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
-		w.WriteHeader(http.StatusOK)
-	}}
+	provider := &fakeProvider{proxyErr: &providers.UpstreamStatusError{Status: http.StatusServiceUnavailable}}
 	svc := proxy.NewService(&fakeRouter{}, map[string]providers.Client{
-		providers.ProviderAnthropic: anthropicProvider,
-		providers.ProviderOpenAI:    openAIProvider,
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAIAND: provider,
+	}, nil, false, nil, nil, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil).
 		WithDeploymentKeyedProviders(map[string]struct{}{
-			providers.ProviderAnthropic: {},
-			providers.ProviderOpenAI:    {},
+			providers.ProviderAIAND: {},
 		}).
 		WithAvailableModels(map[string]struct{}{
-			"claude-opus-4-8": {},
-			"gpt-5.5":         {},
+			"zai-org/glm-5.3":               {},
+			"deepseek-ai/deepseek-v4-flash": {},
 		})
 
 	ctx := context.WithValue(context.Background(), proxy.AgentShadowEvalContextKey{}, proxy.AgentShadowEvaluation{
-		Model: "gpt-5.5", RolloutID: "pilot-1", StateID: "state-1",
+		Model: "deepseek-ai/deepseek-v4-flash", RolloutID: "pilot-1", StateID: "state-1",
 	})
-	body := []byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"inspect this repository"}],"max_tokens":512}`)
+	body := []byte(`{"model":"zai-org/glm-5.3","messages":[{"role":"user","content":"inspect this repository"}],"max_tokens":512}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 
 	_ = svc.ProxyMessages(ctx, body, rec, req)
 
-	assert.NotEmpty(t, openAIProvider.proxyBodies, "the planned candidate must be attempted")
-	assert.Empty(t, anthropicProvider.proxyBodies, "eval forcing must never dispatch the request baseline")
-	assert.Equal(t, "gpt-5.5", rec.Header().Get(proxy.HeaderRouterModel))
-	// gpt-5.5 is not CapExtendedContext, so the header carries its catalog window.
-	assert.Equal(t, "1050000", rec.Header().Get(proxy.HeaderRouterContextWindow))
+	require.Len(t, provider.proxyBodies, 1, "eval forcing must attempt the planned candidate exactly once")
+	assert.Contains(t, string(provider.proxyBodies[0]), `"model":"deepseek-ai/deepseek-v4-flash"`,
+		"eval forcing must never dispatch the request baseline")
+	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", rec.Header().Get(proxy.HeaderRouterModel))
+	// deepseek-v4-flash is a 1M-window roster row, so the header carries its catalog window.
+	assert.Equal(t, "1048576", rec.Header().Get(proxy.HeaderRouterContextWindow))
 }
 
 func TestService_AgentShadowEvaluationNeverRetriesSubscriptionOnDeploymentKey(t *testing.T) {
 	provider := &fakeProvider{proxyErr: &providers.UpstreamStatusError{Status: http.StatusTooManyRequests}}
 	svc := proxy.NewService(&fakeRouter{}, map[string]providers.Client{
-		providers.ProviderAnthropic: provider,
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-opus-4-8", nil).
-		WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAnthropic: {}}).
-		WithAvailableModels(map[string]struct{}{"claude-opus-4-8": {}})
+		providers.ProviderAIAND: provider,
+	}, nil, false, nil, nil, false, providers.ProviderAIAND, "zai-org/glm-5.3", nil).
+		WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAIAND: {}}).
+		WithAvailableModels(map[string]struct{}{"zai-org/glm-5.3": {}})
 
 	ctx := context.WithValue(context.Background(), proxy.AgentShadowEvalContextKey{}, proxy.AgentShadowEvaluation{
-		Model: "claude-opus-4-8", RolloutID: "pilot-1", StateID: "state-1",
+		Model: "zai-org/glm-5.3", RolloutID: "pilot-1", StateID: "state-1",
 	})
 	ctx = context.WithValue(ctx, proxy.InstallationIDContextKey{}, "1791da5d-d0db-494c-8574-859a4cb20d97")
 	ctx = context.WithValue(ctx, proxy.AnthropicSubscriptionContextKey{}, "sk-ant-oat01-subscription-token")
-	body := []byte(`{"model":"claude-opus-4-8","messages":[{"role":"user","content":"inspect this repository"}],"max_tokens":512}`)
+	body := []byte(`{"model":"zai-org/glm-5.3","messages":[{"role":"user","content":"inspect this repository"}],"max_tokens":512}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 
 	_ = svc.ProxyMessages(ctx, body, rec, req)
 
-	require.Len(t, provider.proxyBodies, 1, "eval traffic must not retry on the paid deployment key")
-	require.NotNil(t, provider.proxyCreds[0])
-	assert.True(t, provider.proxyCreds[0].OAuth, "the single attempt must use the supplied subscription")
+	require.Len(t, provider.proxyBodies, 1, "eval traffic must not retry on the deployment key")
+	assert.Nil(t, provider.proxyCreds[0],
+		"an Anthropic subscription cannot serve an AIand row; the single attempt runs on the AIand deployment key")
 }
 
 func TestService_ProxyOpenAIResponses_CustomToolUsesNativeOpenAIFamily(t *testing.T) {
@@ -297,13 +268,13 @@ func TestService_ProxyOpenAIResponses_CustomToolUsesNativeOpenAIFamily(t *testin
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"id":"resp_1","object":"response","output":[{"type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}]}`)
 	}}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.5", Reason: "test"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "deepseek-ai/deepseek-v4-flash", Reason: "test"}}
 	svc := proxy.NewService(fr, map[string]providers.Client{
 		providers.ProviderAnthropic: &fakeProvider{},
 		providers.ProviderOpenAI:    provider,
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
-	body := []byte(`{"model":"gpt-5.5","input":"apply a patch","reasoning":{"effort":"high"},"tools":[{"type":"custom","name":"apply_patch"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-flash","input":"apply a patch","reasoning":{"effort":"high"},"tools":[{"type":"custom","name":"apply_patch"}]}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 	require.NoError(t, svc.ProxyOpenAIResponses(context.Background(), body, rec, req))
@@ -315,7 +286,7 @@ func TestService_ProxyOpenAIResponses_CustomToolUsesNativeOpenAIFamily(t *testin
 	assert.Equal(t, originalEnvelope.ToolConfigurationSHA256(), fr.capturedReq.ToolConfigurationSHA256)
 	assert.Equal(t, map[string]struct{}{providers.ProviderOpenAI: {}}, fr.capturedReq.EnabledProviders)
 	require.Len(t, provider.proxyBodies, 1)
-	assert.JSONEq(t, `{"model":"gpt-5.5","input":"apply a patch","reasoning":{"effort":"high"},"tools":[{"type":"custom","name":"apply_patch"}]}`, string(provider.proxyBodies[0]))
+	assert.JSONEq(t, `{"model":"deepseek-ai/deepseek-v4-flash","input":"apply a patch","reasoning":{"effort":"high"},"tools":[{"type":"custom","name":"apply_patch"}]}`, string(provider.proxyBodies[0]))
 	assert.Equal(t, providers.EndpointResponses, provider.proxyEndpoints[0])
 	assert.JSONEq(t, `{"id":"resp_1","object":"response","output":[{"type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}]}`, rec.Body.String())
 }
@@ -325,9 +296,9 @@ func TestService_ProxyOpenAIResponses_CodexFeedbackSkillIsSynthetic(t *testing.T
 	fr := &fakeRouter{}
 	svc := proxy.NewService(fr, map[string]providers.Client{
 		providers.ProviderOpenAI: provider,
-	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-terra", nil)
+	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "qwen/qwen3.8-27b", nil)
 	ctx := context.WithValue(context.Background(), proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppCodex})
-	body := []byte(`{"model":"gpt-5.6-terra","input":[{"type":"message","role":"user","content":"$rf +"},{"type":"message","role":"user","content":"<skill>\n<name>rf</name>\nrun the feedback skill\n</skill>"},{"type":"custom_tool_call","call_id":"call_skill","name":"exec","input":"..."},{"type":"custom_tool_call_output","call_id":"call_skill","output":[{"type":"input_text","text":"Script completed\nOutput:\n /router-feedback +\n"}]}]}`)
+	body := []byte(`{"model":"qwen/qwen3.8-27b","input":[{"type":"message","role":"user","content":"$rf +"},{"type":"message","role":"user","content":"<skill>\n<name>rf</name>\nrun the feedback skill\n</skill>"},{"type":"custom_tool_call","call_id":"call_skill","name":"exec","input":"..."},{"type":"custom_tool_call_output","call_id":"call_skill","output":[{"type":"input_text","text":"Script completed\nOutput:\n /router-feedback +\n"}]}]}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 
@@ -348,18 +319,18 @@ func TestService_ProxyOpenAIResponses_StaysNativeForDirectOpenAI(t *testing.T) {
 	}{
 		{
 			name:         "reasoning tool turn",
-			model:        "gpt-5.6-luna",
+			model:        "zai-org/glm-5.3-flash",
 			tools:        `,"tools":[{"type":"function","name":"read_file","parameters":{"type":"object"}}]`,
 			wantEndpoint: providers.EndpointResponses,
 		},
 		{
 			name:         "toolless turn stays native too",
-			model:        "gpt-5.6-luna",
+			model:        "zai-org/glm-5.3-flash",
 			wantEndpoint: providers.EndpointResponses,
 		},
 		{
 			name:         "non-reasoning tool turn stays native too",
-			model:        "gpt-4.1",
+			model:        "qwen/qwen3.8-27b",
 			tools:        `,"tools":[{"type":"function","name":"read_file","parameters":{"type":"object"}}]`,
 			wantEndpoint: providers.EndpointResponses,
 		},
@@ -373,7 +344,7 @@ func TestService_ProxyOpenAIResponses_StaysNativeForDirectOpenAI(t *testing.T) {
 			fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: tc.model, Reason: "test"}}
 			svc := proxy.NewService(fr, map[string]providers.Client{
 				providers.ProviderOpenAI: provider,
-			}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
+			}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil)
 
 			ctx := context.WithValue(context.Background(), proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppOpencode})
 			body := []byte(`{"model":"auto","input":"remove the router","reasoning":{"effort":"medium"}` + tc.tools + `}`)
@@ -412,10 +383,10 @@ func TestService_ProxyOpenAIResponses_BroadRolloutOffKeepsNarrowPromotion(t *tes
 				w.WriteHeader(http.StatusOK)
 				_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
 			}}
-			fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-luna", Reason: "test"}}
+			fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "zai-org/glm-5.3-flash", Reason: "test"}}
 			svc := proxy.NewService(fr, map[string]providers.Client{
 				providers.ProviderOpenAI: provider,
-			}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
+			}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil)
 
 			ctx := context.WithValue(context.Background(), proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppOpencode})
 			ctx = flags.WithOverrides(ctx, flags.Overrides{
@@ -450,12 +421,12 @@ func TestService_ProxyOpenAIResponses_ToolTurnFallsBackWhenEndpointLacksResponse
 	}
 	fr := &fakeRouter{decision: router.Decision{
 		Provider: providers.ProviderOpenAI,
-		Model:    "gpt-5.6-luna",
+		Model:    "zai-org/glm-5.3-flash",
 		Reason:   "test",
 	}}
 	svc := proxy.NewService(fr, map[string]providers.Client{
 		providers.ProviderOpenAI: provider,
-	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
+	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil)
 
 	ctx := context.WithValue(
 		context.Background(),
@@ -477,7 +448,9 @@ func TestService_ProxyOpenAIResponses_ToolTurnFallsBackWhenEndpointLacksResponse
 		assert.Equal(t, want, provider.proxyEndpoints)
 		last := provider.proxyBodies[len(provider.proxyBodies)-1]
 		assert.False(t, gjson.GetBytes(last, "input").Exists())
-		assert.Equal(t, "none", gjson.GetBytes(last, "reasoning_effort").Str)
+		// The gpt-5.6 effort-none override went with its catalog rows; a roster
+		// model's chat fallback carries no reasoning_effort at all.
+		assert.False(t, gjson.GetBytes(last, "reasoning_effort").Exists())
 		assert.Equal(t, http.StatusOK, rec.Code)
 	}
 }
@@ -517,17 +490,17 @@ func TestService_ProxyOpenAIResponses_NativeBadgeForTerminalClientsHonorsSuppres
 			}}
 			fr := &fakeRouter{decision: router.Decision{
 				Provider: providers.ProviderOpenAI,
-				Model:    "gpt-5.6-terra",
+				Model:    "qwen/qwen3.8-27b",
 				Reason:   "test",
 			}}
 			svc := proxy.NewService(fr, map[string]providers.Client{
 				providers.ProviderOpenAI: provider,
-			}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
+			}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil)
 
 			ctx := context.WithValue(context.Background(), proxy.OpenAISubscriptionContextKey{}, "eyJhbGciOiJSUzI1NiJ9.codex.sig")
 			ctx = context.WithValue(ctx, proxy.OpenAIAccountIDContextKey{}, "acct-123")
 			ctx = context.WithValue(ctx, proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: tc.clientApp})
-			body := []byte(`{"model":"gpt-5.6-sol","stream":true,"input":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"\u2063\u2060\u2063\u2060**Weave Router** — gpt-5.6-sol\n\nold answer\n\n_Weave Router feedback:_ /rf + good experience"}]},{"type":"message","role":"user","content":"continue"},{"type":"message","role":"assistant","content":[{"type":"output_text","text":""}]},{"type":"function_call","call_id":"call_shell","name":"shell","arguments":"{}"}]}`)
+			body := []byte(`{"model":"moonshotai/kimi-k3","stream":true,"input":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"\u2063\u2060\u2063\u2060**Weave Router** — gpt-5.6-sol\n\nold answer\n\n_Weave Router feedback:_ /rf + good experience"}]},{"type":"message","role":"user","content":"continue"},{"type":"message","role":"assistant","content":[{"type":"output_text","text":""}]},{"type":"function_call","call_id":"call_shell","name":"shell","arguments":"{}"}]}`)
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 			if tc.marker != "" {
@@ -539,7 +512,7 @@ func TestService_ProxyOpenAIResponses_NativeBadgeForTerminalClientsHonorsSuppres
 
 			require.NoError(t, svc.ProxyOpenAIResponses(ctx, body, rec, req))
 			require.Len(t, provider.proxyBodies, 1)
-			assert.Equal(t, "gpt-5.6-terra", gjson.GetBytes(provider.proxyBodies[0], "model").Str)
+			assert.Equal(t, "qwen/qwen3.8-27b", gjson.GetBytes(provider.proxyBodies[0], "model").Str)
 			upstreamHistory := gjson.GetBytes(provider.proxyBodies[0], "input.0.content.0.text").Str
 			if tc.wantStrip {
 				assert.Equal(t, "old answer", upstreamHistory)
@@ -554,7 +527,7 @@ func TestService_ProxyOpenAIResponses_NativeBadgeForTerminalClientsHonorsSuppres
 				assert.Equal(t, "message", nativeInput[2].Get("type").Str)
 			}
 			if tc.wantBadge {
-				assert.Contains(t, rec.Body.String(), "✦ **Weave Router** → gpt-5.6-terra · "+markerReasonBestPickForTest)
+				assert.Contains(t, rec.Body.String(), "✦ **Weave Router** → qwen/qwen3.8-27b · "+markerReasonBestPickForTest)
 				assert.NotEqual(t, native, rec.Body.String())
 			} else {
 				assert.Equal(t, native, rec.Body.String(), "suppressed and non-terminal clients retain byte identity")
@@ -573,7 +546,7 @@ func TestService_ProxyOpenAIResponses_OpenCodeStripsTerminalArtifactsBeforeTrans
 	svc := proxy.NewService(fr, map[string]providers.Client{
 		providers.ProviderAIAND:  provider,
 		providers.ProviderOpenAI: provider,
-	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
+	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil)
 
 	ctx := context.WithValue(context.Background(), proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppOpencode})
 	body := []byte(`{"model":"auto","input":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"⁣⁠⁣⁠**Weave Router** — gpt-5.6-sol\n\nold answer\n\n_Weave Router feedback:_ /rf + good experience"}]},{"type":"message","role":"user","content":"continue"}]}`)
@@ -604,10 +577,10 @@ func TestService_ProxyOpenAIResponses_TranslatedMarkerOptOutPreservesStream(t *t
 		providers.ProviderOpenAI: &fakeProvider{
 			proxyResponse: together.proxyResponse,
 		},
-	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
+	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil)
 
 	ctx := context.WithValue(context.Background(), proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppCodex})
-	body := []byte(`{"model":"gpt-5.6-luna","stream":true,"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"say hello"}]}]}`)
+	body := []byte(`{"model":"zai-org/glm-5.3-flash","stream":true,"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"say hello"}]}]}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 	req.Header.Set("X-Weave-Routing-Marker", "off")
@@ -620,18 +593,18 @@ func TestService_ProxyOpenAIResponses_TranslatedMarkerOptOutPreservesStream(t *t
 
 func TestService_ProxyOpenAIResponses_NativeMarkerOptOutPreservesContentType(t *testing.T) {
 	terminal := "event: response.completed\n" +
-		`data: {"type":"response.completed","sequence_number":2,"response":{"id":"resp_1","status":"completed","model":"gpt-5.6-sol","output":[{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}],"usage":{"input_tokens":120,"output_tokens":8}}}` + "\n\n"
+		`data: {"type":"response.completed","sequence_number":2,"response":{"id":"resp_1","status":"completed","model":"moonshotai/kimi-k3","output":[{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}],"usage":{"input_tokens":120,"output_tokens":8}}}` + "\n\n"
 	openAI := &fakeProvider{proxyResponse: nativeResponsesStream(terminal)}
 	fr := &fakeRouter{decision: router.Decision{
 		Provider: providers.ProviderOpenAI,
-		Model:    "gpt-5.6-sol",
+		Model:    "moonshotai/kimi-k3",
 		Reason:   "test",
 	}}
 	svc := proxy.NewService(fr, map[string]providers.Client{
 		providers.ProviderOpenAI: openAI,
-	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
+	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil)
 
-	body := []byte(`{"model":"gpt-5.6-sol","stream":true,"input":[{"type":"reasoning","id":"rs_0","encrypted_content":"opaque"},{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","stream":true,"input":[{"type":"reasoning","id":"rs_0","encrypted_content":"opaque"},{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 	req.Header.Set("X-Weave-Routing-Marker", "off")
@@ -673,21 +646,21 @@ func TestService_ProxyOpenAIResponses_EmitsRoutingMarkerForCodex(t *testing.T) {
 			}}
 			fr := &fakeRouter{decision: router.Decision{
 				Provider: providers.ProviderAIAND,
-				Model:    "deepseek/deepseek-v4-pro",
+				Model:    "deepseek-ai/deepseek-v4-pro",
 				Reason:   "test",
 			}}
 			svc := proxy.NewService(fr, map[string]providers.Client{
 				providers.ProviderAIAND: provider,
-			}, nil, false, nil, nil, false, providers.ProviderAIAND, "gpt-5.6-sol", nil)
+			}, nil, false, nil, nil, false, providers.ProviderAIAND, "moonshotai/kimi-k3", nil)
 
 			ctx := context.WithValue(context.Background(), proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppCodex})
-			body := []byte(`{"model":"gpt-5.6-luna","stream":true,"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"do the thing"}]}]}`)
+			body := []byte(`{"model":"zai-org/glm-5.3-flash","stream":true,"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"do the thing"}]}]}`)
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 
 			require.NoError(t, svc.ProxyOpenAIResponses(ctx, body, rec, req))
 
-			marker := "✦ **Weave Router** → deepseek/deepseek-v4-pro · " + markerReasonBestPickForTest
+			marker := "✦ **Weave Router** → deepseek-ai/deepseek-v4-pro · " + markerReasonBestPickForTest
 			deltas := responsesTextDeltas(t, rec.Body.Bytes())
 			require.NotEmpty(t, deltas)
 			assert.Equal(t, codexBadgeSentinelForTest+marker+"\n\n", deltas[0])
@@ -728,74 +701,70 @@ func TestService_CodexRequestRoutesInfrastructureOpenAIModelWithoutOAuth(t *test
 	}}
 	fr := &fakeRouter{decision: router.Decision{
 		Provider: providers.ProviderOpenAI,
-		Model:    "gpt-5.4-nano",
+		Model:    "motif-technologies/motif-3",
 		Reason:   "hmm:test",
 	}}
 	svc := proxy.NewService(fr, map[string]providers.Client{
 		providers.ProviderOpenAI: provider,
-	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil).
+	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil).
 		WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderOpenAI: {}})
 
 	ctx := context.WithValue(context.Background(), proxy.OpenAISubscriptionContextKey{}, "eyJhbGciOiJSUzI1NiJ9.codex.sig")
 	ctx = context.WithValue(ctx, proxy.OpenAIAccountIDContextKey{}, "acct-123")
-	body := []byte(`{"model":"gpt-5.6-sol","input":"route this turn"}`)
+	body := []byte(`{"model":"moonshotai/kimi-k3","input":"route this turn"}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 
 	require.NoError(t, svc.ProxyOpenAIResponses(ctx, body, rec, req))
 	require.Len(t, provider.proxyBodies, 1)
 	assert.Equal(t, providers.EndpointResponses, provider.proxyEndpoints[0])
-	assert.Contains(t, string(provider.proxyBodies[0]), `"model":"gpt-5.4-nano"`)
+	assert.Contains(t, string(provider.proxyBodies[0]), `"model":"motif-technologies/motif-3"`)
 	assert.Nil(t, provider.proxyCreds[0],
 		"an HMM-selected infrastructure model must use the OpenAI deployment key, never caller OAuth")
 }
 
 func TestService_CodexForcedModelUsesModelScopedCredential(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		model     string
-		wantOAuth bool
+		name  string
+		model string
 	}{
-		{name: "native Codex model", model: "gpt-5.6-terra", wantOAuth: true},
-		{name: "infrastructure OpenAI model", model: "gpt-5.4-nano", wantOAuth: false},
+		{name: "reasoning roster model", model: "qwen/qwen3.8-27b"},
+		{name: "text-only roster model", model: "motif-technologies/motif-3"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			provider := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = io.WriteString(w, `{"id":"resp_1","object":"response","output":[{"type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}]}`)
+				w.WriteHeader(http.StatusOK)
+				_, _ = io.WriteString(w, `{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
 			}}
 			store := newFakePinStore()
 			store.hasPin = true
 			store.pin = sessionpin.Pin{
-				Provider:    providers.ProviderOpenAI,
+				Provider:    providers.ProviderAIAND,
 				Model:       tc.model,
 				Reason:      translate.ReasonUserForceModel,
 				PinnedUntil: time.Now().Add(time.Hour),
 			}
 			fr := &fakeRouter{err: errors.New("forced pin must bypass the scorer")}
 			svc := proxy.NewService(fr, map[string]providers.Client{
-				providers.ProviderOpenAI: provider,
-			}, nil, false, nil, store, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil).
-				WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderOpenAI: {}})
+				providers.ProviderAIAND: provider,
+			}, nil, false, nil, store, false, providers.ProviderAIAND, "moonshotai/kimi-k3", nil).
+				WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderAIAND: {}})
 
 			ctx := authedCtx("11111111-1111-1111-1111-111111111111")
 			ctx = context.WithValue(ctx, proxy.OpenAISubscriptionContextKey{}, "eyJhbGciOiJSUzI1NiJ9.codex.sig")
 			ctx = context.WithValue(ctx, proxy.OpenAIAccountIDContextKey{}, "acct-123")
-			body := []byte(`{"model":"gpt-5.6-sol","input":"use the forced model"}`)
+			body := []byte(`{"model":"moonshotai/kimi-k3","input":"use the forced model"}`)
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 
 			require.NoError(t, svc.ProxyOpenAIResponses(ctx, body, rec, req))
 			assert.Zero(t, fr.routeCalls, "the stored user-forced model must bypass automatic routing")
 			require.Len(t, provider.proxyCreds, 1)
-			if tc.wantOAuth {
-				require.NotNil(t, provider.proxyCreds[0])
-				assert.True(t, provider.proxyCreds[0].OAuth)
-				assert.Equal(t, "codex_subscription", provider.proxyCreds[0].Source)
-			} else {
-				assert.Nil(t, provider.proxyCreds[0],
-					"the infrastructure model must fall through to the OpenAI deployment key")
-			}
+			// ChatGPT OAuth covers no AIand roster row, so a forced pin on one
+			// must resolve to the AIand deployment key, never the caller's OAuth.
+			assert.Nil(t, provider.proxyCreds[0],
+				"a Codex subscription cannot serve an AIand row; the forced model uses the deployment key")
 			assert.Contains(t, string(provider.proxyBodies[0]), `"model":"`+tc.model+`"`)
 		})
 	}
@@ -811,11 +780,11 @@ func TestService_ProxyOpenAIResponses_CodexPassthroughUsesChatForOpenAICompatPro
 	svc := proxy.NewService(fr, map[string]providers.Client{
 		providers.ProviderOpenAI: &fakeProvider{},
 		providers.ProviderAIAND:  aiand,
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	ctx := context.WithValue(context.Background(), proxy.OpenAISubscriptionContextKey{}, "eyJhbGciOiJSUzI1NiJ9.codex.sig")
 	ctx = context.WithValue(ctx, proxy.OpenAIAccountIDContextKey{}, "acct-123")
-	body := []byte(`{"model":"gpt-5.5","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-flash","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}]}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 	require.NoError(t, svc.ProxyOpenAIResponses(ctx, body, rec, req))
@@ -844,7 +813,7 @@ func TestService_ProxyOpenAIResponses_CodexPortableBridgeKeepsHMMProvidersAndRes
 		providers.ProviderOpenAI:    &fakeProvider{},
 		providers.ProviderAnthropic: &fakeProvider{},
 		providers.ProviderAIAND:     aiand,
-	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil).
+	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil).
 		WithDeploymentKeyedProviders(map[string]struct{}{
 			providers.ProviderOpenAI:    {},
 			providers.ProviderAnthropic: {},
@@ -855,7 +824,7 @@ func TestService_ProxyOpenAIResponses_CodexPortableBridgeKeepsHMMProvidersAndRes
 	ctx = context.WithValue(ctx, proxy.OpenAIAccountIDContextKey{}, "acct-123")
 	ctx = context.WithValue(ctx, proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppCodex})
 	body := []byte(`{
-			"model":"gpt-5.6-sol",
+			"model":"moonshotai/kimi-k3",
 			"stream":true,
 			"service_tier":"priority",
 			"prompt_cache_key":"codex-cache-key",
@@ -912,7 +881,7 @@ func (f *fakeProvider) Passthrough(ctx context.Context, prep providers.PreparedR
 }
 
 func makeProxyService(decision router.Decision, p map[string]providers.Client) *proxy.Service {
-	return proxy.NewService(&fakeRouter{decision: decision}, p, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+	return proxy.NewService(&fakeRouter{decision: decision}, p, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithRetrySleep(noRetrySleep)
 }
 
@@ -947,7 +916,7 @@ func TestService_PassthroughToProvider_CountTokensLocalFallback(t *testing.T) {
 		providers.ProviderOpenAI:    openAIProvider,
 	}).WithDeploymentKeyedProviders(map[string]struct{}{providers.ProviderOpenAI: {}})
 
-	body := []byte(`{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hello world"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":"hello world"}]}`)
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", strings.NewReader(""))
 	rec := httptest.NewRecorder()
 
@@ -963,7 +932,7 @@ func TestService_PassthroughToProvider_CountTokensLocalFallback(t *testing.T) {
 // TestService_PassthroughToProvider_CountTokensForwardsWithCredential verifies
 // that a reachable Anthropic credential keeps count_tokens on the real upstream.
 func TestService_PassthroughToProvider_CountTokensForwardsWithCredential(t *testing.T) {
-	body := []byte(`{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hello"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":"hello"}]}`)
 
 	t.Run("deployment key", func(t *testing.T) {
 		provider := &fakeProvider{}
@@ -995,13 +964,13 @@ func TestService_ProxyMessages_PropagatesUpstreamStatusError(t *testing.T) {
 	upstreamErr := &providers.UpstreamStatusError{Status: 400}
 	provider := &fakeProvider{proxyErr: upstreamErr}
 	svc := makeProxyService(
-		router.Decision{Provider: "anthropic", Model: "claude-haiku-4-5"},
+		router.Decision{Provider: "anthropic", Model: "zai-org/glm-5.3-flash"},
 		map[string]providers.Client{"anthropic": provider},
 	)
 
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`)
 
 	err := svc.ProxyMessages(context.Background(), body, rec, httpReq)
 
@@ -1032,7 +1001,7 @@ func TestService_ProxyMessages_CrossFormatUpstreamErrorBodyReachesClient(t *test
 
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`)
 
 	err := svc.ProxyMessages(context.Background(), body, rec, httpReq)
 
@@ -1054,7 +1023,7 @@ func TestService_ProxyMessages_CrossFormatUpstreamErrorBodyReachesClient(t *test
 func TestService_ProxyMessages_StripsRoutingMarkerFromInboundHistory(t *testing.T) {
 	const markerSentinel = "Weave Router"
 	body := []byte(`{
-		"model":"claude-opus-4-7",
+		"model":"deepseek-ai/deepseek-v4-pro",
 		"messages":[
 			{"role":"user","content":"first prompt"},
 			{"role":"assistant","content":[
@@ -1069,7 +1038,7 @@ func TestService_ProxyMessages_StripsRoutingMarkerFromInboundHistory(t *testing.
 
 	provider := &fakeProvider{}
 	svc := makeProxyService(
-		router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"},
+		router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"},
 		map[string]providers.Client{providers.ProviderAnthropic: provider},
 	)
 
@@ -1099,7 +1068,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageFlag(t *testing.T) {
 	// embedOnlyUserMessage must keep both user prompts, drop system text,
 	// assistant tool_use, and tool_result blocks.
 	body := []byte(`{
-		"model":"claude-opus-4-7",
+		"model":"deepseek-ai/deepseek-v4-pro",
 		"system":"You are Claude Code. CLAUDE.md says: do not use emojis...",
 		"messages":[
 			{"role":"user","content":"` + firstUserPrompt + `"},
@@ -1110,7 +1079,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageFlag(t *testing.T) {
 	}`)
 
 	t.Run("flag off uses concatenated stream", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "claude-haiku-4-5"}}
+		fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "zai-org/glm-5.3-flash"}}
 		svc := proxy.NewService(fr,
 			map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 			nil,
@@ -1118,7 +1087,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageFlag(t *testing.T) {
 			nil,
 			nil,
 			false,
-			providers.ProviderAnthropic, "claude-haiku-4-5",
+			providers.ProviderAnthropic, "zai-org/glm-5.3-flash",
 			nil,
 		)
 
@@ -1133,7 +1102,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageFlag(t *testing.T) {
 	})
 
 	t.Run("flag on concatenates user-role text and drops everything else", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "claude-haiku-4-5"}}
+		fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "zai-org/glm-5.3-flash"}}
 		svc := proxy.NewService(fr,
 			map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 			nil,
@@ -1141,7 +1110,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageFlag(t *testing.T) {
 			nil,
 			nil,
 			false,
-			providers.ProviderAnthropic, "claude-haiku-4-5",
+			providers.ProviderAnthropic, "zai-org/glm-5.3-flash",
 			nil,
 		)
 
@@ -1159,7 +1128,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageFlag(t *testing.T) {
 func TestService_ProxyMessages_EmbedOnlyUserMessageContextOverride(t *testing.T) {
 	const userPrompt = "Find the race condition in main.go"
 	body := []byte(`{
-		"model":"claude-opus-4-7",
+		"model":"deepseek-ai/deepseek-v4-pro",
 		"system":"You are Claude Code preamble...",
 		"messages":[{"role":"user","content":"` + userPrompt + `"}]
 	}`)
@@ -1197,7 +1166,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageContextOverride(t *testing.T)
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "claude-haiku-4-5"}}
+			fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "zai-org/glm-5.3-flash"}}
 			svc := proxy.NewService(fr,
 				map[string]providers.Client{"anthropic": &fakeProvider{}},
 				nil,
@@ -1205,7 +1174,7 @@ func TestService_ProxyMessages_EmbedOnlyUserMessageContextOverride(t *testing.T)
 				nil,
 				nil,
 				false,
-				"anthropic", "claude-haiku-4-5",
+				"anthropic", "zai-org/glm-5.3-flash",
 				nil,
 			)
 
@@ -1230,8 +1199,8 @@ func boolPtr(b bool) *bool { return &b }
 // TestService_ProxyMessages_NoPinStoreRunsScorerEveryTurn verifies that
 // without a pin store, every turn re-runs the cluster scorer.
 func TestService_ProxyMessages_NoPinStoreRunsScorerEveryTurn(t *testing.T) {
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hi"}]}`)
-	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "claude-haiku-4-5"}}
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`)
+	fr := &fakeRouter{decision: router.Decision{Provider: "anthropic", Model: "zai-org/glm-5.3-flash"}}
 	svc := proxy.NewService(fr,
 		map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
 		nil,
@@ -1239,7 +1208,7 @@ func TestService_ProxyMessages_NoPinStoreRunsScorerEveryTurn(t *testing.T) {
 		nil,
 		nil, // pinStore disabled
 		false,
-		providers.ProviderAnthropic, "claude-haiku-4-5",
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash",
 		nil,
 	)
 
@@ -1253,7 +1222,7 @@ func TestService_ProxyMessages_NoPinStoreRunsScorerEveryTurn(t *testing.T) {
 }
 
 func TestService_ProxyOpenAIChatCompletion_AnthropicCrossFormat(t *testing.T) {
-	anthropicResp := `{"id":"msg_abc","type":"message","role":"assistant","content":[{"type":"text","text":"Hello!"}],"model":"claude-opus-4-7","stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}}`
+	anthropicResp := `{"id":"msg_abc","type":"message","role":"assistant","content":[{"type":"text","text":"Hello!"}],"model":"deepseek-ai/deepseek-v4-pro","stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}}`
 
 	provider := &fakeProvider{
 		proxyResponse: func(w http.ResponseWriter) {
@@ -1263,11 +1232,11 @@ func TestService_ProxyOpenAIChatCompletion_AnthropicCrossFormat(t *testing.T) {
 		},
 	}
 	svc := makeProxyService(
-		router.Decision{Provider: "anthropic", Model: "claude-opus-4-7", Reason: "test"},
+		router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-pro", Reason: "test"},
 		map[string]providers.Client{"anthropic": provider},
 	)
 
-	openAIReq := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":100}`
+	openAIReq := `{"model":"qwen/qwen3.8-27b","messages":[{"role":"user","content":"hi"}],"max_tokens":100}`
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(openAIReq))
 
@@ -1298,11 +1267,11 @@ func TestService_ProxyOpenAIChatCompletion_AnthropicProxyError_PropagatesError(t
 		proxyErr: upstreamErr,
 	}
 	svc := makeProxyService(
-		router.Decision{Provider: "anthropic", Model: "claude-opus-4-7", Reason: "test"},
+		router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4-pro", Reason: "test"},
 		map[string]providers.Client{"anthropic": provider},
 	)
 
-	body := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`
+	body := `{"model":"qwen/qwen3.8-27b","messages":[{"role":"user","content":"hi"}]}`
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 
@@ -1322,11 +1291,11 @@ func TestService_ProxyOpenAIChatCompletion_NativeOpenAI(t *testing.T) {
 		},
 	}
 	svc := makeProxyService(
-		router.Decision{Provider: "openai", Model: "gpt-4o", Reason: "test"},
+		router.Decision{Provider: "openai", Model: "qwen/qwen3.8-27b", Reason: "test"},
 		map[string]providers.Client{"openai": provider},
 	)
 
-	body := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`
+	body := `{"model":"qwen/qwen3.8-27b","messages":[{"role":"user","content":"hi"}]}`
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 
@@ -1342,7 +1311,7 @@ func TestService_ProxyOpenAIChatCompletion_NativeOpenAI(t *testing.T) {
 	assert.Equal(t, providers.EndpointChatCompletions, provider.proxyEndpoints[0])
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(provider.proxyBodies[0], &got))
-	assert.Equal(t, "gpt-4o", got["model"], "envelope rewrites model to decision.Model")
+	assert.Equal(t, "qwen/qwen3.8-27b", got["model"], "envelope rewrites model to decision.Model")
 	msgs, _ := got["messages"].([]any)
 	require.Len(t, msgs, 1)
 	assert.Contains(t, rec.Body.String(), `"chat.completion"`)
@@ -1365,7 +1334,7 @@ func TestService_ProxyOpenAIChatCompletion_NativeOpenAICompatProvider(t *testing
 		map[string]providers.Client{providers.ProviderAIAND: provider},
 	)
 
-	body := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`
+	body := `{"model":"qwen/qwen3.8-27b","messages":[{"role":"user","content":"hi"}]}`
 	rec := httptest.NewRecorder()
 	httpReq := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 
@@ -1391,7 +1360,7 @@ func TestService_ProxyMessages_DispatchesOpenAICompatProviders(t *testing.T) {
 		model    string
 	}{
 		{"aiand", providers.ProviderAIAND, "deepseek/deepseek-v4-flash"},
-		{"openai", providers.ProviderOpenAI, "gpt-5.6-sol"},
+		{"openai", providers.ProviderOpenAI, "moonshotai/kimi-k3"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1408,7 +1377,7 @@ func TestService_ProxyMessages_DispatchesOpenAICompatProviders(t *testing.T) {
 			)
 			// Tools + opus keeps this out of the classifier-hard-pin path,
 			// so the test exercises the widened switch, not the fallback.
-			body := []byte(`{"model":"claude-opus-4-7","max_tokens":16,"tools":[{"name":"calc","description":"add","input_schema":{"type":"object","properties":{"a":{"type":"integer"},"b":{"type":"integer"}},"required":["a","b"]}}],"messages":[{"role":"user","content":"What is 7+5? Use calc."}]}`)
+			body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","max_tokens":16,"tools":[{"name":"calc","description":"add","input_schema":{"type":"object","properties":{"a":{"type":"integer"},"b":{"type":"integer"}},"required":["a","b"]}}],"messages":[{"role":"user","content":"What is 7+5? Use calc."}]}`)
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(string(body)))
 			require.NoError(t, svc.ProxyMessages(context.Background(), body, rec, req))
@@ -1424,7 +1393,7 @@ func TestService_ProxyOpenAIChatCompletion_DispatchesOpenAICompatProviders(t *te
 		model    string
 	}{
 		{"aiand", providers.ProviderAIAND, "deepseek/deepseek-v4-flash"},
-		{"openai", providers.ProviderOpenAI, "gpt-5.6-sol"},
+		{"openai", providers.ProviderOpenAI, "moonshotai/kimi-k3"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1439,7 +1408,7 @@ func TestService_ProxyOpenAIChatCompletion_DispatchesOpenAICompatProviders(t *te
 				router.Decision{Provider: tc.provider, Model: tc.model, Reason: "test"},
 				map[string]providers.Client{tc.provider: p},
 			)
-			body := `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`
+			body := `{"model":"qwen/qwen3.8-27b","messages":[{"role":"user","content":"hi"}]}`
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 			require.NoError(t, svc.ProxyOpenAIChatCompletion(context.Background(), []byte(body), rec, req))
@@ -1454,19 +1423,19 @@ func TestService_ProxyOpenAIChatCompletion_DispatchesOpenAICompatProviders(t *te
 // route freely and the sub matching the chosen model pays. (Single-sub
 // callers are unaffected: a lone Codex sub still yields {OpenAI}.)
 func TestService_CodexPassthrough_RoutesFreelyWithBothSubs(t *testing.T) {
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-sonnet-4-6"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "deepseek-ai/deepseek-v4.1-flash"}}
 	// Anthropic upstream returns a normal Messages response; proxy translates
 	// it to Responses wire format (not the verbatim Codex-backend path).
 	anthropicResp := func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","role":"assistant","model":"claude-sonnet-4-6","content":[{"type":"text","text":"hi"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`))
+		_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","role":"assistant","model":"deepseek-ai/deepseek-v4.1-flash","content":[{"type":"text","text":"hi"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`))
 	}
 	providerMap := map[string]providers.Client{
 		providers.ProviderOpenAI:    &fakeProvider{},
 		providers.ProviderAnthropic: &fakeProvider{proxyResponse: anthropicResp},
 	}
-	svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-sonnet-4-6", nil).
+	svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "deepseek-ai/deepseek-v4.1-flash", nil).
 		WithByokOnly(true)
 
 	// Both subscriptions presented on the authenticated request: a Codex sub
@@ -1475,7 +1444,7 @@ func TestService_CodexPassthrough_RoutesFreelyWithBothSubs(t *testing.T) {
 	ctx = context.WithValue(ctx, proxy.OpenAIAccountIDContextKey{}, "acct-123")
 	ctx = context.WithValue(ctx, proxy.AnthropicSubscriptionContextKey{}, "sk-ant-oat01-subscription-token")
 
-	body := []byte(`{"model":"gpt-5.5","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-flash","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}]}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 	require.NoError(t, svc.ProxyOpenAIResponses(ctx, body, rec, req))
@@ -1497,15 +1466,15 @@ func TestService_CodexPassthrough_RoutesFreelyWithBothSubs(t *testing.T) {
 // TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer: with BYOK-only,
 // providers without per-request creds must be excluded, or argmax 402s.
 func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`)
 	providerMap := map[string]providers.Client{
 		providers.ProviderAnthropic: &fakeProvider{},
 		providers.ProviderAIAND:     &fakeProvider{},
 	}
 
 	t.Run("byok-off keeps every registered provider eligible (selfhost baseline)", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 		rec := httptest.NewRecorder()
 		httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
@@ -1517,8 +1486,8 @@ func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
 	})
 
 	t.Run("byok-on with no creds yields empty eligible set", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 			WithByokOnly(true)
 
 		rec := httptest.NewRecorder()
@@ -1533,8 +1502,8 @@ func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
 		// A client x-api-key on the Anthropic surface is a legitimate passthrough
 		// credential and enables Anthropic, but must not leak into AIand or
 		// other OpenAI-compat upstreams on a different inbound surface.
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 			WithByokOnly(true)
 
 		rec := httptest.NewRecorder()
@@ -1554,8 +1523,8 @@ func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
 		// enables Anthropic, but must never enable AIand or other
 		// OpenAI-compat upstreams — that cross-provider leak was the 2026-05-13
 		// prod incident (argmax picked the compat upstream, 401'd with no key).
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 			WithByokOnly(true)
 
 		rec := httptest.NewRecorder()
@@ -1574,12 +1543,12 @@ func TestService_WithByokOnly_FiltersUnauthedProvidersFromScorer(t *testing.T) {
 // Model exclusion flows from installation context or env override into
 // the router.Request that the scorer consumes. Env override wins.
 func TestService_ExcludedModelsThroughRequest(t *testing.T) {
-	body := []byte(`{"model":"claude-opus-4-7","messages":[{"role":"user","content":"hi"}]}`)
+	body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`)
 	providerMap := map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}}
 
 	t.Run("no override and no installation list → nil", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 		rec := httptest.NewRecorder()
 		httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
@@ -1590,35 +1559,35 @@ func TestService_ExcludedModelsThroughRequest(t *testing.T) {
 	})
 
 	t.Run("installation list populates request", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
-		ctx := context.WithValue(context.Background(), proxy.InstallationExcludedModelsContextKey{}, []string{"claude-opus-4-7", "gpt-5"})
+		ctx := context.WithValue(context.Background(), proxy.InstallationExcludedModelsContextKey{}, []string{"deepseek-ai/deepseek-v4-pro", "moonshotai/kimi-k3"})
 		rec := httptest.NewRecorder()
 		httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 		require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
 
 		require.NotNil(t, fr.capturedReq)
-		assert.Contains(t, fr.capturedReq.ExcludedModels, "claude-opus-4-7")
-		assert.Contains(t, fr.capturedReq.ExcludedModels, "gpt-5")
+		assert.Contains(t, fr.capturedReq.ExcludedModels, "deepseek-ai/deepseek-v4-pro")
+		assert.Contains(t, fr.capturedReq.ExcludedModels, "moonshotai/kimi-k3")
 	})
 
 	t.Run("env override replaces installation list", func(t *testing.T) {
-		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5"}}
-		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil).
-			WithExcludedModelsOverride([]string{"gpt-4o"})
+		fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash"}}
+		svc := proxy.NewService(fr, providerMap, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
+			WithExcludedModelsOverride([]string{"qwen/qwen3.8-27b"})
 
 		// Installation list says one thing; override says another. Override wins.
-		ctx := context.WithValue(context.Background(), proxy.InstallationExcludedModelsContextKey{}, []string{"claude-opus-4-7"})
+		ctx := context.WithValue(context.Background(), proxy.InstallationExcludedModelsContextKey{}, []string{"deepseek-ai/deepseek-v4-pro"})
 		rec := httptest.NewRecorder()
 		httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
 		require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
 
 		require.NotNil(t, fr.capturedReq)
-		assert.Contains(t, fr.capturedReq.ExcludedModels, "gpt-4o")
-		assert.NotContains(t, fr.capturedReq.ExcludedModels, "claude-opus-4-7")
+		assert.Contains(t, fr.capturedReq.ExcludedModels, "qwen/qwen3.8-27b")
+		assert.NotContains(t, fr.capturedReq.ExcludedModels, "deepseek-ai/deepseek-v4-pro")
 		assert.True(t, svc.HasExcludedModelsOverride())
-		assert.Equal(t, []string{"gpt-4o"}, svc.ExcludedModelsOverride())
+		assert.Equal(t, []string{"qwen/qwen3.8-27b"}, svc.ExcludedModelsOverride())
 	})
 }
 
@@ -1632,7 +1601,7 @@ func TestService_ProxyOpenAIResponses_NativeDispatchAppliesArmEffort(t *testing.
 		wantEffort string
 	}{
 		{name: "arm level within the target's menu", armEffort: "low", wantEffort: "low"},
-		{name: "the top level reaches the wire unclamped", armEffort: "xhigh", wantEffort: "xhigh"},
+		{name: "the top level reaches the wire unclamped", armEffort: "high", wantEffort: "high"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			provider := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
@@ -1642,13 +1611,13 @@ func TestService_ProxyOpenAIResponses_NativeDispatchAppliesArmEffort(t *testing.
 			}}
 			fr := &fakeRouter{decision: router.Decision{
 				Provider: providers.ProviderOpenAI,
-				Model:    "gpt-5.6-luna",
+				Model:    "zai-org/glm-5.3-flash",
 				Effort:   tc.armEffort,
 				Reason:   "test",
 			}}
 			svc := proxy.NewService(fr, map[string]providers.Client{
 				providers.ProviderOpenAI: provider,
-			}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
+			}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil)
 
 			ctx := context.WithValue(context.Background(), proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppOpencode})
 			body := []byte(`{"model":"auto","input":"remove the router","reasoning":{"effort":"medium","summary":"auto"}}`)

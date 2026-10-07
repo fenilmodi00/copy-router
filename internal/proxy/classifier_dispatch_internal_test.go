@@ -34,6 +34,16 @@ func (p *classifierResponseProvider) Proxy(_ context.Context, decision router.De
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if decision.Provider == providers.ProviderAIAND {
+		if !gjson.GetBytes(request.Body, "stream").Bool() {
+			_, err := io.WriteString(w, `{"id":"chatcmpl_c","object":"chat.completion","created":1,"model":"`+decision.Model+`","choices":[{"index":0,"message":{"role":"assistant","content":"answer"},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":3,"total_tokens":15}}`)
+			return err
+		}
+		_, err := io.WriteString(w, "data: {\"id\":\"chatcmpl_c\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\""+decision.Model+"\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"answer\"},\"finish_reason\":null}]}\n\n"+
+			"data: {\"id\":\"chatcmpl_c\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\""+decision.Model+"\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3,\"total_tokens\":15}}\n\n"+
+			"data: [DONE]\n\n")
+		return err
+	}
 	if decision.Provider == providers.ProviderAnthropic {
 		_, err := io.WriteString(w, `{"type":"message","role":"assistant","content":[{"type":"text","text":"answer"}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":3}}`)
 		return err
@@ -48,21 +58,21 @@ func TestClassifierDispatchAcrossProtocols(t *testing.T) {
 		toolActivity, thirdUser                          string
 		proxyRequest                                     func(*Service, context.Context, []byte, http.ResponseWriter, *http.Request) error
 	}{
-		{"messages", providers.ProviderAnthropic, "claude-sonnet-4-6", "/v1/messages",
-			`{"model":"claude-sonnet-4-6","max_tokens":1024,"messages":[{"role":"user","content":"first"}]}`,
-			`{"model":"claude-sonnet-4-6","max_tokens":1024,"messages":[{"role":"user","content":"first"},{"role":"assistant","content":[{"type":"thinking","thinking":"not a response"},{"type":"text","text":""},{"type":"text","text":"answer"}]},{"role":"user","content":"next"}]}`,
+		{"messages", providers.ProviderAIAND, "deepseek-ai/deepseek-v4.1-flash", "/v1/messages",
+			`{"model":"deepseek-ai/deepseek-v4.1-flash","max_tokens":1024,"messages":[{"role":"user","content":"first"}]}`,
+			`{"model":"deepseek-ai/deepseek-v4.1-flash","max_tokens":1024,"messages":[{"role":"user","content":"first"},{"role":"assistant","content":[{"type":"thinking","thinking":"not a response"},{"type":"text","text":""},{"type":"text","text":"answer"}]},{"role":"user","content":"next"}]}`,
 			`{"role":"assistant","content":[{"type":"tool_use","id":"c1","name":"test","input":{}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"c1","is_error":true,"content":"failed"}]}`,
 			`{"role":"user","content":"third"}`,
 			(*Service).ProxyMessages},
-		{"chat", providers.ProviderOpenAI, catalog.ModelIDGPT55.String(), "/v1/chat/completions",
-			fmt.Sprintf(`{"model":%q,"stream":true,"messages":[{"role":"user","content":"first"}]}`, catalog.ModelIDGPT55.String()),
-			fmt.Sprintf(`{"model":%q,"stream":true,"messages":[{"role":"user","content":"first"},{"role":"assistant","content":[{"type":"text","text":""},{"type":"text","text":"answer"}]},{"role":"user","content":"next"}]}`, catalog.ModelIDGPT55.String()),
+		{"chat", providers.ProviderAIAND, "deepseek-ai/deepseek-v4-flash", "/v1/chat/completions",
+			fmt.Sprintf(`{"model":%q,"stream":true,"messages":[{"role":"user","content":"first"}]}`, "deepseek-ai/deepseek-v4-flash"),
+			fmt.Sprintf(`{"model":%q,"stream":true,"messages":[{"role":"user","content":"first"},{"role":"assistant","content":[{"type":"text","text":""},{"type":"text","text":"answer"}]},{"role":"user","content":"next"}]}`, "deepseek-ai/deepseek-v4-flash"),
 			`{"role":"assistant","content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"test","arguments":"{}"}}]},{"role":"tool","tool_call_id":"c1","is_error":true,"content":"failed"}`,
 			`{"role":"user","content":"third"}`,
 			(*Service).ProxyOpenAIChatCompletion},
-		{"responses", providers.ProviderOpenAI, catalog.ModelIDGPT55.String(), "/v1/responses",
-			fmt.Sprintf(`{"model":%q,"stream":true,"input":[{"role":"user","content":"first"}]}`, catalog.ModelIDGPT55.String()),
-			fmt.Sprintf(`{"model":%q,"stream":true,"input":[{"role":"user","content":"first"},{"role":"assistant","content":[{"type":"output_text","text":""},{"type":"output_text","text":"answer"}]},{"role":"user","content":"next"}]}`, catalog.ModelIDGPT55.String()),
+		{"responses", providers.ProviderAIAND, "deepseek-ai/deepseek-v4-flash", "/v1/responses",
+			fmt.Sprintf(`{"model":%q,"stream":true,"input":[{"role":"user","content":"first"}]}`, "deepseek-ai/deepseek-v4-flash"),
+			fmt.Sprintf(`{"model":%q,"stream":true,"input":[{"role":"user","content":"first"},{"role":"assistant","content":[{"type":"output_text","text":""},{"type":"output_text","text":"answer"}]},{"role":"user","content":"next"}]}`, "deepseek-ai/deepseek-v4-flash"),
 			`{"type":"function_call","call_id":"c1","name":"test","arguments":"{}"},{"type":"function_call_output","call_id":"c1","status":"failed","output":"failed"}`,
 			`{"role":"user","content":"third"}`,
 			(*Service).ProxyOpenAIResponses},
@@ -120,21 +130,10 @@ func TestClassifierDispatchAcrossProtocols(t *testing.T) {
 			require.Equal(t, router.ClassifierFeatures{UserMessageCount: 3, ToolCallCount: 1, ToolErrorCount: 1}, inputs[3].User.Features)
 			require.Equal(t, inputs[1].User.PrecedingResponses, inputs[2].User.PrecedingResponses, "tool payloads must not become response history")
 			require.Zero(t, baseline.calls)
-			if test.name == "messages" {
-				for _, body := range []string{classifierSearchBody, classifierSearchBody, third} {
-					upstream.body = nil
-					err := test.proxyRequest(svc, ctx, []byte(body), httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, test.path, nil))
-					require.NoError(t, err)
-					require.NotEmpty(t, upstream.body)
-					if body == classifierSearchBody {
-						require.Equal(t, "web_search_20250305", gjson.GetBytes(upstream.body, "tools.0.type").String())
-						require.Equal(t, gjson.Get(body, "messages.0.content").String(), gjson.GetBytes(upstream.body, "messages.0.content.0.text").String())
-					}
-				}
-				require.Len(t, inputs, 5, "search retries reuse a child; parent resumes without reclassification")
-				require.Equal(t, router.ClassifierFeatures{UserMessageCount: 1}, inputs[4].User.Features)
-				require.Zero(t, baseline.calls)
-			}
+			// The native web-search sub-turn block was removed: no enabled
+			// provider runs Anthropic server tools natively under the AIand-only
+			// roster and the gateway search executor was cut, so a web_search
+			// turn falls through to routing and is refused before dispatch.
 			classificationCount := len(inputs)
 			upstream.body = nil
 			compacted := strings.ReplaceAll(test.firstBody, "first", "compacted")
@@ -157,11 +156,11 @@ func TestClassifierDispatchAcrossProtocols(t *testing.T) {
 }
 
 func TestClassifierRecapServesWithoutAnchoringPin(t *testing.T) {
-	const model = "claude-sonnet-4-6"
+	const model = "deepseek-ai/deepseek-v4.1-flash"
 	fixtureService, principal, store := classifierSessionFixture(t, classifierMedium)
 	upstream := &classifierResponseProvider{}
 	pins := newStubPinStore()
-	svc := NewService(&betaTestRouter{}, map[string]providers.Client{providers.ProviderAnthropic: upstream}, nil, false, nil, pins, false, providers.ProviderAnthropic, model, nil)
+	svc := NewService(&betaTestRouter{}, map[string]providers.Client{providers.ProviderAIAND: upstream}, nil, false, nil, pins, false, providers.ProviderAIAND, model, nil)
 	require.NoError(t, svc.WithClassifierSessions(fixtureService.classifierSessions.config, store, fixtureService.classifierSessions.classifier))
 	escalationClasses := []string{string(escalation.Low), string(escalation.Medium), string(escalation.High), string(escalation.Maximum)}
 	roster := &rosterdata.Roster{SchemaVersion: rosterdata.SchemaVersionPolicyV1, SHA256: strings.Repeat("b", 64), ClassOrder: escalationClasses, Clusters: map[string]rosterdata.Cluster{}}
@@ -171,7 +170,7 @@ func TestClassifierRecapServesWithoutAnchoringPin(t *testing.T) {
 	for _, class := range escalationClasses {
 		roster.Clusters[class] = rosterdata.Cluster{Arms: []string{arm}, ArmScores: map[string]float64{arm: 1}}
 	}
-	resolver := policy.NewResolver(map[string]struct{}{model: {}}, map[string]struct{}{providers.ProviderAnthropic: {}}, armid.ForModel, policy.ManagedProviderPolicy())
+	resolver := policy.NewResolver(map[string]struct{}{model: {}}, map[string]struct{}{providers.ProviderAIAND: {}}, armid.ForModel, policy.ManagedProviderPolicy())
 	capabilities := policy.Capabilities{SchemaVersion: policy.SchemaVersionV4, AuthoritativePerTurnSelection: true}
 	routing := policy.NewSidecarRouter(policy.SidecarRouterConfig{Strategy: router.StrategyLLMClassifier, Unavailable: router.ErrClassifierUnavailable, ClassifierArtifactID: "llm-classifier-v1.0.0", ClassifierArtifactSHA256: strings.Repeat("a", 64), SelectionPolicyReleaseID: "llm-classifier-v1.0.0", SelectionPolicySHA256: roster.SHA256}, policy.AtomicClassifierFacts{Release: "llm-classifier-v1.0.0", ReleaseSHA256: strings.Repeat("a", 64)}, resolver).WithCapabilities(capabilities).WithArmSelector(selection.Selector(roster))
 	svc.WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyLLMClassifier, Router: routing, Capabilities: capabilities, Unavailable: router.ErrClassifierUnavailable})
@@ -189,10 +188,10 @@ func TestClassifierRecapServesWithoutAnchoringPin(t *testing.T) {
 		return len(pins.upserts)
 	}
 
-	send(`{"model":"claude-sonnet-4-6","max_tokens":1024,"messages":[{"role":"user","content":"The user stepped away and is coming back. Recap in under 40 words, 1-2 plain sentences, no markdown."}]}`)
+	send(`{"model":"deepseek-ai/deepseek-v4.1-flash","max_tokens":1024,"messages":[{"role":"user","content":"The user stepped away and is coming back. Recap in under 40 words, 1-2 plain sentences, no markdown."}]}`)
 	require.Zero(t, upsertCount(), "a recap must not move the session pin")
 
-	send(`{"model":"claude-sonnet-4-6","max_tokens":1024,"messages":[{"role":"user","content":"first"}]}`)
+	send(`{"model":"deepseek-ai/deepseek-v4.1-flash","max_tokens":1024,"messages":[{"role":"user","content":"first"}]}`)
 	require.Equal(t, 1, upsertCount(), "a real turn on the same path still anchors the pin")
 }
 
@@ -214,7 +213,7 @@ func TestClassifierInputRejectsControlBypasses(t *testing.T) {
 		require.Error(t, err, command)
 	}
 	for _, override := range []context.Context{
-		context.WithValue(ctx, AgentShadowEvalContextKey{}, AgentShadowEvaluation{Model: catalog.ModelIDGPT55.String(), RolloutID: "fixture", StateID: "fixture"}),
+		context.WithValue(ctx, AgentShadowEvalContextKey{}, AgentShadowEvaluation{Model: "deepseek-ai/deepseek-v4-flash", RolloutID: "fixture", StateID: "fixture"}),
 		router.WithPolicyPinRequest(ctx, router.PolicyPinRequest{Authorized: true, Pin: router.PolicyPin{ArtifactSHA256: strings.Repeat("a", 64), RosterSHA256: strings.Repeat("b", 64)}}),
 	} {
 		_, err := svc.withClassifierInput(override, []byte(`{"messages":[{"role":"user","content":"first"}]}`), router.EndpointAnthropicMessages)
@@ -223,7 +222,7 @@ func TestClassifierInputRejectsControlBypasses(t *testing.T) {
 }
 
 func TestClassifierUtilityRequestsDoNotEstablishThreadRoot(t *testing.T) {
-	const utilityModel catalog.ModelID = "claude-sonnet-4-6"
+	const utilityModel catalog.ModelID = "deepseek-ai/deepseek-v4.1-flash"
 	fixture, principal, store := classifierSessionFixture(t, classifierMedium)
 	upstream := &classifierResponseProvider{}
 	baseline := &betaTestRouter{}

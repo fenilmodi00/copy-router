@@ -57,9 +57,9 @@ func (c *responsesRetryClient) Passthrough(context.Context, providers.PreparedRe
 func TestProxyOpenAIChatCompletion_SameBindingRetryStaysOnResponses(t *testing.T) {
 	client := &responsesRetryClient{}
 	svc := NewService(
-		staticRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-luna", Reason: "test"}},
+		staticRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "zai-org/glm-5.3-flash", Reason: "test"}},
 		map[string]providers.Client{providers.ProviderOpenAI: client},
-		nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil,
+		nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil,
 	)
 	svc.retrySleep = noopSleep
 
@@ -93,11 +93,11 @@ func TestProxyMessages_SiblingFailoverOntoOpenAIUsesResponses(t *testing.T) {
 	rescue := &responsesRetryClient{}
 	decision := router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-opus-5",
+		Model:    "zai-org/glm-5.3",
 		Reason:   "test",
 		Metadata: &router.RoutingMetadata{
-			CandidateModels:    []string{"claude-opus-5", "gpt-5.6-luna"},
-			CandidateProviders: map[string]string{"gpt-5.6-luna": providers.ProviderOpenAI},
+			CandidateModels:    []string{"zai-org/glm-5.3", "zai-org/glm-5.3-flash"},
+			CandidateProviders: map[string]string{"zai-org/glm-5.3-flash": providers.ProviderOpenAI},
 		},
 	}
 	svc := NewService(
@@ -106,14 +106,14 @@ func TestProxyMessages_SiblingFailoverOntoOpenAIUsesResponses(t *testing.T) {
 			providers.ProviderAnthropic: failing,
 			providers.ProviderOpenAI:    rescue,
 		},
-		nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-haiku-4-5", nil,
+		nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil,
 	).WithDeploymentKeyedProviders(map[string]struct{}{
 		providers.ProviderAnthropic: {},
 		providers.ProviderOpenAI:    {},
 	})
 	svc.retrySleep = noopSleep
 
-	body := `{"model":"claude-opus-5","max_tokens":1024,"stream":true,"messages":[{"role":"user","content":"read main.go"}],"tools":[{"name":"read_file","input_schema":{"type":"object","properties":{"path":{"type":"string"}}}}],"thinking":{"type":"adaptive"}}`
+	body := `{"model":"zai-org/glm-5.3","max_tokens":1024,"stream":true,"messages":[{"role":"user","content":"read main.go"}],"tools":[{"name":"read_file","input_schema":{"type":"object","properties":{"path":{"type":"string"}}}}],"thinking":{"type":"adaptive"}}`
 	rec := httptest.NewRecorder()
 	require.NoError(t, svc.ProxyMessages(context.Background(), []byte(body), rec,
 		httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(body))))
@@ -168,9 +168,9 @@ func (c *emptyThenOKResponsesClient) Passthrough(context.Context, providers.Prep
 func TestProxyOpenAIResponses_RetriesNativeEmptyCompletion(t *testing.T) {
 	client := &emptyThenOKResponsesClient{}
 	svc := NewService(
-		staticRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-luna", Reason: "test"}},
+		staticRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "zai-org/glm-5.3-flash", Reason: "test"}},
 		map[string]providers.Client{providers.ProviderOpenAI: client},
-		nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil,
+		nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil,
 	)
 	svc.retrySleep = noopSleep
 	body := "{\"model\":\"gpt-5.6-luna\",\"input\":\"hi\"}"
@@ -184,9 +184,9 @@ func TestProxyOpenAIResponses_RetriesNativeEmptyCompletion(t *testing.T) {
 func TestProxyOpenAIResponses_RetriesNativeStreamingEmptyCompletion(t *testing.T) {
 	client := &emptyThenOKResponsesClient{streaming: true}
 	svc := NewService(
-		staticRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-luna", Reason: "test"}},
+		staticRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "zai-org/glm-5.3-flash", Reason: "test"}},
 		map[string]providers.Client{providers.ProviderOpenAI: client},
-		nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil,
+		nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil,
 	)
 	svc.retrySleep = noopSleep
 	body := "{\"model\":\"gpt-5.6-luna\",\"stream\":true,\"input\":\"hi\"}"
@@ -200,9 +200,9 @@ func TestProxyOpenAIResponses_RetriesNativeStreamingEmptyCompletion(t *testing.T
 func TestProxyOpenAIChatCompletion_RetriesNonStreamingEmptyCompletion(t *testing.T) {
 	client := &emptyThenOKResponsesClient{streaming: true}
 	svc := NewService(
-		staticRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-luna", Reason: "test"}},
+		staticRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "zai-org/glm-5.3-flash", Reason: "test"}},
 		map[string]providers.Client{providers.ProviderOpenAI: client},
-		nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil,
+		nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil,
 	)
 	svc.retrySleep = noopSleep
 	body := "{\"model\":\"auto\",\"stream\":false,\"max_tokens\":256,\"messages\":[{\"role\":\"user\",\"content\":\"read main.go\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"parameters\":{\"type\":\"object\"}}}],\"reasoning_effort\":\"medium\"}"
@@ -232,7 +232,7 @@ func (c *emptyThenOKChatCompletionsClient) Passthrough(context.Context, provider
 }
 
 func TestProxyOpenAIResponses_RetriesTranslatedStreamingEmptyCompletion(t *testing.T) {
-	const servedModel = "grok-4.6"
+	const servedModel = "deepseek-ai/deepseek-v4-pro"
 	client := &emptyThenOKChatCompletionsClient{}
 	svc := NewService(
 		staticRouter{decision: router.Decision{Provider: providers.ProviderAIAND, Model: servedModel, Reason: "test"}},

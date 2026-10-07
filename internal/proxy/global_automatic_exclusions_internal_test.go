@@ -33,15 +33,15 @@ func (s *stubGlobalExclusionStore) ListGlobalAutomaticRoutingExclusions(context.
 }
 
 func TestGlobalAutomaticExclusions_ServesCachedSnapshotWithinTTL(t *testing.T) {
-	store := &stubGlobalExclusionStore{byModel: map[string]string{"claude-opus-5": "too expensive"}}
+	store := &stubGlobalExclusionStore{byModel: map[string]string{"zai-org/glm-5.3": "too expensive"}}
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithGlobalAutomaticExclusions(store)
 
 	first := svc.globalAutomaticExcludedModels(context.Background())
 	second := svc.globalAutomaticExcludedModels(context.Background())
 
-	assert.Equal(t, map[string]struct{}{"claude-opus-5": {}}, first)
+	assert.Equal(t, map[string]struct{}{"zai-org/glm-5.3": {}}, first)
 	assert.Equal(t, first, second)
 	assert.Equal(t, 1, store.calls, "a second read inside the TTL must not re-query")
 }
@@ -51,7 +51,7 @@ func TestGlobalAutomaticExclusions_ServesCachedSnapshotWithinTTL(t *testing.T) {
 func TestGlobalAutomaticExclusions_ColdReadFailureFailsOpen(t *testing.T) {
 	store := &stubGlobalExclusionStore{err: errors.New("router database unreachable")}
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithGlobalAutomaticExclusions(store)
 
 	assert.Empty(t, svc.globalAutomaticExcludedModels(context.Background()))
@@ -60,30 +60,30 @@ func TestGlobalAutomaticExclusions_ColdReadFailureFailsOpen(t *testing.T) {
 }
 
 func TestGlobalAutomaticExclusions_RefreshFailureKeepsLastSnapshot(t *testing.T) {
-	store := &stubGlobalExclusionStore{byModel: map[string]string{"claude-opus-5": ""}}
+	store := &stubGlobalExclusionStore{byModel: map[string]string{"zai-org/glm-5.3": ""}}
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithGlobalAutomaticExclusions(store)
 
 	require.NotEmpty(t, svc.globalAutomaticExcludedModels(context.Background()))
 	store.err = errors.New("router database unreachable")
 	svc.globalAutomaticExclusions.refreshedAt = time.Now().Add(-2 * globalAutomaticExclusionTTL)
 
-	assert.Equal(t, map[string]struct{}{"claude-opus-5": {}},
+	assert.Equal(t, map[string]struct{}{"zai-org/glm-5.3": {}},
 		svc.globalAutomaticExcludedModels(context.Background()))
 }
 
 // The soft set must reach the router as its own field: folding it into
 // ExcludedModels would also reject explicit force-model pins.
 func TestWithPolicyRequestContext_CarriesAutomaticExclusionsSeparately(t *testing.T) {
-	store := &stubGlobalExclusionStore{byModel: map[string]string{"claude-opus-5": ""}}
+	store := &stubGlobalExclusionStore{byModel: map[string]string{"zai-org/glm-5.3": ""}}
 	svc := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithGlobalAutomaticExclusions(store)
 
 	req := svc.withPolicyRequestContext(context.Background(), router.Request{})
 
-	assert.Equal(t, map[string]struct{}{"claude-opus-5": {}}, req.AutomaticExcludedModels)
+	assert.Equal(t, map[string]struct{}{"zai-org/glm-5.3": {}}, req.AutomaticExcludedModels)
 	assert.Empty(t, req.ExcludedModels)
 }
 
@@ -92,8 +92,8 @@ func automaticallyDisabledRequest(model string) router.Request {
 }
 
 func TestAutomaticPinEligible_RejectsDisabledModelButForcedPinSurvives(t *testing.T) {
-	pin := sessionpin.Pin{Model: "claude-opus-5", Provider: providers.ProviderAnthropic}
-	req := automaticallyDisabledRequest("claude-opus-5")
+	pin := sessionpin.Pin{Model: "zai-org/glm-5.3", Provider: providers.ProviderAnthropic}
+	req := automaticallyDisabledRequest("zai-org/glm-5.3")
 
 	assert.False(t, automaticPinEligible(pin, req))
 	assert.True(t, forcedPinEligible(pin, req),
@@ -103,18 +103,18 @@ func TestAutomaticPinEligible_RejectsDisabledModelButForcedPinSurvives(t *testin
 // A session already pinned to a model must move off it once the model is
 // disabled — otherwise the setting only affects sessions that route fresh.
 func TestTurnLoop_DropsAutomaticPinOnDisabledModel(t *testing.T) {
-	fakeRouter := &tierProbeRouter{available: map[string]struct{}{"claude-haiku-4-5": {}}}
+	fakeRouter := &tierProbeRouter{available: map[string]struct{}{"zai-org/glm-5.3-flash": {}}}
 	store := &overwritingPinStore{pin: sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
-		Model:       "claude-opus-5",
+		Model:       "zai-org/glm-5.3",
 		Reason:      "postgres",
 		PinnedUntil: time.Now().Add(time.Hour),
 	}, found: true}
 	svc := NewService(fakeRouter, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic)).
 		WithGlobalAutomaticExclusions(&stubGlobalExclusionStore{
-			byModel: map[string]string{"claude-opus-5": "quality regression"},
+			byModel: map[string]string{"zai-org/glm-5.3": "quality regression"},
 		})
 
 	env := forceCommandEnv(t)
@@ -123,28 +123,28 @@ func TestTurnLoop_DropsAutomaticPinOnDisabledModel(t *testing.T) {
 		router.Request{
 			RequestedModel:          feats.Model,
 			EnabledProviders:        keyed(providers.ProviderAnthropic),
-			AutomaticExcludedModels: map[string]struct{}{"claude-opus-5": {}},
+			AutomaticExcludedModels: map[string]struct{}{"zai-org/glm-5.3": {}},
 		})
 
 	require.NoError(t, err)
-	assert.Equal(t, "claude-haiku-4-5", res.Decision.Model)
+	assert.Equal(t, "zai-org/glm-5.3-flash", res.Decision.Model)
 	assert.False(t, res.StickyHit, "the disabled pin must not serve this turn")
 }
 
 // The same disable must leave an explicit /force-model pin serving.
 func TestTurnLoop_KeepsForcedPinOnDisabledModel(t *testing.T) {
-	fakeRouter := &tierProbeRouter{available: map[string]struct{}{"claude-haiku-4-5": {}}}
+	fakeRouter := &tierProbeRouter{available: map[string]struct{}{"zai-org/glm-5.3-flash": {}}}
 	store := &overwritingPinStore{pin: sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
-		Model:       "claude-opus-5",
+		Model:       "zai-org/glm-5.3",
 		Reason:      translate.ReasonUserForceModel,
 		PinnedUntil: pinNeverExpires,
 	}, found: true}
 	svc := NewService(fakeRouter, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic)).
 		WithGlobalAutomaticExclusions(&stubGlobalExclusionStore{
-			byModel: map[string]string{"claude-opus-5": "quality regression"},
+			byModel: map[string]string{"zai-org/glm-5.3": "quality regression"},
 		})
 
 	env := forceCommandEnv(t)
@@ -153,29 +153,29 @@ func TestTurnLoop_KeepsForcedPinOnDisabledModel(t *testing.T) {
 		router.Request{
 			RequestedModel:          feats.Model,
 			EnabledProviders:        keyed(providers.ProviderAnthropic),
-			AutomaticExcludedModels: map[string]struct{}{"claude-opus-5": {}},
+			AutomaticExcludedModels: map[string]struct{}{"zai-org/glm-5.3": {}},
 		})
 
 	require.NoError(t, err)
-	assert.Equal(t, "claude-opus-5", res.Decision.Model)
+	assert.Equal(t, "zai-org/glm-5.3", res.Decision.Model)
 	assert.True(t, res.StickyHit)
 }
 
 // Loop escalation is a router-chosen rescue, so it must not resurrect a model
 // the deployment disabled.
 func TestTurnLoop_DropsEscalationPinOnDisabledModel(t *testing.T) {
-	fakeRouter := &tierProbeRouter{available: map[string]struct{}{"claude-haiku-4-5": {}}}
+	fakeRouter := &tierProbeRouter{available: map[string]struct{}{"zai-org/glm-5.3-flash": {}}}
 	store := &overwritingPinStore{pin: sessionpin.Pin{
 		Provider:    providers.ProviderAnthropic,
-		Model:       "claude-opus-5",
+		Model:       "zai-org/glm-5.3",
 		Reason:      translate.ReasonLoopEscalation,
 		PinnedUntil: time.Now().Add(time.Hour),
 	}, found: true}
 	svc := NewService(fakeRouter, nil, nil, false, nil, store, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil).
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil).
 		WithDeploymentKeyedProviders(keyed(providers.ProviderAnthropic)).
 		WithGlobalAutomaticExclusions(&stubGlobalExclusionStore{
-			byModel: map[string]string{"claude-opus-5": ""},
+			byModel: map[string]string{"zai-org/glm-5.3": ""},
 		})
 
 	env := forceCommandEnv(t)
@@ -184,9 +184,9 @@ func TestTurnLoop_DropsEscalationPinOnDisabledModel(t *testing.T) {
 		router.Request{
 			RequestedModel:          feats.Model,
 			EnabledProviders:        keyed(providers.ProviderAnthropic),
-			AutomaticExcludedModels: map[string]struct{}{"claude-opus-5": {}},
+			AutomaticExcludedModels: map[string]struct{}{"zai-org/glm-5.3": {}},
 		})
 
 	require.NoError(t, err)
-	assert.Equal(t, "claude-haiku-4-5", res.Decision.Model)
+	assert.Equal(t, "zai-org/glm-5.3-flash", res.Decision.Model)
 }

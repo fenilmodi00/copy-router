@@ -19,7 +19,7 @@ import (
 
 // codexNotifyTurnBody is a Codex code-mode history where an exec script
 // called notify() three times, so its call_id carries four outputs.
-const codexNotifyTurnBody = `{"model":"gpt-5.6-sol","input":[` +
+const codexNotifyTurnBody = `{"model":"moonshotai/kimi-k3","input":[` +
 	`{"type":"message","role":"user","content":[{"type":"input_text","text":"poll the build"}]},` +
 	`{"type":"custom_tool_call","call_id":"toolu_dup_1","name":"exec","input":"notify(status)"},` +
 	`{"type":"custom_tool_call_output","call_id":"toolu_dup_1","output":[{"type":"input_text","text":"Script completed\nOutput:\n"},{"type":"input_text","text":"build passed"}]},` +
@@ -37,13 +37,13 @@ func TestProxyOpenAIResponses_CodexDuplicateToolOutputsReachAnthropicOnce(t *tes
 	anthropic := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, `{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+		_, _ = io.WriteString(w, `{"id":"msg_1","type":"message","role":"assistant","model":"zai-org/glm-5.3","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
 	}}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-opus-5", Reason: "test"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3", Reason: "test"}}
 	svc := proxy.NewService(fr, map[string]providers.Client{
 		providers.ProviderAnthropic: anthropic,
 		providers.ProviderOpenAI:    &fakeProvider{},
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-opus-5", nil)
+	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3", nil)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
@@ -69,10 +69,10 @@ func TestProxyOpenAIResponses_CodexDuplicateToolOutputsStayVerbatimOnNativeOpenA
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"id":"resp_1","object":"response","output":[{"type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}]}`)
 	}}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-sol", Reason: "test"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderOpenAI, Model: "moonshotai/kimi-k3", Reason: "test"}}
 	svc := proxy.NewService(fr, map[string]providers.Client{
 		providers.ProviderOpenAI: openai,
-	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "gpt-5.6-sol", nil)
+	}, nil, false, nil, nil, false, providers.ProviderOpenAI, "moonshotai/kimi-k3", nil)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
@@ -94,14 +94,14 @@ func TestProxyMessages_DuplicateToolResultsReachAnthropicOnce(t *testing.T) {
 	anthropic := &fakeProvider{proxyResponse: func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, `{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+		_, _ = io.WriteString(w, `{"id":"msg_1","type":"message","role":"assistant","model":"zai-org/glm-5.3","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
 	}}
-	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-opus-5", Reason: "test"}}
+	fr := &fakeRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3", Reason: "test"}}
 	svc := proxy.NewService(fr, map[string]providers.Client{
 		providers.ProviderAnthropic: anthropic,
-	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "claude-opus-5", nil)
+	}, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3", nil)
 
-	body := []byte(`{"model":"claude-opus-5","max_tokens":512,"messages":[` +
+	body := []byte(`{"model":"zai-org/glm-5.3","max_tokens":512,"messages":[` +
 		`{"role":"user","content":"poll the build"},` +
 		`{"role":"assistant","content":[{"type":"tool_use","id":"toolu_dup_1","name":"exec","input":{}}]},` +
 		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_dup_1","content":"done"},{"type":"tool_result","tool_use_id":"toolu_dup_1","content":"progress"},{"type":"text","text":"what next?"}]}]}`)

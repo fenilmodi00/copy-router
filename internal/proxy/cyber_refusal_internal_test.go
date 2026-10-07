@@ -63,7 +63,7 @@ func (f *repinFakeStore) SweepExpired(context.Context) error { return nil }
 // stop_reason "refusal" on HTTP 200; see catalog.go). The real opus cyber
 // refusal also carries api_refusal_category "cyber" / "safeguards flagged".
 const refusalSSE = `event: message_start
-data: {"type":"message_start","message":{"id":"msg_1","model":"claude-opus-4-8","stop_reason":null}}
+data: {"type":"message_start","message":{"id":"msg_1","model":"zai-org/glm-5.3","stop_reason":null}}
 
 event: message_delta
 data: {"type":"message_delta","delta":{"stop_reason":"refusal","stop_sequence":null},"usage":{"output_tokens":5}}
@@ -73,7 +73,7 @@ data: {"type":"message_stop"}
 `
 
 const normalSSE = `event: message_start
-data: {"type":"message_start","message":{"id":"msg_2","model":"claude-opus-4-8"}}
+data: {"type":"message_start","message":{"id":"msg_2","model":"zai-org/glm-5.3"}}
 
 event: message_delta
 data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null}}
@@ -173,9 +173,9 @@ func repinCtx() context.Context {
 
 func TestMaybeRepinOnRefusal_RepinsToFallbackModel(t *testing.T) {
 	store := &repinFakeStore{} // no existing pin -> no PairedModel
-	s := &Service{pinStore: store, cyberRefusalRepin: true, cyberRefusalFallbackModel: "claude-sonnet-5"}
+	s := &Service{pinStore: store, cyberRefusalRepin: true, cyberRefusalFallbackModel: "deepseek-ai/deepseek-v4.1-flash"}
 	obs := &refusalObserver{refused: true}
-	served := router.Decision{Provider: "anthropic", Model: "claude-opus-4-8"}
+	served := router.Decision{Provider: "anthropic", Model: "zai-org/glm-5.3"}
 
 	s.maybeRepinOnRefusal(repinCtx(), obs, [sessionpin.SessionKeyLen]byte{1, 2, 3}, "main_loop", served)
 
@@ -183,8 +183,8 @@ func TestMaybeRepinOnRefusal_RepinsToFallbackModel(t *testing.T) {
 		t.Fatalf("expected exactly 1 re-pin upsert, got %d", len(store.upserts))
 	}
 	got := store.upserts[0]
-	if got.Model != "claude-sonnet-5" {
-		t.Fatalf("re-pinned to %q, want claude-sonnet-5", got.Model)
+	if got.Model != "deepseek-ai/deepseek-v4.1-flash" {
+		t.Fatalf("re-pinned to %q, want the configured fallback", got.Model)
 	}
 	if got.Provider == "" {
 		t.Fatal("re-pin has no provider (catalog resolution failed)")
@@ -197,18 +197,18 @@ func TestMaybeRepinOnRefusal_RepinsToFallbackModel(t *testing.T) {
 func TestMaybeRepinOnRefusal_PrefersPairedModel(t *testing.T) {
 	store := &repinFakeStore{
 		hasPin: true,
-		getPin: sessionpin.Pin{PairedModel: "claude-haiku-4-5", PairedProvider: "anthropic"},
+		getPin: sessionpin.Pin{PairedModel: "zai-org/glm-5.3-flash", PairedProvider: "anthropic"},
 	}
-	s := &Service{pinStore: store, cyberRefusalRepin: true, cyberRefusalFallbackModel: "claude-sonnet-5"}
+	s := &Service{pinStore: store, cyberRefusalRepin: true, cyberRefusalFallbackModel: "deepseek-ai/deepseek-v4.1-flash"}
 	obs := &refusalObserver{refused: true}
-	served := router.Decision{Provider: "anthropic", Model: "claude-opus-4-8"}
+	served := router.Decision{Provider: "anthropic", Model: "zai-org/glm-5.3"}
 
 	s.maybeRepinOnRefusal(repinCtx(), obs, [sessionpin.SessionKeyLen]byte{4, 5, 6}, "main_loop", served)
 
 	if len(store.upserts) != 1 {
 		t.Fatalf("expected 1 upsert, got %d", len(store.upserts))
 	}
-	if got := store.upserts[0].Model; got != "claude-haiku-4-5" {
+	if got := store.upserts[0].Model; got != "zai-org/glm-5.3-flash" {
 		t.Fatalf("re-pinned to %q, want the pin's PairedModel claude-haiku-4-5", got)
 	}
 	if got := store.upserts[0].Provider; got != "anthropic" {
@@ -221,10 +221,10 @@ func TestMaybeRepinOnRefusal_PrefersPairedModel(t *testing.T) {
 func TestRepinOffRefusingModel_SkipsPairedModelOnTheRefusingVendor(t *testing.T) {
 	store := &repinFakeStore{
 		hasPin: true,
-		getPin: sessionpin.Pin{PairedModel: "gpt-5.4", PairedProvider: providers.ProviderOpenAI},
+		getPin: sessionpin.Pin{PairedModel: "qwen/qwen3.8-27b", PairedProvider: providers.ProviderOpenAI},
 	}
-	s := &Service{pinStore: store, cyberRefusalRepin: true, cyberRefusalFallbackModel: "claude-sonnet-5"}
-	served := router.Decision{Provider: providers.ProviderOpenAI, Model: "gpt-5.6-sol"}
+	s := &Service{pinStore: store, cyberRefusalRepin: true, cyberRefusalFallbackModel: "deepseek-ai/deepseek-v4.1-flash"}
+	served := router.Decision{Provider: providers.ProviderOpenAI, Model: "moonshotai/kimi-k3"}
 
 	s.repinOffRefusingModel(repinCtx(), [sessionpin.SessionKeyLen]byte{8, 9}, "main_loop", served,
 		providers.CyberPolicyErrorCode, providers.ProviderOpenAI)
@@ -232,21 +232,21 @@ func TestRepinOffRefusingModel_SkipsPairedModelOnTheRefusingVendor(t *testing.T)
 	if len(store.upserts) != 1 {
 		t.Fatalf("expected 1 upsert, got %d", len(store.upserts))
 	}
-	if got := store.upserts[0].Model; got != "claude-sonnet-5" {
-		t.Fatalf("re-pinned to %q, want the off-vendor fallback claude-sonnet-5", got)
+	if got := store.upserts[0].Model; got != "deepseek-ai/deepseek-v4.1-flash" {
+		t.Fatalf("re-pinned to %q, want the off-vendor fallback", got)
 	}
-	if got := store.upserts[0].Provider; got != providers.ProviderAnthropic {
-		t.Fatalf("re-pin provider = %q, want anthropic", got)
+	if got := store.upserts[0].Provider; got != providers.ProviderAIAND {
+		t.Fatalf("re-pin provider = %q, want aiand", got)
 	}
 }
 
 func TestMaybeRepinOnRefusal_NoOpCases(t *testing.T) {
-	served := router.Decision{Provider: "anthropic", Model: "claude-opus-4-8"}
+	served := router.Decision{Provider: "anthropic", Model: "zai-org/glm-5.3"}
 	key := [sessionpin.SessionKeyLen]byte{7}
 
 	t.Run("nil observer", func(t *testing.T) {
 		store := &repinFakeStore{}
-		s := &Service{pinStore: store, cyberRefusalRepin: true, cyberRefusalFallbackModel: "claude-sonnet-5"}
+		s := &Service{pinStore: store, cyberRefusalRepin: true, cyberRefusalFallbackModel: "deepseek-ai/deepseek-v4.1-flash"}
 		s.maybeRepinOnRefusal(repinCtx(), nil, key, "main_loop", served)
 		if len(store.upserts) != 0 {
 			t.Fatalf("nil observer should not re-pin, got %d upserts", len(store.upserts))
@@ -255,7 +255,7 @@ func TestMaybeRepinOnRefusal_NoOpCases(t *testing.T) {
 
 	t.Run("no refusal observed", func(t *testing.T) {
 		store := &repinFakeStore{}
-		s := &Service{pinStore: store, cyberRefusalRepin: true, cyberRefusalFallbackModel: "claude-sonnet-5"}
+		s := &Service{pinStore: store, cyberRefusalRepin: true, cyberRefusalFallbackModel: "deepseek-ai/deepseek-v4.1-flash"}
 		s.maybeRepinOnRefusal(repinCtx(), &refusalObserver{refused: false}, key, "main_loop", served)
 		if len(store.upserts) != 0 {
 			t.Fatalf("no refusal should not re-pin, got %d upserts", len(store.upserts))
@@ -264,7 +264,7 @@ func TestMaybeRepinOnRefusal_NoOpCases(t *testing.T) {
 
 	t.Run("re-pin disabled", func(t *testing.T) {
 		store := &repinFakeStore{}
-		s := &Service{pinStore: store, cyberRefusalRepin: false, cyberRefusalFallbackModel: "claude-sonnet-5"}
+		s := &Service{pinStore: store, cyberRefusalRepin: false, cyberRefusalFallbackModel: "deepseek-ai/deepseek-v4.1-flash"}
 		s.maybeRepinOnRefusal(repinCtx(), &refusalObserver{refused: true}, key, "main_loop", served)
 		if len(store.upserts) != 0 {
 			t.Fatalf("re-pin disabled should not upsert, got %d", len(store.upserts))
@@ -273,8 +273,8 @@ func TestMaybeRepinOnRefusal_NoOpCases(t *testing.T) {
 
 	t.Run("served model already the fallback", func(t *testing.T) {
 		store := &repinFakeStore{}
-		s := &Service{pinStore: store, cyberRefusalRepin: true, cyberRefusalFallbackModel: "claude-sonnet-5"}
-		alreadyFallback := router.Decision{Provider: "anthropic", Model: "claude-sonnet-5"}
+		s := &Service{pinStore: store, cyberRefusalRepin: true, cyberRefusalFallbackModel: "deepseek-ai/deepseek-v4.1-flash"}
+		alreadyFallback := router.Decision{Provider: "anthropic", Model: "deepseek-ai/deepseek-v4.1-flash"}
 		s.maybeRepinOnRefusal(repinCtx(), &refusalObserver{refused: true}, key, "main_loop", alreadyFallback)
 		if len(store.upserts) != 0 {
 			t.Fatalf("re-pin to the same model should be skipped, got %d upserts", len(store.upserts))

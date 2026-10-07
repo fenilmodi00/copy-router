@@ -92,7 +92,7 @@ func validLoader(t *testing.T) *fakeLoader {
   "class_order":["low"],
   "ranking":{"alpha":{"low":0.4},"alpha_min":{"low":0.1},"alpha_max":{"low":0.8},"quality_bias_neutral":0.7,"wii_score_version":"wii-v1","wii_normalization_sha256":"wii","wpi_score_version":"wpi-v1","wpi_normalization_sha256":"wpi"},
   "preferences":{"preferred_model_bonus":0.5,"subscription_bonus":0.35},
-  "clusters":{"low":{"complexity_label":"low","arms":["openai/gpt-5.6-sol"],"cost_ref_usd":1,"latency_ref_ms":1,"arm_scores":{"openai/gpt-5.6-sol":1},"arm_indices":{"openai/gpt-5.6-sol":{"wii_v1":80,"wpi_v1":40}}}}
+  "clusters":{"low":{"complexity_label":"low","arms":["moonshotai/kimi-k3"],"cost_ref_usd":1,"latency_ref_ms":1,"arm_scores":{"moonshotai/kimi-k3":1},"arm_indices":{"moonshotai/kimi-k3":{"wii_v1":80,"wpi_v1":40}}}}
 }`)
 	policy, err := rosterdata.ParseValidated(policyJSON)
 	require.NoError(t, err)

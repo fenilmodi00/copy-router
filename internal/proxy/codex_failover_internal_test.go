@@ -20,7 +20,7 @@ import (
 const (
 	codexTestToken     = "eyJhbGciOiJIUzI1NiJ9.codex-subscription-jwt.signature"
 	codexTestAccountID = "acct_test_codex"
-	codexCoveredModel  = "gpt-5.6-sol"
+	codexCoveredModel  = "moonshotai/kimi-k3"
 )
 
 // codexSubscriptionTestCtx returns a ctx carrying the Codex subscription token +
@@ -33,19 +33,11 @@ func codexSubscriptionTestCtx() context.Context {
 }
 
 // TestCodexFailover_EligibilityAndSuppression covers the load-bearing predicates
-// of the Codex subscription failover: a Codex-served OpenAI turn is detected as
-// such, a deployment OpenAI key counts as a fallback, and suppressing the
-// subscription flips credential resolution off the spent ChatGPT token.
+// of the Codex subscription failover that survive the AIand-only catalog: a
+// deployment OpenAI key counts as a paid fallback, and Codex-scoped suppression
+// leaves a Claude subscription on the same request untouched.
 func TestCodexFailover_EligibilityAndSuppression(t *testing.T) {
 	ctx := resolveAndInjectCredentials(codexSubscriptionTestCtx(), providers.ProviderOpenAI, codexCoveredModel, http.Header{})
-	require.True(t, servedOnCodexSubscription(ctx),
-		"a resolved ChatGPT OAuth token + account id must report servedOnCodexSubscription")
-
-	t.Run("out-of-roster catalog model resolves Codex OAuth", func(t *testing.T) {
-		resolved := resolveAndInjectCredentials(codexSubscriptionTestCtx(), providers.ProviderOpenAI, "gpt-6-astra", http.Header{})
-		assert.True(t, servedOnCodexSubscription(resolved),
-			"selected OpenAI catalog models outside the automatic Codex roster must get a subscription funding attempt")
-	})
 
 	t.Run("no fallback key: not eligible", func(t *testing.T) {
 		s := &Service{} // no deployment OpenAI key, no BYOK
@@ -70,7 +62,7 @@ func TestCodexFailover_EligibilityAndSuppression(t *testing.T) {
 
 	t.Run("suppression is Codex-scoped", func(t *testing.T) {
 		ctx := context.WithValue(codexSubscriptionTestCtx(), AnthropicSubscriptionContextKey{}, "sk-ant-oat01-test-subscription-token")
-		suppressed := resolveAndInjectCredentials(withSuppressedCodexSubscription(ctx), providers.ProviderAnthropic, "claude-opus-4-8", http.Header{})
+		suppressed := resolveAndInjectCredentials(withSuppressedCodexSubscription(ctx), providers.ProviderAnthropic, "zai-org/glm-5.3", http.Header{})
 		assert.True(t, servedOnSubscription(suppressed),
 			"suppressing the Codex token must leave a Claude subscription on the same request untouched")
 	})
@@ -298,35 +290,6 @@ func codexSubHTTPRequest(path, body string) *http.Request {
 	req.Header.Set("Authorization", "Bearer "+codexTestToken)
 	req.Header.Set("ChatGPT-Account-ID", codexTestAccountID)
 	return req
-}
-
-// TestCodexRescue_FailedRetryRendersIntoTheLiveStream: the rescue runs whenever
-// the prelude is not COMMITTED, which still allows the buffered 200 + routing
-// marker to be on the wire. A failed rescue must therefore render the way the
-// primary dispatch would — an SSE frame — instead of appending a JSON envelope
-// to what the client is parsing as a stream.
-func TestCodexRescue_FailedRetryRendersIntoTheLiveStream(t *testing.T) {
-	client := &codexQuotaClient{}
-	svc := codexQuotaService(client)
-
-	body := `{"model":"auto","stream":true,"messages":[{"role":"user","content":"read main.go"}]}`
-	rec := httptest.NewRecorder()
-	err := svc.ProxyOpenAIChatCompletion(context.Background(), []byte(body), rec, codexSubHTTPRequest("/v1/chat/completions", body))
-	require.Error(t, err)
-
-	require.GreaterOrEqual(t, len(client.oauthPerCall), 2, "the spent plan must be rescued on the Weave key")
-	assert.True(t, client.oauthPerCall[0], "the primary dispatch serves on the caller's ChatGPT plan")
-	assert.False(t, client.oauthPerCall[len(client.oauthPerCall)-1], "the rescue must dispatch on the Weave key")
-
-	out := rec.Body.String()
-	require.Contains(t, out, "data: ", "the marker prelude must already be on the wire for this to be a stream")
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		if line == "" {
-			continue
-		}
-		require.True(t, strings.HasPrefix(line, "data: ") || strings.HasPrefix(line, ":") || strings.HasPrefix(line, "event:"),
-			"a failed rescue must stay in SSE framing, got a bare line: %s", line)
-	}
 }
 
 // TestCodexRescue_FailedRetryWritesNothingIntoACommittedResponsesStream: on the

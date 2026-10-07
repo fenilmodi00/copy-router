@@ -27,15 +27,15 @@ func TestCompileLegacyRosterPreservesWIIDescription(t *testing.T) {
   "clusters": {
     "low": {
       "complexity_label": "low",
-      "arms": ["openai/gpt-5.6-sol"],
-      "arms_by_harness": {"codex": ["openai/gpt-5.6-sol"]},
+      "arms": ["deepseek-ai/deepseek-v4-pro"],
+      "arms_by_harness": {"codex": ["deepseek-ai/deepseek-v4-pro"]},
       "cost_ref_usd": 0.02,
       "latency_ref_ms": 8000,
-      "arm_scores": {"openai/gpt-5.6-sol": 10},
-      "arm_indices": {"openai/gpt-5.6-sol": {"wii_v1": 50, "wpi_v1": 10}}
+      "arm_scores": {"deepseek-ai/deepseek-v4-pro": 10},
+      "arm_indices": {"deepseek-ai/deepseek-v4-pro": {"wii_v1": 50, "wpi_v1": 10}}
     }
   },
-  "manual_pins": {"pi": {"low": ["openai/gpt-5.6-sol"]}}
+  "manual_pins": {"pi": {"low": ["deepseek-ai/deepseek-v4-pro"]}}
 }`)
 
 	canonical, policy, err := policycompiler.Compile(source, policycompiler.Options{
@@ -44,7 +44,7 @@ func TestCompileLegacyRosterPreservesWIIDescription(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, rosterdata.SchemaVersionPolicyV1, policy.SchemaVersion)
 	assert.Equal(t, "six-benchmark absolute WII with frozen normalization", policy.Ranking.WIIDescription)
-	assert.Equal(t, []string{"openai/gpt-5.6-sol"}, policy.Clusters["low"].ManualPinsByHarness[rosterdata.HarnessPI])
+	assert.Equal(t, []string{"deepseek-ai/deepseek-v4-pro"}, policy.Clusters["low"].ManualPinsByHarness[rosterdata.HarnessPI])
 	assert.Contains(t, string(canonical), `"wii_v1":"six-benchmark absolute WII with frozen normalization"`)
 }
 
@@ -64,22 +64,22 @@ func TestCompileMapsPooledPinsToAllHarness(t *testing.T) {
   "clusters": {
     "low": {
       "complexity_label": "low",
-      "arms": ["openai/gpt-5.6-sol"],
-      "arms_by_harness": {"codex": ["openai/gpt-5.6-sol"]},
+      "arms": ["deepseek-ai/deepseek-v4-pro"],
+      "arms_by_harness": {"codex": ["deepseek-ai/deepseek-v4-pro"]},
       "cost_ref_usd": 0.02,
       "latency_ref_ms": 8000,
-      "arm_scores": {"openai/gpt-5.6-sol": 10},
-      "arm_indices": {"openai/gpt-5.6-sol": {"wii_v1": 50, "wpi_v1": 10}}
+      "arm_scores": {"deepseek-ai/deepseek-v4-pro": 10},
+      "arm_indices": {"deepseek-ai/deepseek-v4-pro": {"wii_v1": 50, "wpi_v1": 10}}
     }
   },
-  "manual_pins": {"pooled": {"low": ["x-ai/grok-4.6"]}}
+  "manual_pins": {"pooled": {"low": ["zai-org/glm-5.3"]}}
 }`)
 
 	canonical, policy, err := policycompiler.Compile(source, policycompiler.Options{
 		ClassOrder: []string{"low"},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"x-ai/grok-4.6"}, policy.Clusters["low"].ManualPinsByHarness[rosterdata.HarnessAll])
+	assert.Equal(t, []string{"zai-org/glm-5.3"}, policy.Clusters["low"].ManualPinsByHarness[rosterdata.HarnessAll])
 	assert.NotContains(t, string(canonical), "pooled")
 }
 
@@ -96,19 +96,19 @@ func TestCompileKeepsOpenCodeHarnessPolicy(t *testing.T) {
     "wpi_score_version": "wpi-v1",
     "wpi_normalization_sha256": "wpi-sha"
   },
-  "harness_vendor_priority": {"opencode": {"vendors": ["openai"], "clusters": ["low"]}},
+  "harness_vendor_priority": {"opencode": {"vendors": ["aiand"], "clusters": ["low"]}},
   "clusters": {
     "low": {
       "complexity_label": "low",
-      "arms": ["openai/gpt-5.6-sol", "x-ai/grok-4.6"],
-      "arms_by_harness": {"opencode": ["x-ai/grok-4.6", "openai/gpt-5.6-sol"]},
+      "arms": ["deepseek-ai/deepseek-v4-pro", "zai-org/glm-5.3"],
+      "arms_by_harness": {"opencode": ["zai-org/glm-5.3", "deepseek-ai/deepseek-v4-pro"]},
       "cost_ref_usd": 0.02,
       "latency_ref_ms": 8000,
-      "arm_scores": {"openai/gpt-5.6-sol": 10, "x-ai/grok-4.6": 12},
-      "arm_indices": {"openai/gpt-5.6-sol": {"wii_v1": 50, "wpi_v1": 10}, "x-ai/grok-4.6": {"wii_v1": 55, "wpi_v1": 15}}
+      "arm_scores": {"deepseek-ai/deepseek-v4-pro": 10, "zai-org/glm-5.3": 12},
+      "arm_indices": {"deepseek-ai/deepseek-v4-pro": {"wii_v1": 50, "wpi_v1": 10}, "zai-org/glm-5.3": {"wii_v1": 55, "wpi_v1": 15}}
     }
   },
-  "manual_pins": {"opencode": {"low": ["x-ai/grok-4.6"]}}
+  "manual_pins": {"opencode": {"low": ["zai-org/glm-5.3"]}}
 }`)
 
 	_, policy, err := policycompiler.Compile(source, policycompiler.Options{
@@ -116,7 +116,7 @@ func TestCompileKeepsOpenCodeHarnessPolicy(t *testing.T) {
 	})
 	require.NoError(t, err)
 	low := policy.Clusters["low"]
-	assert.Equal(t, []string{"x-ai/grok-4.6", "openai/gpt-5.6-sol"}, low.ArmsByHarness[rosterdata.HarnessOpenCode])
-	assert.Equal(t, []string{"x-ai/grok-4.6"}, low.ManualPinsByHarness[rosterdata.HarnessOpenCode])
-	assert.Equal(t, []string{"openai"}, low.PreferredVendorsByHarness[rosterdata.HarnessOpenCode])
+	assert.Equal(t, []string{"zai-org/glm-5.3", "deepseek-ai/deepseek-v4-pro"}, low.ArmsByHarness[rosterdata.HarnessOpenCode])
+	assert.Equal(t, []string{"zai-org/glm-5.3"}, low.ManualPinsByHarness[rosterdata.HarnessOpenCode])
+	assert.Equal(t, []string{"aiand"}, low.PreferredVendorsByHarness[rosterdata.HarnessOpenCode])
 }

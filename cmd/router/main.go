@@ -39,9 +39,7 @@ import (
 	"weave-os/router/internal/postgres/poolconfig"
 	servingpostgres "weave-os/router/internal/postgres/serving"
 	"weave-os/router/internal/providers"
-	"weave-os/router/internal/providers/anthropic"
 	providerHTTP "weave-os/router/internal/providers/httputil"
-	openaiProvider "weave-os/router/internal/providers/openai"
 	openaiCompatProvider "weave-os/router/internal/providers/openaicompat"
 	"weave-os/router/internal/proxy"
 	"weave-os/router/internal/proxy/usage"
@@ -202,12 +200,6 @@ func main() {
 	// Feeds resolveHardPinModel so compaction only lands where deployment
 	// auth actually exists — a BYOK/passthrough-only provider would 401.
 	envKeyedProviders := make(map[string]struct{})
-	// True when Anthropic has no deployment key but is reachable via client
-	// auth passthrough (Claude Code's OAuth/x-api-key flow). Must stay out of
-	// envKeyedProviders since not every request carries those credentials.
-	anthropicPassthroughEligible := false
-	// Mirrors anthropicPassthroughEligible for OpenAI (Codex's plan flow).
-	openaiPassthroughEligible := false
 
 	// Wired by default in managed mode. A boot-time health-check error (e.g.
 	// transient pool unreadiness) defaults to billing-enabled rather than
@@ -238,60 +230,6 @@ func main() {
 		billingSvc.WithInternalTestPrepaid(servingpostgres.NewInternalTestBook(pool))
 	}
 	byokOnly := deploymentMode == server.DeploymentModeManaged && billingSvc == nil
-
-	// Always registered. With ANTHROPIC_API_KEY (selfhosted only) the router
-	// uses its own key; otherwise client auth headers pass through directly.
-	anthropicKey := ""
-	if !byokOnly {
-		anthropicKey = config.GetOr("ANTHROPIC_API_KEY", "")
-	}
-	providerMap[providers.ProviderAnthropic] = anthropic.NewClient(anthropicKey, anthropic.DefaultBaseURL, anthropic.WithModelListHTTPClient(discoveryHTTPClient))
-	switch {
-	case byokOnly:
-		logger.Info("Anthropic provider enabled (BYOK only)", "base_url", anthropic.DefaultBaseURL)
-	case anthropicKey != "":
-		envKeyedProviders[providers.ProviderAnthropic] = struct{}{}
-		logger.Info("Anthropic provider enabled (router key)", "base_url", anthropic.DefaultBaseURL)
-	default:
-		// Selfhosted, no env key: passthrough-only, kept out of envKeyedProviders.
-		anthropicPassthroughEligible = true
-		logger.Info("Anthropic provider enabled (client auth passthrough)", "base_url", anthropic.DefaultBaseURL)
-	}
-
-	{
-		openaiBaseURL := config.GetOr("OPENAI_BASE_URL", openaiProvider.DefaultBaseURL)
-		openaiKey := ""
-		if !byokOnly {
-			openaiKey = config.GetOr("OPENAI_API_KEY", "")
-		}
-		// Codex (ChatGPT) subscription reroute to the Codex backend lives in
-		// the OpenAI client itself, keyed off the resolved credential.
-		openaiClient := openaiProvider.NewClientWithModelIDMap(
-			openaiKey,
-			openaiBaseURL,
-			upstreamIDsForProvider(providers.ProviderOpenAI),
-		)
-		// Local tests can point the subscription branch at a deterministic native
-		// Responses mock without changing the production ChatGPT endpoint.
-		if deploymentMode == server.DeploymentModeSelfHosted {
-			if codexBaseURL := config.GetOr("ROUTER_CODEX_BASE_URL", ""); codexBaseURL != "" {
-				openaiClient.SetCodexBaseURL(codexBaseURL)
-			}
-		}
-		providerMap[providers.ProviderOpenAI] = openaiClient
-		switch {
-		case byokOnly:
-			logger.Info("OpenAI provider enabled (BYOK only)", "base_url", openaiBaseURL)
-		case openaiKey != "":
-			envKeyedProviders[providers.ProviderOpenAI] = struct{}{}
-			logger.Info("OpenAI provider enabled", "base_url", openaiBaseURL)
-		default:
-			// OpenAI in selfhosted with no env key serves the passthrough
-			// path on client Authorization headers (Codex plan flow).
-			openaiPassthroughEligible = true
-			logger.Info("OpenAI provider enabled (client auth passthrough)", "base_url", openaiBaseURL)
-		}
-	}
 
 	{
 		// AIand serves slash-form catalog IDs natively — plain NewClient, no model ID map.
@@ -551,18 +489,9 @@ func main() {
 		deploymentEligible[p] = struct{}{}
 	}
 
-	// Kept separate from deploymentEligible: adding these unconditionally would
-	// let e.g. an Anthropic-surface request route to OpenAI in passthrough mode,
-	// forwarding an Anthropic `x-api-key` to api.openai.com — a credential leak.
-	// WithPassthroughEligibleProviders only admits a provider when the request
-	// matches its own surface.
-	passthroughEligible := make(map[string]struct{}, 2)
-	if anthropicPassthroughEligible {
-		passthroughEligible[providers.ProviderAnthropic] = struct{}{}
-	}
-	if openaiPassthroughEligible {
-		passthroughEligible[providers.ProviderOpenAI] = struct{}{}
-	}
+	// Provider API keys are deployment-level only now: the sole registered
+	// provider (AIAND) is either env-keyed or BYOK-only, with no client-auth
+	// passthrough surface to admit, so the passthrough set stays empty.
 
 	// Planner + handover config (Prism-style cache-aware routing); each default
 	// below can be overridden per deployment.
@@ -1107,7 +1036,7 @@ func main() {
 		WithPiHandoffSecret(config.GetOr("ROUTER_PI_HANDOFF_SECRET", "")).
 		WithByokOnly(byokOnly).
 		WithDeploymentKeyedProviders(deploymentEligible).
-		WithPassthroughEligibleProviders(passthroughEligible).
+		WithPassthroughEligibleProviders(nil).
 		WithHardPinResolver(hardPinResolver).
 		WithSubAgentOverride(subAgentProvider, subAgentModel).
 		WithPlannerEnabled(plannerEnabled).
@@ -2050,17 +1979,11 @@ func envVarHint(provider string) string {
 	return "<unknown provider " + provider + ">"
 }
 
-// upstreamIDsForProvider maps public model ID -> upstream model ID for a
-// provider's bindings with a non-empty UpstreamID; nil if no rewriting is
-// needed (e.g. OpenRouter, where the slug IS the upstream ID).
 // registerDeploymentKeyedProvider resolves a provider's deployment-level API
 // key (respecting byokOnly), constructs its client via newClient, registers
-// it in providerMap, and logs its BYOK/keyed/passthrough state. Shared by the
-// providers whose registration collapses to "resolve key -> build client ->
-// three-way log switch" (Fireworks, Makora, MiniMax, Together, Bedrock, Google);
-// OpenRouter and Anthropic/OpenAI have genuinely different gating
-// logic and stay bespoke. extraLogAttrs are appended only to the
-// deployment-keyed log line (e.g. Bedrock's region).
+// it in providerMap, and logs its BYOK/keyed/passthrough state. Used by the
+// sole registered provider (AIand). extraLogAttrs are appended only to the
+// deployment-keyed log line.
 func registerDeploymentKeyedProvider(
 	providerMap map[string]providers.Client,
 	envKeyedProviders map[string]struct{},
@@ -2084,21 +2007,6 @@ func registerDeploymentKeyedProvider(
 	default:
 		logger.Info(displayName+" provider registered (BYOK only — set "+keyEnvVar+" for deployment-level use)", "base_url", baseURL)
 	}
-}
-
-func upstreamIDsForProvider(provider string) map[string]string {
-	out := make(map[string]string)
-	for _, m := range catalog.Models {
-		for _, b := range m.Providers {
-			if b.Provider == provider && b.UpstreamID != "" {
-				out[m.ID] = b.UpstreamID
-			}
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
 }
 
 type escalationStateSweeper interface {

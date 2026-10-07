@@ -22,7 +22,7 @@ func escalationCompletionContext() context.Context {
 }
 
 func newEscalationCompletionService(store *escalationTestStore, observer *escalationTestObserver, clients map[string]providers.Client) *Service {
-	return NewService(nil, clients, nil, false, nil, newStubPinStore(), false, providers.ProviderAnthropic, "claude-opus-4-8", nil).
+	return NewService(nil, clients, nil, false, nil, newStubPinStore(), false, providers.ProviderAnthropic, "zai-org/glm-5.3", nil).
 		WithEscalation(store, observer).
 		WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyHMMEmbedding, Router: escalationDispatchRouter{}, Capabilities: policy.Capabilities{SchemaVersion: policy.SchemaVersionV1, AuthoritativePerTurnSelection: true}})
 }
@@ -34,9 +34,9 @@ func TestEscalationCompletionRecordsPostRoutingPreparationFailure(t *testing.T) 
 		invoke        func(*Service, context.Context, []byte, http.ResponseWriter, *http.Request) error
 		expectedError error
 	}{
-		{"messages_missing_provider", `{"model":"claude-opus-4-8","max_tokens":4096,"tools":[{"name":"Read","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"inspect the repository"}]}`, (*Service).ProxyMessages, ErrProviderNotConfigured},
-		{"chat_missing_provider", `{"model":"gpt-5","messages":[{"role":"user","content":"inspect the repository"}],"tools":[{"type":"function","function":{"name":"Read","parameters":{"type":"object"}}}]}`, (*Service).ProxyOpenAIChatCompletion, ErrProviderNotConfigured},
-		{"responses_missing_provider", `{"model":"gpt-5","input":"inspect the repository","tools":[{"type":"function","name":"Read","parameters":{"type":"object"}}]}`, (*Service).ProxyOpenAIResponses, ErrProviderNotConfigured},
+		{"messages_missing_provider", `{"model":"zai-org/glm-5.3","max_tokens":4096,"tools":[{"name":"Read","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"inspect the repository"}]}`, (*Service).ProxyMessages, ErrProviderNotConfigured},
+		{"chat_missing_provider", `{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"inspect the repository"}],"tools":[{"type":"function","function":{"name":"Read","parameters":{"type":"object"}}}]}`, (*Service).ProxyOpenAIChatCompletion, ErrProviderNotConfigured},
+		{"responses_missing_provider", `{"model":"moonshotai/kimi-k3","input":"inspect the repository","tools":[{"type":"function","name":"Read","parameters":{"type":"object"}}]}`, (*Service).ProxyOpenAIResponses, ErrProviderNotConfigured},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := newEscalationTestStore()
@@ -94,7 +94,7 @@ func TestEscalationCompletionWaitsForResponsesFinalization(t *testing.T) {
 			provider := escalationCompletionProvider{writeResponse: func(w http.ResponseWriter) error {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				_, err := w.Write([]byte(`{"id":"msg_test","type":"message","role":"assistant","model":"claude-haiku-4-5","content":[{"type":"text","text":"repository inspected"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}}`))
+				_, err := w.Write([]byte(`{"id":"msg_test","type":"message","role":"assistant","model":"zai-org/glm-5.3-flash","content":[{"type":"text","text":"repository inspected"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}}`))
 				return err
 			}}
 			svc := newEscalationCompletionService(store, observer, map[string]providers.Client{providers.ProviderAnthropic: provider})
@@ -110,7 +110,7 @@ func TestEscalationCompletionWaitsForResponsesFinalization(t *testing.T) {
 			if failFinalize {
 				writer.writeErr = finalizationErr
 			}
-			body := []byte(`{"model":"gpt-5","input":"inspect the repository","tools":[{"type":"function","name":"Read","parameters":{"type":"object"}}]}`)
+			body := []byte(`{"model":"moonshotai/kimi-k3","input":"inspect the repository","tools":[{"type":"function","name":"Read","parameters":{"type":"object"}}]}`)
 			err := svc.ProxyOpenAIResponses(escalationCompletionContext(), body, writer, httptest.NewRequest(http.MethodPost, "/v1/responses", nil))
 			if failFinalize {
 				require.ErrorIs(t, err, finalizationErr)
@@ -140,8 +140,8 @@ func TestEscalationTurnsBypassPopulatedSemanticCache(t *testing.T) {
 		body   string
 		invoke func(*Service, context.Context, []byte, http.ResponseWriter, *http.Request) error
 	}{
-		{"messages", cache.FormatAnthropic, `{"model":"claude-opus-4-8","max_tokens":4096,"tools":[{"name":"Read","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"inspect the repository"}]}`, (*Service).ProxyMessages},
-		{"chat", cache.FormatOpenAI, `{"model":"gpt-5","messages":[{"role":"user","content":"inspect the repository"}],"tools":[{"type":"function","function":{"name":"Read","parameters":{"type":"object"}}}]}`, (*Service).ProxyOpenAIChatCompletion},
+		{"messages", cache.FormatAnthropic, `{"model":"zai-org/glm-5.3","max_tokens":4096,"tools":[{"name":"Read","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"inspect the repository"}]}`, (*Service).ProxyMessages},
+		{"chat", cache.FormatOpenAI, `{"model":"moonshotai/kimi-k3","messages":[{"role":"user","content":"inspect the repository"}],"tools":[{"type":"function","function":{"name":"Read","parameters":{"type":"object"}}}]}`, (*Service).ProxyOpenAIChatCompletion},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := newEscalationTestStore()
@@ -151,8 +151,8 @@ func TestEscalationTurnsBypassPopulatedSemanticCache(t *testing.T) {
 			semanticCache.Store(externalID, tc.format, embedding, 1, cache.CachedResponse{StatusCode: http.StatusOK, Body: []byte(`{"cached":true}`)}, "", 0)
 			_, hit := semanticCache.Lookup(externalID, tc.format, embedding, []int{1}, "", 0)
 			require.True(t, hit)
-			classifier := &authoritativeTestRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "claude-haiku-4-5", Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMMEmbedding), Embedding: embedding, ClusterIDs: []int{1}}}}
-			svc := NewService(nil, nil, nil, false, semanticCache, newStubPinStore(), false, providers.ProviderAnthropic, "claude-opus-4-8", nil).WithEscalation(store, &escalationTestObserver{}).WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyHMMEmbedding, Router: classifier, Capabilities: policy.Capabilities{SchemaVersion: policy.SchemaVersionV1}})
+			classifier := &authoritativeTestRouter{decision: router.Decision{Provider: providers.ProviderAnthropic, Model: "zai-org/glm-5.3-flash", Metadata: &router.RoutingMetadata{Strategy: string(router.StrategyHMMEmbedding), Embedding: embedding, ClusterIDs: []int{1}}}}
+			svc := NewService(nil, nil, nil, false, semanticCache, newStubPinStore(), false, providers.ProviderAnthropic, "zai-org/glm-5.3", nil).WithEscalation(store, &escalationTestObserver{}).WithPolicyStrategy(policy.StrategySpec{Strategy: router.StrategyHMMEmbedding, Router: classifier, Capabilities: policy.Capabilities{SchemaVersion: policy.SchemaVersionV1}})
 			ctx := context.WithValue(escalationCompletionContext(), ExternalIDContextKey{}, externalID)
 			recorder := httptest.NewRecorder()
 			err := tc.invoke(svc, ctx, []byte(tc.body), recorder, httptest.NewRequest(http.MethodPost, "/test", nil))

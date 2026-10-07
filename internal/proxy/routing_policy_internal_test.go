@@ -14,7 +14,6 @@ import (
 	"weave-os/router/internal/auth"
 	"weave-os/router/internal/providers"
 	"weave-os/router/internal/router"
-	"weave-os/router/internal/router/catalog"
 	"weave-os/router/internal/router/sessionpin"
 	"weave-os/router/internal/translate"
 )
@@ -44,22 +43,21 @@ func TestExplicitRoutingPolicyPrecedesClassifierAndPins(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			routerSpy := &blindExperimentRouterSpy{err: errors.New("scorer must not run")}
 			pins := newStubPinStore()
-			service := NewService(routerSpy, nil, nil, false, nil, pins, false, providers.ProviderAnthropic, catalog.ModelIDClaudeHaiku45.String(), nil)
+			service := NewService(routerSpy, nil, nil, false, nil, pins, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil)
 			authService := auth.NewService(nil, nil, nil, nil, nil, nil, time.Now).WithRoutingPolicies(routingPolicyStub{mode: tc.mode, assigned: tc.assigned}, nil)
 			ctx, err := authService.WithRoutingPolicy(context.Background(), "installation")
 			require.NoError(t, err)
 			ctx, err = authService.WithRoutingAssignment(ctx, "installation", "user")
 			require.NoError(t, err)
-			envelope, err := translate.ParseAnthropic([]byte(`{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hello"}]}`))
+			envelope, err := translate.ParseAnthropic([]byte(`{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":"hello"}]}`))
 			require.NoError(t, err)
-			request := router.Request{RequestedModel: catalog.ModelIDClaudeSonnet46.String(), EnabledProviders: map[string]struct{}{providers.ProviderAnthropic: {}}}
+			request := router.Request{RequestedModel: "deepseek-ai/deepseek-v4.1-flash", EnabledProviders: map[string]struct{}{providers.ProviderAIAND: {}}}
 			turn, err := service.runTurnLoop(ctx, envelope, envelope.RoutingFeatures(false), "api-key", uuid.New(), "", http.Header{}, request)
 			require.NoError(t, err)
 			assert.True(t, turn.CallerModelPassthrough)
-			assert.Equal(t, catalog.ModelIDClaudeSonnet46.String(), turn.Decision.Model)
+			assert.Equal(t, "deepseek-ai/deepseek-v4.1-flash", turn.Decision.Model)
 			assert.Empty(t, routingMarkerFor(turn))
 			assert.Equal(t, 0, routerSpy.routeCalls)
-			assert.False(t, turn.UsageBypass)
 			pins.mu.Lock()
 			defer pins.mu.Unlock()
 			assert.Equal(t, []string{forceModelSessionRole}, pins.getRoles)
@@ -83,12 +81,12 @@ func TestRoutingPolicyPreservesExplicitForcedModel(t *testing.T) {
 		} {
 			t.Run(string(mode)+"/"+tc.name, func(t *testing.T) {
 				pins := newStubPinStore()
-				forceModel := catalog.ModelIDClaudeHaiku45.String()
+				forceModel := "zai-org/glm-5.3-flash"
 				if !tc.requestOnly {
 					forceModel = ""
 					pins.getFound = true
 					pins.getPin = sessionpin.Pin{
-						Model: catalog.ModelIDClaudeHaiku45.String(), Provider: providers.ProviderAnthropic,
+						Model: "zai-org/glm-5.3-flash", Provider: providers.ProviderAIAND,
 						Reason: translate.ReasonUserForceModel, PinnedUntil: pinNeverExpires,
 					}
 					if tc.cleared {
@@ -96,19 +94,19 @@ func TestRoutingPolicyPreservesExplicitForcedModel(t *testing.T) {
 					}
 				}
 				routerSpy := &blindExperimentRouterSpy{err: errors.New("scorer must not run")}
-				service := NewService(routerSpy, nil, nil, false, nil, pins, false, providers.ProviderAnthropic, catalog.ModelIDClaudeHaiku45.String(), nil)
+				service := NewService(routerSpy, nil, nil, false, nil, pins, false, providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil)
 				authService := auth.NewService(nil, nil, nil, nil, nil, nil, time.Now).WithRoutingPolicies(routingPolicyStub{mode: mode}, nil)
 				ctx, err := authService.WithRoutingPolicy(context.Background(), "installation")
 				require.NoError(t, err)
 				ctx, err = authService.WithRoutingAssignment(ctx, "installation", "user")
 				require.NoError(t, err)
 				if tc.excluded {
-					ctx = context.WithValue(ctx, InstallationExcludedModelsContextKey{}, []string{catalog.ModelIDClaudeHaiku45.String()})
+					ctx = context.WithValue(ctx, InstallationExcludedModelsContextKey{}, []string{"zai-org/glm-5.3-flash"})
 				}
-				envelope, err := translate.ParseAnthropic([]byte(`{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hello"}]}`))
+				envelope, err := translate.ParseAnthropic([]byte(`{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":"hello"}]}`))
 				require.NoError(t, err)
 				turn, err := service.runTurnLoop(ctx, envelope, envelope.RoutingFeatures(false), "api-key", uuid.New(), "", http.Header{}, router.Request{
-					RequestedModel: catalog.ModelIDClaudeSonnet46.String(), ForceModel: forceModel, EnabledProviders: map[string]struct{}{providers.ProviderAnthropic: {}},
+					RequestedModel: "deepseek-ai/deepseek-v4.1-flash", ForceModel: forceModel, EnabledProviders: map[string]struct{}{providers.ProviderAIAND: {}},
 				})
 				assert.Zero(t, routerSpy.routeCalls)
 				if tc.excluded {
@@ -117,11 +115,11 @@ func TestRoutingPolicyPreservesExplicitForcedModel(t *testing.T) {
 				}
 				require.NoError(t, err)
 				if tc.cleared {
-					assert.Equal(t, catalog.ModelIDClaudeSonnet46.String(), turn.Decision.Model)
+					assert.Equal(t, "deepseek-ai/deepseek-v4.1-flash", turn.Decision.Model)
 					assert.True(t, turn.CallerModelPassthrough)
 					return
 				}
-				assert.Equal(t, catalog.ModelIDClaudeHaiku45.String(), turn.Decision.Model)
+				assert.Equal(t, "zai-org/glm-5.3-flash", turn.Decision.Model)
 				assert.Equal(t, translate.ReasonUserForceModel, turn.Decision.Reason)
 				assert.False(t, turn.CallerModelPassthrough)
 			})
@@ -130,7 +128,7 @@ func TestRoutingPolicyPreservesExplicitForcedModel(t *testing.T) {
 }
 
 func TestRoutingPolicyPassthroughUnknownModelIsAttributedToPolicy(t *testing.T) {
-	service := NewService(nil, nil, nil, false, nil, nil, false, providers.ProviderAnthropic, catalog.ModelIDClaudeHaiku45.String(), nil)
+	service := NewService(nil, nil, nil, false, nil, nil, false, providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 	authService := auth.NewService(nil, nil, nil, nil, nil, nil, time.Now).WithRoutingPolicies(routingPolicyStub{mode: auth.RoutingPolicyPassthrough}, nil)
 	ctx, err := authService.WithRoutingPolicy(context.Background(), "installation")
 	require.NoError(t, err)

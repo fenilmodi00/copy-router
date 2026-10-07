@@ -215,10 +215,6 @@ type turnLoopResult struct {
 	// AuthoritativePerTurn is true only for eligible main/tool-result turns
 	// whose active policy declared model-authoritative dispatch.
 	AuthoritativePerTurn bool
-	// UsageBypass is true when the caller's own subscription has headroom:
-	// ProxyMessages must serve the requested model straight through with no
-	// billing debit, bypassing Decision's normal dispatch.
-	UsageBypass bool
 	// CallerModelPassthrough records direct dispatch under the internal
 	// experiment without changing usage-bypass billing semantics.
 	CallerModelPassthrough bool
@@ -545,10 +541,8 @@ func isUnpinnedScoredTurn(tt turntype.TurnType) bool {
 }
 
 // routeWithoutPin scores a turn that has no session pin to honor or anchor:
-// an explicit force still wins, then a classifier presenting the caller's
-// Claude subscription passes straight through to the requested model
-// (classifierPassthroughEngaged) or the usage bypass intercepts the fresh
-// decision, and res.SessionKey stays zero so nothing is written back.
+// an explicit force still wins, then the fresh decision is scored, and
+// res.SessionKey stays zero so nothing is written back.
 func (s *Service) routeWithoutPin(
 	ctx context.Context,
 	req router.Request,
@@ -565,11 +559,6 @@ func (s *Service) routeWithoutPin(
 		return res, nil
 	}
 	req.PolicyTurnContext = buildPolicyTurnContext(req, res, sessionpin.Pin{}, sessionpin.Pin{})
-	if dec, ok := s.usageBypassDecision(ctx, reqHeaders, req, nil, res.TurnType); ok {
-		res.Decision = dec
-		res.UsageBypass = true
-		return res, nil
-	}
 	decision, err := s.routeFor(ctx, req)
 	if err != nil {
 		return res, err
@@ -1022,19 +1011,12 @@ func (s *Service) runTurnLoop(
 
 	// Claude Code executes WebSearch in an isolated one-message request with a
 	// different cache key from the parent conversation. Preserve the request's
-	// resolved baseline Anthropic model instead of asking the policy to choose a
-	// new uncached arm; ordinary in-context search turns continue below and
-	// retain their pin.
+	// resolved baseline model instead of asking the policy to choose a new
+	// uncached arm; ordinary in-context search turns continue below and retain
+	// their pin.
 	if !forceModelFound && env.IsNativeWebSearchSubTurn() {
-		// No session strikes yet: the pin rows are read further down, and the
-		// non-bypass branch below passes the baseline model through unrouted.
-		if decision, ok := s.usageBypassDecision(ctx, reqHeaders, req, nil, res.TurnType); ok {
-			res.SessionKey = threadSessionKey
-			res.Decision = decision
-			res.UsageBypass = true
-			return res, nil
-		}
-
+		// The pin rows are read further down; the baseline model is passed
+		// through unrouted below.
 		passthroughModel := s.baselineFor(req.RequestedModel)
 		_, excluded := req.ExcludedModels[passthroughModel]
 		_, safetyExcluded := req.SafetyExcludedModels[passthroughModel]
@@ -1045,7 +1027,7 @@ func (s *Service) runTurnLoop(
 			req.EnabledProviders,
 			req.CustomBindings,
 		)
-		if !excluded && !safetyExcluded && allowed && bindingFound && binding.Provider == providers.ProviderAnthropic {
+		if !excluded && !safetyExcluded && allowed && bindingFound {
 			res.SessionKey = threadSessionKey
 			res.Decision = router.Decision{
 				Provider: binding.Provider,
@@ -1572,24 +1554,6 @@ func (s *Service) runTurnLoop(
 			"pin_provider", commandContinuation.Provider,
 		)
 		s.refreshPin(ctx, installationID, res.SessionKey, commandContinuation, res.PinRole, decision)
-		return res, nil
-	}
-
-	// Positioned after hard-pin/forced-pin (higher precedence) and after all
-	// pin-drop guards (context overflow, provider disabled, images, maxed-out),
-	// but before the tool-result/planner-disabled stickies and scorer, so a
-	// stale pin from a prior routed stretch can't make a tool_result
-	// continuation diverge from the bypassed tool_use turn. The pin itself is
-	// untouched and resumes once utilization crosses the threshold.
-	//
-	// Bypass settles whether the turn is routed at all (caller's prepaid quota,
-	// not a routing-quality opinion) — AuthoritativePerTurn controls which model
-	// is chosen for a routed turn, so the gate must not apply here. It does
-	// yield to a session strike on the requested model: that arm failed this
-	// user mid-turn, and the strike is what keeps the next turn off it.
-	if dec, ok := s.usageBypassDecision(ctx, reqHeaders, req, res.SessionDemotedModels, res.TurnType); ok {
-		res.Decision = dec
-		res.UsageBypass = true
 		return res, nil
 	}
 

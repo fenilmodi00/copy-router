@@ -42,8 +42,8 @@ func TestCallerModelPassthroughSkipsAutomaticPinsAndScorer(t *testing.T) {
 	routerSpy := &blindExperimentRouterSpy{err: errors.New("scorer must not run")}
 	pins := newStubPinStore()
 	service := NewService(routerSpy, nil, nil, false, nil, pins, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
-	envelope, err := translate.ParseAnthropic([]byte(`{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hello"}]}`))
+		providers.ProviderAIAND, "zai-org/glm-5.3-flash", nil)
+	envelope, err := translate.ParseAnthropic([]byte(`{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":"hello"}]}`))
 	require.NoError(t, err)
 
 	loopResult, err := service.runTurnLoop(
@@ -55,9 +55,9 @@ func TestCallerModelPassthroughSkipsAutomaticPinsAndScorer(t *testing.T) {
 		"",
 		http.Header{},
 		router.Request{
-			RequestedModel: "claude-sonnet-4-6",
+			RequestedModel: "deepseek-ai/deepseek-v4.1-flash",
 			EnabledProviders: map[string]struct{}{
-				providers.ProviderAnthropic: {},
+				providers.ProviderAIAND: {},
 			},
 		},
 	)
@@ -65,9 +65,8 @@ func TestCallerModelPassthroughSkipsAutomaticPinsAndScorer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, routerSpy.routeCalls)
 	assert.True(t, loopResult.CallerModelPassthrough)
-	assert.False(t, loopResult.UsageBypass)
-	assert.Equal(t, "claude-sonnet-4-6", loopResult.Decision.Model)
-	assert.Equal(t, providers.ProviderAnthropic, loopResult.Decision.Provider)
+	assert.Equal(t, "deepseek-ai/deepseek-v4.1-flash", loopResult.Decision.Model)
+	assert.Equal(t, providers.ProviderAIAND, loopResult.Decision.Provider)
 	assert.Equal(t, blindExperimentPublicDecisionReason, loopResult.Decision.Reason)
 	pins.mu.Lock()
 	defer pins.mu.Unlock()
@@ -80,8 +79,8 @@ func TestCallerModelPassthroughSkipsAutomaticPinsAndScorer(t *testing.T) {
 func TestCallerModelPassthroughLeavesAutomaticSessionHistoryUntouched(t *testing.T) {
 	pins := newStubPinStore()
 	service := NewService(nil, nil, nil, false, nil, pins, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
-	envelope, err := translate.ParseAnthropic([]byte(`{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hello"}]}`))
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
+	envelope, err := translate.ParseAnthropic([]byte(`{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":"hello"}]}`))
 	require.NoError(t, err)
 
 	loopResult, err := service.runTurnLoop(
@@ -92,7 +91,7 @@ func TestCallerModelPassthroughLeavesAutomaticSessionHistoryUntouched(t *testing
 		uuid.New(),
 		"",
 		http.Header{},
-		router.Request{RequestedModel: "claude-sonnet-4-6"},
+		router.Request{RequestedModel: "deepseek-ai/deepseek-v4.1-flash"},
 	)
 
 	require.NoError(t, err)
@@ -110,12 +109,12 @@ func TestCallerModelPassthroughLeavesAutomaticSessionHistoryUntouched(t *testing
 
 func TestCallerModelPassthroughUsesGatewayAlias(t *testing.T) {
 	service := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	decision, passthrough, err := service.blindExperimentPassthroughDecision(
 		blindExperimentContext(auth.BlindExperimentArmPassthrough),
 		router.Request{
-			RequestedModel: "gpt-5.4",
+			RequestedModel: "qwen/qwen3.8-27b",
 			EnabledProviders: map[string]struct{}{
 				providers.ProviderAIAND:  {},
 				providers.ProviderOpenAI: {},
@@ -124,7 +123,7 @@ func TestCallerModelPassthroughUsesGatewayAlias(t *testing.T) {
 				providers.ProviderAIAND: {},
 			},
 			CustomBindings: map[string][]string{
-				"gpt-5.4": {providers.ProviderAIAND},
+				"qwen/qwen3.8-27b": {providers.ProviderAIAND},
 			},
 		},
 	)
@@ -133,13 +132,13 @@ func TestCallerModelPassthroughUsesGatewayAlias(t *testing.T) {
 	assert.True(t, passthrough)
 	assert.Equal(t, providers.ProviderAIAND, decision.Provider,
 		"gateway-exclusive passthrough must use the held key's alias instead of the catalog binding")
-	assert.Equal(t, "gpt-5.4", decision.Model)
+	assert.Equal(t, "qwen/qwen3.8-27b", decision.Model)
 	assert.Equal(t, blindExperimentPublicDecisionReason, decision.Reason)
 }
 
 func TestCallerModelPassthroughRejectsUnknownModelWithoutBlamingProviderKeys(t *testing.T) {
 	service := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	_, _, err := service.blindExperimentPassthroughDecision(
 		blindExperimentContext(auth.BlindExperimentArmPassthrough),
@@ -159,26 +158,26 @@ func TestCallerModelPassthroughRejectsUnknownModelWithoutBlamingProviderKeys(t *
 
 func TestCallerModelPassthroughResolvesDatedAlias(t *testing.T) {
 	service := NewService(nil, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
 
 	decision, _, err := service.blindExperimentPassthroughDecision(
 		blindExperimentContext(auth.BlindExperimentArmPassthrough),
 		router.Request{
-			RequestedModel:   "claude-haiku-4-5-20251001",
-			EnabledProviders: map[string]struct{}{providers.ProviderAnthropic: {}},
+			RequestedModel:   "zai-org/glm-5.3-20260101",
+			EnabledProviders: map[string]struct{}{providers.ProviderAIAND: {}},
 		},
 	)
 
 	require.NoError(t, err, "a dated catalog alias is a known model and must still pass through")
-	assert.Equal(t, providers.ProviderAnthropic, decision.Provider)
-	assert.Equal(t, "claude-haiku-4-5-20251001", decision.Model)
+	assert.Equal(t, providers.ProviderAIAND, decision.Provider)
+	assert.Equal(t, "zai-org/glm-5.3-20260101", decision.Model)
 }
 
 func TestCallerModelPassthroughHonorsExcludedModels(t *testing.T) {
 	routerSpy := &blindExperimentRouterSpy{err: errors.New("scorer must not run")}
 	service := NewService(routerSpy, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
-	envelope, err := translate.ParseAnthropic([]byte(`{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hello"}]}`))
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
+	envelope, err := translate.ParseAnthropic([]byte(`{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":"hello"}]}`))
 	require.NoError(t, err)
 
 	_, err = service.runTurnLoop(
@@ -190,9 +189,9 @@ func TestCallerModelPassthroughHonorsExcludedModels(t *testing.T) {
 		"",
 		http.Header{},
 		router.Request{
-			RequestedModel: "claude-sonnet-4-6",
+			RequestedModel: "deepseek-ai/deepseek-v4.1-flash",
 			ExcludedModels: map[string]struct{}{
-				"claude-sonnet-4-6": {},
+				"deepseek-ai/deepseek-v4.1-flash": {},
 			},
 		},
 	)
@@ -205,12 +204,12 @@ func TestCallerModelPassthroughHonorsExcludedModels(t *testing.T) {
 func TestBlindExperimentRouterOnUsesScorer(t *testing.T) {
 	routerSpy := &blindExperimentRouterSpy{decision: router.Decision{
 		Provider: providers.ProviderAnthropic,
-		Model:    "claude-haiku-4-5",
+		Model:    "zai-org/glm-5.3-flash",
 		Reason:   "cluster:test",
 	}}
 	service := NewService(routerSpy, nil, nil, false, nil, nil, false,
-		providers.ProviderAnthropic, "claude-haiku-4-5", nil)
-	envelope, err := translate.ParseAnthropic([]byte(`{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hello"}]}`))
+		providers.ProviderAnthropic, "zai-org/glm-5.3-flash", nil)
+	envelope, err := translate.ParseAnthropic([]byte(`{"model":"deepseek-ai/deepseek-v4.1-flash","messages":[{"role":"user","content":"hello"}]}`))
 	require.NoError(t, err)
 
 	loopResult, err := service.runTurnLoop(
@@ -221,13 +220,13 @@ func TestBlindExperimentRouterOnUsesScorer(t *testing.T) {
 		uuid.New(),
 		"",
 		http.Header{},
-		router.Request{RequestedModel: "claude-sonnet-4-6"},
+		router.Request{RequestedModel: "deepseek-ai/deepseek-v4.1-flash"},
 	)
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, routerSpy.routeCalls)
 	assert.False(t, loopResult.CallerModelPassthrough)
-	assert.Equal(t, "claude-haiku-4-5", loopResult.Decision.Model)
+	assert.Equal(t, "zai-org/glm-5.3-flash", loopResult.Decision.Model)
 }
 
 func TestApplyBlindExperimentTelemetry(t *testing.T) {
@@ -256,7 +255,7 @@ func TestCohortTelemetrySeparatesScheduledIntendedAndApplied(t *testing.T) {
 	ctx := context.WithValue(context.Background(), auth.BlindExperimentContextKey{}, state)
 	params := InsertTelemetryParams{}
 	applyBlindExperimentTelemetry(ctx, &params, &turnLoopResult{
-		Decision: router.Decision{Model: "claude-sonnet-4-6"}, CallerModelPassthrough: true})
+		Decision: router.Decision{Model: "deepseek-ai/deepseek-v4.1-flash"}, CallerModelPassthrough: true})
 	assert.Equal(t, auth.BlindExperimentArmRouterOn, params.CohortScheduledArm)
 	assert.Equal(t, auth.BlindExperimentArmPassthrough, params.BlindExperimentArm)
 	require.NotNil(t, params.CohortTreatmentApplied)
@@ -265,7 +264,7 @@ func TestCohortTelemetrySeparatesScheduledIntendedAndApplied(t *testing.T) {
 	state.Arm = auth.BlindExperimentArmRouterOn
 	ctx = context.WithValue(context.Background(), auth.BlindExperimentContextKey{}, state)
 	params = InsertTelemetryParams{}
-	applyBlindExperimentTelemetry(ctx, &params, &turnLoopResult{Decision: router.Decision{Model: "claude-sonnet-4-6"}, HardPinned: true})
+	applyBlindExperimentTelemetry(ctx, &params, &turnLoopResult{Decision: router.Decision{Model: "deepseek-ai/deepseek-v4.1-flash"}, HardPinned: true})
 	require.NotNil(t, params.CohortTreatmentApplied)
 	assert.False(t, *params.CohortTreatmentApplied)
 	assert.Equal(t, auth.CohortBypassHardPin, params.CohortBypassReason)
@@ -293,7 +292,6 @@ func TestCohortTelemetryExplainsBypassedTreatment(t *testing.T) {
 	}{
 		{name: "force model", routed: &turnLoopResult{Decision: router.Decision{Model: "model", Reason: translate.ReasonUserForceModel}}, reason: auth.CohortBypassForceModel},
 		{name: "hard pin", routed: &turnLoopResult{HardPinned: true, Decision: router.Decision{Model: "model"}}, reason: auth.CohortBypassHardPin},
-		{name: "usage bypass", routed: &turnLoopResult{UsageBypass: true, Decision: router.Decision{Model: "model"}}, reason: auth.CohortBypassUsageBypass},
 		{name: "not dispatched", routed: nil, reason: auth.CohortBypassNotDispatched},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {

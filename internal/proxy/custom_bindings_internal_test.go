@@ -15,11 +15,11 @@ func TestCustomBindingsFromKeys_DeclaredByAliases(t *testing.T) {
 	got := customBindingsFromKeys([]*auth.ExternalAPIKey{{
 		Provider:     providers.ProviderAIAND,
 		Plaintext:    []byte("pat"),
-		ModelAliases: map[string]string{"gpt-5": "openai-gpt-5"},
+		ModelAliases: map[string]string{"moonshotai/kimi-k3": "openai-gpt-5"},
 	}})
 
 	assert.Equal(t,
-		map[string][]string{"gpt-5": {providers.ProviderAIAND}},
+		map[string][]string{"moonshotai/kimi-k3": {providers.ProviderAIAND}},
 		got)
 }
 
@@ -28,7 +28,7 @@ func TestCustomBindingsFromKeys_SkipsUnusableDeclarations(t *testing.T) {
 		{
 			// No plaintext: enrolling it would route to an upstream that 401s.
 			Provider:     providers.ProviderAIAND,
-			ModelAliases: map[string]string{"gpt-5": "openai-gpt-5"},
+			ModelAliases: map[string]string{"moonshotai/kimi-k3": "openai-gpt-5"},
 		},
 		{
 			Provider:  providers.ProviderOpenAI,
@@ -49,16 +49,16 @@ func TestCustomBindingsFromKeys_ProvidersAreOrdered(t *testing.T) {
 		{
 			Provider:     providers.ProviderOpenAI,
 			Plaintext:    []byte("pat"),
-			ModelAliases: map[string]string{"claude-sonnet-4-5": "claude-sonnet-4-5"},
+			ModelAliases: map[string]string{"qwen/qwen3.8-27b": "qwen/qwen3.8-27b"},
 		},
 		{
 			Provider:     providers.ProviderAIAND,
 			Plaintext:    []byte("pat"),
-			ModelAliases: map[string]string{"claude-sonnet-4-5": "claude-sonnet-4-5"},
+			ModelAliases: map[string]string{"qwen/qwen3.8-27b": "qwen/qwen3.8-27b"},
 		},
 	}
 
 	assert.Equal(t,
 		[]string{providers.ProviderAIAND, providers.ProviderOpenAI},
-		customBindingsFromKeys(keys)["claude-sonnet-4-5"])
+		customBindingsFromKeys(keys)["qwen/qwen3.8-27b"])
 }

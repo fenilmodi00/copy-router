@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"weave-os/router/internal/providers"
 	"weave-os/router/internal/router"
 	"weave-os/router/internal/router/catalog"
 	"weave-os/router/internal/router/planner"
@@ -30,10 +31,10 @@ func correctedInputs(pinModel, freshModel string, tokens, prefix, priorOut int, 
 	return planner.Inputs{
 		Pin: sessionpin.Pin{
 			Model:           pinModel,
-			Provider:        "anthropic",
+			Provider:        providers.ProviderAIAND,
 			LastTurnEndedAt: time.Now().Add(-time.Minute),
 		},
-		Fresh:                 router.Decision{Model: freshModel, Provider: "anthropic"},
+		Fresh:                 router.Decision{Model: freshModel, Provider: providers.ProviderAIAND},
 		EstimatedInputTokens:  tokens,
 		CacheablePrefixTokens: prefix,
 		CachePrefixKnown:      true,
@@ -43,17 +44,17 @@ func correctedInputs(pinModel, freshModel string, tokens, prefix, priorOut int, 
 }
 
 // The safety property: merging must not move routing until the flag is armed.
-// Sonnet->Haiku is chosen because legacy's break-even (0.25 at N=3, m=0.10)
-// sits above Haiku's 0.333x, so legacy stays; Opus->Haiku is 0.20x and legacy
-// already switches, so it cannot show the difference.
+// deepseek-v4-pro->motif-3 is chosen because legacy prices both sides at their
+// read multiplier, so the small discounted gap fails the bar; the corrected
+// path sees the uncached tail at full price and switches.
 func TestCorrectedEconomicsIsOffByDefault(t *testing.T) {
-	in := correctedInputs("claude-sonnet-5", "claude-haiku-4-5", 200_000, 80_000, 1200, false)
+	in := correctedInputs("deepseek-ai/deepseek-v4-pro", "motif-technologies/motif-3", 200_000, 80_000, 1200, false)
 
 	before := planner.Decide(in, legacyCfg(3))
 	after := planner.Decide(in, correctedCfg(3))
 
 	assert.Equal(t, planner.OutcomeStay, before.Outcome,
-		"legacy prices the whole prompt at the read multiplier, so a 3x gap fails its 0.25 bar")
+		"legacy prices the whole prompt at the read multiplier, so the discounted gap fails the bar")
 	assert.Equal(t, planner.OutcomeSwitch, after.Outcome,
 		"corrected economics sees the uncached tail and switches")
 }
@@ -63,12 +64,12 @@ func TestCorrectedEconomicsIsOffByDefault(t *testing.T) {
 // price gap between two models applies undiscounted.
 func TestCorrectedEVRestoresTheUncachedTail(t *testing.T) {
 	highK := planner.Decide(
-		correctedInputs("claude-opus-5", "claude-haiku-4-5", 200_000, 180_000, 1200, false), correctedCfg(3))
+		correctedInputs("deepseek-ai/deepseek-v4-pro", "motif-technologies/motif-3", 200_000, 180_000, 1200, false), correctedCfg(3))
 	lowK := planner.Decide(
-		correctedInputs("claude-opus-5", "claude-haiku-4-5", 200_000, 80_000, 1200, false), correctedCfg(3))
+		correctedInputs("deepseek-ai/deepseek-v4-pro", "motif-technologies/motif-3", 200_000, 80_000, 1200, false), correctedCfg(3))
 
 	assert.Greater(t, lowK.ExpectedSavingsUSD, highK.ExpectedSavingsUSD,
-		"a smaller cacheable share leaves more prompt at full price, where the 5x gap bites")
+		"a smaller cacheable share leaves more prompt at full price, where the raw price gap bites")
 	assert.Less(t, lowK.EvictionCostUSD, highK.EvictionCostUSD,
 		"less live cache to destroy makes the switch cheaper")
 }
@@ -106,7 +107,7 @@ func TestCorrectedEVGoldenVectors(t *testing.T) {
 // Legacy is blind to output price, so a model many times dearer per output
 // token can score EV-positive on input alone.
 func TestCorrectedEVCountsOutputPrice(t *testing.T) {
-	in := correctedInputs("claude-haiku-4-5", "claude-opus-5", 200_000, 180_000, 60_000, false)
+	in := correctedInputs("motif-technologies/motif-3", "moonshotai/kimi-k3", 200_000, 180_000, 60_000, false)
 	withOutput := planner.Decide(in, correctedCfg(3))
 
 	noOutput := in
@@ -115,13 +116,13 @@ func TestCorrectedEVCountsOutputPrice(t *testing.T) {
 		planner.Decide(noOutput, correctedCfg(3)).ExpectedSavingsUSD,
 		"the output term must move the EV")
 	assert.Equal(t, planner.OutcomeStay, withOutput.Outcome,
-		"switching to a 5x-dearer-output model on a 60k-token completion is not a saving")
+		"switching to a far-dearer-output model on a 60k-token completion is not a saving")
 }
 
 // An un-migrated call site — one that supplies no prefix telemetry at all —
 // must degrade to the old behaviour, not to a wild k=0.
 func TestCacheableShareFallsBackToLegacyWhenUninstrumented(t *testing.T) {
-	in := correctedInputs("claude-opus-5", "claude-haiku-4-5", 200_000, 0, 0, false)
+	in := correctedInputs("deepseek-ai/deepseek-v4-pro", "motif-technologies/motif-3", 200_000, 0, 0, false)
 	in.CachePrefixKnown = false
 	corrected := planner.Decide(in, correctedCfg(3))
 	legacy := planner.Decide(in, legacyCfg(3))
@@ -133,7 +134,7 @@ func TestCacheableShareFallsBackToLegacyWhenUninstrumented(t *testing.T) {
 // Without CachePrefixKnown the k=1 fallback swallows it, pricing the pin as
 // fully cached and charging eviction for a prefix that does not exist.
 func TestExplicitZeroPrefixIsNotTreatedAsFullyCached(t *testing.T) {
-	measuredZero := correctedInputs("claude-opus-5", "claude-haiku-4-5", 200_000, 0, 0, false)
+	measuredZero := correctedInputs("deepseek-ai/deepseek-v4-pro", "motif-technologies/motif-3", 200_000, 0, 0, false)
 	measuredZero.CachePrefixKnown = true
 
 	noEvidence := measuredZero
@@ -153,17 +154,17 @@ func TestExplicitZeroPrefixIsNotTreatedAsFullyCached(t *testing.T) {
 // Eviction is (w-m) -- the write paid in place of the read -- not the (1-m)
 // the legacy path charges.
 func TestCorrectedEVChargesWritePremiumNotFullPrice(t *testing.T) {
-	in := correctedInputs("claude-opus-5", "claude-haiku-4-5", 1_000_000, 1_000_000, 0, false)
+	in := correctedInputs("deepseek-ai/deepseek-v4-pro", "motif-technologies/motif-3", 1_000_000, 1_000_000, 0, false)
 	got := planner.Decide(in, correctedCfg(3)).EvictionCostUSD
-	// haiku $1/Mtok, write 1.25x, read 0.10x, whole prompt cacheable.
-	assert.InDelta(t, 1.0*(1.25-0.10), got, 1e-9)
+	// motif-3 $0.50/Mtok, write 1.25x, read 0.40x, whole prompt cacheable.
+	assert.InDelta(t, 0.5*(1.25-0.40), got, 1e-9)
 	assert.False(t, math.IsNaN(got))
 }
 
 // Nothing live to destroy, so moving is free and both sides pay full rate.
 func TestCorrectedEVColdPinChargesNoEviction(t *testing.T) {
 	cold := planner.Decide(
-		correctedInputs("claude-opus-5", "claude-haiku-4-5", 200_000, 180_000, 1200, true), correctedCfg(3))
+		correctedInputs("deepseek-ai/deepseek-v4-pro", "motif-technologies/motif-3", 200_000, 180_000, 1200, true), correctedCfg(3))
 	assert.Zero(t, cold.EvictionCostUSD)
 	assert.Equal(t, planner.OutcomeSwitch, cold.Outcome)
 }
