@@ -51,6 +51,7 @@ type InsertInferenceAttemptParams struct {
 // Costs are USD micros ($1.00 = 1,000,000) summed as integers so no float rounding accumulates.
 // Actual = router's chosen binding; Requested = client's originally-requested model.
 type SessionCost struct {
+	ContextSnapshot        *ContextSnapshot
 	SessionID              string
 	RequestCount           int64
 	ActualCostUSDMicros    int64
@@ -64,7 +65,10 @@ type SessionCost struct {
 
 // InsertTelemetryParams mirrors one router.upstream span row.
 type InsertTelemetryParams struct {
-	InstallationID string
+	// ContextSnapshot is the marshaled ContextSnapshot for this request, or nil
+	// when the row must not carry one (non-conversation turn or non-OK status).
+	ContextSnapshot []byte
+	InstallationID  string
 	// APIKeyID attributes the row to the authenticating api key (per-key spend
 	// audit). Empty leaves the column NULL.
 	APIKeyID                        string
@@ -139,6 +143,7 @@ type InsertTelemetryParams struct {
 	TTFTMs                *int64
 	CacheCreationTokens   *int32
 	CacheReadTokens       *int32
+	ReasoningTokens       *int32
 	DeviceID              string
 	SessionID             string
 	RouterUserID          string
@@ -181,9 +186,13 @@ type InsertTelemetryParams struct {
 	// WorkspaceSystemText (cross-vendor emitters only); nil otherwise.
 	WorkspaceAppendFired *bool
 	FailoverUsed         *bool
-	DegenerateShadow     *bool
-	PolicyPinRequested   *bool
-	PolicyPinHonoured    *bool
+	// FailoverAttempted marks any turn on which a failover was dispatched,
+	// including a failover that also failed. Its DB column is deferred: the
+	// telemetry migration/queries are owned elsewhere this wave.
+	FailoverAttempted  *bool
+	DegenerateShadow   *bool
+	PolicyPinRequested *bool
+	PolicyPinHonoured  *bool
 
 	// SessionKey + Role are the offline join key to spiral_shadow_events and
 	// session_pins (16-byte digest + roleForTier of the requested model). Nil /

@@ -15,6 +15,18 @@ const (
 	// of the model that served the turn, so window-aware clients (pi) can budget
 	// auto-compaction against the served model rather than the requested one.
 	HeaderRouterContextWindow = "x-router-context-window"
+	// HeaderRouterContextEstimate carries the conservative whole-request
+	// overflow estimate (tokens) for THIS request, using the same envelope as
+	// capacity filtering. Not a tokenizer count and not client usage.
+	HeaderRouterContextEstimate = "x-router-context-estimate-tokens"
+	// HeaderRouterContextReserve carries the output reserve used in capacity
+	// filtering: the greater of 8,000 tokens and the request's output limit.
+	HeaderRouterContextReserve = "x-router-context-output-reserve-tokens"
+	// HeaderRouterContextEstimateKind names how the estimate was derived;
+	// "approximate" in version 1.
+	HeaderRouterContextEstimateKind = "x-router-context-estimate-kind"
+	// HeaderRouterContextVersion is the companion estimate contract version.
+	HeaderRouterContextVersion = "x-router-context-version"
 	// HeaderRouterCache reports semantic-cache status; value is RouterCacheHit
 	// on a cache hit and the header is omitted otherwise.
 	HeaderRouterCache = "x-router-cache"

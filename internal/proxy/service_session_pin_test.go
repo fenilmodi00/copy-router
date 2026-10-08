@@ -677,7 +677,7 @@ func TestService_HardPin_TitleGen_AppliesExcludedModels(t *testing.T) {
 		fr, providerMap, nil, false, nil, store, false,
 		providers.ProviderAIAND, excludedModel, // boot-time pin is the excluded model
 		nil,
-	).WithHardPinResolver(resolver)
+	).WithExplicitUtilityHardPin(true).WithHardPinResolver(resolver)
 
 	ctx := context.WithValue(authedCtx(uuid.New().String()),
 		proxy.InstallationExcludedModelsContextKey{}, []string{excludedModel})

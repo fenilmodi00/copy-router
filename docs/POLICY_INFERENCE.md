@@ -3,7 +3,7 @@
 # Router Inference Policy Registry
 
 - Schema version: `inference_policy_registry_v2`
-- Registry revision: `sha256:c07150e524de7060e9432c5a74fa207c597bfeb0eed09f6deffcda726cd4e582`
+- Registry revision: `sha256:2fb4c8ae648bcf23719c190296dbebfe618b453ac67422bd9a131feeee45821a`
 
 This static projection contains no tenant credentials, installation overrides, request content, or private gateway details. Migration status describes the current execution boundary; `legacy_direct` entries are inventory, not authorization for new call sites.
 
@@ -26,7 +26,7 @@ This static projection contains no tenant credentials, installation overrides, r
 | `policy_sidecar_outcome` | `control_plane` | `control-policy-sidecar-outcome@1` | `none` | `none` | — | — | `none` | `source=deployment` | `non_inference` | `@steventohme` | Report bounded serving outcomes to the configured policy sidecar. |
 | `policy_sidecar_preview` | `control_plane` | `control-policy-sidecar-preview@1` | `none` | `none` | — | — | `none` | `source=deployment` | `non_inference` | `@steventohme` | Preview a policy decision without serving or mutating routing state. |
 | `precompaction_summary` | `auxiliary_inference` | `aux-precompaction-summary@2` | `fixed_catalog` | `deepseek-ai/deepseek-v4-pro`<br>`zai-org/glm-5.3`<br>`moonshotai/kimi-k3` | `catalog_binding`<br>`context_window`<br>`model_exclusions`<br>`provider_exclusions` | — | `local_recovery` | `source=policy attempts=1 timeout_ms=90000 max_output=4000` | `executor` | `@steventohme` | Preserve elided task state with the context-window-aware summarizer cascade before local trim rescue: the session's warm pin when it is a reviewed summarizer-grade roster model, else the deployment compaction model, else the large-window model. |
-| `probe` | `auxiliary_inference` | `aux-probe@2` | `deployment_hard_pin` | `deployment` | `catalog_binding`<br>`context_window`<br>`model_exclusions`<br>`provider_exclusions`<br>`spend` | `capability` | `binding` | `source=request` | `executor` | `@steventohme` | Serve provider and quota probes without creating a durable session pin. |
+| `probe` | `auxiliary_inference` | `aux-probe@2` | `deployment_hard_pin` | `deployment` | `catalog_binding`<br>`context_window`<br>`model_exclusions`<br>`provider_exclusions`<br>`spend` | `capability` | `binding` | `source=request` | `executor` | `@steventohme` | Preserve the caller's provider and quota probe target unless explicitly overridden, without creating a durable session pin. |
 | `semantic_cache_embedding` | `local_support` | `local-semantic-cache-embedding@1` | `none` | `local` | — | — | `none` | `source=local` | `non_inference` | `@steventohme` | Compute semantic-cache keys locally and independently from provider dispatch. |
 | `sub_agent_dispatch` | `auxiliary_inference` | `aux-sub-agent-dispatch@2` | `deployment_hard_pin` | `deployment` | `catalog_binding`<br>`context_window`<br>`model_exclusions`<br>`provider_exclusions`<br>`spend` | `capability` | `binding` | `source=request` | `executor` | `@steventohme` | Apply the reviewed deployment hard pin for sub-agent work while preserving tenant eligibility. |
 | `title_generation` | `auxiliary_inference` | `aux-title-generation@2` | `deployment_hard_pin` | `deployment` | `catalog_binding`<br>`context_window`<br>`model_exclusions`<br>`provider_exclusions`<br>`spend` | `capability` | `binding` | `source=request` | `executor` | `@steventohme` | Keep hidden title-generation calls cheap and isolated from the main session pin. |

@@ -1,5 +1,6 @@
 # Compiled binaries
 bin/
+/router
 *.exe
 *.exe~
 *.dll
@@ -55,6 +56,7 @@ dist/
 # Logs
 logs/
 *.log
+.run-coding-*.err
 
 # Docker overrides
 docker-compose.override.yml

@@ -98,7 +98,7 @@ explicitly to its managed Codex config.
 | Path                                  | Purpose                                                       |
 | ------------------------------------- | ------------------------------------------------------------- |
 | `~/.claude/settings.json`             | Sets `env.ANTHROPIC_BASE_URL`, `env.ANTHROPIC_CUSTOM_HEADERS` with `X-Weave-Router-Key`, `env.ENABLE_TOOL_SEARCH=true` (a custom base URL otherwise inlines tool schemas into every request), `statusLine`, and Claude Code `attribution` so commits/PRs credit Weave Router. Other keys preserved. |
-| `~/.weave/cc-statusline.sh`           | Shows transcript model/token information and an estimated cost comparison. Explicitly labels routing as unverified; it is not a routing health check. |
+| `~/.weave/cc-statusline.sh`           | Shows the response model and an estimated cost comparison, without token counts. It is not a routing health check. |
 
 **Project scope (`--scope project`):**
 
@@ -113,6 +113,48 @@ explicitly to its managed Codex config.
 The router key lives in `ANTHROPIC_CUSTOM_HEADERS` so Claude Code can keep
 using its normal Anthropic auth (`Authorization` / `x-api-key`) for the
 logged-in user's Team/Pro/Max/individual plan.
+
+#### Claude Code Remote Control compatibility
+
+[Remote Control](https://code.claude.com/docs/en/remote-control) requires direct
+access to the Anthropic API and is unavailable while Weave Router's custom
+`ANTHROPIC_BASE_URL` is active. Your claude.ai subscription login can remain
+configured for ordinary routed requests, but it does not remove this restriction.
+
+To use Remote Control, turn routing off for your install scope:
+
+```bash
+# User-scope install
+npx @weave-os/router off --claude
+
+# Project-scope install; run from the repository
+npx @weave-os/router off --claude --scope project
+```
+
+Fully quit and reopen Claude Code: it reads the configuration at launch. Requests
+then go directly to Anthropic and bypass Weave Router; they are not routed,
+measured, or governed by Weave Router. The toggle preserves the Router endpoint
+and key for restoration. Weave Router does not proxy Remote Control or
+automatically switch routing for it.
+
+When finished, run the matching command and fully quit and reopen Claude Code
+again to resume routing:
+
+```bash
+# User-scope install
+npx @weave-os/router on --claude
+
+# Project-scope install; run from the repository
+npx @weave-os/router on --claude --scope project
+```
+
+Remote Control also requires an eligible claude.ai subscription and sign-in;
+API-key authentication is not supported. Team and Enterprise organizations need
+an Owner to enable Remote Control. If it still fails with routing off, follow
+[Anthropic's current troubleshooting](https://code.claude.com/docs/en/remote-control#troubleshooting)
+for subscription/auth eligibility, admin settings, organization policy,
+cloud-provider routing, and network access. See also
+[Weave's Remote Control troubleshooting](https://docs.workweave.ai/router/troubleshooting#claude-code-remote-control).
 
 ### Codex (`--codex`)
 
@@ -359,7 +401,7 @@ it now answers the directive itself — no inference, and the id is by
 construction the one telemetry recorded rather than a client-side guess at it.
 The skill and its script remain installed as a fallback for older routers.
 
-**Codex status integration.** Codex 0.150+ supports lifecycle hooks. The installer enables hooks and adds managed `SessionStart` and `Stop` handlers. They maintain a small local state file and set the terminal title to `Weave Router · <routed-model> ← <requested-model>` when the router provides a routed-model marker. On ordinary turns where the model is unchanged, the title remains the last known routed model; before the first routed response it shows `Weave Router · active`. The hooks intentionally emit no status messages: Codex renders hook output in the conversation, which makes a persistent router indicator noisy and easy to confuse with model output. It is not a replacement for Codex's requested-model line: that line continues to show the model selected in Codex configuration, while the Weave status identifies the model that actually served. Existing user and project hooks remain outside the managed block and are preserved on reinstall/uninstall.
+**Codex status integration.** Codex 0.150+ supports lifecycle hooks. The installer enables hooks and adds managed `SessionStart`, `Stop`, and `PreCompact` handlers. They maintain a small local state file and set the terminal title to `Weave Router · <requested-model> → <routed-model>` when the router provides a routed-model marker. On ordinary turns where the model is unchanged, the title remains the last known routed model; before the first routed response it shows `Weave Router · active`. The hooks intentionally emit no status messages: Codex renders hook output in the conversation, which makes a persistent router indicator noisy and easy to confuse with model output. It is not a replacement for Codex's requested-model line: that line continues to show the model selected in Codex configuration, while the Weave status identifies the model that actually served. Existing user and project hooks remain outside the managed block and are preserved on reinstall/uninstall.
 
 **Session savings.** The title also carries `· saved $X.XX` when the router has beaten the model Codex asked for. The number comes from the router — the hook reads `GET <base-url>/v1/sessions/<session-id>/cost` with the router key already in `config.toml` — and is never computed locally: Codex records only its *requested* model on every turn, never the one that served, so client-side pricing would compare a model against itself and always report zero. The fetch is detached and its result is cached for the following turn, so no turn ever blocks on the network; a slow, unreachable, or older router simply leaves the title model-only. A session where the router spent more than the requested model would have shows no clause at all rather than a negative number, and a total under a cent reads `saved <$0.01`. Set `WEAVE_CODEX_STATUS_SAVINGS=0` to turn the lookup off entirely.
 
@@ -554,8 +596,8 @@ env var to make the setting editable.
 1. Run `npx @weave-os/router status --claude` to inspect the saved settings
    in the selected scope. Connectivity verifies the key, not inference.
 2. Run `claude` and send a prompt. The terminal shows
-   `WEAVE ROUTER · transcript model: <model>`.
-   Model names, token totals and pin acknowledgements come from the local
+   `WEAVE ROUTER · response model: <model>`.
+   Model names and pin acknowledgements come from the local
    transcript, which can also contain direct-provider responses or old sessions.
 3. Confirm a matching new inference request in the router's server-side
    telemetry. A saved endpoint, a successful key check, and commit/PR attribution
@@ -606,3 +648,18 @@ npx @weave-os/router --uninstall --opencode --scope project
 
 Removes only the keys / block this installer added; everything else in
 `settings.json` / `config.toml` is left alone.
+
+
+## Context indicators
+
+Claude Code's managed status line uses the documented `context_window.used_percentage` only alongside a valid `context_window_size`: `Context 58%`. The `!` cue at 90% is a display convention, not a prediction of Claude's compaction threshold. Missing, malformed, or unsupported fields are omitted. Session token totals and transcript usage never supply a percentage. Native usage takes priority; when unavailable, a matching session/selection/response-model snapshot may supply `last Router ctx est. ~72k/128k`.
+
+Codex 0.150+ lifecycle integrations use the terminal title, for example `Weave Router · moonshotai/kimi-k3 → deepseek-ai/deepseek-v4.1-flash · last Router ctx est. ~72k/128k`. Current hook schemas expose no stable client-native context percentage. They do not provide an inline status bar; no hook message is printed to simulate one. Existing routed-model markers still work with older Routers. The snapshot's served model is authoritative only within a validated, recent session snapshot.
+
+The Router estimate and served-model window are separate from the client budget. `~` marks an approximate whole-request estimate, including image estimates. The full window also has to hold the output reserve, so the denominator is not remaining input capacity. Only native percentages get warning cues. A model switch does not compact history; clients own their transcripts and compaction, including Claude Code's `/compact` command. This Router revision preserves client history and forwards overflow errors in the client's native form so the harness can compact.
+
+Snapshots refresh asynchronously from the existing authenticated session-cost read, never from synchronous status-line network calls. They expire after five minutes, are keyed by session and helper installation scope, and use private atomic cache files without credentials. The `last` label acknowledges telemetry/fetch lag and cache hits that produce no new upstream record. Displays refresh on client status-line/lifecycle events, not continuously during streaming. Codex clears its snapshot cache on SessionStart/PreCompact and rejects older in-flight refreshes after a new lifecycle event. Project helpers read their adjacent configuration and never fall back to a user-scope key. Custom Claude status lines and unrelated hooks remain preserved by the installer.
+
+Set `WEAVE_STATUSLINE_CONTEXT=0` (Claude) or `WEAVE_CODEX_STATUS_CONTEXT=0` (Codex) to hide context. Codex's savings opt-out remains independent. Older Router versions omit the optional snapshot and keep existing indicators. The scripts and installer heredocs are tested for parity.
+
+Payload contracts checked against [Claude's official status-line fields](https://code.claude.com/docs/en/statusline) and [Codex's hook types](https://github.com/openai/codex/blob/main/codex-rs/hooks/src/types.rs). These are schema/source checks with synthetic fixtures, not an interactive pilot of every client release. Run `make test-statusline` and `make test-install` for offline checks. Live Claude status-line and Codex terminal refresh/compaction checks remain part of release verification.

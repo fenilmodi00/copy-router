@@ -18,6 +18,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 // cyberRefusalSSE is the shape OpenAI's classifier streams on a 200: no output
@@ -45,6 +46,7 @@ type cyberRefusalUpstreams struct {
 	openAIHits     int
 	aiandHits      int
 	openAIResponse func(http.ResponseWriter)
+	aiandSSE       string
 }
 
 func (u *cyberRefusalUpstreams) counts() (openAI, aiand int) {
@@ -69,7 +71,11 @@ func (u *cyberRefusalUpstreams) start(t *testing.T) (openAIURL, aiandURL string)
 		u.mu.Unlock()
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, aiandRescueChatSSE)
+		response := u.aiandSSE
+		if response == "" {
+			response = aiandRescueChatSSE
+		}
+		_, _ = io.WriteString(w, response)
 	}))
 	t.Cleanup(aiandServer.Close)
 
@@ -159,6 +165,44 @@ func TestProxyOpenAIResponses_CyberRefusalRescuesOffVendorAndRepins(t *testing.T
 	pin := store.upserts[len(store.upserts)-1]
 	assert.Equal(t, "deepseek-ai/deepseek-v4.1-flash", pin.Model)
 	assert.Equal(t, providers.ProviderAIAND, pin.Provider)
+}
+
+// A rescued title must reach the harness as parseable title JSON in both the
+// delta and the completed frame, and the rescue must not touch the automatic
+// conversation pin.
+func TestProxyOpenAIResponses_RescuedTitleContainsOnlyTitle(t *testing.T) {
+	upstreams := &cyberRefusalUpstreams{openAIResponse: func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"error":{"code":"cyber_policy","message":"This content was flagged for possible cybersecurity risk."}}`)
+	}, aiandSSE: strings.Replace(aiandRescueChatSSE, `"content":"rescued"`, `"content":"{\"title\":\"Rescued task\"}"`, 1)}
+	openAIURL, aiandURL := upstreams.start(t)
+	pins := newFakePinStore()
+	svc := cyberRefusalService(openAIURL, aiandURL, "test", pins, newCaptureTelemetry()).WithCyberRefusalRetry(true)
+	body := []byte(`{"model":"moonshotai/kimi-k3","stream":true,"text":{"format":{"type":"json_schema","schema":{"type":"object","properties":{"title":{"type":"string"}},"required":["title"],"additionalProperties":false}}},"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"Generate a concise task title."}]}]}`)
+	ctx := context.WithValue(authedCtx(cyberRefusalInstallationID), proxy.ClientIdentityContextKey{}, proxy.ClientIdentity{ClientApp: proxy.ClientAppCodex})
+	rec := httptest.NewRecorder()
+	require.NoError(t, svc.ProxyOpenAIResponses(ctx, body, rec, httptest.NewRequest(http.MethodPost, "/v1/responses", nil)))
+	openAIHits, aiandHits := upstreams.counts()
+	assert.Equal(t, 1, openAIHits)
+	assert.Equal(t, 1, aiandHits)
+	var deltaText, completedText string
+	for _, line := range strings.Split(rec.Body.String(), "\n") {
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		frame := gjson.Parse(strings.TrimPrefix(line, "data: "))
+		switch frame.Get("type").String() {
+		case "response.output_text.delta":
+			deltaText += frame.Get("delta").String()
+		case "response.completed":
+			completedText = frame.Get("response.output.0.content.0.text").String()
+		}
+	}
+	assert.JSONEq(t, `{"title":"Rescued task"}`, deltaText)
+	assert.JSONEq(t, `{"title":"Rescued task"}`, completedText)
+	assert.Equal(t, 1, pins.getCalls, "titles inspect only the explicit force control, never the automatic conversation pin")
+	assert.Empty(t, pins.upserts)
 }
 
 // Once output is committed a second model's stream would interleave with the

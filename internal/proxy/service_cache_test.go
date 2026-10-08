@@ -38,10 +38,7 @@ func embeddingFixture(seed float32) []float32 {
 	return out
 }
 
-// anthropicBody returns a minimal valid Anthropic Messages body. Includes a
-// stub tool so the request stays classified as MainLoop — without it the
-// turntype detector would fingerprint it as Classifier (small max_tokens,
-// no tools, short message list) and hard-pin past the semantic cache.
+// anthropicBody uses an ordinary text prompt with a MainLoop output budget.
 func anthropicBody(prompt string, stream bool) []byte {
 	streamLit := "false"
 	if stream {
@@ -49,9 +46,8 @@ func anthropicBody(prompt string, stream bool) []byte {
 	}
 	return []byte(`{
 		"model":"deepseek-ai/deepseek-v4-pro",
-		"max_tokens":256,
+		"max_tokens":4096,
 		"stream":` + streamLit + `,
-		"tools":[{"name":"noop","description":"placeholder","input_schema":{"type":"object"}}],
 		"messages":[{"role":"user","content":"` + prompt + `"}]
 	}`)
 }
@@ -72,7 +68,7 @@ func decisionWithEmbedding(emb []float32, clusterIDs []int) router.Decision {
 // proxyContextWithExternalID wires the per-tenant ID; without it the cache is bypassed.
 func proxyContextWithExternalID(t *testing.T, externalID string) context.Context {
 	t.Helper()
-	ctx := context.Background()
+	ctx := context.WithValue(context.Background(), proxy.APIKeyIDContextKey{}, "cache-test-key")
 	if externalID != "" {
 		ctx = context.WithValue(ctx, proxy.ExternalIDContextKey{}, externalID)
 	}
@@ -111,7 +107,9 @@ func TestService_Cache_HitShortCircuitsProvider(t *testing.T) {
 func TestService_Cache_StreamingBypasses(t *testing.T) {
 	emb := embeddingFixture(2)
 	provider := &fakeProvider{
-		proxyResponse: func(w http.ResponseWriter) { _, _ = w.Write([]byte("event: stream-payload\n")) },
+		proxyResponse: func(w http.ResponseWriter) {
+			_, _ = w.Write([]byte("event: message_start\ndata: {\"type\":\"message_start\"}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"))
+		},
 	}
 	fr := &fakeRouter{decision: decisionWithEmbedding(emb, []int{0})}
 	c := cache.New(cache.DefaultConfig())

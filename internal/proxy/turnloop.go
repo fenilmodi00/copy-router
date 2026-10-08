@@ -126,18 +126,23 @@ func cacheablePrefixTokens(pin sessionpin.Pin, total int, prefixBroken bool) (in
 		return 0, true // a client trim really did evict the prefix
 	}
 	cached := pin.LastCachedReadTokens + pin.LastCachedWriteTokens
-	// input_tokens is fresh-only on Anthropic (disjoint from read/write) but is
-	// prompt_tokens — already cache-inclusive — everywhere else. Mirrors
-	// catalog.EffectiveInputCost's provider branch.
-	prior := pin.LastInputTokens
-	if pin.Provider == providers.ProviderAnthropic {
-		prior += cached
-	}
+	prior := priorPromptTokens(pin)
 	if prior <= 0 {
 		return 0, false
 	}
 	share := min(1.0, float64(cached)/float64(prior))
 	return int(share * float64(total)), true
+}
+
+// priorPromptTokens is the pin's previous-turn prompt size. Usage is
+// extracted by wire family: input_tokens is fresh-only on the Anthropic family
+// (disjoint from read/write) but is prompt_tokens — already cache-inclusive —
+// everywhere else.
+func priorPromptTokens(pin sessionpin.Pin) int {
+	if providers.FamilyFor(pin.Provider) == providers.FamilyAnthropic {
+		return pin.LastInputTokens + pin.LastCachedReadTokens + pin.LastCachedWriteTokens
+	}
+	return pin.LastInputTokens
 }
 
 // plannerInputTokens returns the planner's prompt-size estimate from
@@ -264,6 +269,10 @@ type turnLoopResult struct {
 	// the client transcript on every later turn, so the emit path ORs this
 	// in to keep stripping them for the life of the session.
 	SessionEverSwitched bool
+	// PriorServedEndedAt and PriorPromptTokens describe PriorServedModel's turn,
+	// read from the same pin.
+	PriorServedEndedAt time.Time
+	PriorPromptTokens  int
 	// StripThinkingBlocks forces signature removal when switch history is unavailable.
 	StripThinkingBlocks bool
 	// Handover captures the summarize-or-trim step when the planner switched.
@@ -299,6 +308,11 @@ type turnLoopResult struct {
 	// the in-turn rescue can readmit them when honouring them would leave no
 	// candidate. Empty unless transient_rate_limit is on.
 	SessionCooldownModels map[string]time.Time
+	// SessionStrikeReadmitModels are the session-lifetime demotions the
+	// in-turn rescue may readmit as a last resort when no other candidate is
+	// left: a session that has struck out every arm must not 502 a turn that
+	// a previously failed arm could still serve.
+	SessionStrikeReadmitModels []string
 	// AuthorityShadow is the counterfactual HMM cache-gate verdict on an
 	// authoritative-per-turn turn. Observation only: it never touches Decision.
 	AuthorityShadow authorityCacheShadow
@@ -383,6 +397,30 @@ func (r turnLoopResult) modelSwitched() bool {
 	// prompt-cache prefix and invalidates thinking-block signatures.
 	transition := r.PriorServedModel != "" && r.PriorServedModel != r.Decision.ServedIdentity()
 	return transition || r.SessionEverSwitched || r.StripThinkingBlocks
+}
+
+// baselineWarmPrefillTokens returns the cache-creation tokens this turn paid
+// only because the router switched models. The baseline would have kept
+// serving the thread, so within its provider's cache TTL it would have read
+// the previous turn's prompt warm; content appended since is a write either
+// way. A first turn, client trim, or ingress truncation re-primes the
+// baseline's cache too, so those turns have nothing to correct.
+func (r turnLoopResult) baselineWarmPrefillTokens(requestStart time.Time, cacheCreation, cacheRead int, servedModel, baselineModel string, historyTruncated bool) int {
+	if cacheCreation <= 0 || r.PriorServedModel == "" || r.PrefixTrimmed || historyTruncated {
+		return 0
+	}
+	if baseModelOf(r.PriorServedModel) == servedModel {
+		return 0
+	}
+	baseline, ok := catalog.ByID(baselineModel)
+	if !ok {
+		return 0
+	}
+	// Prefill happens at request start, so this turn's generation time does not count against the TTL.
+	if requestStart.Sub(r.PriorServedEndedAt) >= providers.CacheTTLFor(baseline.PrimaryProvider()) {
+		return 0
+	}
+	return min(cacheCreation, max(r.PriorPromptTokens-cacheRead, 0))
 }
 
 func isHMMDecision(dec router.Decision) bool {
@@ -506,7 +544,9 @@ func (r turnLoopResult) rescueOrigin() policy.OverrideSource {
 }
 
 // isHardPinnedTurn reports whether a turn type bypasses pin lookup/write,
-// planner, and scorer entirely via the boot-time hard pin. These turns are
+// planner, and scorer entirely. Probes preserve the requested target unless
+// explicitly deployment-pinned; title generation hard-pins only with an
+// explicit deployment override. These turns are
 // also skipped by proactive compaction: they are either tiny (probe/title-gen)
 // or carry their own dedicated flow (Claude Code's compaction turn, whose
 // request the router must not rewrite). SubAgentDispatch hard-pins when an
@@ -516,8 +556,10 @@ func (r turnLoopResult) rescueOrigin() policy.OverrideSource {
 // force them. Classifier turns are scored (see isUnpinnedScoredTurn).
 func (s *Service) isHardPinnedTurn(ctx context.Context, tt turntype.TurnType) bool {
 	switch tt {
-	case turntype.Compaction, turntype.Probe, turntype.TitleGen:
+	case turntype.Compaction, turntype.Probe:
 		return true
+	case turntype.TitleGen:
+		return s.explicitUtilityHardPin
 	case turntype.SubAgentDispatch:
 		if s.hasSubAgentOverride() {
 			return true
@@ -536,8 +578,10 @@ func (s *Service) isHardPinnedTurn(ctx context.Context, tt turntype.TurnType) bo
 // transcript it grades is the payload, not history the router may rewrite.
 // A recap is a side fork shown beneath the reply the user just read, so it
 // gets no routing marker, and its decision must not move the session pin.
+// A title is a separate hidden session; neither the conversation's model nor
+// a deployment's default utility shortcut is a request-aware title choice.
 func isUnpinnedScoredTurn(tt turntype.TurnType) bool {
-	return tt == turntype.Classifier || tt == turntype.Recap
+	return tt == turntype.Classifier || tt == turntype.Recap || tt == turntype.TitleGen
 }
 
 // routeWithoutPin scores a turn that has no session pin to honor or anchor:
@@ -815,8 +859,10 @@ func (s *Service) runTurnLoop(
 	// would otherwise short-circuit scoring (/force-model, sticky pins, usage
 	// bypass, blind-experiment passthrough, planner stays) is not consulted.
 	// Utility hard pins below are never policy-scored and keep their own path.
-	if _, pinned := router.HonouredPolicyPin(ctx); pinned && !s.isHardPinnedTurn(ctx, res.TurnType) {
-		if s.pinStore != nil && !isUnpinnedScoredTurn(res.TurnType) {
+	automaticProbe := res.TurnType == turntype.Probe && !s.explicitUtilityHardPin &&
+		(req.RequestedModel == "" || req.RequestedModel == automaticProbeModel)
+	if _, pinned := router.HonouredPolicyPin(ctx); pinned && (!s.isHardPinnedTurn(ctx, res.TurnType) || automaticProbe) {
+		if s.pinStore != nil && !isUnpinnedScoredTurn(res.TurnType) && !automaticProbe {
 			res.SessionKey = threadSessionKey
 			_, _, res.SessionFirstTurn = s.loadPinWithStoreState(ctx, res.SessionKey, res.PinRole)
 		}
@@ -850,7 +896,22 @@ func (s *Service) runTurnLoop(
 			req.ExcludedModels = s.readmitForcedModel(ctx, req, env, feats, forceModelPin)
 		}
 	}
-	if hardPinnedTurn {
+	// Current force-model state wins over the experiment. Otherwise resolve the
+	// passthrough arm before utility hard pins, automatic session pins or a
+	// scorer, as policy passthrough does. An honoured policy pin keeps utility
+	// turns on their hard pin; it has already scored every other turn.
+	if _, policyPinned := router.HonouredPolicyPin(ctx); !forceModelFound && !policyPinned {
+		decision, passthrough, err := s.blindExperimentPassthroughDecision(ctx, req)
+		if err != nil {
+			return res, err
+		}
+		if passthrough {
+			res.Decision = decision
+			res.CallerModelPassthrough = true
+			return res, nil
+		}
+	}
+	if hardPinnedTurn && !automaticProbe {
 		purpose, registered := utilityPurposes[res.TurnType]
 		if !registered {
 			return res, fmt.Errorf("hard-pinned turn type %q has no inference purpose", res.TurnType)
@@ -859,6 +920,7 @@ func (s *Service) runTurnLoop(
 	}
 	if forceModelFound && hardPinnedTurn {
 		if forcedPinEligible(forceModelPin, req) {
+			res.Purpose = utilityPurposes[res.TurnType]
 			threadPin, hmmHistory, forceHistory := sessionpin.Pin{}, sessionpin.Pin{}, sessionpin.Pin{}
 			if s.pinStore != nil {
 				threadPin, _ = s.loadPin(ctx, threadSessionKey, res.PinRole)
@@ -868,7 +930,7 @@ func (s *Service) runTurnLoop(
 			res.SessionKey = threadSessionKey
 			res.PinModel = forceModelPin.Model
 			res.PinAgeSec = pinAge(forceModelPin)
-			res.PriorServedModel, res.SessionEverSwitched = switchHistoryFromPins(threadPin, hmmHistory, forceHistory)
+			res.applySwitchHistory(threadPin, hmmHistory, forceHistory)
 			res.EscalateEffort = !forceHistory.LastTurnEndedAt.IsZero() &&
 				(forceHistory.LastOutputTokens == 0 || forceHistory.ConsecutiveUpstreamErrors > 0)
 			res.Decision = pinDecision(forceModelPin)
@@ -889,6 +951,21 @@ func (s *Service) runTurnLoop(
 			"enabled_providers", sortedEnabledKeys(req.EnabledProviders),
 			"role", res.PinRole,
 		)
+	}
+
+	if res.TurnType == turntype.Probe && !s.explicitUtilityHardPin {
+		res.SessionKey = [sessionpin.SessionKeyLen]byte{}
+		if automaticProbe {
+			return s.routeWithoutPin(ctx, req, res, reqHeaders, forceModelFound, forceModelPin)
+		}
+		decision, err := s.callerModelPassthroughDecision(ctx, req)
+		if err != nil {
+			return res, err
+		}
+		res.Decision = decision
+		res.CallerModelPassthrough = true
+		res.Origin = policy.OverrideSourceRequest
+		return res, nil
 	}
 
 	// Automatic hard pins bypass pin lookup/write, planner, and scorer entirely.
@@ -989,20 +1066,6 @@ func (s *Service) runTurnLoop(
 		res.Origin = origin
 		res.PinTier = string(res.TurnType) + "_hard_pin"
 		return res, nil
-	}
-
-	// Current force-model state wins over the experiment. Otherwise resolve the
-	// passthrough arm before reading automatic session pins or invoking a scorer.
-	if !forceModelFound {
-		decision, passthrough, err := s.blindExperimentPassthroughDecision(ctx, req)
-		if err != nil {
-			return res, err
-		}
-		if passthrough {
-			res.Decision = decision
-			res.CallerModelPassthrough = true
-			return res, nil
-		}
 	}
 
 	// Claude Code executes WebSearch in an isolated one-message request with a
@@ -1164,6 +1227,7 @@ func (s *Service) runTurnLoop(
 	// failover and every automatic pin reuse at once, and is the only one an
 	// explicit /force-model of the same model still routes through.
 	demoted := mergeSessionStrikes(pin.DemotedModels, hmmHistory.DemotedModels)
+	res.SessionStrikeReadmitModels = harnessSafeModels(imageSafeModels(demoted, req.HasImages), req.HasTools)
 	if s.ResolveTransientRateLimit(ctx) {
 		// A rate-limit strike expires: the arm is only out while its
 		// cooldown is in force.
@@ -1179,7 +1243,7 @@ func (s *Service) runTurnLoop(
 			req.AutomaticExcludedModels = addToSet(req.AutomaticExcludedModels, model)
 		}
 	}
-	res.PriorServedModel, res.SessionEverSwitched = switchHistoryFromPins(pin, hmmHistory, forceHistory)
+	res.applySwitchHistory(pin, hmmHistory, forceHistory)
 	req.PolicyTurnContext = buildPolicyTurnContext(req, res, pin, hmmHistory)
 	// Computed before any same-turn pin-drop guards below so it reflects the
 	// prior turn's outcome; Service.effortEscalation gates whether it's acted on.
@@ -1539,9 +1603,9 @@ func (s *Service) runTurnLoop(
 		res.PinModel = commandContinuation.Model
 		res.PinAgeSec = pinAge(commandContinuation)
 		if forceModelCleared {
-			res.PriorServedModel, res.SessionEverSwitched = switchHistoryFromPins(commandContinuation, hmmHistory, forceHistory, forceModelPin)
+			res.applySwitchHistory(commandContinuation, hmmHistory, forceHistory, forceModelPin)
 		} else {
-			res.PriorServedModel, res.SessionEverSwitched = switchHistoryFromPins(commandContinuation, hmmHistory, forceHistory)
+			res.applySwitchHistory(commandContinuation, hmmHistory, forceHistory)
 		}
 		res.EscalateEffort = !commandContinuation.LastTurnEndedAt.IsZero() &&
 			(commandContinuation.LastOutputTokens == 0 || commandContinuation.ConsecutiveUpstreamErrors > 0)
@@ -2554,6 +2618,21 @@ func (s *Service) loadHMMHistory(ctx context.Context, sessionKey [sessionpin.Ses
 }
 
 func switchHistoryFromPins(pins ...sessionpin.Pin) (string, bool) {
+	latestTurn, sessionEverSwitched := latestServedTurn(pins...)
+	return latestTurn.LastServedModel, sessionEverSwitched
+}
+
+// applySwitchHistory records the latest served turn across pins, so switch
+// detection and the savings baseline's cache-TTL check read the same turn.
+func (r *turnLoopResult) applySwitchHistory(pins ...sessionpin.Pin) {
+	latestTurn, sessionEverSwitched := latestServedTurn(pins...)
+	r.PriorServedModel = latestTurn.LastServedModel
+	r.PriorServedEndedAt = latestTurn.LastTurnEndedAt
+	r.PriorPromptTokens = priorPromptTokens(latestTurn)
+	r.SessionEverSwitched = sessionEverSwitched
+}
+
+func latestServedTurn(pins ...sessionpin.Pin) (sessionpin.Pin, bool) {
 	var latest sessionpin.Pin
 	sessionEverSwitched := false
 	seenModel := ""
@@ -2570,7 +2649,7 @@ func switchHistoryFromPins(pins ...sessionpin.Pin) (string, bool) {
 			latest = pin
 		}
 	}
-	return latest.LastServedModel, sessionEverSwitched
+	return latest, sessionEverSwitched
 }
 
 func buildPolicyTurnContext(

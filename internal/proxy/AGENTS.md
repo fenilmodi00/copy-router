@@ -104,6 +104,21 @@ same flag makes the same-binding retry Retry-After-aware
 died at 11 consecutive client-visible 429s because a burst-time rescue had
 permanently demoted the arm that recovered minutes later.
 
+**A session-lifetime strike is soft for rescue too, as the very last resort.**
+Primary selection already treats a demotion as soft (an emptied pool reroutes
+onto the excluded model), so a session that has struck out every arm keeps
+being served on one. The rescue walk used to treat the same strikes as hard,
+so once both arms of a two-model roster were demoted every pre-commit failure
+reached the client unrescued (prod 2026-10: hundreds of header-timeout 502s
+with the other arm never tried). `runTurnLoop` now carries the strikes as
+`SessionStrikeReadmitModels` (image-unsafe arms, and ToolUseLow/AgenticLow arms
+on tool turns, dropped), and `rescueWalkOrReadmitCooling` readmits them on
+sibling failover only (never the cyber-refusal retry) and only when neither the
+eligible walk nor cooldown readmission yields a candidate. `strikesInRescuePool`
+filters non-roster strikes to the turn's scored pool; roster readmissions are
+separately bounded by `rosterRescueAdmits`. Hard and deployment-wide exclusions
+still hold, and the arm that just failed is never re-served.
+
 **A wholly non-routable allowlist is rejected at the admin API.** Membership
 validation for `PUT /admin/v1/allowed-models` is catalog-wide on purpose —
 force-model and hard-pin reach rows the router never scores — but the
@@ -163,14 +178,24 @@ has catalog bindings to walk), and a model stays routable unless **every**
 gateway key aliasing it has refused, since a second endpoint may serve it. The
 alias itself is still the customer-side fix — this only caps the bill at one 404.
 
-**The hard-pin tier resolves against the same bindings.** Probe/title-gen/
-compaction turns bypass the scorer, so `hardPinResolver` gets its
+**The hard-pin tier resolves against the same bindings.** Compaction and explicitly
+deployment-pinned utility turns bypass the scorer, so `hardPinResolver` gets its
 own `HardPinRequest` carrying `CustomBindings` + `GatewayProviders` and selects
 via `cluster.FastestModelForRequest`. Without them a gateway-only installation
 resolved nothing and every such turn 503'd `ErrClusterUnavailable` ("cluster
 scorer failed") while its scored turns routed fine — prod 2026-08-26. An empty
 result under a gateway now reports `ErrGatewayServesNoDeployedModel` for the
 same reason the resolver does: the alias list is the thing to fix.
+
+**Default titles are scored independently; probes preserve their target.** Title
+generation uses `routeWithoutPin`, without consulting or updating the conversation's
+automatic pin or emitting a routing marker. Default provider/quota probes use the
+requested model and do not cross-model fail over. An automatic probe with no
+concrete requested model is scored independently without a session pin.
+Same-model credential fallback
+still applies, so a successful probe does not prove subscription-specific quota.
+An explicit `ROUTER_HARD_PIN_MODEL`
+retains the utility override, and deliberate `/force-model` choices still win.
 
 **Classifier turns are scored, not hard-pinned.** Claude Code's security
 monitor is a fresh window (own system prompt, ~50k-token transcript as
@@ -251,6 +276,8 @@ Multi-binding models (deepseek/qwen/moonshot with Fireworks/Makora/Bedrock prima
 **Single-binding same-binding retry.** Most catalog models carry one binding (Anthropic/OpenAI/Google), so cross-binding failover has nowhere to walk — a sole-provider 5xx/timeout would kill the request. For these, `dispatchWithFallback` retries the *same* binding in place up to `maxSameBindingRetries` (2) with exponential backoff (`sameBindingBackoff`: 250ms, 500ms), pre-commit only, abortable on ctx cancel (`sleepWithContext`). Multi-binding models skip in-place retry (`len(bindings) > 1` breaks the inner loop) and fail straight over to the next provider — a different upstream beats re-hitting the flaky one. Tests inject `Service.retrySleep` to keep the backoff instant.
 
 **Retries are bounded twice: count AND wall-clock.** `maxSameBindingRetries` caps how many attempts; `sameBindingRetryBudget` (10s) caps how much time they may consume in total. The count alone bounds attempts but not cost — an upstream that accepts the stream and never answers burns a full `ResponseHeaderTimeout` (30s) per attempt, so three of them spend ~90s on a request that was never going to be served (prod 2026-08-26: a gateway hanging deterministically on tool-result turns, where every retry re-sent the identical payload). A transient blip clears on a *quick* retry by definition, so an attempt series that already outran the budget is not the fault class in-place retry was built for; cheap failures (5xx in milliseconds) still get the full attempt count. The budget stopping a retry logs at WARN with `spent_ms`/`budget_ms` — without it, a hang and a blip are indistinguishable in the logs. Tests inject `Service.now` to simulate a slow attempt without burning real time; express the simulated duration as an absolute value, never as a multiple of `sameBindingRetryBudget`, or the test scales with the constant and can never fail.
+
+**Native streams must end on a terminal event.** A provider adapter returns nil on a clean EOF after a 2xx, so a native passthrough the upstream closed mid-turn would otherwise be recorded as served. Native Anthropic (`message_stop`), OpenAI chat (`finish_reason` or `[DONE]`) and Responses (`response.completed`/`incomplete`/`failed`) streams are watched by [`streamTerminalObserver`](stream_terminal_observer.go) and `responsesTerminalObserver`; an upstream-declared failure also counts as an end (Anthropic/Responses `error` event, a chat chunk carrying an `error` object, `response.failed`). Chat with `n > 1` ends only when every choice that emitted has finished or on `[DONE]`; a keepalive-only stream never started; a truncated final frame is not a terminal; an unframed body is not judged. A missing terminal becomes `translate.ErrStreamEmpty` (never started) or `translate.ErrStreamIncomplete`: pre-commit both are retryable like any transport fault, post-commit they take the normal in-stream error path, and `error_class` records `stream_cut`. Telemetry's `failover_used` marks a turn a rescue served; `failover_attempted` marks one where a baseline or sibling rescue was dispatched, served or not.
 
 `preludeBuffer` wraps the client writer on every request and separates a synthetic prelude from provider-output commitment. OpenAI responses use `CommitPrelude()` to flush the routing marker immediately after the decision while leaving `Committed()` false. Anthropic responses keep the prelude buffered until provider output arrives, preserving an HTTP error status when every attempt fails before output. `Discard()` clears a failed attempt, and continuation-aware writers emit a corrected marker when fallback changes the serving model. Once provider output flips `Committed()`, no further retry is allowed.
 

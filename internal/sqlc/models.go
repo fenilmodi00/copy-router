@@ -687,6 +687,8 @@ type RouterModelRouterRequestTelemetry struct {
 	ErrorClass              *string
 	LatestToolCallCounts    []byte
 	ServingTarget           *string
+	ReasoningTokens         *int32
+	ContextSnapshot         []byte
 }
 
 type RouterModelRouterSubscriptionAccount struct {

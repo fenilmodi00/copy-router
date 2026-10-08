@@ -2,6 +2,7 @@ package proxy_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -132,6 +133,12 @@ func TestProxyMessages_OSSOutageFailsOverToBaselineAIand(t *testing.T) {
 	// The buffered initial marker is replaced before it becomes visible, so the
 	// client sees only the model that produced provider output.
 	assert.Equal(t, "zai-org/glm-5.3", rec.Header().Get(proxy.HeaderRouterModel), "x-router-model reflects the baseline model that served")
+	assertContextHeaders(t, rec.Header())
+	assert.Equal(t, "1048576", rec.Header().Get(proxy.HeaderRouterContextWindow))
+	telemetryRow := tel.firstRow(t)
+	var contextSnapshot proxy.ContextSnapshot
+	require.NoError(t, json.Unmarshal(telemetryRow.ContextSnapshot, &contextSnapshot))
+	assert.Equal(t, "zai-org/glm-5.3", contextSnapshot.ServedModel)
 	initialMarker := strings.Index(respBody, "moonshotai/kimi-k3")
 	fallbackMarker := strings.Index(respBody, "zai-org/glm-5.3")
 	require.Equal(t, -1, initialMarker, "failed initial decision marker stays hidden")

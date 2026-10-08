@@ -248,7 +248,7 @@ Keep the signing key identical on gateway and workers of the same environment.
 | `ROUTER_EMBED_ONLY_USER_MESSAGE`  | `true`                       | Feed only user-role text to the embedder. Set `false` to embed the full concatenated turn. |
 | `ROUTER_STICKY_DECISION_TTL_MS`   | `0` (disabled)               | Reuse a routing decision per API key for this many ms. |
 | `ROUTER_SESSION_PIN_ENABLED`      | `true`                       | Pin a session to its first-routed model so multi-turn conversations stay coherent. |
-| `ROUTER_HARD_PIN_MODEL`           | *(none)*                     | Force every request to a specific model, bypassing the cluster scorer. Debugging only. |
+| `ROUTER_HARD_PIN_MODEL`           | *(none)*                     | Force every request to a specific model, bypassing the cluster scorer. Debugging only. Without this explicit override, titles and probes with auto/empty models are scored independently, while provider/quota probes with concrete models preserve their requested target; none anchors an automatic conversation pin. |
 | `ROUTER_HARD_PIN_PROVIDER`        | *(none)*                     | Pair with `ROUTER_HARD_PIN_MODEL`. |
 | `ROUTER_HARD_PIN_EXPLORE`         | `true`                       | Pin Claude Code Task-tool sub-agent turns to `ROUTER_HARD_PIN_MODEL`/`ROUTER_HARD_PIN_PROVIDER` (or the cheapest deployed model, if those are unset). Set `false` to route sub-agents through the scorer like any other turn. Ignored under the HMM strategy, whose classifier selects sub-agent turns like any other turn. |
 | `ROUTER_SUBAGENT_MODEL`           | *(none)*                     | Route Claude Code Task-tool sub-agent turns to a distinct model, independent of `ROUTER_HARD_PIN_MODEL` — e.g. a local/self-hosted OpenAI-compatible model (point `AIAND_BASE_URL` at your server) while the main loop keeps using Anthropic/whatever the scorer picks. Requires `ROUTER_SUBAGENT_PROVIDER`; either alone is ignored. Takes effect regardless of `ROUTER_HARD_PIN_EXPLORE` and under every strategy, including HMM. |
@@ -513,8 +513,10 @@ OTLP **log record** per upstream call to `${OTEL_EXPORTER_OTLP_ENDPOINT}/v1/logs
 Each record carries the same routing/decision metadata as the spans plus the
 call outcome, and — depending on the mode — the request/response bodies. This
 is the ML-ready event stream (one record per LLM call, full inputs and
-outputs). It is **opt-in**: with `WV_CAPTURE_CONTENT` unset (the default) no
-log records are emitted and behavior is unchanged.
+outputs). It is **opt-in**: with `WV_CAPTURE_CONTENT` unset (the default) the
+only log records emitted are `router.permanent_error` diagnostics for
+permanent upstream 4xx failures — routing metadata plus a bounded (4 KiB),
+redacted copy of the upstream error body, classified as `upstream.error_class`.
 
 | Variable             | Default | Purpose |
 | -------------------- | ------- | ------- |
@@ -598,3 +600,23 @@ The committed cluster artifacts (centroids, rankings, model registry,
 metadata) live under `internal/router/cluster/artifacts/v<X.Y>/`. The
 `artifacts/latest` pointer selects the default served version;
 `ROUTER_CLUSTER_VERSION` overrides per-deployment.
+
+## Response context snapshot
+
+Successful proxied responses report a per-request context snapshot in headers:
+
+| Header | Meaning |
+| --- | --- |
+| `x-router-context-window` | Effective served model/provider window, in integer tokens; unchanged from the existing Pi contract. |
+| `x-router-context-estimate-tokens` | Conservative whole-request overflow estimate, in integer tokens, using the same request envelope as capacity filtering. Includes image estimates; not a tokenizer count or client compaction percentage. |
+| `x-router-context-output-reserve-tokens` | Output reserve used in capacity filtering: the greater of 8,000 tokens and the request's output limit. This part of the window is not input headroom. |
+| `x-router-context-estimate-kind` | `approximate` in version 1. |
+| `x-router-context-version` | `1` for the companion estimate contract. |
+
+The estimate describes input to this Router request. The window describes the binding that served it, including provider failover. It does not describe the client's private context budget or the maximum window of the eligible pool. A conservative estimate can exceed the served window when the Router admits the widest candidates for the provider to decide actual fit. Do not derive client usage percentages or warnings from it. Omitted, unknown-version, or invalid values are unavailable, never zero. Clients must retain existing model displays when companions are absent. Native CLI integrations need no CORS changes.
+
+Anthropic Messages, OpenAI Chat Completions/Responses through the HTTP adapter, and semantic-cache replies carry this contract. Cache replies compute estimates from the current request rather than replaying stored headers. Non-HTTP transports that cannot preserve headers must omit the display.
+
+The authenticated `GET /v1/sessions/:session_id/cost` response optionally includes `context_snapshot` for the latest conversation request (main loop, tool result, or client compaction) in that installation/session. It contains version, estimate kind/tokens, served window, output reserve, requested/served models, request ID, and UTC request/completion times. Snapshots expire five minutes after completion; a missing, malformed, failed latest request, or older Router omits the field. Title generation, probes, classifiers, recaps, and subagent dispatches do not replace the conversation snapshot. The existing read-key authentication and rate limits apply, and responses use `Cache-Control: no-store`. No eligible-model pool, private thresholds, credentials, or prompt content is returned. Telemetry is asynchronous, so a fetch can lag the completed turn. Semantic-cache hits have live headers but do not create an upstream telemetry snapshot; the session endpoint may still describe an earlier request.
+
+Migration `0120` adds a nullable snapshot to existing request telemetry so client hooks can read it across Router replicas. Apply the migration before running the new binary; older binaries leave it null. This metadata bridge is required because lifecycle hooks cannot access inference response headers. It creates no new context-history endpoint or stored routine.

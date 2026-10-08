@@ -144,6 +144,19 @@ func spanStr(t *testing.T, sp *tracev1.Span, key string) string {
 	return ""
 }
 
+func spanBool(t *testing.T, sp *tracev1.Span, key string) bool {
+	t.Helper()
+	for _, kv := range sp.Attributes {
+		if kv.Key == key {
+			bv, ok := kv.Value.Value.(*commonv1.AnyValue_BoolValue)
+			require.True(t, ok, "attr %q must be a bool", key)
+			return bv.BoolValue
+		}
+	}
+	t.Fatalf("attr %q not present on span", key)
+	return false
+}
+
 // bypassCaptureTelemetry records InsertTelemetryParams rows for assertions.
 // Only InsertRequestTelemetry matters; the read methods satisfy the interface.
 type bypassCaptureTelemetry struct {

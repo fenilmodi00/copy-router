@@ -147,10 +147,6 @@ func (r *shadowRequestRouter) Route(_ context.Context, request router.Request) (
 
 func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) {
 	const installID = "66666666-6666-6666-6666-666666666666"
-	serving := router.Decision{
-		Provider: providers.ProviderAnthropic,
-		Model:    "zai-org/glm-5.3-flash",
-	}
 	scorerDecision := router.Decision{
 		Provider: providers.ProviderAnthropic,
 		Model:    "deepseek-ai/deepseek-v4-pro",
@@ -209,7 +205,7 @@ func TestPolicyShadowComparisonSkipsDryRunAndCollectsServingRoute(t *testing.T) 
 	assert.Equal(t, "rollout-1", row.RolloutID)
 	assert.True(t, row.TrainingAllowed)
 	assert.Equal(t, "cluster", row.ServingStrategy)
-	assert.Equal(t, serving.Model, row.ServingModel)
+	assert.Equal(t, scorerDecision.Model, row.ServingModel)
 	assert.Equal(t, "future-policy", row.ShadowStrategy)
 	assert.Equal(t, "deepseek-ai/deepseek-v4-flash", row.ShadowModel)
 	assert.Equal(t, "shadow-route-1", row.ShadowRouteID)
@@ -469,7 +465,7 @@ func TestProxyMessages_NoMetadataOmitsClusterFields(t *testing.T) {
 func TestProxyMessages_PersistsTurnType(t *testing.T) {
 	const installID = "55555555-5555-5555-5555-555555555555"
 	decision := router.Decision{
-		Provider: providers.ProviderAnthropic,
+		Provider: providers.ProviderAIAND,
 		Model:    "zai-org/glm-5.3-flash",
 		Reason:   "pin",
 	}
@@ -495,9 +491,13 @@ func TestProxyMessages_PersistsTurnType(t *testing.T) {
 			telem := newCaptureTelemetry()
 			svc := proxy.NewService(
 				&fakeRouter{decision: decision},
-				map[string]providers.Client{providers.ProviderAnthropic: &fakeProvider{}},
+				map[string]providers.Client{
+					providers.ProviderAIAND: &fakeProvider{
+						proxyResponse: jsonUpstream(`{"id":"chatcmpl_1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`),
+					},
+				},
 				nil, false, nil, nil, false,
-				providers.ProviderAnthropic, "zai-org/glm-5.3-flash",
+				providers.ProviderAIAND, "zai-org/glm-5.3-flash",
 				telem,
 			)
 
@@ -632,6 +632,7 @@ func TestProxyMessages_NativeAnthropicResponseSignals(t *testing.T) {
 		events            []string
 		wantStopReason    *string
 		wantToolUseBlocks *int32
+		wantCut           bool
 	}{
 		{
 			name:              "observed tool turn",
@@ -644,6 +645,7 @@ func TestProxyMessages_NativeAnthropicResponseSignals(t *testing.T) {
 			name:    "stream cut before message_delta stays unknown",
 			enabled: true,
 			events:  toolTurn[:4],
+			wantCut: true,
 		},
 		{
 			name:    "flag off keeps the row as it is today",
@@ -672,9 +674,16 @@ func TestProxyMessages_NativeAnthropicResponseSignals(t *testing.T) {
 			rec := httptest.NewRecorder()
 			body := []byte(`{"model":"deepseek-ai/deepseek-v4-pro","stream":true,"messages":[{"role":"user","content":"hello"}]}`)
 			httpReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(""))
-			require.NoError(t, svc.ProxyMessages(ctx, body, rec, httpReq))
+			err := svc.ProxyMessages(ctx, body, rec, httpReq)
 
 			row := telem.firstRow(t)
+			if tt.wantCut {
+				require.Error(t, err, "a stream without message_stop is not a served turn")
+				assert.Equal(t, proxy.TurnErrorStreamCut, row.ErrorClass)
+			} else {
+				require.NoError(t, err)
+				assert.Empty(t, row.ErrorClass)
+			}
 			assert.Equal(t, tt.wantStopReason, row.StopReason)
 			assert.Equal(t, tt.wantStopReason, row.UpstreamFinishReason)
 			assert.Equal(t, tt.wantToolUseBlocks, row.ToolUseBlocks)

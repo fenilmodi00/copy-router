@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"weave-os/router/internal/providers"
 	"weave-os/router/internal/router/catalog"
 
 	"github.com/stretchr/testify/assert"
@@ -77,6 +78,50 @@ func TestEffectiveInputCost_UsesBindingCacheWritePrice(t *testing.T) {
 	price.CacheWriteMultiplier = 0
 	legacy := catalog.EffectiveInputCost(100, 10, 20, price, "openai")
 	assert.InDelta(t, 0.000185, legacy, 1e-12, "unspecified values preserve legacy 1.25x behavior")
+}
+
+func TestCounterfactualInputCost_RepricesWarmPrefillAsCacheRead(t *testing.T) {
+	opus := catalog.Pricing{InputUSDPer1M: 5, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10}
+
+	// 2k fresh + 100k cold prefill: $0.01 + $0.625 actual; the warm baseline reads the prefill for $0.05.
+	assert.InDelta(t, 0.635, catalog.CounterfactualInputCost(2_000, 100_000, 0, 0, opus, "anthropic"), 1e-12)
+	assert.InDelta(t, 0.060, catalog.CounterfactualInputCost(2_000, 100_000, 0, 100_000, opus, "anthropic"), 1e-12)
+}
+
+func TestCounterfactualInputCost_SameResultForEitherUsageShape(t *testing.T) {
+	opus := catalog.Pricing{InputUSDPer1M: 5, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10}
+
+	// OpenAI-shaped input_tokens include cached tokens; the fresh split must survive the repricing.
+	anthropic := catalog.CounterfactualInputCost(2_000, 100_000, 5_000, 100_000, opus, "anthropic")
+	openai := catalog.CounterfactualInputCost(107_000, 100_000, 5_000, 100_000, opus, "openai")
+	assert.InDelta(t, anthropic, openai, 1e-12)
+}
+
+func TestEffectiveInputCost_AnthropicFamilyInputIsFreshOnly(t *testing.T) {
+	sonnet := catalog.Pricing{InputUSDPer1M: 3, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10}
+
+	// The local tree registers no gateway/wafer Anthropic providers, so register
+	// one to prove the branch keys on the wire family, not the literal name.
+	providers.ProviderFamilies["anthropic_gateway"] = providers.FamilyAnthropic
+	t.Cleanup(func() { delete(providers.ProviderFamilies, "anthropic_gateway") })
+
+	// 2k fresh + 10k write + 100k read: $0.006 + $0.0375 + $0.03.
+	for _, provider := range []string{providers.ProviderAnthropic, "anthropic_gateway"} {
+		got := catalog.EffectiveInputCost(2_000, 10_000, 100_000, sonnet, provider)
+		assert.InDelta(t, 0.0735, got, 1e-12, provider)
+	}
+	assert.InDelta(t, 0.0735, catalog.EffectiveInputCost(112_000, 10_000, 100_000, sonnet, providers.ProviderOpenAI), 1e-12)
+}
+
+func TestCounterfactualInputCost_AnthropicFamilyInputIsFreshOnly(t *testing.T) {
+	opus := catalog.Pricing{InputUSDPer1M: 5, CacheWriteMultiplier: 1.25, CacheReadMultiplier: 0.10}
+
+	providers.ProviderFamilies["anthropic_gateway"] = providers.FamilyAnthropic
+	t.Cleanup(func() { delete(providers.ProviderFamilies, "anthropic_gateway") })
+
+	for _, provider := range []string{providers.ProviderAnthropic, "anthropic_gateway"} {
+		assert.InDelta(t, 0.060, catalog.CounterfactualInputCost(2_000, 100_000, 0, 100_000, opus, provider), 1e-12, provider)
+	}
 }
 
 func TestEffectiveCost_SelectsLongContextTier(t *testing.T) {

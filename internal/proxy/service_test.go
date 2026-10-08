@@ -193,6 +193,7 @@ func TestService_AgentShadowEvaluationForcesEphemerallyWithoutServingRouter(t *t
 	// zai-org/glm-5.3 is a 1M-window roster row, so the served context window
 	// header reports the effective catalog window clients should budget against.
 	assert.Equal(t, "1048576", rec.Header().Get(proxy.HeaderRouterContextWindow))
+	assertContextHeaders(t, rec.Header())
 	assert.Equal(t, providers.ProviderAIAND, rec.Header().Get(proxy.HeaderRouterProvider))
 	assert.Equal(t, proxy.ReasonAgentShadowEval, rec.Header().Get(proxy.HeaderRouterDecision))
 	assert.Never(t, func() bool {
@@ -328,6 +329,7 @@ func TestService_ProxyOpenAIResponses_StaysNativeForDirectOpenAI(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(""))
 
 			require.NoError(t, svc.ProxyOpenAIResponses(ctx, body, rec, req))
+			assertContextHeaders(t, rec.Header())
 			require.Len(t, provider.proxyBodies, 1)
 			assert.Equal(t, tc.wantEndpoint, provider.proxyEndpoints[0])
 			assert.Equal(t, tc.model, gjson.GetBytes(provider.proxyBodies[0], "model").Str)
@@ -1026,6 +1028,7 @@ func TestService_ProxyOpenAIChatCompletion_NativeOpenAI(t *testing.T) {
 	})
 	err := svc.ProxyOpenAIChatCompletion(ctx, []byte(body), rec, httpReq)
 	require.NoError(t, err)
+	assertContextHeaders(t, rec.Header())
 
 	require.Len(t, provider.proxyBodies, 1)
 	assert.Equal(t, providers.EndpointChatCompletions, provider.proxyEndpoints[0])
@@ -1312,4 +1315,15 @@ func TestService_ProxyOpenAIResponses_NativeDispatchAppliesArmEffort(t *testing.
 			assert.Equal(t, "remove the router", gjson.GetBytes(provider.proxyBodies[0], "input").Str)
 		})
 	}
+}
+
+// assertContextHeaders pins the companion estimate contract every proxied
+// response must carry alongside x-router-context-window.
+func assertContextHeaders(t *testing.T, headers http.Header) {
+	t.Helper()
+	require.Equal(t, "1", headers.Get(proxy.HeaderRouterContextVersion))
+	require.Equal(t, "approximate", headers.Get(proxy.HeaderRouterContextEstimateKind))
+	require.Equal(t, "8000", headers.Get(proxy.HeaderRouterContextReserve))
+	require.NotEmpty(t, headers.Get(proxy.HeaderRouterContextEstimate))
+	require.NotEqual(t, "0", headers.Get(proxy.HeaderRouterContextEstimate))
 }

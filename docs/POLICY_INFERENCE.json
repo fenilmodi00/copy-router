@@ -1,6 +1,6 @@
 {
   "schema_version": "inference_policy_registry_v2",
-  "registry_revision": "sha256:c07150e524de7060e9432c5a74fa207c597bfeb0eed09f6deffcda726cd4e582",
+  "registry_revision": "sha256:2fb4c8ae648bcf23719c190296dbebfe618b453ac67422bd9a131feeee45821a",
   "policies": [
     {
       "purpose": "agent_shadow_evaluation",
@@ -493,7 +493,7 @@
       "policy_id": "aux-probe",
       "policy_revision": "2",
       "owner": "@steventohme",
-      "rationale": "Serve provider and quota probes without creating a durable session pin.",
+      "rationale": "Preserve the caller's provider and quota probe target unless explicitly overridden, without creating a durable session pin.",
       "selection_strategy": "deployment_hard_pin",
       "candidate_source": "deployment",
       "hard_constraints": [

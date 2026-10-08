@@ -102,6 +102,7 @@
 # it rather than editing.
 
 set -euo pipefail
+export PATH="$PATH:$HOME/.weave/bin"
 
 # ---------- defaults ----------
 
@@ -263,6 +264,7 @@ SPIN_FRAMES='⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏'
 SPIN_INTERVAL=0.08
 spin_pid=""
 spin_log=""
+jq_download_tmp=""
 
 _spin_cleanup() {
   # Kill any active spinner child and restore the cursor. Called from the
@@ -273,6 +275,10 @@ _spin_cleanup() {
     wait "$spin_pid" 2>/dev/null || true
   fi
   spin_pid=""
+  if [ -n "$jq_download_tmp" ]; then
+    rm -f "$jq_download_tmp" 2>/dev/null || true
+    jq_download_tmp=""
+  fi
   if [ "$tty_out" = "true" ]; then
     printf '\033[?25h' # show cursor
   fi
@@ -350,6 +356,47 @@ usage() {
   print_banner
   awk 'NR<2 { next } /^set -euo/ { exit } { sub(/^# ?/, ""); print }' "$0"
   exit "${1:-0}"
+}
+
+ensure_jq() {
+  command -v jq >/dev/null 2>&1 && return 0
+  local asset checksum destination temporary actual_checksum
+  case "$(uname -s):$(uname -m)" in
+    Darwin:arm64) asset=jq-macos-arm64; checksum=a9fe3ea2f86dfc72f6728417521ec9067b343277152b114f4e98d8cb0e263603 ;;
+    Darwin:x86_64) asset=jq-macos-amd64; checksum=e80dbe0d2a2597e3c11c404f03337b981d74b4a8504b70586c354b7697a7c27f ;;
+    Linux:x86_64) asset=jq-linux-amd64; checksum=020468de7539ce70ef1bceaf7cde2e8c4f2ca6c3afb84642aabc5c97d9fc2a0d ;;
+    Linux:aarch64|Linux:arm64) asset=jq-linux-arm64; checksum=6bc62f25981328edd3cfcfe6fe51b073f2d7e7710d7ef7fcdac28d4e384fc3d4 ;;
+    MINGW*:x86_64|MSYS*:x86_64|CYGWIN*:x86_64) asset=jq-windows-amd64.exe; checksum=23cb60a1354eed6bcc8d9b9735e8c7b388cd1fdcb75726b93bc299ef22dd9334 ;;
+    *) err "Automatic jq installation is unavailable for $(uname -s)/$(uname -m). Install jq and retry."; exit 1 ;;
+  esac
+  require_cmd curl "curl is required to download jq."
+  destination="$HOME/.weave/bin"
+  mkdir -p "$destination"
+  temporary="$(mktemp "$destination/.jq.XXXXXX")"
+  jq_download_tmp="$temporary"
+  info "Downloading jq 1.8.1 ($asset)."
+  if ! curl --fail --location --silent --show-error --connect-timeout 15 --max-time 120 \
+    "https://github.com/jqlang/jq/releases/download/jq-1.8.1/$asset" -o "$temporary"; then
+    err "Could not download jq. Check access to github.com or install jq and retry."
+    exit 1
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual_checksum="$(sha256sum "$temporary" | awk '{print $1}')"
+  else
+    require_cmd shasum "shasum or sha256sum is required to verify jq."
+    actual_checksum="$(shasum -a 256 "$temporary" | awk '{print $1}')"
+  fi
+  if [ "$actual_checksum" != "$checksum" ]; then
+    err "Downloaded jq failed checksum verification. Retry or install jq manually."
+    exit 1
+  fi
+  chmod 755 "$temporary"
+  case "$asset" in
+    *.exe) mv -f "$temporary" "$destination/jq.exe" ;;
+    *) mv -f "$temporary" "$destination/jq" ;;
+  esac
+  jq_download_tmp=""
+  jq --version >/dev/null
 }
 
 require_cmd() {
@@ -871,6 +918,11 @@ command = "${esc_status}"
 [[hooks.Stop.hooks]]
 type = "command"
 command = "${esc_status}"
+
+[[hooks.PreCompact]]
+[[hooks.PreCompact.hooks]]
+type = "command"
+command = "${esc_status}"
 TOML
 )${directive_hook_block}"
     if [ "${WEAVE_CAPTURE_LLM_CLASSIFIER:-}" = "1" ]; then
@@ -879,11 +931,6 @@ TOML
 [[hooks.PreToolUse]]
 matcher = "spawn_agent"
 [[hooks.PreToolUse.hooks]]
-type = "command"
-command = "${esc_status}"
-
-[[hooks.PreCompact]]
-[[hooks.PreCompact.hooks]]
 type = "command"
 command = "${esc_status}"
 TOML
@@ -1818,7 +1865,7 @@ fi
 # found`. Installing Codex itself still needs no jq.
 if [ "$target" = "claude" ] || [ "$target" = "opencode" ] || [ "$target" = "pi" ] \
    || { [ "$mode" = "models" ] && [ "$target" = "codex" ]; }; then
-  require_cmd jq    "macOS: 'brew install jq' · Debian/Ubuntu: 'sudo apt install jq'"
+  ensure_jq
 fi
 # curl is used by the install/update paths' health/validate probes and by every
 # `models` call. The on/off toggles only ping the router best-effort after a
@@ -3554,7 +3601,7 @@ run_login() {
   extra="$(printf '%s\n' "$models_args" | tail -n +2)"
   [ -n "$provider" ] || { err "Use 'login claude' or 'login codex'."; exit 2; }
   [ -z "$extra" ] || { err "Login accepts exactly one provider."; exit 2; }
-  require_cmd jq "Install jq to enroll a subscription account."
+  ensure_jq
   require_cmd openssl "Install OpenSSL to enroll a subscription account."
   case "$provider" in
     claude) run_login_claude ;;
@@ -4317,6 +4364,7 @@ install_codex_status_script() {
 # blocks on the network, and every failure path leaves the title model-only.
 
 set -euo pipefail
+export PATH="$PATH:$HOME/.weave/bin"
 
 # ---------- background self-refresh ----------
 #
@@ -4391,6 +4439,9 @@ weave_self_refresh() {
   return 0
 }
 
+async_title_enabled=0
+[ ! -t 2 ] || async_title_enabled=1
+
 state_root="${XDG_CACHE_HOME:-$HOME/.cache}/weave-router/codex"
 helper_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd -P)"
 disabled_marker="$helper_dir/.weave-router-disabled"
@@ -4400,7 +4451,7 @@ emit_title() {
   local title="$1"
   if [ -n "${WEAVE_CODEX_STATUS_TITLE_FILE:-}" ]; then
     printf '%s\n' "$title" >"$WEAVE_CODEX_STATUS_TITLE_FILE"
-  elif [ -t 2 ] && [ -w /dev/tty ]; then
+  elif { [ -t 2 ] || [ "${async_title_enabled:-0}" = "1" ]; } && [ -w /dev/tty ]; then
     printf '\033]0;%s\007' "$title" >/dev/tty
   fi
   return 0
@@ -4416,7 +4467,7 @@ safe_session_id() {
 }
 
 safe_display_value() {
-  printf '%s' "$1" | sed 's/[^A-Za-z0-9._:\/-]//g' | cut -c1-128
+  printf '%s' "$1" | sed 's/[^A-Za-z0-9._:\/-]//g' | cut -c1-64
 }
 
 state_file_for() {
@@ -4449,6 +4500,77 @@ cost_file_for() {
   local id
   id="$(safe_session_id "$1")" || return 1
   printf '%s/%s.cost' "$state_root" "$id"
+}
+
+context_file_for() {
+  local id scope
+  id="$(safe_session_id "$1")" || return 1
+  scope="$(printf '%s' "$helper_dir" | cksum | awk '{print $1}')"
+  printf '%s/%s-%s.context' "$state_root" "$scope" "$id"
+}
+
+generation_file_for() {
+  local id scope
+  id="$(safe_session_id "$1")" || return 1
+  scope="$(printf '%s' "$helper_dir" | cksum | awk '{print $1}')"
+  printf '%s/active-%s-%s' "$state_root" "$scope" "$id"
+}
+
+state_lock_for() {
+  local id scope
+  id="$(safe_session_id "$1")" || return 1
+  scope="$(printf '%s' "$helper_dir" | cksum | awk '{print $1}')"
+  printf '%s/state-%s-%s.lock' "$state_root" "$scope" "$id"
+}
+
+acquire_state_lock() {
+  local lock="$1" attempt=0 lock_mtime now dead
+  while ! mkdir "$lock" 2>/dev/null; do
+    lock_mtime="$(stat -c %Y "$lock" 2>/dev/null || stat -f %m "$lock" 2>/dev/null)" || lock_mtime=0
+    now="$(date +%s 2>/dev/null)" || now=0
+    if [ "$lock_mtime" -gt 0 ] && [ $((now - lock_mtime)) -gt 30 ]; then
+      dead="${lock}.dead.$$"
+      mv "$lock" "$dead" 2>/dev/null || continue
+      rmdir "$dead" 2>/dev/null || true
+      continue
+    fi
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 1000 ] || return 1
+    sleep 0.01
+  done
+  return 0
+}
+
+release_state_lock() {
+  rmdir "$1" 2>/dev/null || true
+}
+
+context_snapshot() {
+  local file="$1" id="$2" now
+  [ -f "$file" ] || return 0
+  [ "$(wc -c <"$file")" -le 4096 ] || return 0
+  now="$(date +%s)"
+  jq -ce --arg session "$id" --argjson now "$now" '
+
+    def tokens: type == "number" and floor == . and . > 0 and . <= 2147483647;
+    def epoch: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
+    .context_snapshot as $s |
+    select(.session_id == $session and $s.version == 1 and $s.estimate_kind == "approximate") |
+    select(($s.estimate_tokens | tokens) and ($s.context_window | tokens) and ($s.output_reserve_tokens | tokens)) |
+    select(($s.served_model | type) == "string" and ($s.served_model | test("^[A-Za-z0-9._:/-]{1,128}$"))) |
+    select(($s.request_id | type) == "string" and ($s.request_id | length) > 0 and ($s.request_id | length) <= 128) |
+    ($s.recorded_at | epoch) as $recorded | ($s.requested_at | epoch) as $requested |
+    select($requested > 0 and $requested <= $recorded and $recorded <= $now and $now - $recorded <= 300) |
+    $s
+  ' "$file" 2>/dev/null || true
+}
+
+context_clause() {
+  local snapshot="$1"
+  [ -n "$snapshot" ] || return 0
+  awk -v estimate="$(jq -r '.estimate_tokens' <<<"$snapshot")" -v window="$(jq -r '.context_window' <<<"$snapshot")" 'BEGIN {
+    printf " · last Router ctx est. ~%s/%s", (estimate < 1000 ? estimate : sprintf("%.0fk", estimate/1000)), (window < 1000 ? window : sprintf("%.0fk", window/1000))
+  }'
 }
 
 # Reads the router base URL and key out of the Codex config this install owns.
@@ -4528,11 +4650,11 @@ read_codex_endpoint() {
 # Fire-and-forget on purpose — a slow or unreachable router must never stall a
 # Codex turn, and every failure simply leaves the previous cache in place.
 refresh_session_cost() {
-  local id="$1" file="$2"
-  [ "${WEAVE_CODEX_STATUS_SAVINGS:-1}" = "0" ] && return 0
+  local id="$1" file="$2" context_file="$3" generation="$4"
+  [ "${WEAVE_CODEX_STATUS_SAVINGS:-1}" = "0" ] && [ "${WEAVE_CODEX_STATUS_CONTEXT:-1}" = "0" ] && return 0
   command -v curl >/dev/null 2>&1 || return 0
 
-  local endpoint base_url key
+  local endpoint base_url key active_file state_lock
   endpoint="$(read_codex_endpoint)" || return 0
   base_url="$(printf '%s' "$endpoint" | sed -n 1p)"
   key="$(printf '%s' "$endpoint" | sed -n 2p)"
@@ -4540,22 +4662,11 @@ refresh_session_cost() {
 
   mkdir -p "$state_root" 2>/dev/null || return 0
   chmod 700 "$state_root" 2>/dev/null || true
+  active_file="$(generation_file_for "$id")" || return 0
+  state_lock="$(state_lock_for "$id")" || return 0
 
   (
     exec </dev/null
-    # mkdir is the portable atomic test-and-set. A crashed holder would block
-    # refreshes forever, so a lock older than the fetch timeout is reclaimed.
-    lock="$file.lock"
-    if ! mkdir "$lock" 2>/dev/null; then
-      lock_mtime="$(stat -c %Y "$lock" 2>/dev/null || stat -f %m "$lock" 2>/dev/null)" || lock_mtime=0
-      lock_now="$(date +%s 2>/dev/null)" || lock_now=0
-      if [ "${lock_mtime:-0}" -le 0 ] || [ $(( lock_now - lock_mtime )) -le 30 ]; then
-        exit 0
-      fi
-      rm -rf "$lock" 2>/dev/null
-      mkdir "$lock" 2>/dev/null || exit 0
-    fi
-    trap 'rmdir "$lock" 2>/dev/null' EXIT
 
     # A file:// base is the offline/test seam: curl reads it as the response
     # body directly, so the endpoint path is meaningless for it.
@@ -4564,20 +4675,91 @@ refresh_session_cost() {
       file://*) ;;
       *) url="${url%/v1}/v1/sessions/$id/cost" ;;
     esac
-    body="$(curl -fsS --max-time 5 -H "X-Weave-Router-Key: $key" "$url" 2>/dev/null)" || exit 0
-    # savings_usd is the router's own (requested - actual). A body without it
-    # (404, error envelope, older router) writes nothing and leaves the cache.
-    savings="$(printf '%s' "$body" | jq -r '.savings_usd // empty' 2>/dev/null)" || exit 0
-    case "$savings" in
-      ''|*[!0-9.eE+-]*) exit 0 ;;
-    esac
-    tmp="$file.tmp.$$"
-    mkdir -p "$(dirname "$file")" 2>/dev/null
-    if printf '%s' "$savings" >"$tmp" 2>/dev/null; then
-      chmod 600 "$tmp" 2>/dev/null
-      mv "$tmp" "$file" 2>/dev/null
+    header_file="$(mktemp "$state_root/.headers.XXXXXX")" || exit 0
+    chmod 600 "$header_file"
+    printf 'header = "X-Weave-Router-Key: %s"\n' "$key" >"$header_file"
+    if ! body="$(curl -fsS --max-time 5 --max-filesize 8192 -K "$header_file" "$url" 2>/dev/null)"; then
+      rm -f "$header_file"
+      exit 0
     fi
-    rm -f "$tmp" 2>/dev/null
+    rm -f "$header_file"
+    [ "$(printf '%s' "$body" | wc -c)" -le 8192 ] || exit 0
+    response_session="$(jq -r '.session_id // empty' <<<"$body" 2>/dev/null)" || exit 0
+    [ -z "$response_session" ] || [ "$response_session" = "$id" ] || exit 0
+    context_tmp=""
+    fresh_snapshot=""
+    fresh_title=""
+    savings_tmp=""
+    savings=""
+    fresh_model=""
+    fresh_requested=""
+    if [ "${WEAVE_CODEX_STATUS_CONTEXT:-1}" != "0" ]; then
+      context_tmp="$(mktemp "$state_root/.context.XXXXXX")" || exit 0
+      chmod 600 "$context_tmp"
+      printf '%s' "$body" >"$context_tmp" || { rm -f "$context_tmp"; exit 0; }
+      fresh_snapshot="$(context_snapshot "$context_tmp" "$id")"
+      if [ -n "$fresh_snapshot" ]; then
+        fresh_model="$(safe_display_value "$(jq -r '.served_model' <<<"$fresh_snapshot")")"
+        fresh_requested="$(jq -r '.requested_model // empty' <<<"$fresh_snapshot")"
+        if { [ -z "$requested_model" ] || [ "$fresh_requested" = "$requested_model" ]; } \
+           && { [ -z "$force_model" ] || [ "$fresh_model" = "$(safe_display_value "$force_model")" ]; } \
+           && { [ -z "$marker_model" ] || [ "$fresh_model" = "$routed_model" ]; }; then
+          shown_requested="$requested_model"
+          [ -n "$shown_requested" ] || shown_requested="$(safe_display_value "$fresh_requested")"
+          if [ -n "$shown_requested" ] && [ "$fresh_model" != "$shown_requested" ]; then
+            fresh_title="Weave Router · $shown_requested → $fresh_model"
+          else
+            fresh_title="Weave Router · $fresh_model"
+          fi
+        fi
+      fi
+    fi
+    if [ "${WEAVE_CODEX_STATUS_SAVINGS:-1}" != "0" ]; then
+      # savings_usd is the router's own (requested - actual). A body without it
+      # (404, error envelope, older router) leaves the cache untouched.
+      savings="$(printf '%s' "$body" | jq -r '.savings_usd // empty' 2>/dev/null)" || savings=""
+      case "$savings" in ''|*[!0-9.eE+-]*) savings="" ;; esac
+      if [ -n "$savings" ]; then
+        savings_tmp="$(mktemp "$state_root/.cost.XXXXXX")" || savings=""
+        if [ -n "$savings" ]; then
+          if ! chmod 600 "$savings_tmp" 2>/dev/null || ! printf '%s' "$savings" >"$savings_tmp" 2>/dev/null; then
+            rm -f "$savings_tmp"
+            savings_tmp=""
+          fi
+        fi
+      fi
+    fi
+    if ! acquire_state_lock "$state_lock"; then
+      rm -f "$context_tmp" "$savings_tmp"
+      exit 0
+    fi
+    trap 'release_state_lock "$state_lock"; rmdir "$lock" 2>/dev/null || true' EXIT
+    if [ "$(cat "$active_file" 2>/dev/null)" = "$generation" ]; then
+      if [ "${WEAVE_CODEX_STATUS_CONTEXT:-1}" != "0" ]; then
+        if [ -n "$fresh_snapshot" ]; then
+          if mv "$context_tmp" "$context_file" 2>/dev/null; then
+            context_tmp=""
+          else
+            fresh_title=""
+          fi
+        else
+          rm -f "$context_file"
+        fi
+      fi
+      if [ -n "$savings_tmp" ]; then
+        if mv "$savings_tmp" "$file" 2>/dev/null; then
+          savings_tmp=""
+        else
+          rm -f "$savings_tmp"
+          savings_tmp=""
+        fi
+      fi
+      if [ -n "$fresh_title" ] && [ ! -f "$disabled_marker" ]; then
+        emit_title "$fresh_title$(savings_clause "$file")$(context_clause "$fresh_snapshot")"
+      fi
+    fi
+    release_state_lock "$state_lock"
+    rm -f "$context_tmp" "$savings_tmp"
   ) >/dev/null 2>&1 &
   disown 2>/dev/null || true
 }
@@ -4646,6 +4828,22 @@ if [ "${WEAVE_CAPTURE_LLM_CLASSIFIER:-}" = "1" ] && [ -n "${WEAVE_CAPTURE_HOOK_T
   esac
   fi
 fi
+session_id="$(safe_session_id "$(jq -r '.session_id // empty' <<<"$payload")")" || exit 0
+active_file="$(generation_file_for "$session_id")"
+state_lock="$(state_lock_for "$session_id")"
+mkdir -p "$state_root"
+chmod 700 "$state_root"
+acquire_state_lock "$state_lock" || exit 0
+trap 'release_state_lock "$state_lock"' EXIT
+generation="$(mktemp "$state_root/.generation.XXXXXX")"
+printf '%s' "$generation" >"$generation"
+chmod 600 "$generation"
+mv "$generation" "$active_file"
+if [ "$hook_event_name" = "SessionStart" ] || [ "$hook_event_name" = "PreCompact" ]; then
+  reset_context="$(context_file_for "$session_id")" || reset_context=""
+  [ -z "$reset_context" ] || rm -f "$reset_context"
+fi
+release_state_lock "$state_lock"
 if [ "$hook_event_name" = "SessionStart" ]; then
   if [ -f "$disabled_marker" ]; then
     emit_title "Codex · direct"
@@ -4655,7 +4853,11 @@ if [ "$hook_event_name" = "SessionStart" ]; then
   exit 0
 fi
 
-if [ "$hook_event_name" = "PreToolUse" ] || [ "$hook_event_name" = "PreCompact" ]; then
+if [ "$hook_event_name" = "PreCompact" ]; then
+  [ -f "$disabled_marker" ] || emit_title "Weave Router · active"
+  exit 0
+fi
+if [ "$hook_event_name" = "PreToolUse" ]; then
   exit 0
 fi
 
@@ -4711,22 +4913,39 @@ fi
 # turn would not be included even in a blocking read — reading first and
 # refreshing after costs a turn of freshness and buys never blocking Codex.
 savings=""
+context=""
+context_file="$(context_file_for "$session_id" 2>/dev/null)" || context_file=""
+if [ -n "$context_file" ] && [ "${WEAVE_CODEX_STATUS_CONTEXT:-1}" != "0" ]; then
+  snapshot="$(context_snapshot "$context_file" "$session_id")"
+  if [ -n "$snapshot" ]; then
+    snapshot_model="$(safe_display_value "$(jq -r '.served_model' <<<"$snapshot")")"
+    snapshot_requested="$(jq -r '.requested_model // empty' <<<"$snapshot")"
+    if { [ -z "$marker_model" ] || [ "$snapshot_model" = "$routed_model" ]; } && { [ -z "$requested_model" ] || [ "$snapshot_requested" = "$requested_model" ]; } && { [ -z "$force_model" ] || [ "$snapshot_model" = "$(safe_display_value "$force_model")" ]; }; then
+      routed_model="$snapshot_model"
+      [ -n "$requested_model" ] || requested_model="$(safe_display_value "$snapshot_requested")"
+      context="$(context_clause "$snapshot")"
+    fi
+  fi
+fi
 cost_file=""
 if cost_file="$(cost_file_for "$session_id" 2>/dev/null)"; then
   savings="$(savings_clause "$cost_file")"
-  refresh_session_cost "$(safe_session_id "$session_id")" "$cost_file"
+
 fi
 
 if [ -n "$routed_model" ] && [ -n "$requested_model" ] && [ "$routed_model" != "$requested_model" ]; then
-  title="Weave Router · $routed_model ← $requested_model$savings"
+  title="Weave Router · $requested_model → $routed_model$savings"
 elif [ -n "$routed_model" ]; then
   title="Weave Router · $routed_model$savings"
 elif [ -n "$requested_model" ]; then
-  title="Weave Router · active ← $requested_model$savings"
+  title="Weave Router · $requested_model → active$savings"
 else
   title="Weave Router · active$savings"
 fi
-emit_title "$title"
+emit_title "$title$context"
+if [ -n "$cost_file" ] && [ -n "$context_file" ]; then
+  refresh_session_cost "$(safe_session_id "$session_id")" "$cost_file" "$context_file" "$generation"
+fi
 CODEX_STATUS_EOF
   fi
   chmod 700 "$codex_status_file"
@@ -4800,6 +5019,7 @@ install_codex_directive_script() {
 # fire.
 
 set -uo pipefail
+export PATH="$PATH:$HOME/.weave/bin"
 
 # How long the toggle may take before the hook gives up and passes the prompt
 # through. npx resolves from cache after first use; the budget covers a cold
@@ -5186,21 +5406,22 @@ cat > "$statusline_file" << 'STATUSLINE_EOF'
 #
 # Claude Code statusline for the Weave Router. CC pipes a JSON blob on stdin
 # whose `transcript_path` points at the current session's JSONL log. Model
-# names, token totals and price comparisons come from that local transcript;
-# none establish the request's destination. Routing remains explicitly
-# unverified, including when the transcript contains an old router pin ack.
+# names and price comparisons come from that local transcript; neither
+# establishes the request's destination, including when the transcript
+# contains an old router pin acknowledgement.
 #
 # Wire up by adding to ~/.claude/settings.json:
 #   { "statusLine": { "type": "command", "command": "/abs/path/to/cc-statusline.sh" } }
 #
 # Renders:
-#   WEAVE ROUTER · transcript model: claude-sonnet-4-5 · selected: claude-opus-4-7 · est. cost difference $1.23 · 12.4k in / 3.1k out
+#   WEAVE ROUTER · response model: claude-sonnet-4-5 · selected: claude-opus-4-7 · est. cost difference $1.23
 #
 # Pricing source of truth: internal/router/catalog. Input/output prices and
 # cache-read multipliers are generated by cmd/genprices. Cache creation remains
 # at 1.25× input pending TTL-aware pricing.
 
 set -euo pipefail
+export PATH="$PATH:$HOME/.weave/bin"
 
 # ---------- background self-refresh ----------
 #
@@ -5602,7 +5823,14 @@ weave_hidden_gate() {
       file://*) ;;
       *) url="$url/v1/display-settings" ;;
     esac
-    body="$(curl -fsS --max-time 5 -H "X-Weave-Router-Key: $key" "$url" 2>/dev/null)" || exit 0
+    header_file="$(mktemp "$cache_dir/.headers.XXXXXX")" || exit 0
+    chmod 600 "$header_file"
+    printf 'header = "X-Weave-Router-Key: %s"\n' "$key" >"$header_file"
+    if ! body="$(curl -fsS --max-time 5 -K "$header_file" "$url" 2>/dev/null)"; then
+      rm -f "$header_file"
+      exit 0
+    fi
+    rm -f "$header_file"
     hidden="$(printf '%s' "$body" | jq -r '.hide_terminal_surfaces // false' 2>/dev/null)"
     tmp="$cache.tmp.$$"
     if [ "$hidden" = "true" ]; then
@@ -5621,12 +5849,26 @@ if weave_hidden_gate </dev/null; then
 fi
 
 input="$(cat)"
+jq -e 'type == "object"' >/dev/null 2>&1 <<<"$input" || exit 0
 transcript_path="$(printf '%s' "$input" | jq -r '.transcript_path // empty')"
 # Prefer model.id over display_name: pricing keys + the response model id in
 # the transcript are canonical ids (e.g. claude-opus-4-7), while display_name
 # is a human label ("Opus 4.7 (1M context)") that won't hit the pricing table,
 # preventing a price comparison. id passes through normalize_model cleanly.
 selected_display="$(printf '%s' "$input" | jq -r '.model.id // .model.display_name // "?"')"
+
+# Claude owns this percentage and its window; session totals never establish it.
+context_clause="$(jq -r '
+  .context_window as $c |
+  if ($c.context_window_size | type) == "number" and $c.context_window_size > 0 and $c.context_window_size <= 2147483647
+     and ($c.context_window_size | floor) == $c.context_window_size
+     and ($c.used_percentage | type) == "number" and $c.used_percentage >= 0 and $c.used_percentage <= 100
+  then " · Context " + ($c.used_percentage | floor | tostring) + "%" +
+       (if $c.used_percentage >= 90 then " !" else "" end)
+  else "" end
+' <<<"$input" 2>/dev/null)" || context_clause=""
+
+[ "${WEAVE_STATUSLINE_CONTEXT:-1}" != "0" ] || context_clause=""
 
 # Normalize a model id to a pricing-table key. CC + the decisions log carry
 # two flavors of annotation we don't want in the lookup:
@@ -5679,10 +5921,6 @@ transcript_model=""
 has_pin_record="false"
 last_pin_model=""
 session_cost_difference=""
-tot_in=0
-tot_out=0
-tot_cache_read=0
-tot_cache_write=0
 
 # This is a hypothetical comparison against the CURRENT selection, not
 # realized router savings: the transcript does not record each turn's
@@ -5746,7 +5984,7 @@ if [[ -n "$transcript_path" && -f "$transcript_path" ]]; then
     last_pin_model="${force_state#APPLIED }"
   fi
 
-  # Missing prices leave the comparison unknown without hiding token totals.
+  # Missing prices leave the comparison unknown without hiding the model.
   #
   # Dedup note: CC writes one JSONL entry per *content block* in an
   # assistant turn (text, text, tool_use → 3 entries), and every entry
@@ -5760,7 +5998,7 @@ if [[ -n "$transcript_path" && -f "$transcript_path" ]]; then
   #     grows), so the composite key keeps turns distinct. Two turns with
   #     byte-identical id AND usage would still collapse, but that's a
   #     genuine retry/duplicate we want to drop.
-  read -r session_cost_difference tot_in tot_out tot_cache_read tot_cache_write < <(
+  session_cost_difference="$(
     jq -rs --argjson p "$prices" --arg requested "$requested_norm" '
       [.[] | select(.type=="assistant" and .message.model!="<synthetic>" and .message.model!="weave-router")] |
       unique_by([.message.id, .message.usage]) |
@@ -5789,15 +6027,14 @@ if [[ -n "$transcript_path" && -f "$transcript_path" ]]; then
            ($requested_cost - $routed_cost)
          end
        end) as $savings |
-      "\(if $savings == null then "unknown" else $savings end) \($t.in) \($t.out) \($t.crd) \($t.cwrt)"
+      if $savings == null then "unknown" else $savings end
     ' "$transcript_path" 2>/dev/null \
-    | awk 'BEGIN{s=0; i=0; o=0; r=0; w=0}
-           {if ($1 == "unknown") comparison_unknown=1; else s+=$1; i+=$2; o+=$3; r+=$4; w+=$5}
+    | awk 'BEGIN{s=0}
+           {if ($1 == "unknown") comparison_unknown=1; else s+=$1}
            END{
              if (NR == 0 || comparison_unknown) printf "unknown"; else printf "%.4f", s;
-             printf " %d %d %d %d\n", i, o, r, w
            }'
-  ) || true
+  )" || true
 fi
 
 # ---------- refresh when a model isn't in the pricing table ----------
@@ -5833,6 +6070,94 @@ weave_refresh_on_price_miss() {
 }
 weave_refresh_on_price_miss "$requested_norm" "$transcript_model" 2>/dev/null || true
 
+router_context_fallback() {
+  [ -z "$context_clause" ] || return 0
+  [ "${WEAVE_STATUSLINE_CONTEXT:-1}" != "0" ] || return 0
+  local session helper_dir scope cache root now snapshot
+  session="$(jq -r '.session_id // empty' <<<"$input")"
+  case "$session" in ''|*[!A-Za-z0-9._-]*) return 0 ;; esac
+  [ "${#session}" -le 128 ] || return 0
+  helper_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  scope="$(printf '%s' "$helper_dir" | cksum | awk '{print $1}')"
+  root="${XDG_CACHE_HOME:-$HOME/.cache}/weave-router/claude-context"
+  cache="$root/$scope-$session.json"
+  now="$(date +%s)"
+  if [ -f "$cache" ] && [ "$(wc -c <"$cache")" -le 8192 ]; then
+    snapshot="$(jq -ce --arg session "$session" --argjson now "$now" '
+
+    def tokens: type == "number" and floor == . and . > 0 and . <= 2147483647;
+    def epoch: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
+    .context_snapshot as $s |
+    select(.session_id == $session and $s.version == 1 and $s.estimate_kind == "approximate") |
+    select(($s.estimate_tokens | tokens) and ($s.context_window | tokens) and ($s.output_reserve_tokens | tokens)) |
+    select(($s.served_model | type) == "string" and ($s.served_model | test("^[A-Za-z0-9._:/-]{1,128}$"))) |
+    select(($s.request_id | type) == "string" and ($s.request_id | length) > 0 and ($s.request_id | length) <= 128) |
+    ($s.recorded_at | epoch) as $recorded | ($s.requested_at | epoch) as $requested |
+    select($requested > 0 and $requested <= $recorded and $recorded <= $now and $now - $recorded <= 300) |
+    $s
+    ' "$cache" 2>/dev/null)" || snapshot=""
+    if [ -n "$snapshot" ]; then
+      local served requested
+      served="$(normalize_model "$(jq -r '.served_model' <<<"$snapshot")")"
+      requested="$(normalize_model "$(jq -r '.requested_model // empty' <<<"$snapshot")")"
+      if [ "$served" = "$transcript_model" ] && [ "$requested" = "$requested_norm" ]; then
+        context_clause="$(awk -v e="$(jq -r '.estimate_tokens' <<<"$snapshot")" -v w="$(jq -r '.context_window' <<<"$snapshot")" 'BEGIN {
+          printf " · last Router ctx est. ~%s/%s", (e < 1000 ? e : sprintf("%.0fk", e/1000)), (w < 1000 ? w : sprintf("%.0fk", w/1000))
+        }')"
+      fi
+    fi
+  fi
+  command -v curl >/dev/null 2>&1 || return 0
+  mkdir -p "$root" 2>/dev/null || return 0
+  chmod 700 "$root"
+  (
+    exec </dev/null
+    # Serialize refreshes; a timeout cannot delay the status-line process.
+    if ! mkdir "$cache.lock" 2>/dev/null; then
+      lock_mtime="$(stat -c %Y "$cache.lock" 2>/dev/null || stat -f %m "$cache.lock" 2>/dev/null)" || lock_mtime=0
+      [ $(( $(date +%s) - lock_mtime )) -gt 30 ] || exit 0
+      dead="$cache.lock.dead.$$"
+      mv "$cache.lock" "$dead" 2>/dev/null || exit 0
+      rm -rf "$dead"
+      mkdir "$cache.lock" 2>/dev/null || exit 0
+    fi
+    trap 'rmdir "$cache.lock" 2>/dev/null' EXIT
+    settings_base="$HOME"
+    case "$helper_dir" in */.claude) settings_base="${helper_dir%/.claude}" ;; esac
+    settings="$settings_base/.claude/settings.json"
+    local_settings="$settings_base/.claude/settings.local.json"
+    base=""
+    key=""
+    for settings_file in "$settings" "$local_settings"; do
+      [ -f "$settings_file" ] || continue
+      if jq -e '.env | has("ANTHROPIC_BASE_URL")' "$settings_file" >/dev/null 2>&1; then
+        base="$(jq -r '.env.ANTHROPIC_BASE_URL // empty' "$settings_file" 2>/dev/null)"
+      fi
+      if jq -e '.env | has("ANTHROPIC_CUSTOM_HEADERS")' "$settings_file" >/dev/null 2>&1; then
+        key="$(jq -r '.env.ANTHROPIC_CUSTOM_HEADERS // "" | split("\n")[] | select(startswith("X-Weave-Router-Key:")) | sub("^X-Weave-Router-Key:[[:space:]]*"; "")' "$settings_file" 2>/dev/null | head -n1)"
+      fi
+    done
+    base="${WEAVE_ROUTER_BASE_URL:-${ANTHROPIC_BASE_URL:-$base}}"
+    key="${WEAVE_ROUTER_KEY:-$key}"
+    [ -n "$base" ] && [ -n "$key" ] || exit 0
+    url="${base%/}"
+    case "$url" in file://*) ;; *) url="${url%/v1}/v1/sessions/$session/cost" ;; esac
+    tmp="$(mktemp "$root/.snapshot.XXXXXX")" || exit 0
+    header_file="$(mktemp "$root/.headers.XXXXXX")" || { rm -f "$tmp"; exit 0; }
+    chmod 600 "$tmp"
+    chmod 600 "$header_file"
+    printf 'header = "X-Weave-Router-Key: %s"\n' "$key" >"$header_file"
+    if curl -fsS --max-time 5 --max-filesize 8192 -K "$header_file" "$url" -o "$tmp" 2>/dev/null \
+       && [ "$(wc -c <"$tmp")" -le 8192 ] \
+       && [ "$(jq -r '.session_id // empty' "$tmp" 2>/dev/null)" = "$session" ]; then
+      mv "$tmp" "$cache"
+    fi
+    rm -f "$tmp" "$header_file"
+  ) >/dev/null 2>&1 &
+  disown 2>/dev/null || true
+}
+router_context_fallback 2>/dev/null || true
+
 # Brand color (#FF6C47) on terminals that grok 24-bit truecolor — that's
 # every modern one (iTerm2, Apple Terminal, vscode, ghostty, alacritty,
 # wezterm, kitty). Falls back gracefully on any escape-stripping terminal.
@@ -5848,40 +6173,13 @@ fmt_money() {
   }'
 }
 
-fmt_tok() {
-  awk -v v="$1" 'BEGIN{
-    v = v+0
-    if (v >= 1000000) { printf "%.1fM", v/1000000; exit }
-    if (v >= 1000)    { printf "%.1fk", v/1000;    exit }
-    printf "%d", v
-  }'
-}
-
-# cache_read tokens are the cached portion of every prompt that the
-# provider serves at 0.1× input price; cache_write tokens are the bytes
-# that get newly cached on this turn at 1.25× input price. They behave
-# completely differently both in cost and in what they tell the user
-# about session-level efficiency, so we surface them separately rather
-# than summing into a single "cached" number that conflates the two.
-# Each clause is shown only when nonzero, so quiet sessions stay quiet.
-tokens_clause=""
-if [[ "$tot_in" -gt 0 || "$tot_out" -gt 0 || "$tot_cache_read" -gt 0 || "$tot_cache_write" -gt 0 ]]; then
-  tokens_clause=" · $(fmt_tok "$tot_in") in / $(fmt_tok "$tot_out") out"
-  if [[ "$tot_cache_read" -gt 0 ]]; then
-    tokens_clause+=" / $(fmt_tok "$tot_cache_read") cache read"
-  fi
-  if [[ "$tot_cache_write" -gt 0 ]]; then
-    tokens_clause+=" / $(fmt_tok "$tot_cache_write") cache write"
-  fi
-fi
-
 printf '%s' "$brand"
 if [[ "$transcript_model" == "failure" ]]; then
   printf ' · last response failed'
 elif [[ "$transcript_model" == "weave-router" ]]; then
   printf ' · control acknowledgement'
 elif [[ -n "$transcript_model" ]]; then
-  printf ' · transcript model: %s' "$transcript_model"
+  printf ' · response model: %s' "$transcript_model"
 fi
 if [[ -n "$selected_display" && "$selected_display" != "?" ]]; then
   printf ' · selected: %s' "$selected_display"
@@ -5892,7 +6190,8 @@ fi
 if [[ "$has_pin_record" == "true" ]]; then
   printf ' · last pin: %s' "$last_pin_model"
 fi
-printf '%s' "$tokens_clause"
+
+printf '%s' "$context_clause"
 STATUSLINE_EOF
 chmod +x "$statusline_file"
 printf '%s\n' "$CLAUDE_STATUSLINE_MARKER" >"$statusline_ownership_file"

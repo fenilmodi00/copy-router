@@ -164,6 +164,13 @@ func (g *cyberRefusalGate) Finalize() error {
 	return g.release()
 }
 
+// Abandon drops anything still withheld without delivering it, for an attempt
+// that will be retried: released, the preamble would commit the client to it.
+func (g *cyberRefusalGate) Abandon() {
+	g.holding = false
+	g.discardHeld()
+}
+
 func (g *cyberRefusalGate) release() error {
 	if g.held.Len() == 0 {
 		return nil
@@ -231,7 +238,7 @@ func (s *Service) cyberRefusalFallback(
 	avoidProvider string,
 ) (model, provider string, ok bool) {
 	model = s.ResolveCyberRefusalFallbackModel(ctx)
-	if s.pinStore != nil {
+	if s.pinStore != nil && sessionKey != ([sessionpin.SessionKeyLen]byte{}) {
 		if existing, found, err := s.pinStore.Get(context.Background(), sessionKey, role); err == nil && found &&
 			pinMatchesEffectiveStrategy(ctx, existing) && existing.PairedModel != "" &&
 			!providerAvoided(providerForModel(existing.PairedProvider, existing.PairedModel), avoidProvider) {

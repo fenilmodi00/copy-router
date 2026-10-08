@@ -11,7 +11,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
+
+// The AIand roster model this fork's scorer returns for a title turn.
+const codexTitleScoredModel = "moonshotai/kimi-k3"
 
 type codexTitleRouter struct {
 	routeCalls int
@@ -19,15 +23,17 @@ type codexTitleRouter struct {
 
 func (r *codexTitleRouter) Route(context.Context, router.Request) (router.Decision, error) {
 	r.routeCalls++
-	return router.Decision{Provider: providers.ProviderOpenAI, Model: "moonshotai/kimi-k3", Reason: "scored"}, nil
+	return router.Decision{Provider: providers.ProviderOpenAI, Model: codexTitleScoredModel, Reason: "scored"}, nil
 }
 
 type codexTitleProvider struct {
 	endpoints []providers.Endpoint
+	models    []string
 }
 
 func (p *codexTitleProvider) Proxy(_ context.Context, _ router.Decision, prep providers.PreparedRequest, w http.ResponseWriter, _ *http.Request) error {
 	p.endpoints = append(p.endpoints, prep.Endpoint)
+	p.models = append(p.models, gjson.GetBytes(prep.Body, "model").String())
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"id":"resp_1","object":"response","output":[{"type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}]}`))
 	return nil
@@ -37,7 +43,7 @@ func (p *codexTitleProvider) Passthrough(context.Context, providers.PreparedRequ
 	return providers.ErrNotImplemented
 }
 
-func TestCodexResponsesTitleGenerationHardPinsWithoutScoring(t *testing.T) {
+func TestCodexResponsesTitleGenerationScoresWithoutMarker(t *testing.T) {
 	routerSpy := &codexTitleRouter{}
 	provider := &codexTitleProvider{}
 	svc := NewService(
@@ -64,11 +70,12 @@ func TestCodexResponsesTitleGenerationHardPinsWithoutScoring(t *testing.T) {
 
 	require.NoError(t, svc.ProxyOpenAIResponses(ctx, body, rec, req))
 	require.Len(t, provider.endpoints, 1)
-	require.Zero(t, routerSpy.routeCalls, "Codex title generation must use the hard-pin path")
-	assert.NotContains(t, rec.Body.String(), "Weave Router", "hard-pinned title responses must not carry a routing marker")
+	require.Equal(t, 1, routerSpy.routeCalls, "Codex title generation must be scored independently")
+	assert.Equal(t, []string{codexTitleScoredModel}, provider.models)
+	assert.NotContains(t, rec.Body.String(), "Weave Router", "title responses must not carry a routing marker")
 }
 
-func TestCodexResponsesTitlePromptHardPinsWithoutScoring(t *testing.T) {
+func TestCodexResponsesTitlePromptScoresWithoutMarker(t *testing.T) {
 	routerSpy := &codexTitleRouter{}
 	provider := &codexTitleProvider{}
 	svc := NewService(
@@ -95,11 +102,12 @@ func TestCodexResponsesTitlePromptHardPinsWithoutScoring(t *testing.T) {
 
 	require.NoError(t, svc.ProxyOpenAIResponses(ctx, body, rec, req))
 	require.Len(t, provider.endpoints, 1)
-	require.Zero(t, routerSpy.routeCalls, "Codex title generation must use the hard-pin path")
-	assert.NotContains(t, rec.Body.String(), "Weave Router", "hard-pinned title responses must not carry a routing marker")
+	require.Equal(t, 1, routerSpy.routeCalls, "Codex title generation must be scored independently")
+	assert.Equal(t, []string{codexTitleScoredModel}, provider.models)
+	assert.NotContains(t, rec.Body.String(), "Weave Router", "title responses must not carry a routing marker")
 }
 
-func TestCodexResponsesTitlePromptAfterHarnessContextHardPins(t *testing.T) {
+func TestCodexResponsesTitlePromptAfterHarnessContextScores(t *testing.T) {
 	routerSpy := &codexTitleRouter{}
 	provider := &codexTitleProvider{}
 	svc := NewService(
@@ -126,8 +134,9 @@ func TestCodexResponsesTitlePromptAfterHarnessContextHardPins(t *testing.T) {
 
 	require.NoError(t, svc.ProxyOpenAIResponses(ctx, body, rec, req))
 	require.Len(t, provider.endpoints, 1)
-	require.Zero(t, routerSpy.routeCalls, "Codex title generation must use the hard-pin path")
-	assert.NotContains(t, rec.Body.String(), "Weave Router", "hard-pinned title responses must not carry a routing marker")
+	require.Equal(t, 1, routerSpy.routeCalls, "Codex title generation must be scored independently")
+	assert.Equal(t, []string{codexTitleScoredModel}, provider.models)
+	assert.NotContains(t, rec.Body.String(), "Weave Router", "title responses must not carry a routing marker")
 }
 
 func TestCodexResponsesTitlePromptWithAssistantHistoryUsesScorer(t *testing.T) {

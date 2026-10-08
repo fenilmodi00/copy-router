@@ -5,11 +5,18 @@ import (
 	"testing"
 	"time"
 
+	"weave-os/router/internal/providers"
+	"weave-os/router/internal/router/catalog"
+
 	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func testProvenance() Provenance {
+	return NewProvenance(ProvenanceScope{CredentialSubject: "subject", Product: ProductLegacy, Model: catalog.ModelID("deepseek-ai/deepseek-v4-pro"), Provider: providers.ProviderAIAND, UpstreamScope: "deployment"})
+}
 
 // newBrokenCache builds a Cache bypassing New()'s validation, so cfg fields
 // that would make lru.New fail (size <= 0) survive into bucket().
@@ -33,7 +40,7 @@ func TestBucket_InvalidMaxBucketsPerInstallationNoOpsInsteadOfPanic(t *testing.T
 	c := newBrokenCache(t, cfg)
 
 	assert.NotPanics(t, func() {
-		b := c.bucket("inst-1", FormatAnthropic, 0, "v1", 0, true)
+		b := c.bucket("inst-1", FormatAnthropic, 0, "v1", 0, testProvenance(), true)
 		assert.Nil(t, b, "bucket allocation failure must surface as nil, not panic")
 	})
 }
@@ -46,7 +53,7 @@ func TestBucket_InvalidBucketSizeNoOpsInsteadOfPanic(t *testing.T) {
 	c := newBrokenCache(t, cfg)
 
 	assert.NotPanics(t, func() {
-		b := c.bucket("inst-1", FormatAnthropic, 0, "v1", 0, true)
+		b := c.bucket("inst-1", FormatAnthropic, 0, "v1", 0, testProvenance(), true)
 		assert.Nil(t, b, "bucket allocation failure must surface as nil, not panic")
 	})
 }
@@ -61,12 +68,12 @@ func TestLookupAndStore_SurviveBrokenBucketAllocation(t *testing.T) {
 	emb := []float32{1, 0, 0, 0}
 
 	assert.NotPanics(t, func() {
-		c.Store("inst-1", FormatAnthropic, emb, 0, CachedResponse{StatusCode: http.StatusOK}, "v1", 0)
+		c.Store("inst-1", FormatAnthropic, emb, 0, CachedResponse{StatusCode: http.StatusOK}, "v1", 0, testProvenance())
 	})
 
 	var hit bool
 	assert.NotPanics(t, func() {
-		_, hit = c.Lookup("inst-1", FormatAnthropic, emb, []int{0}, "v1", 0)
+		_, hit = c.Lookup("inst-1", FormatAnthropic, emb, []int{0}, "v1", 0, testProvenance())
 	})
 	assert.False(t, hit, "broken bucket allocation must degrade to a cache miss")
 }
